@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# TypeScript CLI
+
+- Use TypeScript and follow best practice naming conventions
+- This CLI is used by developers, and the quality of the code matters. Remember that the target audience cares about code quality as much as we do, so put extra effort into producting code that is considered best in class and contemporary
+- Try and avoid unnecessary additional dependencies
+- This CLI is using the very popular and well maintained oclif framework, see https://github.com/oclif/oclif and https://oclif.io/. Please read the docs and follow best practice.
+- The user experience of developers using this CLI really matters. We want to delight developers who use this CLI. Ensure you have helpful help messages, error messages, and offer interactive modes where applicable. Don't overload users with options, consider what data they need to know etc.
