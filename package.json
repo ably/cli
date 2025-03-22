@@ -1,0 +1,27 @@
+{
+  "name": "ably-cli",
+  "version": "0.0.1",
+  "description": "Ably CLI for Pub/Sub, Chat, Spaces and the Control API",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "bin": {
+    "ably": "./bin/run.js"
+  },
+  "oclif": {
+    "bin": "ably",
+    "commands": "./dist/commands",
+    "dirname": "ably",
+    "topicSeparator": " "
+  },
+  "dependencies": {
+    "@oclif/core": "^4.2.10"
+  },
+  "devDependencies": {
+    "@types/node": "^18",
+    "ts-node": "^10.9.2"
+  }
+}
