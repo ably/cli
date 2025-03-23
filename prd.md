@@ -142,7 +142,7 @@ Note:
 
 ### Global arguments
 
-- `--host`: Override the host endpoint for all product API calls. In the product SDKs, this is typically the `host` option.
+- `--host`: Override the host endpoint for all product API calls. In the product SDKs, this is typically the `host` option. Note that specifying the host will override both the Realtime and REST host for the Realtime client.
 - `--env`: Override the the environment for all product API calls. In the product SDKs, this is typically the `env` option.
 - `--control-host`: Override the host endpoint for the control API, which defaults to control.ably.net. 
 - `--access-token`: Overrides any configured access token used for the Control API

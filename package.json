@@ -18,23 +18,25 @@
   "type": "module",
   "oclif": {
     "bin": "ably",
-    "commands": "./dist/commands",
     "dirname": "ably",
-    "topicSeparator": " "
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "plugins": ["./dist"]
   },
   "dependencies": {
-    "@oclif/core": "^4.2.10"
+    "@oclif/core": "^4.2.10",
+    "ably": "github:ably/ably-js#type-correction-publishoptions"
   },
   "devDependencies": {
-    "@types/node": "^22.13.11",
-    "@types/mocha": "^10.0.1",
     "@oclif/test": "^3",
     "@types/chai": "^4",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^22.13.11",
     "chai": "^4",
     "mocha": "^11",
     "shx": "^0.4",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"    
+    "typescript": "^5.8.2"
   },
   "engines": {
     "node": ">=22.0.0"
