@@ -44,7 +44,7 @@ export default class AppsListCommand extends ControlBaseCommand {
           this.log(`Account ID: ${app.accountId}`)
           this.log(`TLS Only: ${app.tlsOnly ? 'Yes' : 'No'}`)
           this.log(`Created: ${this.formatDate(app.created)}`)
-          this.log(`Updated: ${this.formatDate(app.updated)}`)
+          this.log(`Updated: ${this.formatDate(app.modified)}`)
           if (app.apnsUsesSandboxCert !== undefined) {
             this.log(`APNS Uses Sandbox Cert: ${app.apnsUsesSandboxCert ? 'Yes' : 'No'}`)
           }

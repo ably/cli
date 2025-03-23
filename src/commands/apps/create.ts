@@ -50,7 +50,7 @@ export default class AppsCreateCommand extends ControlBaseCommand {
         this.log(`Account ID: ${app.accountId}`)
         this.log(`TLS Only: ${app.tlsOnly ? 'Yes' : 'No'}`)
         this.log(`Created: ${this.formatDate(app.created)}`)
-        this.log(`Updated: ${this.formatDate(app.updated)}`)
+        this.log(`Updated: ${this.formatDate(app.modified)}`)
       }
     } catch (error) {
       this.error(`Error creating app: ${error instanceof Error ? error.message : String(error)}`)
