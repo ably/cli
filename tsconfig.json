@@ -2,12 +2,15 @@
   "compilerOptions": {
     "declaration": true,
     "module": "NodeNext",
-    "outDir": "dist",
-    "rootDir": "src",
+    "outDir": "./dist",
+    "rootDir": "./src",
     "strict": true,
     "target": "es2022",
     "moduleResolution": "nodenext",
-    "composite": true
+    "composite": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["./src/**/*"],
   "ts-node": {

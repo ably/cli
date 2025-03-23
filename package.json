@@ -4,7 +4,7 @@
   "description": "Ably CLI for Pub/Sub, Chat, Spaces and the Control API",
   "main": "index.js",
   "scripts": {
-    "build": "rm -rf dist && tsc -b",
+    "build": "rm -rf dist && rm -f tsconfig.tsbuildinfo && tsc",
     "postpack": "rm -f oclif.manifest.json",
     "prepack": "oclif manifest && oclif readme",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
