@@ -1,13 +1,13 @@
 import { Args, Flags } from '@oclif/core'
 import { AblyBaseCommand } from '../../../base-command.js'
 
-export default class ChannelsOccupancyLive extends AblyBaseCommand {
+export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
   static description = 'Subscribe to real-time occupancy metrics for a channel'
 
   static examples = [
-    '$ ably channels occupancy:live my-channel',
-    '$ ably channels occupancy:live --api-key "YOUR_API_KEY" my-channel',
-    '$ ably channels occupancy:live --format json my-channel',
+    '$ ably channels occupancy subscribe my-channel',
+    '$ ably channels occupancy subscribe --api-key "YOUR_API_KEY" my-channel',
+    '$ ably channels occupancy subscribe --format json my-channel',
   ]
 
   static flags = {
@@ -21,13 +21,13 @@ export default class ChannelsOccupancyLive extends AblyBaseCommand {
 
   static args = {
     channel: Args.string({
-      description: 'Channel name to get live occupancy for',
+      description: 'Channel name to subscribe to occupancy for',
       required: true,
     }),
   }
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(ChannelsOccupancyLive)
+    const { args, flags } = await this.parse(ChannelsOccupancySubscribe)
     
     // Validate API key is provided
     if (!flags['api-key']) {

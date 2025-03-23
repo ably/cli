@@ -1,0 +1,153 @@
+import fetch from 'node-fetch'
+
+export interface ControlApiOptions {
+  accessToken: string
+  controlHost?: string
+}
+
+export interface App {
+  id: string
+  name: string
+  accountId: string
+  status: string
+  tlsOnly: boolean
+  created: number
+  updated: number
+  apnsUsesSandboxCert?: boolean
+}
+
+export interface AppStats {
+  intervalId: string
+  unit: string
+  appId?: string
+  schema?: string
+  entries: {
+    [key: string]: number
+  }
+}
+
+export class ControlApi {
+  private accessToken: string
+  private controlHost: string
+
+  constructor(options: ControlApiOptions) {
+    this.accessToken = options.accessToken
+    this.controlHost = options.controlHost || 'control.ably.net'
+  }
+
+  private async request<T>(path: string, method = 'GET', body?: any): Promise<T> {
+    const url = `https://${this.controlHost}/v1${path}`
+    
+    const options: any = {
+      method,
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    }
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      options.body = JSON.stringify(body)
+    }
+
+    const response = await fetch(url, options)
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Control API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+
+    if (response.status === 204) {
+      return {} as T
+    }
+
+    return await response.json() as T
+  }
+
+  // Get user and account info
+  async getMe(): Promise<{ user: any, account: any }> {
+    return this.request<{ user: any, account: any }>('/me')
+  }
+
+  // Get all apps
+  async listApps(): Promise<App[]> {
+    // First get the account ID from /me endpoint
+    const meResponse = await this.getMe()
+    const accountId = meResponse.account.id
+    
+    // Use correct path with account ID prefix
+    return this.request<App[]>(`/accounts/${accountId}/apps`)
+  }
+
+  // Get an app by ID
+  async getApp(appId: string): Promise<App> {
+    // App ID-specific operations don't need account ID in the path
+    return this.request<App>(`/apps/${appId}`)
+  }
+
+  // Create a new app
+  async createApp(appData: { name: string, tlsOnly?: boolean }): Promise<App> {
+    // First get the account ID from /me endpoint
+    const meResponse = await this.getMe()
+    const accountId = meResponse.account.id
+    
+    // Use correct path with account ID prefix
+    return this.request<App>(`/accounts/${accountId}/apps`, 'POST', appData)
+  }
+
+  // Update an app
+  async updateApp(appId: string, appData: { name?: string, tlsOnly?: boolean }): Promise<App> {
+    // App ID-specific operations don't need account ID in the path
+    return this.request<App>(`/apps/${appId}`, 'PATCH', appData)
+  }
+
+  // Delete an app
+  async deleteApp(appId: string): Promise<void> {
+    // App ID-specific operations don't need account ID in the path
+    return this.request<void>(`/apps/${appId}`, 'DELETE')
+  }
+
+  // Get app stats
+  async getAppStats(
+    appId: string, 
+    options: { 
+      start?: number, 
+      end?: number, 
+      by?: string, 
+      limit?: number, 
+      unit?: string 
+    } = {}
+  ): Promise<AppStats[]> {
+    const queryParams = new URLSearchParams()
+    if (options.start) queryParams.append('start', options.start.toString())
+    if (options.end) queryParams.append('end', options.end.toString())
+    if (options.by) queryParams.append('by', options.by)
+    if (options.limit) queryParams.append('limit', options.limit.toString())
+    if (options.unit) queryParams.append('unit', options.unit)
+
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    
+    // App ID-specific operations don't need account ID in the path
+    return this.request<AppStats[]>(`/apps/${appId}/stats${queryString}`)
+  }
+
+  // Upload Apple Push Notification Service P12 certificate for an app
+  async uploadApnsP12(
+    appId: string, 
+    certificateData: string, 
+    options: { 
+      useForSandbox?: boolean, 
+      password?: string 
+    } = {}
+  ): Promise<{ id: string }> {
+    const data = {
+      p12Certificate: certificateData,
+      useForSandbox: options.useForSandbox,
+      password: options.password
+    }
+    
+    // App ID-specific operations don't need account ID in the path
+    return this.request<{ id: string }>(`/apps/${appId}/push/certificate`, 'POST', data)
+  }
+} 

@@ -21,17 +21,21 @@
     "dirname": "ably",
     "commands": "./dist/commands",
     "topicSeparator": " ",
-    "plugins": ["./dist"]
+    "plugins": [
+      "./dist"
+    ]
   },
   "dependencies": {
     "@oclif/core": "^4.2.10",
-    "ably": "github:ably/ably-js#type-correction-publishoptions"
+    "ably": "github:ably/ably-js#type-correction-publishoptions",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@oclif/test": "^3",
     "@types/chai": "^4",
     "@types/mocha": "^10.0.1",
     "@types/node": "^22.13.11",
+    "@types/node-fetch": "^2.6.12",
     "chai": "^4",
     "mocha": "^11",
     "shx": "^0.4",

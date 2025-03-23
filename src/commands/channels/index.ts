@@ -6,8 +6,8 @@ export default class Channels extends Command {
   static override examples = [
     '$ ably channels publish my-channel \'{"name":"message","data":"Hello, World"}\'',
     '$ ably channels subscribe my-channel',
-    '$ ably channels occupancy:get my-channel',
-    '$ ably channels occupancy:live my-channel',
+    '$ ably channels occupancy get my-channel',
+    '$ ably channels occupancy live my-channel',
     '$ ably channels list',
   ]
 
