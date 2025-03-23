@@ -83,7 +83,7 @@ $ ably channels presence -> this is a topic that groups presence functionality t
 $ ably channels presence enter -> enter presence and remain present until the script is terminated. Show who is entering and leaving whilst present,
 $ ably channels presence subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
 
-$ ably config edit -> opens the config TOML file with the default text editor 
+$ ably config -> opens the config TOML file with the default text editor 
 
 ### Authentication
 

@@ -12,7 +12,7 @@ export interface App {
   status: string
   tlsOnly: boolean
   created: number
-  updated: number
+  modified: number
   apnsUsesSandboxCert?: boolean
 }
 
@@ -25,6 +25,9 @@ export interface AppStats {
     [key: string]: number
   }
 }
+
+// Since account stats have the same structure as app stats
+export type AccountStats = AppStats;
 
 export class ControlApi {
   private accessToken: string
@@ -130,6 +133,33 @@ export class ControlApi {
     
     // App ID-specific operations don't need account ID in the path
     return this.request<AppStats[]>(`/apps/${appId}/stats${queryString}`)
+  }
+
+  // Get account stats
+  async getAccountStats(
+    options: { 
+      start?: number, 
+      end?: number, 
+      by?: string, 
+      limit?: number, 
+      unit?: string 
+    } = {}
+  ): Promise<AccountStats[]> {
+    const queryParams = new URLSearchParams()
+    if (options.start) queryParams.append('start', options.start.toString())
+    if (options.end) queryParams.append('end', options.end.toString())
+    if (options.by) queryParams.append('by', options.by)
+    if (options.limit) queryParams.append('limit', options.limit.toString())
+    if (options.unit) queryParams.append('unit', options.unit)
+
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    
+    // First get the account ID from /me endpoint
+    const meResponse = await this.getMe()
+    const accountId = meResponse.account.id
+    
+    // Account stats require the account ID in the path
+    return this.request<AccountStats[]>(`/accounts/${accountId}/stats${queryString}`)
   }
 
   // Upload Apple Push Notification Service P12 certificate for an app

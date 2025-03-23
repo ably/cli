@@ -17,6 +17,9 @@ importers:
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
+      toml:
+        specifier: ^3.0.0
+        version: 3.0.0
     devDependencies:
       '@oclif/test':
         specifier: ^3
@@ -1038,6 +1041,9 @@ packages:
 
   to-utf8@0.0.1:
     resolution: {integrity: sha512-zks18/TWT1iHO3v0vFp5qLKOG27m67ycq/Y7a7cTiRuUNlc4gf3HGnkRgMv0NyhnfTamtkYBJl+YeD1/j07gBQ==}
+
+  toml@3.0.0:
+    resolution: {integrity: sha512-y/mWCZinnvxjTKYhJ+pYxwD0mRLVvOtdS2Awbgxln6iEnt4rk0yBxeSBHkGJcPucRiG0e55mwWp+g/05rsrd6w==}
 
   ts-node@10.9.2:
     resolution: {integrity: sha512-f0FFpIdcHgn8zcPSbf1dRevwt047YMnaiJM3u2w2RewrB+fob/zePZcrOyQoLMMO7aBIddLcQIEK5dYjkLnGrQ==}
@@ -2171,6 +2177,8 @@ snapshots:
       is-number: 7.0.0
 
   to-utf8@0.0.1: {}
+
+  toml@3.0.0: {}
 
   ts-node@10.9.2(@types/node@22.13.11)(typescript@5.8.2):
     dependencies:

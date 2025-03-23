@@ -3,13 +3,16 @@ import { ControlApi } from './services/control-api.js'
 
 export abstract class ControlBaseCommand extends AblyBaseCommand {
   protected createControlApi(flags: any): ControlApi {
+    // Try to get access token from flags, then from config
+    const accessToken = flags['access-token'] || this.configManager.getAccessToken()
+
     // Validate access token is provided
-    if (!flags['access-token']) {
-      this.error('An access token is required for Control API operations. Please provide it with --access-token flag or set the ABLY_ACCESS_TOKEN environment variable.')
+    if (!accessToken) {
+      this.error('An access token is required for Control API operations. Please provide it with --access-token flag, set the ABLY_ACCESS_TOKEN environment variable, or log in using "ably accounts login".')
     }
 
     return new ControlApi({
-      accessToken: flags['access-token'],
+      accessToken,
       controlHost: flags['control-host'],
     })
   }

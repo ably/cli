@@ -1,8 +1,16 @@
 import {Command, Flags} from '@oclif/core'
 import * as Ably from 'ably'
 import {randomUUID} from 'crypto'
+import { ConfigManager } from './services/config-manager.js'
 
 export abstract class AblyBaseCommand extends Command {
+  protected configManager: ConfigManager
+
+  constructor(argv: string[], config: any) {
+    super(argv, config)
+    this.configManager = new ConfigManager()
+  }
+
   static globalFlags = {
     'host': Flags.string({
       description: 'Override the host endpoint for all product API calls',
@@ -33,9 +41,14 @@ export abstract class AblyBaseCommand extends Command {
   protected getClientOptions(flags: any): Ably.ClientOptions {
     const options: Ably.ClientOptions = {}
 
-    // Handle authentication
+    // Handle authentication - try flags first, then config
     if (flags['api-key']) {
       options.key = flags['api-key']
+    } else {
+      const apiKey = this.configManager.getApiKey()
+      if (apiKey) {
+        options.key = apiKey
+      }
     }
 
     // Handle client ID

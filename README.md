@@ -25,6 +25,13 @@ USAGE
 <!-- usagestop -->
 # Commands
 <!-- commands -->
+* [`ably accounts`](#ably-accounts)
+* [`ably accounts current`](#ably-accounts-current)
+* [`ably accounts list`](#ably-accounts-list)
+* [`ably accounts login [TOKEN]`](#ably-accounts-login-token)
+* [`ably accounts logout [ALIAS]`](#ably-accounts-logout-alias)
+* [`ably accounts stats`](#ably-accounts-stats)
+* [`ably accounts switch [ALIAS]`](#ably-accounts-switch-alias)
 * [`ably apps`](#ably-apps)
 * [`ably apps create`](#ably-apps-create)
 * [`ably apps delete ID`](#ably-apps-delete-id)
@@ -38,7 +45,207 @@ USAGE
 * [`ably channels occupancy subscribe CHANNEL`](#ably-channels-occupancy-subscribe-channel)
 * [`ably channels publish CHANNEL MESSAGE`](#ably-channels-publish-channel-message)
 * [`ably channels subscribe CHANNELS`](#ably-channels-subscribe-channels)
-* [`ably config [FILE]`](#ably-config-file)
+* [`ably config`](#ably-config)
+* [`ably login [TOKEN]`](#ably-login-token)
+
+## `ably accounts`
+
+Commands for working with Ably accounts
+
+```
+USAGE
+  $ ably accounts
+
+DESCRIPTION
+  Commands for working with Ably accounts
+
+EXAMPLES
+  $ ably accounts stats
+```
+
+## `ably accounts current`
+
+Show the current Ably account
+
+```
+USAGE
+  $ ably accounts current [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  Show the current Ably account
+
+EXAMPLES
+  $ ably accounts current
+```
+
+## `ably accounts list`
+
+List locally configured Ably accounts
+
+```
+USAGE
+  $ ably accounts list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  List locally configured Ably accounts
+
+EXAMPLES
+  $ ably accounts list
+```
+
+## `ably accounts login [TOKEN]`
+
+Log in to your Ably account
+
+```
+USAGE
+  $ ably accounts login [TOKEN] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-a <value>] [--no-browser]
+
+ARGUMENTS
+  TOKEN  Access token (if not provided, will prompt for it)
+
+FLAGS
+  -a, --alias=<value>         Alias for this account (default account if not specified)
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --no-browser            Do not open a browser
+
+DESCRIPTION
+  Log in to your Ably account
+
+EXAMPLES
+  $ ably accounts login
+
+  $ ably accounts login --alias mycompany
+```
+
+## `ably accounts logout [ALIAS]`
+
+Log out from an Ably account
+
+```
+USAGE
+  $ ably accounts logout [ALIAS] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-f]
+
+ARGUMENTS
+  ALIAS  Alias of the account to log out from (defaults to current account)
+
+FLAGS
+  -f, --force                 Force logout without confirmation
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  Log out from an Ably account
+
+EXAMPLES
+  $ ably accounts logout
+
+  $ ably accounts logout mycompany
+```
+
+## `ably accounts stats`
+
+Get account stats with optional live updates
+
+```
+USAGE
+  $ ably accounts stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit minute|hour|day|month] [--limit
+    <value>] [--format json|pretty] [--live] [--interval <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --end=<value>           End time in milliseconds since epoch
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
+  --limit=<value>         [default: 10] Maximum number of stats records to return
+  --live                  Subscribe to live stats updates
+  --start=<value>         Start time in milliseconds since epoch
+  --unit=<option>         [default: minute] Time unit for stats
+                          <options: minute|hour|day|month>
+
+DESCRIPTION
+  Get account stats with optional live updates
+
+EXAMPLES
+  $ ably accounts stats
+
+  $ ably accounts stats --unit hour
+
+  $ ably accounts stats --start 1618005600000 --end 1618091999999
+
+  $ ably accounts stats --limit 10
+
+  $ ably accounts stats --format json
+
+  $ ably accounts stats --live
+
+  $ ably accounts stats --live --interval 15
+```
+
+## `ably accounts switch [ALIAS]`
+
+Switch to a different Ably account
+
+```
+USAGE
+  $ ably accounts switch [ALIAS] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>]
+
+ARGUMENTS
+  ALIAS  Alias of the account to switch to
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  Switch to a different Ably account
+
+EXAMPLES
+  $ ably accounts switch
+
+  $ ably accounts switch mycompany
+```
 
 ## `ably apps`
 
@@ -460,25 +667,59 @@ EXAMPLES
   $ ably channels subscribe --cipher-key YOUR_CIPHER_KEY my-channel
 ```
 
-## `ably config [FILE]`
+## `ably config`
 
-Manage your Ably CLI configuration
+Open the Ably config file in the default text editor
 
 ```
 USAGE
-  $ ably config [FILE] [-f] [-n <value>]
-
-ARGUMENTS
-  FILE  file to read
+  $ ably config [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-e <value>]
 
 FLAGS
-  -f, --force
-  -n, --name=<value>  name to print
+  -e, --editor=<value>        Text editor to use (defaults to $EDITOR environment variable)
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
 
 DESCRIPTION
-  Manage your Ably CLI configuration
+  Open the Ably config file in the default text editor
 
 EXAMPLES
-  $ ably config
+  $ ably config edit
+```
+
+## `ably login [TOKEN]`
+
+Log in to your Ably account (alias for "ably accounts login")
+
+```
+USAGE
+  $ ably login [TOKEN] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-a <value>] [--no-browser]
+
+ARGUMENTS
+  TOKEN  Access token (if not provided, will prompt for it)
+
+FLAGS
+  -a, --alias=<value>         Alias for this account (default account if not specified)
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --no-browser            Do not open a browser
+
+DESCRIPTION
+  Log in to your Ably account (alias for "ably accounts login")
+
+EXAMPLES
+  $ ably login
+
+  $ ably login --alias mycompany
 ```
 <!-- commandsstop -->
