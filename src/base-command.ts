@@ -32,32 +32,55 @@ export abstract class AblyBaseCommand extends Command {
     'api-key': Flags.string({
       description: 'Overrides any configured API key used for the product APIs',
     }),
+    'token': Flags.string({
+      description: 'Authenticate using an Ably Token or JWT Token instead of an API key',
+    }),
     'client-id': Flags.string({
-      description: 'Overrides any default client ID when using API authentication',
+      description: 'Overrides any default client ID when using API authentication. Use "none" to explicitly set no client ID. Not applicable when using token authentication.',
     }),
   }
 
+  // Add this method to check if we should suppress output
+  protected shouldSuppressOutput(flags: any): boolean {
+    return flags['token-only'] === true;
+  }
+
   protected async ensureAppAndKey(flags: any): Promise<{appId: string, apiKey: string} | null> {
+    // If token auth is being used, we don't need an API key
+    if (flags.token) {
+      // For token auth, we still need an app ID for some operations
+      let appId = flags.app || this.configManager.getCurrentAppId()
+      if (appId) {
+        return { appId, apiKey: '' }
+      }
+      // If no app ID is provided, we'll try to extract it from the token if it's a JWT
+      // But for now, just return null and let the operation proceed with token auth only
+    }
+    
     // Check if we have an app and key from flags or config
     let appId = flags.app || this.configManager.getCurrentAppId()
     let apiKey = flags['api-key'] || this.configManager.getApiKey(appId)
 
     // If we have both, return them
     if (appId && apiKey) {
-      // Display app and key info in non-JSON mode
-      if (flags.format !== 'json' && !flags.json && !flags.quiet) {
+      // Display app and key info in non-JSON mode, unless output should be suppressed
+      if (flags.format !== 'json' && !flags.json && !flags.quiet && !this.shouldSuppressOutput(flags)) {
         this.displayAppAndKeyInfo(appId, apiKey)
       }
       return { appId, apiKey }
     }
 
     // Otherwise, we need to interactively select them
-    this.log('No app or API key configured for this command.')
+    if (!this.shouldSuppressOutput(flags)) {
+      this.log('No app or API key configured for this command.')
+    }
     
     // Get access token for control API
     const accessToken = flags['access-token'] || this.configManager.getAccessToken()
     if (!accessToken) {
-      this.log('Please log in first with "ably accounts login" or provide an access token with --access-token.')
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log('Please log in first with "ably accounts login" or provide an access token with --access-token.')
+      }
       return null
     }
 
@@ -83,7 +106,9 @@ export abstract class AblyBaseCommand extends Command {
 
     // If no key is selected, prompt to select one
     if (!apiKey) {
-      this.log('Select an API key to use for this command:')
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log('Select an API key to use for this command:')
+      }
       const selectedKey = await this.interactiveHelper.selectKey(controlApi, appId)
       
       if (!selectedKey) return null
@@ -98,7 +123,9 @@ export abstract class AblyBaseCommand extends Command {
           keyName: selectedKey.name || 'Unnamed key'
         }
       )
-      this.log(`Selected key: ${selectedKey.name || 'Unnamed key'} (${selectedKey.id})`)
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log(`Selected key: ${selectedKey.name || 'Unnamed key'} (${selectedKey.id})`)
+      }
     }
 
     return { appId, apiKey }
@@ -118,25 +145,48 @@ export abstract class AblyBaseCommand extends Command {
     this.log('') // Add blank line for readability
   }
 
+  private displayTokenAuthInfo(appId?: string): void {
+    // Display token authentication info
+    let appInfo = ''
+    if (appId) {
+      const appName = this.configManager.getAppName(appId) || 'Unknown App'
+      appInfo = ` ${chalk.dim('•')} ${chalk.green('App=')}${chalk.green.bold(appName)} ${chalk.gray(`(${appId})`)}`
+    }
+    
+    this.log(`${chalk.dim('Using:')} ${chalk.magenta('Auth=')}${chalk.magenta.bold('Token')}${appInfo}`)
+    this.log('') // Add blank line for readability
+  }
+
   protected getClientOptions(flags: any): Ably.ClientOptions {
     const options: Ably.ClientOptions = {}
 
-    // Handle authentication - try flags first, then config
-    if (flags['api-key']) {
+    // Handle authentication - try token first, then api-key, then config
+    if (flags.token) {
+      options.token = flags.token
+      
+      // Show token auth info if not in JSON mode and not suppressing output
+      if (flags.format !== 'json' && !flags.json && !flags.quiet && !this.shouldSuppressOutput(flags)) {
+        this.displayTokenAuthInfo(flags.app || this.configManager.getCurrentAppId())
+      }
+      
+      // When using token auth, we don't set the clientId as it may conflict
+      // with any clientId embedded in the token
+      if (flags['client-id'] && !this.shouldSuppressOutput(flags)) {
+        this.log(chalk.yellow('Warning: clientId is ignored when using token authentication as the clientId is embedded in the token'))
+      }
+    } else if (flags['api-key']) {
       options.key = flags['api-key']
+      
+      // Handle client ID for API key auth
+      this.setClientId(options, flags)
     } else {
       const apiKey = this.configManager.getApiKey()
       if (apiKey) {
         options.key = apiKey
+        
+        // Handle client ID for API key auth
+        this.setClientId(options, flags)
       }
-    }
-
-    // Handle client ID
-    if (flags['client-id']) {
-      options.clientId = flags['client-id']
-    } else {
-      // Generate a default client ID for the CLI
-      options.clientId = `ably-cli-${randomUUID().substring(0, 8)}`
     }
 
     // Handle host and environment options
@@ -151,10 +201,24 @@ export abstract class AblyBaseCommand extends Command {
 
     return options
   }
+  
+  private setClientId(options: Ably.ClientOptions, flags: any): void {
+    if (flags['client-id']) {
+      // Special case: "none" means explicitly no client ID
+      if (flags['client-id'].toLowerCase() === 'none') {
+        // Don't set clientId at all
+      } else {
+        options.clientId = flags['client-id']
+      }
+    } else {
+      // Generate a default client ID for the CLI
+      options.clientId = `ably-cli-${randomUUID().substring(0, 8)}`
+    }
+  }
 
   protected async createAblyClient(flags: any): Promise<Ably.Realtime | null> {
-    // Ensure we have app and key before creating client
-    if (!flags['api-key']) {
+    // If token is provided, we can skip the ensureAppAndKey step
+    if (!flags.token && !flags['api-key']) {
       const appAndKey = await this.ensureAppAndKey(flags)
       if (!appAndKey) {
         return null
@@ -163,6 +227,12 @@ export abstract class AblyBaseCommand extends Command {
     }
 
     const options = this.getClientOptions(flags)
+    
+    // Make sure we have some form of authentication
+    if (!options.key && !options.token) {
+      this.error('Authentication required. Please provide either an API key, a token, or log in first.')
+      return null
+    }
     
     try {
       const client = new Ably.Realtime(options)
@@ -176,8 +246,12 @@ export abstract class AblyBaseCommand extends Command {
         client.connection.once('failed', (stateChange) => {
           // Handle authentication errors specifically
           if (stateChange.reason && stateChange.reason.code === 40100) { // Unauthorized
-            this.handleInvalidKey(flags)
-            reject(new Error('Invalid API key. Ensure you have a valid key configured.'))
+            if (options.key) {
+              this.handleInvalidKey(flags)
+              reject(new Error('Invalid API key. Ensure you have a valid key configured.'))
+            } else {
+              reject(new Error('Invalid token. Please provide a valid Ably Token or JWT.'))
+            }
           } else {
             reject(stateChange.reason || new Error('Connection failed'))
           }
@@ -187,7 +261,9 @@ export abstract class AblyBaseCommand extends Command {
       // Handle any synchronous errors when creating the client
       const err = error as Error & { code?: number } // Type assertion
       if (err.code === 40100 || err.message?.includes('invalid key')) { // Unauthorized or invalid key format
-        await this.handleInvalidKey(flags)
+        if (options.key) {
+          await this.handleInvalidKey(flags)
+        }
       }
       throw error
     }

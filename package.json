@@ -39,6 +39,7 @@
     "chalk": "5",
     "cli-table3": "^0.6.5",
     "inquirer": "^12.5.0",
+    "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",
     "react": "^19.0.0",
     "toml": "^3.0.0"
@@ -47,6 +48,7 @@
     "@oclif/test": "^3",
     "@types/chai": "^4",
     "@types/inquirer": "^9.0.7",
+    "@types/jsonwebtoken": "^9.0.9",
     "@types/mocha": "^10.0.1",
     "@types/node": "^22.13.11",
     "@types/node-fetch": "^2.6.12",

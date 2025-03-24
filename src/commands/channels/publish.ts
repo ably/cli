@@ -8,11 +8,13 @@ export default class ChannelsPublish extends AblyBaseCommand {
   static override examples = [
     '$ ably channels publish my-channel \'{"name":"event","data":"Hello World"}\'',
     '$ ably channels publish --api-key "YOUR_API_KEY" my-channel \'{"data":"Simple message"}\'',
+    '$ ably channels publish --token "YOUR_ABLY_TOKEN" my-channel \'{"data":"Using token auth"}\'',
     '$ ably channels publish --name event my-channel \'{"text":"Hello World"}\'',
     '$ ably channels publish my-channel "Hello World"',
     '$ ably channels publish --name event my-channel "Plain text message"',
     '$ ably channels publish --count 5 my-channel "Message number {{.Count}}"',
     '$ ably channels publish --count 10 --delay 1000 my-channel "Message at {{.Timestamp}}"',
+    '$ ably channels publish --transport realtime my-channel "Using realtime transport"',
   ]
 
   static override flags = {
@@ -35,6 +37,11 @@ export default class ChannelsPublish extends AblyBaseCommand {
       description: 'Delay between messages in milliseconds (min 10ms when count > 1)',
       default: 0,
     }),
+    transport: Flags.string({
+      description: 'Transport method to use for publishing (rest or realtime)',
+      options: ['rest', 'realtime'],
+      default: 'rest',
+    }),
   }
 
   static override args = {
@@ -51,20 +58,22 @@ export default class ChannelsPublish extends AblyBaseCommand {
   async run(): Promise<void> {
     const {args, flags} = await this.parse(ChannelsPublish)
     
-    // Declare realtime outside try block for scope
-    let realtime: Ably.Realtime | null = null
-    
+    // Use REST by default now - only create Realtime client if explicitly requested
+    if (flags.transport === 'realtime') {
+      await this.publishWithRealtime(args, flags)
+    } else {
+      await this.publishWithRest(args, flags)
+    }
+  }
+  
+  async publishWithRest(args: any, flags: any): Promise<void> {
     try {
-      // Create Ably client
-      realtime = await this.createAblyClient(flags)
+      // Create REST client with the same options as we would for Realtime
+      const options = this.getClientOptions(flags)
+      const rest = new Ably.Rest(options)
       
-      if (!realtime) {
-        this.error('Failed to create Ably client. Please check your API key and try again.')
-        return
-      }
-
       // Get the channel
-      const channel = realtime.channels.get(args.channel)
+      const channel = rest.channels.get(args.channel)
       
       // Validate count and delay
       const count = Math.max(1, flags.count)
@@ -73,12 +82,16 @@ export default class ChannelsPublish extends AblyBaseCommand {
       // Enforce minimum delay when sending multiple messages
       if (count > 1 && delay < 10) {
         delay = 10
-        this.log('Using minimum delay of 10ms for multiple messages')
+        if (!this.shouldSuppressOutput(flags)) {
+          this.log('Using minimum delay of 10ms for multiple messages')
+        }
       }
       
       // If sending multiple messages, show a progress indication
-      if (count > 1) {
-        this.log(`Publishing ${count} messages with ${delay}ms delay...`)
+      if (count > 1 && !this.shouldSuppressOutput(flags)) {
+        this.log(`Publishing ${count} messages with ${delay}ms delay using REST transport...`)
+      } else if (!this.shouldSuppressOutput(flags)) {
+        this.log('Using REST transport')
       }
       
       // Track publish progress
@@ -88,9 +101,13 @@ export default class ChannelsPublish extends AblyBaseCommand {
       // Publish messages
       if (count > 1) {
         // Publishing multiple messages without awaiting each publish
-        const progressInterval = setInterval(() => {
-          this.log(`Progress: ${publishedCount}/${count} messages published (${errorCount} errors)`)
-        }, 1000)
+        let progressInterval: NodeJS.Timeout | undefined
+        
+        if (!this.shouldSuppressOutput(flags)) {
+          progressInterval = setInterval(() => {
+            this.log(`Progress: ${publishedCount}/${count} messages published (${errorCount} errors)`)
+          }, 1000)
+        }
         
         for (let i = 0; i < count; i++) {
           // Apply interpolation to the message
@@ -137,7 +154,9 @@ export default class ChannelsPublish extends AblyBaseCommand {
             })
             .catch(err => {
               errorCount++
-              this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              if (!this.shouldSuppressOutput(flags)) {
+                this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              }
             })
           
           // Delay before sending next message if not the last one
@@ -153,14 +172,16 @@ export default class ChannelsPublish extends AblyBaseCommand {
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             if (publishedCount + errorCount >= count || (Date.now() - startWaitTime > maxWaitTime)) {
-              clearInterval(progressInterval)
+              if (progressInterval) clearInterval(progressInterval)
               clearInterval(checkInterval)
               resolve()
             }
           }, 100)
         })
         
-        this.log(`${publishedCount}/${count} messages published successfully (${errorCount} errors).`)
+        if (!this.shouldSuppressOutput(flags)) {
+          this.log(`${publishedCount}/${count} messages published successfully (${errorCount} errors).`)
+        }
       } else {
         // Single message - await the publish for better error handling
         try {
@@ -203,7 +224,188 @@ export default class ChannelsPublish extends AblyBaseCommand {
 
           // Publish the message
           await channel.publish(message)
-          this.log('Message published successfully.')
+          if (!this.shouldSuppressOutput(flags)) {
+            this.log('Message published successfully.')
+          }
+        } catch (error) {
+          this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
+    } catch (error) {
+      this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  
+  async publishWithRealtime(args: any, flags: any): Promise<void> {
+    // Declare realtime outside try block for scope
+    let realtime: Ably.Realtime | null = null
+    
+    try {
+      // Create Ably client
+      realtime = await this.createAblyClient(flags)
+      
+      if (!realtime) {
+        this.error('Failed to create Ably client. Please check your API key and try again.')
+        return
+      }
+
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log('Using Realtime transport')
+      }
+
+      // Get the channel
+      const channel = realtime.channels.get(args.channel)
+      
+      // Validate count and delay
+      const count = Math.max(1, flags.count)
+      let delay = flags.delay
+      
+      // Enforce minimum delay when sending multiple messages
+      if (count > 1 && delay < 10) {
+        delay = 10
+        if (!this.shouldSuppressOutput(flags)) {
+          this.log('Using minimum delay of 10ms for multiple messages')
+        }
+      }
+      
+      // If sending multiple messages, show a progress indication
+      if (count > 1 && !this.shouldSuppressOutput(flags)) {
+        this.log(`Publishing ${count} messages with ${delay}ms delay...`)
+      }
+      
+      // Track publish progress
+      let publishedCount = 0
+      let errorCount = 0
+      
+      // Publish messages
+      if (count > 1) {
+        // Publishing multiple messages without awaiting each publish
+        let progressInterval: NodeJS.Timeout | undefined
+        
+        if (!this.shouldSuppressOutput(flags)) {
+          progressInterval = setInterval(() => {
+            this.log(`Progress: ${publishedCount}/${count} messages published (${errorCount} errors)`)
+          }, 1000)
+        }
+        
+        for (let i = 0; i < count; i++) {
+          // Apply interpolation to the message
+          const interpolatedMessage = this.interpolateMessage(args.message, i + 1)
+          
+          // Parse the message
+          let messageData
+          try {
+            messageData = JSON.parse(interpolatedMessage)
+          } catch (error) {
+            // If parsing fails, use the raw message as data
+            messageData = { data: interpolatedMessage }
+          }
+
+          // Prepare the message
+          const message: any = {}
+          
+          // If name is provided in flags, use it. Otherwise, check if it's in the message data
+          if (flags.name) {
+            message.name = flags.name
+          } else if (messageData.name) {
+            message.name = messageData.name
+            // Remove the name from the data to avoid duplication
+            delete messageData.name
+          }
+
+          // If data is explicitly provided in the message, use it
+          if ('data' in messageData) {
+            message.data = messageData.data
+          } else {
+            // Otherwise use the entire messageData as the data
+            message.data = messageData
+          }
+
+          // Add encoding if provided
+          if (flags.encoding) {
+            message.encoding = flags.encoding
+          }
+
+          // Publish the message without awaiting
+          channel.publish(message)
+            .then(() => {
+              publishedCount++
+            })
+            .catch(err => {
+              errorCount++
+              if (!this.shouldSuppressOutput(flags)) {
+                this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              }
+            })
+          
+          // Delay before sending next message if not the last one
+          if (i < count - 1 && delay > 0) {
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
+        }
+        
+        // Wait for all publishes to complete (or timeout after a reasonable period)
+        const maxWaitTime = Math.max(5000, count * delay * 2) // At least 5 seconds or twice the expected duration
+        const startWaitTime = Date.now()
+        
+        await new Promise<void>(resolve => {
+          const checkInterval = setInterval(() => {
+            if (publishedCount + errorCount >= count || (Date.now() - startWaitTime > maxWaitTime)) {
+              if (progressInterval) clearInterval(progressInterval)
+              clearInterval(checkInterval)
+              resolve()
+            }
+          }, 100)
+        })
+        
+        if (!this.shouldSuppressOutput(flags)) {
+          this.log(`${publishedCount}/${count} messages published successfully (${errorCount} errors).`)
+        }
+      } else {
+        // Single message - await the publish for better error handling
+        try {
+          // Apply interpolation to the message
+          const interpolatedMessage = this.interpolateMessage(args.message, 1)
+          
+          // Parse the message
+          let messageData
+          try {
+            messageData = JSON.parse(interpolatedMessage)
+          } catch (error) {
+            // If parsing fails, use the raw message as data
+            messageData = { data: interpolatedMessage }
+          }
+
+          // Prepare the message
+          const message: any = {}
+          
+          // If name is provided in flags, use it. Otherwise, check if it's in the message data
+          if (flags.name) {
+            message.name = flags.name
+          } else if (messageData.name) {
+            message.name = messageData.name
+            // Remove the name from the data to avoid duplication
+            delete messageData.name
+          }
+
+          // If data is explicitly provided in the message, use it
+          if ('data' in messageData) {
+            message.data = messageData.data
+          } else {
+            // Otherwise use the entire messageData as the data
+            message.data = messageData
+          }
+
+          // Add encoding if provided
+          if (flags.encoding) {
+            message.encoding = flags.encoding
+          }
+
+          // Publish the message
+          await channel.publish(message)
+          if (!this.shouldSuppressOutput(flags)) {
+            this.log('Message published successfully.')
+          }
         } catch (error) {
           this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
         }

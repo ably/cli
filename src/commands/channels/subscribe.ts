@@ -11,6 +11,7 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
     '$ ably channels subscribe my-channel',
     '$ ably channels subscribe my-channel another-channel',
     '$ ably channels subscribe --api-key "YOUR_API_KEY" my-channel',
+    '$ ably channels subscribe --token "YOUR_ABLY_TOKEN" my-channel',
     '$ ably channels subscribe --rewind 10 my-channel',
     '$ ably channels subscribe --delta my-channel',
     '$ ably channels subscribe --cipher-key YOUR_CIPHER_KEY my-channel',
