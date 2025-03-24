@@ -1,4 +1,5 @@
 import { ControlBaseCommand } from '../../control-base-command.js'
+import chalk from 'chalk'
 
 export default class AccountsList extends ControlBaseCommand {
   static override description = 'List locally configured Ably accounts'
@@ -21,28 +22,28 @@ export default class AccountsList extends ControlBaseCommand {
       return
     }
 
-    this.log('Locally configured accounts:')
-    this.log('-------------------')
+    this.log(`Found ${accounts.length} accounts:\n`)
 
     for (const { alias, account } of accounts) {
       const isCurrent = alias === currentAlias
-      const currentMarker = isCurrent ? '* ' : '  '
-
-      this.log(`${currentMarker}${alias !== 'default' ? alias : 'default'}:`)
-      this.log(`  Account: ${account.accountName || 'Unknown'} (${account.accountId || 'Unknown'})`)
+      const prefix = isCurrent ? chalk.green('▶ ') : '  '
+      const titleStyle = isCurrent ? chalk.green.bold : chalk.bold
+      
+      this.log(prefix + titleStyle(`Account: ${alias}`) + (isCurrent ? chalk.green(' (current)') : ''))
+      this.log(`  Name: ${account.accountName || 'Unknown'} (${account.accountId || 'Unknown'})`)
       this.log(`  User: ${account.userEmail || 'Unknown'}`)
       
       // Count number of apps configured for this account
       const appCount = account.apps ? Object.keys(account.apps).length : 0
       this.log(`  Apps configured: ${appCount}`)
       
-      this.log('')
-    }
-
-    if (currentAlias) {
-      this.log(`Current account: ${currentAlias}`)
-    } else {
-      this.log('No account is currently selected.')
+      // Show current app if one is selected and this is the current account
+      if (isCurrent && account.currentAppId) {
+        const appName = this.configManager.getAppName(account.currentAppId) || account.currentAppId
+        this.log(`  Current app: ${appName} (${account.currentAppId})`)
+      }
+      
+      this.log('') // Add a blank line between accounts
     }
   }
 } 

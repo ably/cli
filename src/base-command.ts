@@ -2,13 +2,18 @@ import {Command, Flags} from '@oclif/core'
 import * as Ably from 'ably'
 import {randomUUID} from 'crypto'
 import { ConfigManager } from './services/config-manager.js'
+import { InteractiveHelper } from './services/interactive-helper.js'
+import { ControlApi } from './services/control-api.js'
+import chalk from 'chalk'
 
 export abstract class AblyBaseCommand extends Command {
   protected configManager: ConfigManager
+  protected interactiveHelper: InteractiveHelper
 
   constructor(argv: string[], config: any) {
     super(argv, config)
     this.configManager = new ConfigManager()
+    this.interactiveHelper = new InteractiveHelper(this.configManager)
   }
 
   static globalFlags = {
@@ -36,6 +41,73 @@ export abstract class AblyBaseCommand extends Command {
       description: 'Overrides any default client ID when using API authentication',
       env: 'ABLY_CLIENT_ID',
     }),
+  }
+
+  protected async ensureAppAndKey(flags: any): Promise<{appId: string, apiKey: string} | null> {
+    // Check if we have an app and key from flags or config
+    let appId = flags.app || this.configManager.getCurrentAppId()
+    let apiKey = flags['api-key'] || this.configManager.getApiKey(appId)
+
+    // If we have both, return them
+    if (appId && apiKey) {
+      // Display app and key info in non-JSON mode
+      if (flags.format !== 'json' && !flags.json && !flags.quiet) {
+        this.displayAppAndKeyInfo(appId, apiKey)
+      }
+      return { appId, apiKey }
+    }
+
+    // Otherwise, we need to interactively select them
+    this.log('No app or API key configured for this command.')
+    
+    // Get access token for control API
+    const accessToken = flags['access-token'] || this.configManager.getAccessToken()
+    if (!accessToken) {
+      this.log('Please log in first with "ably accounts login" or provide an access token with --access-token.')
+      return null
+    }
+
+    const controlApi = new ControlApi({ accessToken })
+
+    // If no app is selected, prompt to select one
+    if (!appId) {
+      this.log('Select an app to use for this command:')
+      const selectedApp = await this.interactiveHelper.selectApp(controlApi)
+      
+      if (!selectedApp) return null
+      
+      appId = selectedApp.id
+      this.configManager.setCurrentApp(appId)
+      this.log(`Selected app: ${selectedApp.name} (${appId})`)
+    }
+
+    // If no key is selected, prompt to select one
+    if (!apiKey) {
+      this.log('Select an API key to use for this command:')
+      const selectedKey = await this.interactiveHelper.selectKey(controlApi, appId)
+      
+      if (!selectedKey) return null
+      
+      apiKey = selectedKey.key
+      this.configManager.storeAppKey(appId, apiKey)
+      this.log(`Selected key: ${selectedKey.name || 'Unnamed key'} (${selectedKey.id})`)
+    }
+
+    return { appId, apiKey }
+  }
+
+  private displayAppAndKeyInfo(appId: string, apiKey: string): void {
+    // Get app and key information from config
+    const appName = this.configManager.getAppName(appId) || 'Unknown App'
+    const keyId = apiKey.split(':')[0] // Extract key ID (part before colon)
+    const keyName = this.configManager.getKeyName(appId) || 'Unknown Key'
+    // Format the full key name (app_id.key_id)
+    const formattedKeyName = keyId.includes('.') ? keyId : `${appId}.${keyId}`
+    const currentAccount = this.configManager.getCurrentAccount()
+    const accountName = currentAccount?.accountName || this.configManager.getCurrentAccountAlias() || 'Unknown Account'
+
+    this.log(`${chalk.dim('Using:')} ${chalk.cyan('Account=')}${chalk.cyan.bold(accountName)} ${chalk.dim('•')} ${chalk.green('App=')}${chalk.green.bold(appName)} ${chalk.gray(`(${appId})`)} ${chalk.dim('•')} ${chalk.yellow('Key=')}${chalk.yellow.bold(keyName)} ${chalk.gray(`(${formattedKeyName})`)}`)
+    this.log('') // Add blank line for readability
   }
 
   protected getClientOptions(flags: any): Ably.ClientOptions {
@@ -72,8 +144,61 @@ export abstract class AblyBaseCommand extends Command {
     return options
   }
 
-  protected createAblyClient(flags: any): Ably.Realtime {
+  protected async createAblyClient(flags: any): Promise<Ably.Realtime | null> {
+    // Ensure we have app and key before creating client
+    if (!flags['api-key']) {
+      const appAndKey = await this.ensureAppAndKey(flags)
+      if (!appAndKey) {
+        return null
+      }
+      flags['api-key'] = appAndKey.apiKey
+    }
+
     const options = this.getClientOptions(flags)
-    return new Ably.Realtime(options)
+    
+    try {
+      const client = new Ably.Realtime(options)
+      
+      // Wait for the connection to be established or fail
+      return await new Promise((resolve, reject) => {
+        client.connection.once('connected', () => {
+          resolve(client)
+        })
+        
+        client.connection.once('failed', (stateChange) => {
+          // Handle authentication errors specifically
+          if (stateChange.reason && stateChange.reason.code === 40100) { // Unauthorized
+            this.handleInvalidKey(flags)
+            reject(new Error('Invalid API key. Ensure you have a valid key configured.'))
+          } else {
+            reject(stateChange.reason || new Error('Connection failed'))
+          }
+        })
+      })
+    } catch (error: unknown) {
+      // Handle any synchronous errors when creating the client
+      const err = error as Error & { code?: number } // Type assertion
+      if (err.code === 40100 || err.message?.includes('invalid key')) { // Unauthorized or invalid key format
+        await this.handleInvalidKey(flags)
+      }
+      throw error
+    }
+  }
+  
+  private async handleInvalidKey(flags: any): Promise<void> {
+    const appId = flags.app || this.configManager.getCurrentAppId()
+    
+    if (appId) {
+      this.log('The configured API key appears to be invalid or revoked.')
+      
+      const shouldRemove = await this.interactiveHelper.confirm(
+        'Would you like to remove this invalid key from your configuration?'
+      )
+      
+      if (shouldRemove) {
+        this.configManager.removeApiKey(appId)
+        this.log('Invalid key removed from configuration.')
+      }
+    }
   }
 } 

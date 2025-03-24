@@ -1,0 +1,126 @@
+import inquirer from 'inquirer'
+import { ConfigManager } from './config-manager.js'
+import { ControlApi, App, Key } from './control-api.js'
+
+export class InteractiveHelper {
+  private configManager: ConfigManager
+
+  constructor(configManager: ConfigManager) {
+    this.configManager = configManager
+  }
+
+  /**
+   * Interactively select an account from the list of configured accounts
+   */
+  async selectAccount(): Promise<{alias: string, account: any} | null> {
+    try {
+      const accounts = this.configManager.listAccounts()
+      const currentAlias = this.configManager.getCurrentAccountAlias()
+      
+      if (accounts.length === 0) {
+        console.log('No accounts configured. Use "ably accounts login" to add an account.')
+        return null
+      }
+      
+      const { selectedAccount } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'selectedAccount',
+          message: 'Select an account:',
+          choices: accounts.map(account => {
+            const isCurrent = account.alias === currentAlias
+            const accountInfo = account.account.accountName || account.account.accountId || 'Unknown'
+            const userInfo = account.account.userEmail || 'Unknown'
+            return {
+              name: `${isCurrent ? '* ' : '  '}${account.alias} (${accountInfo}, ${userInfo})`,
+              value: account
+            }
+          })
+        }
+      ])
+      
+      return selectedAccount
+    } catch (error) {
+      console.error('Error selecting account:', error)
+      return null
+    }
+  }
+
+  /**
+   * Interactively select an app from the list of available apps
+   */
+  async selectApp(controlApi: ControlApi): Promise<App | null> {
+    try {
+      const apps = await controlApi.listApps()
+      
+      if (apps.length === 0) {
+        console.log('No apps found. Create an app with "ably apps create" first.')
+        return null
+      }
+      
+      const { selectedApp } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'selectedApp',
+          message: 'Select an app:',
+          choices: apps.map(app => ({
+            name: `${app.name} (${app.id})`,
+            value: app
+          }))
+        }
+      ])
+      
+      return selectedApp
+    } catch (error) {
+      console.error('Error fetching apps:', error)
+      return null
+    }
+  }
+
+  /**
+   * Interactively select a key from the list of available keys for an app
+   */
+  async selectKey(controlApi: ControlApi, appId: string): Promise<Key | null> {
+    try {
+      const keys = await controlApi.listKeys(appId)
+      
+      if (keys.length === 0) {
+        console.log('No keys found for this app.')
+        return null
+      }
+      
+      const { selectedKey } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'selectedKey',
+          message: 'Select a key:',
+          choices: keys.map(key => ({
+            name: `${key.name || 'Unnamed key'} (${key.id})`,
+            value: key
+          }))
+        }
+      ])
+      
+      return selectedKey
+    } catch (error) {
+      console.error('Error fetching keys:', error)
+      return null
+    }
+  }
+
+  /**
+   * Confirm an action with the user
+   */
+  async confirm(message: string): Promise<boolean> {
+    const { confirmed } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmed',
+        message,
+        default: false
+      }
+    ])
+    
+    return confirmed
+  }
+} 

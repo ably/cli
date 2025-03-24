@@ -1,7 +1,7 @@
 import {Command} from '@oclif/core'
 
 export default class Channels extends Command {
-  static override description = 'Commands for working with Ably channels'
+  static override description = 'Interact with Ably Pub/Sub channels'
 
   static override examples = [
     '$ ably channels publish my-channel \'{"name":"message","data":"Hello, World"}\'',

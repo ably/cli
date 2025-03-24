@@ -3,23 +3,29 @@ import path from 'path'
 import os from 'os'
 import toml from 'toml'
 
+// Updated to include key and app metadata
+export interface AppConfig {
+  apiKey?: string
+  keyId?: string
+  keyName?: string
+  appName?: string
+}
+
 export interface AccountConfig {
   accessToken: string
   tokenId?: string
   userEmail?: string
   accountId?: string
   accountName?: string
+  currentAppId?: string
   apps?: {
-    [appId: string]: {
-      apiKey?: string
-    }
+    [appId: string]: AppConfig
   }
 }
 
 export interface AblyConfig {
   current?: {
     account?: string
-    app?: string
   }
   accounts: {
     [alias: string]: AccountConfig
@@ -56,6 +62,17 @@ export class ConfigManager {
         if (!this.config.accounts) {
           this.config.accounts = {}
         }
+        
+        // Migrate old config format if needed - move app from current to account.currentAppId
+        const oldConfig = this.config as any // Use any to allow access to potentially non-existent properties
+        if (oldConfig.current?.app) {
+          const currentAccountAlias = this.config.current?.account
+          if (currentAccountAlias && this.config.accounts[currentAccountAlias]) {
+            this.config.accounts[currentAccountAlias].currentAppId = oldConfig.current.app
+            delete oldConfig.current.app // Remove from current section
+            this.saveConfig() // Save the migrated config
+          }
+        }
       } catch (error) {
         throw new Error(`Failed to load Ably config: ${error}`)
       }
@@ -74,7 +91,7 @@ export class ConfigManager {
     }
   }
 
-  // Format to TOML manually since toml library doesn't support stringify
+  // Updated formatToToml method to include app and key metadata
   private formatToToml(config: AblyConfig): string {
     let result = ''
 
@@ -83,9 +100,6 @@ export class ConfigManager {
       result += '[current]\n'
       if (config.current.account) {
         result += `account = "${config.current.account}"\n`
-      }
-      if (config.current.app) {
-        result += `app = "${config.current.app}"\n`
       }
       result += '\n'
     }
@@ -111,6 +125,10 @@ export class ConfigManager {
         result += `accountName = "${account.accountName}"\n`
       }
       
+      if (account.currentAppId) {
+        result += `currentAppId = "${account.currentAppId}"\n`
+      }
+      
       // Write apps section for this account
       if (account.apps && Object.keys(account.apps).length > 0) {
         for (const [appId, appConfig] of Object.entries(account.apps)) {
@@ -118,6 +136,18 @@ export class ConfigManager {
           
           if (appConfig.apiKey) {
             result += `apiKey = "${appConfig.apiKey}"\n`
+          }
+          
+          if (appConfig.keyId) {
+            result += `keyId = "${appConfig.keyId}"\n`
+          }
+          
+          if (appConfig.keyName) {
+            result += `keyName = "${appConfig.keyName}"\n`
+          }
+          
+          if (appConfig.appName) {
+            result += `appName = "${appConfig.appName}"\n`
           }
           
           result += '\n'
@@ -164,6 +194,7 @@ export class ConfigManager {
     this.config.accounts[alias] = {
       accessToken,
       ...accountInfo,
+      currentAppId: this.config.accounts[alias]?.currentAppId,
       apps: this.config.accounts[alias]?.apps || {}
     }
     
@@ -190,8 +221,12 @@ export class ConfigManager {
     return true
   }
 
-  // Store API key for an app
-  public storeAppKey(appId: string, apiKey: string, accountAlias?: string): void {
+  // Updated storeAppKey to include key metadata
+  public storeAppKey(appId: string, apiKey: string, metadata?: { 
+    keyId?: string, 
+    keyName?: string, 
+    appName?: string 
+  }, accountAlias?: string): void {
     const alias = accountAlias || this.getCurrentAccountAlias() || 'default'
     
     // Ensure the account and apps structure exists
@@ -203,27 +238,38 @@ export class ConfigManager {
       this.config.accounts[alias].apps = {}
     }
     
-    // Store the API key
+    // Store the API key and metadata
     this.config.accounts[alias].apps[appId] = {
-      apiKey
+      ...(this.config.accounts[alias].apps[appId] || {}),
+      apiKey,
+      keyId: metadata?.keyId || apiKey.split(':')[0], // Extract key ID if not provided
+      keyName: metadata?.keyName,
+      appName: metadata?.appName
     }
     
     this.saveConfig()
   }
 
-  // Set current app
+  // Set current app for the current account
   public setCurrentApp(appId: string): void {
-    if (!this.config.current) {
-      this.config.current = {}
+    const currentAccount = this.getCurrentAccount()
+    const currentAlias = this.getCurrentAccountAlias()
+    
+    if (!currentAccount || !currentAlias) {
+      throw new Error('No current account selected')
     }
     
-    this.config.current.app = appId
+    // Set the current app for this account
+    this.config.accounts[currentAlias].currentAppId = appId
     this.saveConfig()
   }
 
-  // Get current app ID
+  // Get current app ID for the current account
   public getCurrentAppId(): string | undefined {
-    return this.config.current?.app
+    const currentAccount = this.getCurrentAccount()
+    if (!currentAccount) return undefined
+    
+    return currentAccount.currentAppId
   }
 
   // Get API key for current app or specific app ID
@@ -235,6 +281,20 @@ export class ConfigManager {
     if (!targetAppId) return undefined
     
     return currentAccount.apps[targetAppId]?.apiKey
+  }
+
+  // Remove API key for an app
+  public removeApiKey(appId: string): boolean {
+    const currentAccount = this.getCurrentAccount()
+    if (!currentAccount || !currentAccount.apps) return false
+    
+    if (currentAccount.apps[appId]) {
+      delete currentAccount.apps[appId].apiKey
+      this.saveConfig()
+      return true
+    }
+    
+    return false
   }
 
   // List all accounts
@@ -265,5 +325,69 @@ export class ConfigManager {
   // Get path to config file
   public getConfigPath(): string {
     return this.configPath
+  }
+
+  // Get key ID for the current app or specific app ID
+  public getKeyId(appId?: string): string | undefined {
+    const currentAccount = this.getCurrentAccount()
+    if (!currentAccount || !currentAccount.apps) return undefined
+    
+    const targetAppId = appId || this.getCurrentAppId()
+    if (!targetAppId) return undefined
+    
+    // Get from specific metadata field or extract from API key
+    const appConfig = currentAccount.apps[targetAppId]
+    if (!appConfig) return undefined
+    
+    if (appConfig.keyId) {
+      return appConfig.keyId
+    }
+    
+    if (appConfig.apiKey) {
+      return appConfig.apiKey.split(':')[0]
+    }
+    
+    return undefined
+  }
+
+  // Get key name for the current app or specific app ID
+  public getKeyName(appId?: string): string | undefined {
+    const currentAccount = this.getCurrentAccount()
+    if (!currentAccount || !currentAccount.apps) return undefined
+    
+    const targetAppId = appId || this.getCurrentAppId()
+    if (!targetAppId) return undefined
+    
+    return currentAccount.apps[targetAppId]?.keyName
+  }
+
+  // Get app name for specific app ID
+  public getAppName(appId: string): string | undefined {
+    const currentAccount = this.getCurrentAccount()
+    if (!currentAccount || !currentAccount.apps) return undefined
+    
+    return currentAccount.apps[appId]?.appName
+  }
+
+  // Store app information (like name) in the config
+  public storeAppInfo(appId: string, appInfo: { appName: string }, accountAlias?: string): void {
+    const alias = accountAlias || this.getCurrentAccountAlias() || 'default'
+    
+    // Ensure the account and apps structure exists
+    if (!this.config.accounts[alias]) {
+      throw new Error(`Account "${alias}" not found`)
+    }
+    
+    if (!this.config.accounts[alias].apps) {
+      this.config.accounts[alias].apps = {}
+    }
+    
+    // Store the app info
+    this.config.accounts[alias].apps[appId] = {
+      ...(this.config.accounts[alias].apps[appId] || {}),
+      ...appInfo
+    }
+    
+    this.saveConfig()
   }
 } 

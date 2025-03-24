@@ -64,7 +64,9 @@ $ ably auth keys revoke [key identifier or complete key] -> revoke a key in the 
 $ ably auth keys get [key identifier or complete key] -> view all the details for a key (uses the Control API)
 $ ably auth keys update [key identifier or complete key] -> update properties of the key such as capabilities and the name
 $ ably auth keys switch [key identifier or complete key] -> switch to this key for all client requests for this app. This API key will be stored in the config for the currently selected app.
+$ ably auth keys current -> Show the current key if one is configured for this app in the config. Note that for each app only one key can be configured, but switching between apps will remember the last configured key for the app if used before.
 
+$ ably apps -> Topic for manage apps
 $ ably apps list -> list all apps available 
 $ ably apps create -> create a new app 
 $ ably apps update -> update the current app or named app from the --app argument 
@@ -72,7 +74,9 @@ $ ably apps delete -> delete the app following confirmation by the user in the C
 $ ably apps set-apns-p12 -> allow a user to upload a P12 cert for use with APNS
 $ ably apps stats -> view app stats, with a --live option which polls every 6 seconds and returns key metrics such as peak connections, channels, message throughput, and cumulative messages sent etc.
 $ ably apps switch -> switch to this app for all subsequent requests
+$ ably apps current -> Show the current app if one is configured for the account.
 
+$ ably channels -> Topic for Ably Pub/Sub channels
 $ ably channels list -> use the channel enumeration API to return a list of live channels
 $ ably channels publish -> publish a message to a channel with optional support for encryption
 $ ably channels batch-publish -> use the REST batch publish API to publish a batch of messages

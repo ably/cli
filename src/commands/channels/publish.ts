@@ -1,4 +1,5 @@
 import {Args, Flags} from '@oclif/core'
+import * as Ably from 'ably'
 import {AblyBaseCommand} from '../../base-command.js'
 
 export default class ChannelsPublish extends AblyBaseCommand {
@@ -8,6 +9,8 @@ export default class ChannelsPublish extends AblyBaseCommand {
     '$ ably channels publish my-channel \'{"name":"event","data":"Hello World"}\'',
     '$ ably channels publish --api-key "YOUR_API_KEY" my-channel \'{"data":"Simple message"}\'',
     '$ ably channels publish --name event my-channel \'{"text":"Hello World"}\'',
+    '$ ably channels publish my-channel "Hello World"',
+    '$ ably channels publish --name event my-channel "Plain text message"',
   ]
 
   static override flags = {
@@ -28,24 +31,26 @@ export default class ChannelsPublish extends AblyBaseCommand {
       required: true,
     }),
     message: Args.string({
-      description: 'The message to publish in JSON format',
+      description: 'The message to publish (JSON format or plain text)',
       required: true,
     }),
   }
 
   async run(): Promise<void> {
     const {args, flags} = await this.parse(ChannelsPublish)
-
-    // Validate API key is provided
-    if (!flags['api-key']) {
-      this.error('An API key is required. Please provide it with --api-key flag or set the ABLY_API_KEY environment variable.')
-      return
-    }
-
-    // Create the Ably client
-    const realtime = this.createAblyClient(flags)
-
+    
+    // Declare realtime outside try block for scope
+    let realtime: Ably.Realtime | null = null
+    
     try {
+      // Create Ably client
+      realtime = await this.createAblyClient(flags)
+      
+      if (!realtime) {
+        this.error('Failed to create Ably client. Please check your API key and try again.')
+        return
+      }
+      
       // Parse the message
       let messageData
       try {
@@ -86,14 +91,15 @@ export default class ChannelsPublish extends AblyBaseCommand {
       // Publish the message
       await channel.publish(message)
       
-      this.log(`Message published to channel "${args.channel}"`)
-      
-      // Close the connection after publishing
+      // Close connection when done
       realtime.close()
+      this.log('Message published successfully.')
     } catch (error) {
+      // Close connection in case of error
+      if (realtime) {
+        realtime.close()
+      }
       this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
-      // Ensure the connection is closed on error
-      realtime.close()
     }
   }
 } 

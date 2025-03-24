@@ -29,6 +29,18 @@ export interface AppStats {
 // Since account stats have the same structure as app stats
 export type AccountStats = AppStats;
 
+export interface Key {
+  id: string
+  appId: string
+  name: string
+  key: string
+  capability: any;
+  revocable: boolean;
+  created: number;
+  modified: number;
+  status: string;
+}
+
 export class ControlApi {
   private accessToken: string
   private controlHost: string
@@ -179,5 +191,44 @@ export class ControlApi {
     
     // App ID-specific operations don't need account ID in the path
     return this.request<{ id: string }>(`/apps/${appId}/push/certificate`, 'POST', data)
+  }
+
+  // List all keys for an app
+  async listKeys(appId: string): Promise<Key[]> {
+    return this.request<Key[]>(`/apps/${appId}/keys`)
+  }
+
+  // Get a specific key by ID or key value
+  async getKey(appId: string, keyIdOrValue: string): Promise<Key> {
+    // Check if it's a full key (containing colon) or just an ID
+    const isFullKey = keyIdOrValue.includes(':')
+    
+    if (isFullKey) {
+      // If it's a full key, we need to list all keys and find the matching one
+      const keys = await this.listKeys(appId)
+      const matchingKey = keys.find(k => k.key === keyIdOrValue)
+      
+      if (!matchingKey) {
+        throw new Error(`Key "${keyIdOrValue}" not found`)
+      }
+      
+      return matchingKey
+    } else {
+      // If it's just an ID, we can fetch it directly
+      return this.request<Key>(`/apps/${appId}/keys/${keyIdOrValue}`)
+    }
+  }
+
+  // Update a key
+  async updateKey(appId: string, keyId: string, keyData: { 
+    name?: string,
+    capability?: any 
+  }): Promise<Key> {
+    return this.request<Key>(`/apps/${appId}/keys/${keyId}`, 'PATCH', keyData)
+  }
+
+  // Revoke a key
+  async revokeKey(appId: string, keyId: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/keys/${keyId}`, 'DELETE')
   }
 } 

@@ -1,7 +1,7 @@
 import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class AccountsCommand extends ControlBaseCommand {
-  static description = 'Commands for working with Ably accounts'
+  static description = 'Manage Ably accounts and your configured access tokens'
 
   static examples = [
     'ably accounts stats',
