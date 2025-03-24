@@ -101,6 +101,11 @@ $ ably rooms list -> list chat rooms using the channel enumeration API, filterin
 $ ably rooms messages send -> send a chat message. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
 $ ably rooms messages subscribe -> subscribe to chat messages
 $ ably rooms messages get -> get historical messages
+$ ably rooms occupancy -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
+$ ably rooms presence subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
+$ ably rooms presence enter -> enter a room and remain present until the script is terminated. Show who is entering and leaving whilst present,
+$ ably rooms reactions subscribe -> subscribe to room reactions
+$ ably rooms reactions send -> send a room reaction
 $ ably rooms typing subscribe -> subscribe to typing indicators and show who is typing and stops typing in realtime
 $ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
 

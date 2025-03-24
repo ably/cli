@@ -105,6 +105,15 @@ USAGE
 * [`ably rooms messages get ROOMID`](#ably-rooms-messages-get-roomid)
 * [`ably rooms messages send ROOMID TEXT`](#ably-rooms-messages-send-roomid-text)
 * [`ably rooms messages subscribe ROOMID`](#ably-rooms-messages-subscribe-roomid)
+* [`ably rooms occupancy`](#ably-rooms-occupancy)
+* [`ably rooms occupancy get ROOMID`](#ably-rooms-occupancy-get-roomid)
+* [`ably rooms occupancy subscribe ROOMID`](#ably-rooms-occupancy-subscribe-roomid)
+* [`ably rooms presence`](#ably-rooms-presence)
+* [`ably rooms presence enter ROOMID`](#ably-rooms-presence-enter-roomid)
+* [`ably rooms presence subscribe ROOMID`](#ably-rooms-presence-subscribe-roomid)
+* [`ably rooms reactions`](#ably-rooms-reactions)
+* [`ably rooms reactions send ROOMID TYPE`](#ably-rooms-reactions-send-roomid-type)
+* [`ably rooms reactions subscribe ROOMID`](#ably-rooms-reactions-subscribe-roomid)
 * [`ably rooms typing`](#ably-rooms-typing)
 * [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
 * [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
@@ -2513,6 +2522,277 @@ EXAMPLES
 ```
 
 _See code: [src/commands/rooms/messages/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/messages/subscribe.ts)_
+
+## `ably rooms occupancy`
+
+Commands for monitoring room occupancy
+
+```
+USAGE
+  $ ably rooms occupancy
+
+DESCRIPTION
+  Commands for monitoring room occupancy
+
+EXAMPLES
+  $ ably rooms occupancy get my-room
+
+  $ ably rooms occupancy subscribe my-room
+```
+
+_See code: [src/commands/rooms/occupancy/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/occupancy/index.ts)_
+
+## `ably rooms occupancy get ROOMID`
+
+Get current occupancy metrics for a room
+
+```
+USAGE
+  $ ably rooms occupancy get ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  ROOMID  Room ID to get occupancy for
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Get current occupancy metrics for a room
+
+EXAMPLES
+  $ ably rooms occupancy get my-room
+
+  $ ably rooms occupancy get --api-key "YOUR_API_KEY" my-room
+```
+
+_See code: [src/commands/rooms/occupancy/get.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/occupancy/get.ts)_
+
+## `ably rooms occupancy subscribe ROOMID`
+
+Subscribe to real-time occupancy metrics for a room
+
+```
+USAGE
+  $ ably rooms occupancy subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  ROOMID  Room ID to subscribe to occupancy for
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to real-time occupancy metrics for a room
+
+EXAMPLES
+  $ ably rooms occupancy subscribe my-room
+
+  $ ably rooms occupancy subscribe --api-key "YOUR_API_KEY" my-room
+
+  $ ably rooms occupancy subscribe --format json my-room
+```
+
+_See code: [src/commands/rooms/occupancy/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/occupancy/subscribe.ts)_
+
+## `ably rooms presence`
+
+Manage presence on Ably chat rooms
+
+```
+USAGE
+  $ ably rooms presence
+
+DESCRIPTION
+  Manage presence on Ably chat rooms
+
+EXAMPLES
+  $ ably rooms presence enter my-room
+
+  $ ably rooms presence subscribe my-room
+```
+
+_See code: [src/commands/rooms/presence/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/presence/index.ts)_
+
+## `ably rooms presence enter ROOMID`
+
+Enter presence in a chat room and remain present until terminated
+
+```
+USAGE
+  $ ably rooms presence enter ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>] [--show-others]
+
+ARGUMENTS
+  ROOMID  Room ID to enter presence on
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --data=<value>          [default: {}] Presence data to publish (JSON string)
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --show-others           Show other presence events while present
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Enter presence in a chat room and remain present until terminated
+
+EXAMPLES
+  $ ably rooms presence enter my-room
+
+  $ ably rooms presence enter my-room --data '{"status":"online","username":"john"}'
+
+  $ ably rooms presence enter my-room --client-id "user123"
+```
+
+_See code: [src/commands/rooms/presence/enter.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/presence/enter.ts)_
+
+## `ably rooms presence subscribe ROOMID`
+
+Subscribe to presence events in a chat room
+
+```
+USAGE
+  $ ably rooms presence subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  ROOMID  Room ID to subscribe to presence for
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to presence events in a chat room
+
+EXAMPLES
+  $ ably rooms presence subscribe my-room
+
+  $ ably rooms presence subscribe my-room --format json
+```
+
+_See code: [src/commands/rooms/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/presence/subscribe.ts)_
+
+## `ably rooms reactions`
+
+Manage reactions in Ably chat rooms
+
+```
+USAGE
+  $ ably rooms reactions
+
+DESCRIPTION
+  Manage reactions in Ably chat rooms
+
+EXAMPLES
+  $ ably rooms reactions send my-room thumbs_up
+
+  $ ably rooms reactions subscribe my-room
+```
+
+_See code: [src/commands/rooms/reactions/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/reactions/index.ts)_
+
+## `ably rooms reactions send ROOMID TYPE`
+
+Send a reaction to a chat room
+
+```
+USAGE
+  $ ably rooms reactions send ROOMID TYPE [--host <value>] [--env <value>] [--control-host <value>] [--access-token
+    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>]
+
+ARGUMENTS
+  ROOMID  Room ID to send the reaction to
+  TYPE    Reaction type/emoji to send
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --metadata=<value>      [default: {}] Optional metadata for the reaction (JSON string)
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Send a reaction to a chat room
+
+EXAMPLES
+  $ ably rooms reactions send my-room thumbs_up
+
+  $ ably rooms reactions send my-room heart --metadata '{"effect":"fireworks"}'
+```
+
+_See code: [src/commands/rooms/reactions/send.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/reactions/send.ts)_
+
+## `ably rooms reactions subscribe ROOMID`
+
+Subscribe to reactions in a chat room
+
+```
+USAGE
+  $ ably rooms reactions subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  ROOMID  Room ID to subscribe to reactions in
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to reactions in a chat room
+
+EXAMPLES
+  $ ably rooms reactions subscribe my-room
+
+  $ ably rooms reactions subscribe my-room --format json
+```
+
+_See code: [src/commands/rooms/reactions/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/reactions/subscribe.ts)_
 
 ## `ably rooms typing`
 
