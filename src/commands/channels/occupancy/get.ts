@@ -38,20 +38,17 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsOccupancyGet)
     
-    // Validate API key is provided
-    if (!flags['api-key']) {
-      this.error('An API key is required. Please provide it with --api-key flag or set the ABLY_API_KEY environment variable.')
-      return
-    }
-
-    // Create the Ably Realtime client
-    const realtime = this.createAblyClient(flags)
-
+    let client: Ably.Realtime | null = null;
+    
     try {
+      // Create the Ably Realtime client
+      client = await this.createAblyClient(flags)
+      if (!client) return
+
       const channelName = args.channel
       
       // Use the realtime client to get channel details
-      const channel = realtime.channels.get(channelName, { 
+      const channel = client.channels.get(channelName, { 
         params: { 
           occupancy: 'metrics' 
         } 
@@ -73,7 +70,7 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
           reject(new Error('Timed out waiting for occupancy metrics'))
         }, 5000) // 5 second timeout
         
-        channel.subscribe('[meta]occupancy', (message) => {
+        channel.subscribe('[meta]occupancy', (message: any) => {
           clearTimeout(timeout)
           channel.unsubscribe('[meta]occupancy')
           
@@ -110,10 +107,10 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
       
       // Clean up
       await channel.detach()
-      realtime.close()
     } catch (error) {
       this.error(`Error fetching channel occupancy: ${error instanceof Error ? error.message : String(error)}`)
-      realtime.close()
+    } finally {
+      if (client) client.close()
     }
   }
 } 

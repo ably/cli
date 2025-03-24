@@ -54,16 +54,13 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
   async run(): Promise<void> {
     const {args, flags, argv} = await this.parse(ChannelsSubscribe)
 
-    // Validate API key is provided
-    if (!flags['api-key']) {
-      this.error('An API key is required. Please provide it with --api-key flag or set the ABLY_API_KEY environment variable.')
-      return
-    }
-
-    // Create the Ably client
-    const realtime = this.createAblyClient(flags)
+    let client: Ably.Realtime | null = null;
 
     try {
+      // Create the Ably client
+      client = await this.createAblyClient(flags)
+      if (!client) return
+
       // Get all channel names from argv
       const channelNames = argv as string[]
 
@@ -102,21 +99,20 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
           }
         }
         
-        return realtime.channels.get(channelName, channelOptions)
+        return client!.channels.get(channelName, channelOptions)
       })
 
       // Setup connection state change handler
-      realtime.connection.on('connected', () => {
+      client.connection.on('connected', () => {
         this.log('Successfully connected to Ably')
       })
 
-      realtime.connection.on('disconnected', () => {
+      client.connection.on('disconnected', () => {
         this.log('Disconnected from Ably')
       })
 
-      realtime.connection.on('failed', (err: Ably.ConnectionStateChange) => {
+      client.connection.on('failed', (err: Ably.ConnectionStateChange) => {
         this.error(`Connection failed: ${err.reason?.message || 'Unknown error'}`)
-        process.exit(1)
       })
 
       // Subscribe to messages on all channels
@@ -131,22 +127,32 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
           this.log(`Data: ${JSON.stringify(message.data, null, 2)}`)
         })
       })
-
-      // Setup graceful shutdown
-      const cleanup = () => {
-        this.log('\nUnsubscribing and closing connection...')
-        channels.forEach((channel: Ably.RealtimeChannel) => channel.unsubscribe())
-        realtime.close()
-        process.exit(0)
-      }
-
-      process.on('SIGINT', cleanup)
-      process.on('SIGTERM', cleanup)
-
+      
       this.log('Listening for messages. Press Ctrl+C to exit.')
+
+      // Keep the process running until interrupted
+      await new Promise<void>((resolve) => {
+        const cleanup = () => {
+          this.log('\nUnsubscribing and closing connection...')
+          channels.forEach((channel: Ably.RealtimeChannel) => channel.unsubscribe())
+          if (client) {
+            client.connection.once('closed', () => {
+              this.log('Connection closed')
+              resolve()
+            })
+            client.close()
+          } else {
+            resolve()
+          }
+        }
+
+        process.on('SIGINT', cleanup)
+        process.on('SIGTERM', cleanup)
+      })
     } catch (error) {
       this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
-      realtime.close()
+    } finally {
+      if (client) client.close()
     }
   }
 } 

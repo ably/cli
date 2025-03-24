@@ -1,5 +1,6 @@
 import { Args, Flags } from '@oclif/core'
 import { AblyBaseCommand } from '../../../base-command.js'
+import * as Ably from 'ably'
 
 export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
   static description = 'Subscribe to real-time occupancy metrics for a channel'
@@ -29,16 +30,15 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsOccupancySubscribe)
     
-    // Validate API key is provided
-    if (!flags['api-key']) {
-      this.error('An API key is required. Please provide it with --api-key flag or set the ABLY_API_KEY environment variable.')
-      return
-    }
-
-    // Create the Ably client
-    const realtime = this.createAblyClient(flags)
-
+    let client: Ably.Realtime | null = null;
+    
     try {
+      this.log('Connecting to Ably...')
+      
+      // Create the Ably client
+      client = await this.createAblyClient(flags)
+      if (!client) return
+
       // Get the channel with occupancy option enabled
       const channelName = args.channel
       const channelOptions = {
@@ -47,25 +47,26 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
         }
       }
       
-      const channel = realtime.channels.get(channelName, channelOptions)
+      const channel = client.channels.get(channelName, channelOptions)
 
       // Setup connection state change handler
-      realtime.connection.on('connected', () => {
+      client.connection.on('connected', () => {
         this.log('Successfully connected to Ably')
         this.log(`Subscribing to occupancy events for channel '${channelName}'...`)
       })
 
-      realtime.connection.on('disconnected', () => {
+      client.connection.on('disconnected', () => {
         this.log('Disconnected from Ably')
       })
 
-      realtime.connection.on('failed', (err) => {
+      client.connection.on('failed', (err: Ably.ConnectionStateChange) => {
         this.error(`Connection failed: ${err.reason?.message || 'Unknown error'}`)
-        process.exit(1)
       })
 
+      this.log('Listening for occupancy updates. Press Ctrl+C to exit.')
+      
       // Subscribe to occupancy events
-      channel.subscribe('[meta]occupancy', (message) => {
+      channel.subscribe('[meta]occupancy', (message: any) => {
         const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
         
         // Extract occupancy metrics from the message
@@ -105,22 +106,29 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
         }
       })
 
-      // Setup graceful shutdown
-      const cleanup = () => {
-        this.log('\nUnsubscribing and closing connection...')
-        channel.unsubscribe()
-        realtime.close()
-        process.exit(0)
-      }
+      // Keep the process running until interrupted
+      await new Promise<void>((resolve) => {
+        const cleanup = () => {
+          this.log('\nUnsubscribing and closing connection...')
+          channel.unsubscribe()
+          if (client) {
+            client.connection.once('closed', () => {
+              this.log('Connection closed')
+              resolve()
+            })
+            client.close()
+          } else {
+            resolve()
+          }
+        }
 
-      process.on('SIGINT', cleanup)
-      process.on('SIGTERM', cleanup)
-      
-      this.log('Connecting to Ably...')
-      this.log('Listening for occupancy updates. Press Ctrl+C to exit.')
+        process.on('SIGINT', cleanup)
+        process.on('SIGTERM', cleanup)
+      })
     } catch (error) {
       this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
-      realtime.close()
+    } finally {
+      if (client) client.close()
     }
   }
 } 

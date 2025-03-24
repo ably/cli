@@ -78,6 +78,8 @@ export abstract class AblyBaseCommand extends Command {
       
       appId = selectedApp.id
       this.configManager.setCurrentApp(appId)
+      // Store app name along with app ID
+      this.configManager.storeAppInfo(appId, { appName: selectedApp.name })
       this.log(`Selected app: ${selectedApp.name} (${appId})`)
     }
 
@@ -89,7 +91,15 @@ export abstract class AblyBaseCommand extends Command {
       if (!selectedKey) return null
       
       apiKey = selectedKey.key
-      this.configManager.storeAppKey(appId, apiKey)
+      // Store key with metadata including key name and ID
+      this.configManager.storeAppKey(
+        appId, 
+        apiKey, 
+        {
+          keyId: selectedKey.id,
+          keyName: selectedKey.name || 'Unnamed key'
+        }
+      )
       this.log(`Selected key: ${selectedKey.name || 'Unnamed key'} (${selectedKey.id})`)
     }
 
