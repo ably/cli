@@ -2,7 +2,8 @@
 
 Ably CLI for Ably Pub/Sub, Ably Spaces, Ably Chat and the Ably Control API.
 
-This project is in early alpha stage. It is not recommended you use this, but do [get in touch](https://ably.com/contact) if you have feedback or feature requests.
+This project is in beta. This CLI is being actively developed, may change and may have bugs. 
+Please [get in touch](https://ably.com/contact) if you have feedback, feature requests or want to report bugs. We will start an issue tracker shortly.
 
 <!-- toc -->
 * [Ably CLI](#ably-cli)
@@ -12,11 +13,11 @@ This project is in early alpha stage. It is not recommended you use this, but do
 # Usage
 <!-- usage -->
 ```sh-session
-$ npm install -g ably-cli
+$ npm install -g @ably/cli
 $ ably COMMAND
 running command...
 $ ably (--version)
-ably-cli/0.0.1 darwin-arm64 node-v22.14.0
+@ably/cli/0.0.1 darwin-arm64 node-v22.14.0
 $ ably --help [COMMAND]
 USAGE
   $ ably COMMAND
@@ -25,55 +26,58 @@ USAGE
 <!-- usagestop -->
 # Commands
 <!-- commands -->
-* [`ably accounts`](#ably-accounts)
-* [`ably accounts current`](#ably-accounts-current)
-* [`ably accounts list`](#ably-accounts-list)
-* [`ably accounts login [TOKEN]`](#ably-accounts-login-token)
-* [`ably accounts logout [ALIAS]`](#ably-accounts-logout-alias)
-* [`ably accounts stats`](#ably-accounts-stats)
-* [`ably accounts switch [ALIAS]`](#ably-accounts-switch-alias)
-* [`ably apps`](#ably-apps)
-* [`ably apps create`](#ably-apps-create)
-* [`ably apps current`](#ably-apps-current)
-* [`ably apps delete ID`](#ably-apps-delete-id)
-* [`ably apps list`](#ably-apps-list)
-* [`ably apps set-apns-p12 ID`](#ably-apps-set-apns-p12-id)
-* [`ably apps stats ID`](#ably-apps-stats-id)
-* [`ably apps switch [APPID]`](#ably-apps-switch-appid)
-* [`ably apps update ID`](#ably-apps-update-id)
-* [`ably auth`](#ably-auth)
-* [`ably auth keys`](#ably-auth-keys)
-* [`ably auth keys current`](#ably-auth-keys-current)
-* [`ably auth keys get KEYNAMEORVALUE`](#ably-auth-keys-get-keynameorvalue)
-* [`ably auth keys list`](#ably-auth-keys-list)
-* [`ably auth keys revoke KEYNAME`](#ably-auth-keys-revoke-keyname)
-* [`ably auth keys switch [KEYNAMEORVALUE]`](#ably-auth-keys-switch-keynameorvalue)
-* [`ably auth keys update KEYNAME`](#ably-auth-keys-update-keyname)
-* [`ably bench`](#ably-bench)
-* [`ably bench publisher CHANNEL`](#ably-bench-publisher-channel)
-* [`ably bench subscriber CHANNEL`](#ably-bench-subscriber-channel)
-* [`ably channels`](#ably-channels)
-* [`ably channels history CHANNEL`](#ably-channels-history-channel)
-* [`ably channels list`](#ably-channels-list)
-* [`ably channels occupancy`](#ably-channels-occupancy)
-* [`ably channels occupancy get CHANNEL`](#ably-channels-occupancy-get-channel)
-* [`ably channels occupancy subscribe CHANNEL`](#ably-channels-occupancy-subscribe-channel)
-* [`ably channels presence`](#ably-channels-presence)
-* [`ably channels presence enter CHANNEL`](#ably-channels-presence-enter-channel)
-* [`ably channels presence subscribe CHANNEL`](#ably-channels-presence-subscribe-channel)
-* [`ably channels publish CHANNEL MESSAGE`](#ably-channels-publish-channel-message)
-* [`ably channels subscribe CHANNELS`](#ably-channels-subscribe-channels)
-* [`ably config`](#ably-config)
-* [`ably login [TOKEN]`](#ably-login-token)
-* [`ably rooms`](#ably-rooms)
-* [`ably rooms list`](#ably-rooms-list)
-* [`ably rooms messages`](#ably-rooms-messages)
-* [`ably rooms messages get ROOMID`](#ably-rooms-messages-get-roomid)
-* [`ably rooms messages send ROOMID TEXT`](#ably-rooms-messages-send-roomid-text)
-* [`ably rooms messages subscribe ROOMID`](#ably-rooms-messages-subscribe-roomid)
-* [`ably rooms typing`](#ably-rooms-typing)
-* [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
-* [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
+- [Ably CLI](#ably-cli)
+- [Usage](#usage)
+- [Commands](#commands)
+  - [`ably accounts`](#ably-accounts)
+  - [`ably accounts current`](#ably-accounts-current)
+  - [`ably accounts list`](#ably-accounts-list)
+  - [`ably accounts login [TOKEN]`](#ably-accounts-login-token)
+  - [`ably accounts logout [ALIAS]`](#ably-accounts-logout-alias)
+  - [`ably accounts stats`](#ably-accounts-stats)
+  - [`ably accounts switch [ALIAS]`](#ably-accounts-switch-alias)
+  - [`ably apps`](#ably-apps)
+  - [`ably apps create`](#ably-apps-create)
+  - [`ably apps current`](#ably-apps-current)
+  - [`ably apps delete ID`](#ably-apps-delete-id)
+  - [`ably apps list`](#ably-apps-list)
+  - [`ably apps set-apns-p12 ID`](#ably-apps-set-apns-p12-id)
+  - [`ably apps stats ID`](#ably-apps-stats-id)
+  - [`ably apps switch [APPID]`](#ably-apps-switch-appid)
+  - [`ably apps update ID`](#ably-apps-update-id)
+  - [`ably auth`](#ably-auth)
+  - [`ably auth keys`](#ably-auth-keys)
+  - [`ably auth keys current`](#ably-auth-keys-current)
+  - [`ably auth keys get KEYNAMEORVALUE`](#ably-auth-keys-get-keynameorvalue)
+  - [`ably auth keys list`](#ably-auth-keys-list)
+  - [`ably auth keys revoke KEYNAME`](#ably-auth-keys-revoke-keyname)
+  - [`ably auth keys switch [KEYNAMEORVALUE]`](#ably-auth-keys-switch-keynameorvalue)
+  - [`ably auth keys update KEYNAME`](#ably-auth-keys-update-keyname)
+  - [`ably bench`](#ably-bench)
+  - [`ably bench publisher CHANNEL`](#ably-bench-publisher-channel)
+  - [`ably bench subscriber CHANNEL`](#ably-bench-subscriber-channel)
+  - [`ably channels`](#ably-channels)
+  - [`ably channels history CHANNEL`](#ably-channels-history-channel)
+  - [`ably channels list`](#ably-channels-list)
+  - [`ably channels occupancy`](#ably-channels-occupancy)
+  - [`ably channels occupancy get CHANNEL`](#ably-channels-occupancy-get-channel)
+  - [`ably channels occupancy subscribe CHANNEL`](#ably-channels-occupancy-subscribe-channel)
+  - [`ably channels presence`](#ably-channels-presence)
+  - [`ably channels presence enter CHANNEL`](#ably-channels-presence-enter-channel)
+  - [`ably channels presence subscribe CHANNEL`](#ably-channels-presence-subscribe-channel)
+  - [`ably channels publish CHANNEL MESSAGE`](#ably-channels-publish-channel-message)
+  - [`ably channels subscribe CHANNELS`](#ably-channels-subscribe-channels)
+  - [`ably config`](#ably-config)
+  - [`ably login [TOKEN]`](#ably-login-token)
+  - [`ably rooms`](#ably-rooms)
+  - [`ably rooms list`](#ably-rooms-list)
+  - [`ably rooms messages`](#ably-rooms-messages)
+  - [`ably rooms messages get ROOMID`](#ably-rooms-messages-get-roomid)
+  - [`ably rooms messages send ROOMID TEXT`](#ably-rooms-messages-send-roomid-text)
+  - [`ably rooms messages subscribe ROOMID`](#ably-rooms-messages-subscribe-roomid)
+  - [`ably rooms typing`](#ably-rooms-typing)
+  - [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
+  - [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
 
 ## `ably accounts`
 

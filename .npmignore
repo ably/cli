@@ -1,0 +1,25 @@
+# Source files
+/src
+
+# Development tools
+.eslintrc
+.prettierrc
+tsconfig.json
+tsconfig.tsbuildinfo
+.mocharc.json
+.github
+.vscode
+.idea
+
+# Tests
+/test
+
+# Docs
+/docs
+PRD.md
+cursor_rules
+TODO.md
+
+# Other
+.DS_Store
+.env* 
