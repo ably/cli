@@ -90,6 +90,7 @@ USAGE
 * [`ably logs channel-lifecycle`](#ably-logs-channel-lifecycle)
 * [`ably logs channel-lifecycle subscribe`](#ably-logs-channel-lifecycle-subscribe)
 * [`ably logs connection-lifecycle`](#ably-logs-connection-lifecycle)
+* [`ably logs connection-lifecycle history`](#ably-logs-connection-lifecycle-history)
 * [`ably logs connection-lifecycle subscribe`](#ably-logs-connection-lifecycle-subscribe)
 * [`ably logs push`](#ably-logs-push)
 * [`ably logs push history`](#ably-logs-push-history)
@@ -495,7 +496,7 @@ _See code: [src/commands/apps/logs/index.ts](https://github.com/ably/cli/blob/v0
 
 ## `ably apps logs history`
 
-Alias for ably logs app history
+Alias for `ably logs app history`
 
 ```
 USAGE
@@ -507,15 +508,15 @@ FLAGS
   --api-key=<value>       Overrides any configured API key used for the product APIs
   --client-id=<value>     Overrides any default client ID when using API authentication
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
-  --direction=<option>    [default: backwards] Direction of message history retrieval
+  --direction=<option>    [default: backwards] Direction of message retrieval
                           <options: backwards|forwards>
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results as JSON
+  --json                  Output results in JSON format
   --limit=<value>         [default: 100] Maximum number of messages to retrieve
 
 DESCRIPTION
-  Alias for ably logs app history
+  Alias for `ably logs app history`
 
 EXAMPLES
   $ ably apps logs history
@@ -523,6 +524,8 @@ EXAMPLES
   $ ably apps logs history --limit 20
 
   $ ably apps logs history --direction forwards
+
+  $ ably apps logs history --json
 ```
 
 _See code: [src/commands/apps/logs/history.ts](https://github.com/ably/cli/blob/v0.1.3/src/commands/apps/logs/history.ts)_
@@ -1103,31 +1106,27 @@ Retrieve message history for a channel
 ```
 USAGE
   $ ably channels history CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards] [--start <value>]
-    [--end <value>] [--format json|pretty] [--cipher-key <value>] [--cipher-algorithm <value>] [--cipher-key-length
-    <value>] [--cipher-mode <value>]
+    [--api-key <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards] [--format json|pretty]
+    [--start <value>] [--end <value>] [--cipher <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to retrieve history for
 
 FLAGS
-  --access-token=<value>       Overrides any configured access token used for the Control API
-  --api-key=<value>            Overrides any configured API key used for the product APIs
-  --cipher-algorithm=<value>   [default: aes] Encryption algorithm to use
-  --cipher-key=<value>         Encryption key for decrypting messages (hex-encoded)
-  --cipher-key-length=<value>  [default: 256] Length of encryption key in bits
-  --cipher-mode=<value>        [default: cbc] Cipher mode to use
-  --client-id=<value>          Overrides any default client ID when using API authentication
-  --control-host=<value>       Override the host endpoint for the control API, which defaults to control.ably.net
-  --direction=<option>         [default: backwards] Order of messages
-                               <options: backwards|forwards>
-  --end=<value>                End time for the history query (ISO 8601 format)
-  --env=<value>                Override the environment for all product API calls
-  --format=<option>            [default: pretty] Output format (json or pretty)
-                               <options: json|pretty>
-  --host=<value>               Override the host endpoint for all product API calls
-  --limit=<value>              [default: 25] Maximum number of messages to return
-  --start=<value>              Start time for the history query (ISO 8601 format)
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --cipher=<value>        Decryption key for encrypted messages (AES-128)
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --direction=<option>    [default: backwards] Direction of message retrieval
+                          <options: backwards|forwards>
+  --end=<value>           End time for the history query (ISO 8601 format)
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --limit=<value>         [default: 50] Maximum number of messages to retrieve
+  --start=<value>         Start time for the history query (ISO 8601 format)
 
 DESCRIPTION
   Retrieve message history for a channel
@@ -1715,7 +1714,7 @@ _See code: [src/commands/logs/app/index.ts](https://github.com/ably/cli/blob/v0.
 
 ## `ably logs app history`
 
-View historical app logs from [meta]log
+Retrieve application log history
 
 ```
 USAGE
@@ -1727,15 +1726,15 @@ FLAGS
   --api-key=<value>       Overrides any configured API key used for the product APIs
   --client-id=<value>     Overrides any default client ID when using API authentication
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
-  --direction=<option>    [default: backwards] Direction of message history retrieval
+  --direction=<option>    [default: backwards] Direction of log retrieval
                           <options: backwards|forwards>
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results as JSON
-  --limit=<value>         [default: 100] Maximum number of messages to retrieve
+  --json                  Output results in JSON format
+  --limit=<value>         [default: 100] Maximum number of logs to retrieve
 
 DESCRIPTION
-  View historical app logs from [meta]log
+  Retrieve application log history
 
 EXAMPLES
   $ ably logs app history
@@ -1743,6 +1742,8 @@ EXAMPLES
   $ ably logs app history --limit 20
 
   $ ably logs app history --direction forwards
+
+  $ ably logs app history --json
 ```
 
 _See code: [src/commands/logs/app/history.ts](https://github.com/ably/cli/blob/v0.1.3/src/commands/logs/app/history.ts)_
@@ -1856,6 +1857,42 @@ EXAMPLES
 
 _See code: [src/commands/logs/connection-lifecycle/index.ts](https://github.com/ably/cli/blob/v0.1.3/src/commands/logs/connection-lifecycle/index.ts)_
 
+## `ably logs connection-lifecycle history`
+
+Retrieve connection lifecycle log history
+
+```
+USAGE
+  $ ably logs connection-lifecycle history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --direction=<option>    [default: backwards] Direction of log retrieval
+                          <options: backwards|forwards>
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results in JSON format
+  --limit=<value>         [default: 100] Maximum number of logs to retrieve
+
+DESCRIPTION
+  Retrieve connection lifecycle log history
+
+EXAMPLES
+  $ ably logs connection-lifecycle history
+
+  $ ably logs connection-lifecycle history --limit 20
+
+  $ ably logs connection-lifecycle history --direction forwards
+
+  $ ably logs connection-lifecycle history --json
+```
+
+_See code: [src/commands/logs/connection-lifecycle/history.ts](https://github.com/ably/cli/blob/v0.1.3/src/commands/logs/connection-lifecycle/history.ts)_
+
 ## `ably logs connection-lifecycle subscribe`
 
 Stream logs from [meta]connection.lifecycle meta channel
@@ -1909,7 +1946,7 @@ _See code: [src/commands/logs/push/index.ts](https://github.com/ably/cli/blob/v0
 
 ## `ably logs push history`
 
-View historical push notification logs from [meta]log:push
+Retrieve push notification log history
 
 ```
 USAGE
@@ -1921,15 +1958,15 @@ FLAGS
   --api-key=<value>       Overrides any configured API key used for the product APIs
   --client-id=<value>     Overrides any default client ID when using API authentication
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
-  --direction=<option>    [default: backwards] Direction of message history retrieval
+  --direction=<option>    [default: backwards] Direction of log retrieval
                           <options: backwards|forwards>
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results as JSON
-  --limit=<value>         [default: 100] Maximum number of messages to retrieve
+  --json                  Output results in JSON format
+  --limit=<value>         [default: 100] Maximum number of logs to retrieve
 
 DESCRIPTION
-  View historical push notification logs from [meta]log:push
+  Retrieve push notification log history
 
 EXAMPLES
   $ ably logs push history
@@ -1937,6 +1974,8 @@ EXAMPLES
   $ ably logs push history --limit 20
 
   $ ably logs push history --direction forwards
+
+  $ ably logs push history --json
 ```
 
 _See code: [src/commands/logs/push/history.ts](https://github.com/ably/cli/blob/v0.1.3/src/commands/logs/push/history.ts)_

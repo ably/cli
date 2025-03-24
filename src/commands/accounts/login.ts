@@ -168,18 +168,52 @@ export default class AccountsLogin extends ControlBaseCommand {
     })
 
     return new Promise((resolve) => {
-      rl.question('Enter an alias for this account (e.g. "dev", "production", "personal"): ', (alias) => {
-        rl.close()
-        
-        const trimmedAlias = alias.trim()
+      const validateAndGetAlias = (input: string): string | null => {
+        const trimmedAlias = input.trim()
         if (!trimmedAlias) {
-          // If they don't enter anything, use default
-          this.log('No alias provided. Using "default" instead.')
-          resolve('default')
-        } else {
-          resolve(trimmedAlias)
+          return null
         }
-      })
+
+        // Convert to lowercase for case-insensitive comparison
+        const lowercaseAlias = trimmedAlias.toLowerCase()
+
+        // First character must be a letter
+        if (!/^[a-z]/.test(lowercaseAlias)) {
+          this.log('Error: Alias must start with a letter')
+          return null
+        }
+
+        // Only allow letters, numbers, dashes, and underscores after first character
+        if (!/^[a-z][a-z0-9_-]*$/.test(lowercaseAlias)) {
+          this.log('Error: Alias can only contain letters, numbers, dashes, and underscores')
+          return null
+        }
+
+        return lowercaseAlias
+      }
+
+      const askForAlias = () => {
+        rl.question('Enter an alias for this account (e.g. "dev", "production", "personal"): ', (alias) => {
+          const validatedAlias = validateAndGetAlias(alias)
+          
+          if (validatedAlias === null) {
+            if (!alias.trim()) {
+              // If they don't enter anything, use default
+              this.log('No alias provided. Using "default" instead.')
+              rl.close()
+              resolve('default')
+            } else {
+              // If validation failed, ask again
+              askForAlias()
+            }
+          } else {
+            rl.close()
+            resolve(validatedAlias)
+          }
+        })
+      }
+
+      askForAlias()
     })
   }
   
