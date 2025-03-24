@@ -8,12 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@ably/chat':
+        specifier: ^0.5.1
+        version: 0.5.1(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)
       '@oclif/core':
         specifier: ^4.2.10
         version: 4.2.10
       ably:
         specifier: github:ably/ably-js#type-correction-publishoptions
-        version: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee
+        version: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0)
       chalk:
         specifier: '5'
         version: 5.4.1
@@ -23,6 +26,9 @@ importers:
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
+      react:
+        specifier: ^19.0.0
+        version: 19.0.0
       toml:
         specifier: ^3.0.0
         version: 3.0.0
@@ -62,6 +68,20 @@ importers:
         version: 5.8.2
 
 packages:
+
+  '@ably/chat@0.5.1':
+    resolution: {integrity: sha512-zwCakFcXPgYNfZ6ERv0F0ExFrzY4dyUbcPzajYgbkuJn3YdQxdqIF9oIP66TChi3tDd5opMOPmWTQxOXFU/IrQ==}
+    version: 0.5.1
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      ably: ^2.6.3
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   '@ably/msgpack-js@0.4.0':
     resolution: {integrity: sha512-IPt/BoiQwCWubqoNik1aw/6M/DleMdrxJOUpSja6xmMRbT2p1TA8oqKWgfZabqzrq8emRNeSl/+4XABPNnW5pQ==}
@@ -233,6 +253,16 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
+  '@rollup/rollup-darwin-arm64@4.37.0':
+    resolution: {integrity: sha512-+iTQ5YHuGmPt10NTzEyMPbayiNTcOZDWsbxZYR1ZnmLnZxG17ivrPSWFO9j6GalY0+gV3Jtwrrs12DBscxnlYA==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rollup/rollup-linux-x64-gnu@4.37.0':
+    resolution: {integrity: sha512-pKivGpgJM5g8dwj0ywBwe/HeVAUSuVVJhUTa/URXjxvoyTT/AxsLTAbkHkDHG7qQxLoW2s3apEIl26uUe08LVQ==}
+    cpu: [x64]
+    os: [linux]
+
   '@sindresorhus/is@4.6.0':
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
     engines: {node: '>=10'}
@@ -386,6 +416,9 @@ packages:
   astral-regex@2.0.0:
     resolution: {integrity: sha512-Z7tMw1ytTXt5jqMcOP+OQteU1VuNK9Y02uuJtKQ1Sv69jXQKKg5cibLwGJow8yzZP+eAc18EmLGPal0bp36rvQ==}
     engines: {node: '>=8'}
+
+  async-mutex@0.5.0:
+    resolution: {integrity: sha512-1A94B18jkJ3DYq284ohPxoXbfTA5HsQ7/Mf4DEhcyLx3Bz27Rh59iScbB6EPiP+B+joue6YCxcMXSbFC1tZKwA==}
 
   async@3.2.6:
     resolution: {integrity: sha512-htCUDlxyyCLMgaM3xXg0C0LW2xqfuQ6p05pCEIsXuyQ+a1koYKTuBMzRNwmybfLgvJDMd0r1LTn4+E0Ti6C2AA==}
@@ -549,6 +582,10 @@ packages:
   delayed-stream@1.0.0:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
+
+  dequal@2.0.3:
+    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
+    engines: {node: '>=6'}
 
   diff@4.0.2:
     resolution: {integrity: sha512-58lmxKSA4BNyLz+HHMUzlOEpg09FV+ev6ZMe3vJihgdxzgcwZ8VoEEPmALCZG9LmqfVoNMMKpttIYTVG6uDY7A==}
@@ -864,6 +901,9 @@ packages:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
 
+  lodash.clonedeep@4.5.0:
+    resolution: {integrity: sha512-H5ZhCF25riFd9uB5UCkVKo61m3S/xZk1x4wA6yp/L3RFP6Z/eHH1ymQcGLo7J3GMPfm0V/7m1tryHuGVxpqEBQ==}
+
   lodash.get@4.4.2:
     resolution: {integrity: sha512-z+Uw/vLuy6gQe8cfaFWD7p0wVv8fJl3mbzXh33RS+0oW2wvUqiRXiQ69gLWSLpgB5/6sU+r6BlQR0MBILadqTQ==}
     deprecated: This package is deprecated. Use the optional chaining (?.) operator instead.
@@ -1064,6 +1104,10 @@ packages:
 
   randombytes@2.1.0:
     resolution: {integrity: sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==}
+
+  react@19.0.0:
+    resolution: {integrity: sha512-V8AVnmPIICiWpGfm6GLzCR/W5FXLchHop40W4nXBmdlEceh16rCN8O8LNWm5bh5XUX91fh7KpA+W0TgMKmgTpQ==}
+    engines: {node: '>=0.10.0'}
 
   readdirp@3.6.0:
     resolution: {integrity: sha512-hOS089on8RduqdbhvQ5Z37A0ESjsqz6qnRcffsMU3495FuTdqSm+7bhJ29JvIOsBDEEnan5DPu9t3To9VRlMzA==}
@@ -1355,6 +1399,17 @@ packages:
 
 snapshots:
 
+  '@ably/chat@0.5.1(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      ably: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0)
+      async-mutex: 0.5.0
+      dequal: 2.0.3
+      lodash.clonedeep: 4.5.0
+    optionalDependencies:
+      '@rollup/rollup-darwin-arm64': 4.37.0
+      '@rollup/rollup-linux-x64-gnu': 4.37.0
+      react: 19.0.0
+
   '@ably/msgpack-js@0.4.0':
     dependencies:
       bops: 1.0.1
@@ -1572,6 +1627,12 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
+  '@rollup/rollup-darwin-arm64@4.37.0':
+    optional: true
+
+  '@rollup/rollup-linux-x64-gnu@4.37.0':
+    optional: true
+
   '@sindresorhus/is@4.6.0': {}
 
   '@sinonjs/commons@3.0.1':
@@ -1657,13 +1718,15 @@ snapshots:
     dependencies:
       '@types/node': 22.13.11
 
-  ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee:
+  ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0):
     dependencies:
       '@ably/msgpack-js': 0.4.0
       fastestsmallesttextencoderdecoder: 1.0.22
       got: 11.8.6
       ulid: 2.4.0
       ws: 8.18.1
+    optionalDependencies:
+      react: 19.0.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -1712,6 +1775,10 @@ snapshots:
   assertion-error@1.1.0: {}
 
   astral-regex@2.0.0: {}
+
+  async-mutex@0.5.0:
+    dependencies:
+      tslib: 2.8.1
 
   async@3.2.6: {}
 
@@ -1883,6 +1950,8 @@ snapshots:
   defer-to-connect@2.0.1: {}
 
   delayed-stream@1.0.0: {}
+
+  dequal@2.0.3: {}
 
   diff@4.0.2: {}
 
@@ -2205,6 +2274,8 @@ snapshots:
     dependencies:
       p-locate: 5.0.0
 
+  lodash.clonedeep@4.5.0: {}
+
   lodash.get@4.4.2: {}
 
   lodash@4.17.21: {}
@@ -2386,6 +2457,8 @@ snapshots:
   randombytes@2.1.0:
     dependencies:
       safe-buffer: 5.2.1
+
+  react@19.0.0: {}
 
   readdirp@3.6.0:
     dependencies:

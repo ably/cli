@@ -89,6 +89,14 @@ $ ably channels presence subscribe -> show the complete list of members present,
 
 $ ably config -> opens the config TOML file with the default text editor 
 
+$ ably rooms -> Topic for Ably Chat
+$ ably rooms list -> list chat rooms using the channel enumeration API, filtering out those that are not chat
+$ ably rooms messages send -> send a chat message
+$ ably rooms messages subscribe -> subscribe to chat messages
+$ ably rooms messages get -> get historical messages
+$ ably rooms typing subscribe -> subscribe to typing indicators and show who is typing and stops typing in realtime
+$ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
+
 ### Authentication
 
 There are two distinct types of authentication needs for the CLI.

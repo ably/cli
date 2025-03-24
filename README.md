@@ -62,6 +62,15 @@ USAGE
 * [`ably channels subscribe CHANNELS`](#ably-channels-subscribe-channels)
 * [`ably config`](#ably-config)
 * [`ably login [TOKEN]`](#ably-login-token)
+* [`ably rooms`](#ably-rooms)
+* [`ably rooms list`](#ably-rooms-list)
+* [`ably rooms messages`](#ably-rooms-messages)
+* [`ably rooms messages get ROOMID`](#ably-rooms-messages-get-roomid)
+* [`ably rooms messages send ROOMID TEXT`](#ably-rooms-messages-send-roomid-text)
+* [`ably rooms messages subscribe ROOMID`](#ably-rooms-messages-subscribe-roomid)
+* [`ably rooms typing`](#ably-rooms-typing)
+* [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
+* [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
 
 ## `ably accounts`
 
@@ -1203,5 +1212,258 @@ EXAMPLES
   $ ably login
 
   $ ably login --alias mycompany
+```
+
+## `ably rooms`
+
+Commands for working with Ably Chat rooms
+
+```
+USAGE
+  $ ably rooms
+
+DESCRIPTION
+  Commands for working with Ably Chat rooms
+
+EXAMPLES
+  $ ably rooms list
+
+  $ ably rooms messages send my-room "Hello world!"
+
+  $ ably rooms messages subscribe my-room
+
+  $ ably rooms messages get my-room
+
+  $ ably rooms typing subscribe my-room
+
+  $ ably rooms typing start my-room
+```
+
+## `ably rooms list`
+
+List active chat rooms
+
+```
+USAGE
+  $ ably rooms list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-p <value>] [--limit <value>] [--format json|pretty]
+
+FLAGS
+  -p, --prefix=<value>        Filter rooms by prefix
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --format=<option>       [default: pretty] Output format (json or pretty)
+                              <options: json|pretty>
+      --host=<value>          Override the host endpoint for all product API calls
+      --limit=<value>         [default: 100] Maximum number of rooms to return
+
+DESCRIPTION
+  List active chat rooms
+
+EXAMPLES
+  $ ably rooms list
+
+  $ ably rooms list --prefix my-room
+
+  $ ably rooms list --limit 50
+
+  $ ably rooms list --format json
+```
+
+## `ably rooms messages`
+
+Commands for working with chat messages in rooms
+
+```
+USAGE
+  $ ably rooms messages
+
+DESCRIPTION
+  Commands for working with chat messages in rooms
+
+EXAMPLES
+  $ ably rooms messages send my-room "Hello world!"
+
+  $ ably rooms messages subscribe my-room
+
+  $ ably rooms messages get my-room
+```
+
+## `ably rooms messages get ROOMID`
+
+Get historical messages from an Ably Chat room
+
+```
+USAGE
+  $ ably rooms messages get ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-l <value>] [--show-metadata]
+
+ARGUMENTS
+  ROOMID  The room ID to get messages from
+
+FLAGS
+  -l, --limit=<value>         [default: 20] Maximum number of messages to retrieve
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --show-metadata         Display message metadata if available
+
+DESCRIPTION
+  Get historical messages from an Ably Chat room
+
+EXAMPLES
+  $ ably rooms messages get my-room
+
+  $ ably rooms messages get --api-key "YOUR_API_KEY" my-room
+
+  $ ably rooms messages get --limit 50 my-room
+
+  $ ably rooms messages get --show-metadata my-room
+```
+
+## `ably rooms messages send ROOMID TEXT`
+
+Send a message to an Ably Chat room
+
+```
+USAGE
+  $ ably rooms messages send ROOMID TEXT [--host <value>] [--env <value>] [--control-host <value>] [--access-token
+    <value>] [--api-key <value>] [--client-id <value>] [--metadata <value>]
+
+ARGUMENTS
+  ROOMID  The room ID to send the message to
+  TEXT    The message text to send
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --metadata=<value>      Additional metadata for the message (JSON format)
+
+DESCRIPTION
+  Send a message to an Ably Chat room
+
+EXAMPLES
+  $ ably rooms messages send my-room "Hello World!"
+
+  $ ably rooms messages send --api-key "YOUR_API_KEY" my-room "Welcome to the chat!"
+
+  $ ably rooms messages send --metadata '{"isImportant":true}' my-room "Attention please!"
+```
+
+## `ably rooms messages subscribe ROOMID`
+
+Subscribe to messages in an Ably Chat room
+
+```
+USAGE
+  $ ably rooms messages subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--show-metadata]
+
+ARGUMENTS
+  ROOMID  The room ID to subscribe to messages from
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --show-metadata         Display message metadata if available
+
+DESCRIPTION
+  Subscribe to messages in an Ably Chat room
+
+EXAMPLES
+  $ ably rooms messages subscribe my-room
+
+  $ ably rooms messages subscribe --api-key "YOUR_API_KEY" my-room
+
+  $ ably rooms messages subscribe --show-metadata my-room
+```
+
+## `ably rooms typing`
+
+Commands for working with typing indicators in chat rooms
+
+```
+USAGE
+  $ ably rooms typing
+
+DESCRIPTION
+  Commands for working with typing indicators in chat rooms
+
+EXAMPLES
+  $ ably rooms typing subscribe my-room
+
+  $ ably rooms typing start my-room
+```
+
+## `ably rooms typing start ROOMID`
+
+Start typing in an Ably Chat room (will remain typing until terminated)
+
+```
+USAGE
+  $ ably rooms typing start ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>]
+
+ARGUMENTS
+  ROOMID  The room ID to start typing in
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  Start typing in an Ably Chat room (will remain typing until terminated)
+
+EXAMPLES
+  $ ably rooms typing start my-room
+
+  $ ably rooms typing start --api-key "YOUR_API_KEY" my-room
+```
+
+## `ably rooms typing subscribe ROOMID`
+
+Subscribe to typing indicators in an Ably Chat room
+
+```
+USAGE
+  $ ably rooms typing subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>]
+
+ARGUMENTS
+  ROOMID  The room ID to subscribe to typing indicators from
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  Subscribe to typing indicators in an Ably Chat room
+
+EXAMPLES
+  $ ably rooms typing subscribe my-room
+
+  $ ably rooms typing subscribe --api-key "YOUR_API_KEY" my-room
 ```
 <!-- commandsstop -->

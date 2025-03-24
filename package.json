@@ -26,11 +26,13 @@
     ]
   },
   "dependencies": {
+    "@ably/chat": "^0.5.1",
     "@oclif/core": "^4.2.10",
     "ably": "github:ably/ably-js#type-correction-publishoptions",
     "chalk": "5",
     "inquirer": "^12.5.0",
     "node-fetch": "^3.3.2",
+    "react": "^19.0.0",
     "toml": "^3.0.0"
   },
   "devDependencies": {
