@@ -26,7 +26,11 @@
     "topicSeparator": " ",
     "plugins": [
       "./dist"
-    ]
+    ],
+    "hidden": [
+      "aliases"
+    ],
+    "helpClass": "./dist/help.js"
   },
   "dependencies": {
     "@ably/chat": "^0.5.1",

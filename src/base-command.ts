@@ -17,29 +17,23 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   static globalFlags = {
-    'host': Flags.string({
+    host: Flags.string({
       description: 'Override the host endpoint for all product API calls',
-      env: 'ABLY_HOST',
     }),
-    'env': Flags.string({
+    env: Flags.string({
       description: 'Override the environment for all product API calls',
-      env: 'ABLY_ENV',
     }),
     'control-host': Flags.string({
       description: 'Override the host endpoint for the control API, which defaults to control.ably.net',
-      env: 'ABLY_CONTROL_HOST',
     }),
     'access-token': Flags.string({
       description: 'Overrides any configured access token used for the Control API',
-      env: 'ABLY_ACCESS_TOKEN',
     }),
     'api-key': Flags.string({
       description: 'Overrides any configured API key used for the product APIs',
-      env: 'ABLY_API_KEY',
     }),
     'client-id': Flags.string({
       description: 'Overrides any default client ID when using API authentication',
-      env: 'ABLY_CLIENT_ID',
     }),
   }
 
@@ -210,5 +204,29 @@ export abstract class AblyBaseCommand extends Command {
         this.log('Invalid key removed from configuration.')
       }
     }
+  }
+
+  protected async handleSingularPlural(command: string): Promise<void> {
+    // Map of singular to plural commands
+    const singularToPlural: Record<string, string> = {
+      'account': 'accounts',
+      'app': 'apps',
+      'channel': 'channels',
+      'connection': 'connections',
+      'log': 'logs',
+      'room': 'rooms'
+    }
+
+    // Check if the command is a singular form
+    const singularMatch = command.match(/^([a-z]+)(?::|$)/)
+    if (singularMatch && singularToPlural[singularMatch[1]]) {
+      // Replace the singular form with plural in the command
+      const pluralCommand = command.replace(/^[a-z]+/, singularToPlural[singularMatch[1]])
+      await this.config.runCommand(pluralCommand, this.argv)
+      return
+    }
+
+    // If not a singular form, continue with normal command execution
+    return
   }
 } 
