@@ -129,26 +129,48 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
           
           this.log(`\n${chalk.yellow('Leaving room and closing connection...')}`)
           
+          // Set a force exit timeout
+          const forceExitTimeout = setTimeout(() => {
+            this.log(chalk.red('Force exiting after timeout...'))
+            process.exit(1)
+          }, 5000)
+          
           try {
             // Leave the room using presence API
-            await room.presence.leave()
+            try {
+              await room.presence.leave()
+              this.log(chalk.green('Successfully left room presence.'))
+            } catch (error) {
+              this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+              this.log('Continuing with cleanup.')
+            }
             
             // Release the room
-            await chatClient.rooms.release(roomId)
+            try {
+              await chatClient.rooms.release(roomId)
+              this.log(chalk.green('Successfully released room.'))
+            } catch (error) {
+              this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+              this.log('Continuing with cleanup.')
+            }
+            
+            if (clients?.realtimeClient) {
+              clients.realtimeClient.close()
+            }
+            
+            this.log(`${chalk.green('Successfully disconnected.')}`)
+            clearTimeout(forceExitTimeout)
+            resolve(null)
+            process.exit(0)
           } catch (error) {
             this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            clearTimeout(forceExitTimeout)
+            process.exit(1)
           }
-          
-          if (clients?.realtimeClient) {
-            clients.realtimeClient.close()
-          }
-          
-          this.log(`${chalk.green('Successfully disconnected.')}`)
-          resolve(null)
         }
 
-        process.on('SIGINT', () => void cleanup())
-        process.on('SIGTERM', () => void cleanup())
+        process.once('SIGINT', () => void cleanup())
+        process.once('SIGTERM', () => void cleanup())
       })
     } catch (error) {
       this.error(`Error entering room presence: ${error instanceof Error ? error.message : String(error)}`)

@@ -131,15 +131,49 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
       
       // Keep the process running until interrupted
       await new Promise((resolve) => {
-        const cleanup = () => {
+        let cleanupInProgress = false
+        
+        const cleanup = async () => {
+          if (cleanupInProgress) return
+          cleanupInProgress = true
+          
           this.log('\nUnsubscribing from presence events and closing connection...')
-          channel.presence.unsubscribe()
-          if (client) client.close()
-          resolve(null)
+          
+          // Set a force exit timeout
+          const forceExitTimeout = setTimeout(() => {
+            this.log(chalk.red('Force exiting after timeout...'))
+            process.exit(1)
+          }, 5000)
+          
+          try {
+            try {
+              // Attempt to unsubscribe from presence
+              channel.presence.unsubscribe()
+              this.log(chalk.green('Successfully unsubscribed from presence events.'))
+            } catch (error) {
+              // If unsubscribing fails (likely due to channel being detached), just log and continue
+              this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+              this.log('Continuing with connection close.')
+            }
+            
+            // Now close the connection
+            if (client) {
+              client.close()
+              this.log(chalk.green('Successfully closed connection.'))
+            }
+            
+            clearTimeout(forceExitTimeout)
+            resolve(null)
+            process.exit(0)
+          } catch (error) {
+            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            clearTimeout(forceExitTimeout)
+            process.exit(1)
+          }
         }
         
-        process.on('SIGINT', cleanup)
-        process.on('SIGTERM', cleanup)
+        process.once('SIGINT', () => void cleanup())
+        process.once('SIGTERM', () => void cleanup())
       })
     } catch (error) {
       this.error(`Error subscribing to presence: ${error instanceof Error ? error.message : String(error)}`)

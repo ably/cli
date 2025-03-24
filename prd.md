@@ -109,6 +109,20 @@ $ ably rooms reactions send -> send a room reaction
 $ ably rooms typing subscribe -> subscribe to typing indicators and show who is typing and stops typing in realtime
 $ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
 
+$ ably spaces -> Topic for Ably Spaces
+$ ably spaces members subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
+$ ably spaces members enter -> enter a space and remain present until the script is terminated. Show who is entering and leaving whilst present.
+$ ably spaces locations set -> allow a location to be set, and remain at this location until the script is terminated. Show other location changes whilst the script is running.
+$ ably spaces locations subscribe -> subcribe to the set of locations, show all locations, and then show location changes as they happen
+$ ably spaces locations get-all -> show all current locations for a space and then exit
+$ ably spaces cursors set -> allows a specific x and y location to be set, but if not position is set, then the client will simulate movements of a mouse moving periodically.
+$ ably spaces cursors subscribe -> show a table of all cursors and their positions, and show changes as they happen. Use colour coding to show when changes have been made, and after 2s revert back to the default colour.
+$ ably spaces cursors get-all -> retrieve all current cursors, show the details, and exit.
+$ ably spaces locks acquire -> acquire a lock for the provided ID, and keep that lock until the script is terminated. Show any other changes to locks whilst the script is running.
+$ ably spaces locks subscribe -> show a table of all locks and show live updates. Use colour coding to show when changes have been made, and after 2s revert back to the default colour.
+$ ably spaces locks get -> a lock ID argument is required, confirm if a lock exists or not and show the lock if one does exist
+$ ably spaces locks get-all -> show a list of all locks and exit
+
 $ ably logs -> Topic for streaming and retrieving logs
 $ ably logs channel-lifecycle subscribe -> Stream logs from [meta]channel.lifecycle meta channel, see https://ably.com/docs/metadata-stats/metadata/subscribe#channel-lifecycle for types of evetns, and the data type.
 $ ably logs connection-lifecycle subscribe -> Stream logs from [meta]connection.lifecycle meta channel. 
@@ -228,7 +242,7 @@ Note:
 #### Ably Control API
 
 For all control plane management of apps and their associated resources, the Control API will be used. 
-The control API is documented in full at https://ably.com/docs/api/control-api and has an OpenAPI specification atmhttps://github.com/ably/docs/blob/main/static/open-specs/control-v1.yaml. 
+The control API is documented in full at https://ably.com/docs/api/control-api and has an OpenAPI specification at https://github.com/ably/docs/blob/main/static/open-specs/control-v1.yaml. 
 All authentication with the Control API requires a Control API token that is configurable by a registered Ably user at https://ably.com/users/access_tokens.
 An access token is associated with a single user and a single account, and all API endpoints, apart from one, can be called without knowing which account the access token belongs to.
 The exception is the https://control.ably.net/v1/accounts/{id}/stats endpoint, which requires an account ID. The CLI can however determine the account ID for the current token by calling the https://control.ably.net/v1/me, and reading the account.id JSON value.

@@ -137,33 +137,67 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
 
       // Keep the process running until interrupted
       await new Promise<void>((resolve) => {
+        let cleanupInProgress = false
+        
         const cleanup = async () => {
+          if (cleanupInProgress) return
+          cleanupInProgress = true
+          
           this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`)
           
-          // Unsubscribe from presence events
-          if (presenceSubscription) {
-            presenceSubscription.unsubscribe()
-          }
-          
-          // Unsubscribe from status changes
-          unsubscribeStatus()
+          // Set a force exit timeout
+          const forceExitTimeout = setTimeout(() => {
+            this.log(chalk.red('Force exiting after timeout...'))
+            process.exit(1)
+          }, 5000)
           
           try {
-            await chatClient.rooms.release(roomId)
+            // Unsubscribe from presence events
+            if (presenceSubscription) {
+              try {
+                presenceSubscription.unsubscribe()
+                this.log(chalk.green('Successfully unsubscribed from presence events.'))
+              } catch (error) {
+                this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+                this.log('Continuing with cleanup.')
+              }
+            }
+            
+            // Unsubscribe from status changes
+            try {
+              unsubscribeStatus()
+              this.log(chalk.green('Successfully unsubscribed from status events.'))
+            } catch (error) {
+              this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+              this.log('Continuing with cleanup.')
+            }
+            
+            // Release the room
+            try {
+              await chatClient.rooms.release(roomId)
+              this.log(chalk.green('Successfully released room.'))
+            } catch (error) {
+              this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+              this.log('Continuing with cleanup.')
+            }
+            
+            if (clients?.realtimeClient) {
+              clients.realtimeClient.close()
+            }
+            
+            this.log(chalk.green('Successfully disconnected.'))
+            clearTimeout(forceExitTimeout)
+            resolve()
+            process.exit(0)
           } catch (error) {
-            this.log(`Error releasing room: ${error instanceof Error ? error.message : String(error)}`)
+            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            clearTimeout(forceExitTimeout)
+            process.exit(1)
           }
-          
-          if (clients?.realtimeClient) {
-            clients.realtimeClient.close()
-          }
-          
-          this.log(chalk.green('Successfully disconnected.'))
-          resolve()
         }
 
-        process.on('SIGINT', () => void cleanup())
-        process.on('SIGTERM', () => void cleanup())
+        process.once('SIGINT', () => void cleanup())
+        process.once('SIGTERM', () => void cleanup())
       })
     } catch (error) {
       this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
