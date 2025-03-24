@@ -15,10 +15,6 @@
   "include": [
     "src/**/*"
   ],
-  "exclude": [
-    "src/commands/channels/occupancy/**/*",
-    "src/commands/channels/subscribe.ts" 
-  ],
   "ts-node": {
     "esm": true
   }

@@ -56,8 +56,9 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
           name: appName
         },
         key: {
-          keyName,
-          label: keyLabel
+          id: keyName,
+          label: keyLabel,
+          value: apiKey
         }
       }))
     } else {
@@ -66,7 +67,8 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
       
       this.log(chalk.bold(`Account: ${currentAccount?.accountName || currentAccountAlias} (${currentAccount?.accountId || 'Unknown ID'})`))
       this.log(chalk.bold(`App: ${appName} (${appId})`))
-      this.log(chalk.bold(`Current API Key Name: ${keyName}`))
+      this.log(chalk.bold(`API Key: ${apiKey}`))
+      this.log(chalk.bold(`Key Name: ${keyName}`))
       this.log(chalk.bold(`Key Label: ${keyLabel}`))
     }
   }

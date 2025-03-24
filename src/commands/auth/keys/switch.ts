@@ -49,9 +49,12 @@ export default class KeysSwitchCommand extends ControlBaseCommand {
     }
     
     try {
+      // Get current app name (if available) to preserve it
+      const existingAppName = this.configManager.getAppName(appId)
+      
       // If key ID or value is provided, switch directly
       if (args.keyNameOrValue && keyId) {
-        await this.switchToKey(appId, keyId, controlApi)
+        await this.switchToKey(appId, keyId, controlApi, existingAppName)
         return
       }
       
@@ -61,13 +64,29 @@ export default class KeysSwitchCommand extends ControlBaseCommand {
       
       if (selectedKey) {
         const keyName = `${appId}.${selectedKey.id}`
+        
+        // Get app details to ensure we have the app name
+        let appName = existingAppName
+        
+        // Fetch app details if we don't have a name
+        if (!appName) {
+          try {
+            const app = await controlApi.getApp(appId)
+            appName = app.name
+          } catch (error) {
+            // If we can't get the app, continue with just the app ID
+            appName = undefined
+          }
+        }
+        
         // Store key with metadata
         this.configManager.storeAppKey(
           appId, 
           selectedKey.key, 
           {
             keyId: selectedKey.id,
-            keyName: selectedKey.name || 'Unnamed key'
+            keyName: selectedKey.name || 'Unnamed key',
+            appName: appName
           }
         )
         this.log(`Switched to key: ${selectedKey.name || 'Unnamed key'} (${keyName})`)
@@ -79,19 +98,35 @@ export default class KeysSwitchCommand extends ControlBaseCommand {
     }
   }
   
-  private async switchToKey(appId: string, keyIdOrValue: string, controlApi: any): Promise<void> {
+  private async switchToKey(appId: string, keyIdOrValue: string, controlApi: any, existingAppName?: string): Promise<void> {
     try {
       // Verify the key exists and get full details
       const key = await controlApi.getKey(appId, keyIdOrValue)
       
       const keyName = `${appId}.${key.id}`
+      
+      // Get app details to ensure we have the app name
+      let appName = existingAppName
+      
+      // Fetch app details if we don't have a name
+      if (!appName) {
+        try {
+          const app = await controlApi.getApp(appId)
+          appName = app.name
+        } catch (error) {
+          // If we can't get the app, continue with just the app ID
+          appName = undefined
+        }
+      }
+      
       // Save to config with metadata
       this.configManager.storeAppKey(
         appId, 
         key.key, 
         {
           keyId: key.id,
-          keyName: key.name || 'Unnamed key'
+          keyName: key.name || 'Unnamed key',
+          appName: appName
         }
       )
       
