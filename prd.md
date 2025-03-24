@@ -78,7 +78,7 @@ $ ably apps current -> Show the current app if one is configured for the account
 
 $ ably channels -> Topic for Ably Pub/Sub channels
 $ ably channels list -> use the channel enumeration API to return a list of live channels
-$ ably channels publish -> publish a message to a channel with optional support for encryption
+$ ably channels publish -> publish a message to a channel with optional support for encryption. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
 $ ably channels batch-publish -> use the REST batch publish API to publish a batch of messages
 $ ably channels subscribe -> subscribe to messages published on one or more provided channels. Support for encryption, deltas, and rewind are available as arguments. Stay subscribed until terminated.
 $ ably channels occupancy -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
@@ -91,11 +91,16 @@ $ ably config -> opens the config TOML file with the default text editor
 
 $ ably rooms -> Topic for Ably Chat
 $ ably rooms list -> list chat rooms using the channel enumeration API, filtering out those that are not chat
-$ ably rooms messages send -> send a chat message
+$ ably rooms messages send -> send a chat message. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
 $ ably rooms messages subscribe -> subscribe to chat messages
 $ ably rooms messages get -> get historical messages
 $ ably rooms typing subscribe -> subscribe to typing indicators and show who is typing and stops typing in realtime
 $ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
+
+
+$ ably bench -> Topic for benchmark tests
+$ ably bench publisher -> allow a publisher to start publishing messages on a specified channel at a frequency of at most 20 messages per second allowing the total number of messages published to be 10,000. Before the publisher starts publishing though, it will check if there are other subscriber bench clients present on the channel and it will also become present and announce it is a publisher and the details of the test. If there are none, it will ask the user if we should wait for subscribers to be present, or continue with a prompt. Once completed, the client will conrim how many messages were published, if there were any errors, and in the case of REST, what the average latency was for the request to complete, and in the case of Realtime, what the average latency was for a message to be received back. Whilst running the test, the message rate and trailing latency for the last 5 seconds shoudl be shown ,along with the cumulative messages sent and percentage of test execute. This should all be presented in a console UI with a progress bar for example. Support for publishing via REST or Realtime is needed. If a test is already running and another one starts, and error will be shown and the CLI should exit. Each publisher can show others that the test is runing using presence data.
+$ ably bench subscriber -> will attach to a channel and be present with data in the presence set indicating it's a subscriber and waiting. Once a publisher bercomes present, the subscriber will indicate a test is starting, and using a UI control, will show running metrics whilst the test is running. Once the test is complete, the summary will be printed out with the test ID, summary of the test paramters, confirmation of how many messages were received or failed, average latencies (based on the publish time assuming clocks are in sync, as the published message will have a latency in the data, and the latency it arrives at Ably is coded into the timestamp field) for end to end, and for it to be received by Ably, with p50, p90, p95 shown. Once the test is done, the subscriber will wait patiently for the next test to start. If a test is running and another one starts, and error will be shown and the CLI should exit.
 
 ### Authentication
 

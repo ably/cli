@@ -30,6 +30,7 @@
     "@oclif/core": "^4.2.10",
     "ably": "github:ably/ably-js#type-correction-publishoptions",
     "chalk": "5",
+    "cli-table3": "^0.6.5",
     "inquirer": "^12.5.0",
     "node-fetch": "^3.3.2",
     "react": "^19.0.0",

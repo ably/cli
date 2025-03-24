@@ -8,12 +8,24 @@ export default class MessagesSend extends ChatBaseCommand {
     '$ ably rooms messages send my-room "Hello World!"',
     '$ ably rooms messages send --api-key "YOUR_API_KEY" my-room "Welcome to the chat!"',
     '$ ably rooms messages send --metadata \'{"isImportant":true}\' my-room "Attention please!"',
+    '$ ably rooms messages send --count 5 my-room "Message number {{.Count}}"',
+    '$ ably rooms messages send --count 10 --delay 1000 my-room "Message at {{.Timestamp}}"',
   ]
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
     metadata: Flags.string({
       description: 'Additional metadata for the message (JSON format)',
+    }),
+    count: Flags.integer({
+      char: 'c',
+      description: 'Number of messages to send',
+      default: 1,
+    }),
+    delay: Flags.integer({
+      char: 'd',
+      description: 'Delay between messages in milliseconds (min 10ms when count > 1)',
+      default: 0,
     }),
   }
 
@@ -56,16 +68,91 @@ export default class MessagesSend extends ChatBaseCommand {
       // Attach to the room
       await room.attach()
       
-      // Send the message
-      await room.messages.send({
-        text: args.text,
-        ...(metadata ? { metadata } : {}),
-      })
+      // Validate count and delay
+      const count = Math.max(1, flags.count)
+      let delay = flags.delay
+      
+      // Enforce minimum delay when sending multiple messages
+      if (count > 1 && delay < 10) {
+        delay = 10
+        this.log('Using minimum delay of 10ms for multiple messages')
+      }
+      
+      // If sending multiple messages, show a progress indication
+      if (count > 1) {
+        this.log(`Sending ${count} messages with ${delay}ms delay...`)
+      }
+      
+      // Track send progress
+      let sentCount = 0
+      let errorCount = 0
+      
+      // Send messages
+      if (count > 1) {
+        // Sending multiple messages without awaiting each send
+        const progressInterval = setInterval(() => {
+          this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`)
+        }, 1000)
+        
+        for (let i = 0; i < count; i++) {
+          // Apply interpolation to the message
+          const interpolatedText = this.interpolateMessage(args.text, i + 1)
+          
+          // Send the message without awaiting
+          room.messages.send({
+            text: interpolatedText,
+            ...(metadata ? { metadata } : {}),
+          })
+          .then(() => {
+            sentCount++
+          })
+          .catch(err => {
+            errorCount++
+            this.log(`Error sending message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+          })
+          
+          // Delay before sending next message if not the last one
+          if (i < count - 1 && delay > 0) {
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
+        }
+        
+        // Wait for all sends to complete (or timeout after a reasonable period)
+        const maxWaitTime = Math.max(5000, count * delay * 2) // At least 5 seconds or twice the expected duration
+        const startWaitTime = Date.now()
+        
+        await new Promise<void>(resolve => {
+          const checkInterval = setInterval(() => {
+            if (sentCount + errorCount >= count || (Date.now() - startWaitTime > maxWaitTime)) {
+              clearInterval(progressInterval)
+              clearInterval(checkInterval)
+              resolve()
+            }
+          }, 100)
+        })
+        
+        this.log(`${sentCount}/${count} messages sent successfully (${errorCount} errors).`)
+      } else {
+        // Single message - await the send for better error handling
+        try {
+          // Apply interpolation to the message
+          const interpolatedText = this.interpolateMessage(args.text, 1)
+          
+          // Send the message
+          await room.messages.send({
+            text: interpolatedText,
+            ...(metadata ? { metadata } : {}),
+          })
+          
+          this.log('Message sent successfully.')
+        } catch (error) {
+          this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
       
       // Release the room
       await chatClient.rooms.release(args.roomId)
       
-      this.log('Message sent successfully.')
     } catch (error) {
       this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
@@ -74,5 +161,15 @@ export default class MessagesSend extends ChatBaseCommand {
         clients.realtimeClient.close()
       }
     }
+  }
+  
+  private interpolateMessage(message: string, count: number): string {
+    // Replace {{.Count}} with the current count
+    let result = message.replace(/\{\{\.Count\}\}/g, count.toString())
+    
+    // Replace {{.Timestamp}} with the current timestamp
+    result = result.replace(/\{\{\.Timestamp\}\}/g, Date.now().toString())
+    
+    return result
   }
 } 

@@ -49,6 +49,9 @@ USAGE
 * [`ably auth keys revoke KEYNAME`](#ably-auth-keys-revoke-keyname)
 * [`ably auth keys switch [KEYNAMEORVALUE]`](#ably-auth-keys-switch-keynameorvalue)
 * [`ably auth keys update KEYNAME`](#ably-auth-keys-update-keyname)
+* [`ably bench`](#ably-bench)
+* [`ably bench publisher CHANNEL`](#ably-bench-publisher-channel)
+* [`ably bench subscriber CHANNEL`](#ably-bench-subscriber-channel)
 * [`ably channels`](#ably-channels)
 * [`ably channels history CHANNEL`](#ably-channels-history-channel)
 * [`ably channels list`](#ably-channels-list)
@@ -809,6 +812,91 @@ EXAMPLES
   $ ably auth keys update APP_ID.KEY_ID --name "New Name" --capabilities "publish,subscribe"
 ```
 
+## `ably bench`
+
+Commands for running benchmark tests
+
+```
+USAGE
+  $ ably bench
+
+DESCRIPTION
+  Commands for running benchmark tests
+
+EXAMPLES
+  $ ably bench publisher my-channel
+  $ ably bench subscriber my-channel
+```
+
+## `ably bench publisher CHANNEL`
+
+Run a publisher benchmark test
+
+```
+USAGE
+  $ ably bench publisher CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-m <value>] [-r <value>] [-t rest|realtime] [--wait-for-subscribers]
+    [--message-size <value>]
+
+ARGUMENTS
+  CHANNEL  The channel name to publish to
+
+FLAGS
+  -m, --messages=<value>      [default: 1000] Number of messages to publish (max 10,000)
+  -r, --rate=<value>          [default: 15] Messages per second to publish (max 20)
+  -t, --transport=<option>    [default: realtime] Transport to use for publishing
+                              <options: rest|realtime>
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --message-size=<value>  [default: 100] Size of the message payload in bytes
+      --wait-for-subscribers  Wait for subscribers to be present before starting
+
+DESCRIPTION
+  Run a publisher benchmark test
+
+EXAMPLES
+  $ ably bench publisher my-channel
+
+  $ ably bench publisher --messages 5000 --rate 10 my-channel
+
+  $ ably bench publisher --transport realtime my-channel
+```
+
+## `ably bench subscriber CHANNEL`
+
+Run a subscriber benchmark test
+
+```
+USAGE
+  $ ably bench subscriber CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [-t rest|realtime]
+
+ARGUMENTS
+  CHANNEL  The channel name to subscribe to
+
+FLAGS
+  -t, --transport=<option>    [default: realtime] Transport to use for subscribing
+                              <options: rest|realtime>
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+
+DESCRIPTION
+  Run a subscriber benchmark test
+
+EXAMPLES
+  $ ably bench subscriber my-channel
+
+  $ ably bench subscriber --transport realtime my-channel
+```
+
 ## `ably channels`
 
 Interact with Ably Pub/Sub channels
@@ -1083,13 +1171,15 @@ Publish a message to an Ably channel
 ```
 USAGE
   $ ably channels publish CHANNEL MESSAGE [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--client-id <value>] [-n <value>] [-e <value>]
+    <value>] [--api-key <value>] [--client-id <value>] [-n <value>] [-e <value>] [-c <value>] [-d <value>]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
   MESSAGE  The message to publish (JSON format or plain text)
 
 FLAGS
+  -c, --count=<value>         [default: 1] Number of messages to publish
+  -d, --delay=<value>         Delay between messages in milliseconds (min 10ms when count > 1)
   -e, --encoding=<value>      The encoding for the message
   -n, --name=<value>          The event name (if not specified in the message JSON)
       --access-token=<value>  Overrides any configured access token used for the Control API
@@ -1112,6 +1202,10 @@ EXAMPLES
   $ ably channels publish my-channel "Hello World"
 
   $ ably channels publish --name event my-channel "Plain text message"
+
+  $ ably channels publish --count 5 my-channel "Message number {{.Count}}"
+
+  $ ably channels publish --count 10 --delay 1000 my-channel "Message at {{.Timestamp}}"
 ```
 
 ## `ably channels subscribe CHANNELS`
@@ -1334,20 +1428,22 @@ Send a message to an Ably Chat room
 ```
 USAGE
   $ ably rooms messages send ROOMID TEXT [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--client-id <value>] [--metadata <value>]
+    <value>] [--api-key <value>] [--client-id <value>] [--metadata <value>] [-c <value>] [-d <value>]
 
 ARGUMENTS
   ROOMID  The room ID to send the message to
   TEXT    The message text to send
 
 FLAGS
-  --access-token=<value>  Overrides any configured access token used for the Control API
-  --api-key=<value>       Overrides any configured API key used for the product APIs
-  --client-id=<value>     Overrides any default client ID when using API authentication
-  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
-  --env=<value>           Override the environment for all product API calls
-  --host=<value>          Override the host endpoint for all product API calls
-  --metadata=<value>      Additional metadata for the message (JSON format)
+  -c, --count=<value>         [default: 1] Number of messages to send
+  -d, --delay=<value>         Delay between messages in milliseconds (min 10ms when count > 1)
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --metadata=<value>      Additional metadata for the message (JSON format)
 
 DESCRIPTION
   Send a message to an Ably Chat room
@@ -1358,6 +1454,10 @@ EXAMPLES
   $ ably rooms messages send --api-key "YOUR_API_KEY" my-room "Welcome to the chat!"
 
   $ ably rooms messages send --metadata '{"isImportant":true}' my-room "Attention please!"
+
+  $ ably rooms messages send --count 5 my-room "Message number {{.Count}}"
+
+  $ ably rooms messages send --count 10 --delay 1000 my-room "Message at {{.Timestamp}}"
 ```
 
 ## `ably rooms messages subscribe ROOMID`
