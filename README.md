@@ -118,6 +118,22 @@ USAGE
 * [`ably rooms typing`](#ably-rooms-typing)
 * [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
 * [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
+* [`ably spaces`](#ably-spaces)
+* [`ably spaces cursors`](#ably-spaces-cursors)
+* [`ably spaces cursors set SPACEID`](#ably-spaces-cursors-set-spaceid)
+* [`ably spaces cursors subscribe SPACEID`](#ably-spaces-cursors-subscribe-spaceid)
+* [`ably spaces locations`](#ably-spaces-locations)
+* [`ably spaces locations get-all SPACEID`](#ably-spaces-locations-get-all-spaceid)
+* [`ably spaces locations set SPACEID`](#ably-spaces-locations-set-spaceid)
+* [`ably spaces locations subscribe SPACEID`](#ably-spaces-locations-subscribe-spaceid)
+* [`ably spaces locks`](#ably-spaces-locks)
+* [`ably spaces locks acquire SPACEID LOCKID`](#ably-spaces-locks-acquire-spaceid-lockid)
+* [`ably spaces locks get SPACEID LOCKID`](#ably-spaces-locks-get-spaceid-lockid)
+* [`ably spaces locks get-all SPACEID`](#ably-spaces-locks-get-all-spaceid)
+* [`ably spaces locks subscribe SPACEID`](#ably-spaces-locks-subscribe-spaceid)
+* [`ably spaces members`](#ably-spaces-members)
+* [`ably spaces members enter SPACEID`](#ably-spaces-members-enter-spaceid)
+* [`ably spaces members subscribe SPACEID`](#ably-spaces-members-subscribe-spaceid)
 
 ## `ably accounts`
 
@@ -2925,4 +2941,512 @@ EXAMPLES
 ```
 
 _See code: [src/commands/rooms/typing/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/rooms/typing/subscribe.ts)_
+
+## `ably spaces`
+
+Interact with Ably Spaces
+
+```
+USAGE
+  $ ably spaces
+
+DESCRIPTION
+  Interact with Ably Spaces
+
+EXAMPLES
+  $ ably spaces members subscribe my-space
+
+  $ ably spaces members enter my-space
+
+  $ ably spaces locations set my-space --location "{"x":10,"y":20}"
+
+  $ ably spaces locations subscribe my-space
+
+  $ ably spaces locations get-all my-space
+
+  $ ably spaces cursors set my-space --position "{"x":100,"y":150}"
+
+  $ ably spaces cursors subscribe my-space
+
+  $ ably spaces cursors get-all my-space
+
+  $ ably spaces locks acquire my-space my-lock-id
+
+  $ ably spaces locks subscribe my-space
+
+  $ ably spaces locks get my-space my-lock-id
+
+  $ ably spaces locks get-all my-space
+```
+
+_See code: [src/commands/spaces/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/index.ts)_
+
+## `ably spaces cursors`
+
+Commands for realtime cursor tracking in Ably Spaces
+
+```
+USAGE
+  $ ably spaces cursors
+
+DESCRIPTION
+  Commands for realtime cursor tracking in Ably Spaces
+
+EXAMPLES
+  $ ably spaces cursors set my-space --position "{"x":100,"y":150}"
+
+  $ ably spaces cursors subscribe my-space
+
+  $ ably spaces cursors get-all my-space
+```
+
+_See code: [src/commands/spaces/cursors/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/cursors/index.ts)_
+
+## `ably spaces cursors set SPACEID`
+
+Set your cursor position in a space
+
+```
+USAGE
+  $ ably spaces cursors set SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--position <value> | --simulate] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to set cursor in
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --position=<value>      Cursor position data to set (JSON format)
+  --simulate              Simulate cursor movements automatically
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Set your cursor position in a space
+
+EXAMPLES
+  $ ably spaces cursors set my-space --position '{"x":100,"y":150}'
+
+  $ ably spaces cursors set my-space --simulate
+```
+
+_See code: [src/commands/spaces/cursors/set.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/cursors/set.ts)_
+
+## `ably spaces cursors subscribe SPACEID`
+
+Subscribe to cursor movements in a space
+
+```
+USAGE
+  $ ably spaces cursors subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to subscribe to cursors for
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to cursor movements in a space
+
+EXAMPLES
+  $ ably spaces cursors subscribe my-space
+
+  $ ably spaces cursors subscribe my-space --format json
+```
+
+_See code: [src/commands/spaces/cursors/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/cursors/subscribe.ts)_
+
+## `ably spaces locations`
+
+Spaces Locations API commands (Ably Spaces client-to-client location sharing)
+
+```
+USAGE
+  $ ably spaces locations
+
+DESCRIPTION
+  Spaces Locations API commands (Ably Spaces client-to-client location sharing)
+```
+
+_See code: [src/commands/spaces/locations/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locations/index.ts)_
+
+## `ably spaces locations get-all SPACEID`
+
+Get all current locations in a space
+
+```
+USAGE
+  $ ably spaces locations get-all SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [-f text|json]
+
+ARGUMENTS
+  SPACEID  Space ID to get locations from
+
+FLAGS
+  -f, --format=<option>       [default: text] Output format
+                              <options: text|json>
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Get all current locations in a space
+
+EXAMPLES
+  $ ably spaces locations get-all my-space
+
+  $ ably spaces locations get-all my-space --format json
+```
+
+_See code: [src/commands/spaces/locations/get-all.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locations/get-all.ts)_
+
+## `ably spaces locations set SPACEID`
+
+Set your location in a space
+
+```
+USAGE
+  $ ably spaces locations set SPACEID --location <value> [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to set location in
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --location=<value>      (required) Location data to set (JSON format)
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Set your location in a space
+
+EXAMPLES
+  $ ably spaces locations set my-space --location '{"x":10,"y":20}'
+
+  $ ably spaces locations set my-space --location '{"sectionId":"section1"}'
+```
+
+_See code: [src/commands/spaces/locations/set.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locations/set.ts)_
+
+## `ably spaces locations subscribe SPACEID`
+
+Subscribe to location changes in a space
+
+```
+USAGE
+  $ ably spaces locations subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to subscribe to locations for
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to location changes in a space
+
+EXAMPLES
+  $ ably spaces locations subscribe my-space
+
+  $ ably spaces locations subscribe my-space --format json
+```
+
+_See code: [src/commands/spaces/locations/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locations/subscribe.ts)_
+
+## `ably spaces locks`
+
+Commands for component locking in Ably Spaces
+
+```
+USAGE
+  $ ably spaces locks
+
+DESCRIPTION
+  Commands for component locking in Ably Spaces
+
+EXAMPLES
+  $ ably spaces locks acquire my-space my-lock-id
+
+  $ ably spaces locks subscribe my-space
+
+  $ ably spaces locks get my-space my-lock-id
+
+  $ ably spaces locks get-all my-space
+```
+
+_See code: [src/commands/spaces/locks/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locks/index.ts)_
+
+## `ably spaces locks acquire SPACEID LOCKID`
+
+Acquire a lock in a space
+
+```
+USAGE
+  $ ably spaces locks acquire SPACEID LOCKID [--host <value>] [--env <value>] [--control-host <value>] [--access-token
+    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to acquire lock in
+  LOCKID   ID of the lock to acquire
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --data=<value>          Optional data to associate with the lock (JSON format)
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Acquire a lock in a space
+
+EXAMPLES
+  $ ably spaces locks acquire my-space my-lock-id
+
+  $ ably spaces locks acquire my-space my-lock-id --data '{"type":"editor"}'
+```
+
+_See code: [src/commands/spaces/locks/acquire.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locks/acquire.ts)_
+
+## `ably spaces locks get SPACEID LOCKID`
+
+Get information about a specific lock
+
+```
+USAGE
+  $ ably spaces locks get SPACEID LOCKID [--host <value>] [--env <value>] [--control-host <value>] [--access-token
+    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to get lock from
+  LOCKID   ID of the lock to get
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Get information about a specific lock
+
+EXAMPLES
+  $ ably spaces locks get my-space my-lock-id
+
+  $ ably spaces locks get my-space my-lock-id --format json
+```
+
+_See code: [src/commands/spaces/locks/get.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locks/get.ts)_
+
+## `ably spaces locks get-all SPACEID`
+
+Get all current locks in a space
+
+```
+USAGE
+  $ ably spaces locks get-all SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to get locks from
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Get all current locks in a space
+
+EXAMPLES
+  $ ably spaces locks get-all my-space
+
+  $ ably spaces locks get-all my-space --format json
+```
+
+_See code: [src/commands/spaces/locks/get-all.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locks/get-all.ts)_
+
+## `ably spaces locks subscribe SPACEID`
+
+Subscribe to lock changes in a space
+
+```
+USAGE
+  $ ably spaces locks subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to subscribe for locks from
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to lock changes in a space
+
+EXAMPLES
+  $ ably spaces locks subscribe my-space
+
+  $ ably spaces locks subscribe my-space --format json
+```
+
+_See code: [src/commands/spaces/locks/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/locks/subscribe.ts)_
+
+## `ably spaces members`
+
+Commands for managing members in Ably Spaces
+
+```
+USAGE
+  $ ably spaces members
+
+DESCRIPTION
+  Commands for managing members in Ably Spaces
+
+EXAMPLES
+  $ ably spaces members subscribe my-space
+
+  $ ably spaces members enter my-space
+```
+
+_See code: [src/commands/spaces/members/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/members/index.ts)_
+
+## `ably spaces members enter SPACEID`
+
+Enter a space and remain present until terminated
+
+```
+USAGE
+  $ ably spaces members enter SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--profile <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to enter
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --profile=<value>       Optional profile data to include with the member (JSON format)
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Enter a space and remain present until terminated
+
+EXAMPLES
+  $ ably spaces members enter my-space
+
+  $ ably spaces members enter my-space --profile '{"name":"User","status":"active"}'
+```
+
+_See code: [src/commands/spaces/members/enter.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/members/enter.ts)_
+
+## `ably spaces members subscribe SPACEID`
+
+Subscribe to member presence events in a space
+
+```
+USAGE
+  $ ably spaces members subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+
+ARGUMENTS
+  SPACEID  Space ID to subscribe to members for
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to member presence events in a space
+
+EXAMPLES
+  $ ably spaces members subscribe my-space
+
+  $ ably spaces members subscribe my-space --format json
+```
+
+_See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/spaces/members/subscribe.ts)_
 <!-- commandsstop -->

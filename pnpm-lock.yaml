@@ -11,6 +11,9 @@ importers:
       '@ably/chat':
         specifier: ^0.5.1
         version: 0.5.1(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)
+      '@ably/spaces':
+        specifier: ^0.4.0
+        version: 0.4.0(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)
       '@oclif/core':
         specifier: ^4.2.10
         version: 4.2.10
@@ -94,6 +97,19 @@ packages:
 
   '@ably/msgpack-js@0.4.0':
     resolution: {integrity: sha512-IPt/BoiQwCWubqoNik1aw/6M/DleMdrxJOUpSja6xmMRbT2p1TA8oqKWgfZabqzrq8emRNeSl/+4XABPNnW5pQ==}
+
+  '@ably/spaces@0.4.0':
+    resolution: {integrity: sha512-yehNgkv9DOHUBR1c46/5Q4BhkF3TJkKb00kLDhZFWTVJpFSW0Mkw0PUgHLkzAg9Bt9LJPcA0mgZq3mFeLQCrIg==}
+    version: 0.4.0
+    peerDependencies:
+      ably: ^2.3.0
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -1049,6 +1065,11 @@ packages:
     resolution: {integrity: sha512-WWdIxpyjEn+FhQJQQv9aQAYlHoNVdzIzUySNV1gHUPDSdZJ3yZn7pAAbQcV7B56Mvu881q9FZV+0Vx2xC44VWA==}
     engines: {node: ^18.17.0 || >=20.5.0}
 
+  nanoid@3.3.11:
+    resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
   natural-orderby@2.0.3:
     resolution: {integrity: sha512-p7KTHxU0CUrcOXe62Zfrb5Z13nLvPhSWR/so3kFulUQU0sgUll2Z0LwpsLN351eOOD+hRGu/F1g+6xDfPeD++Q==}
 
@@ -1473,6 +1494,13 @@ snapshots:
   '@ably/msgpack-js@0.4.0':
     dependencies:
       bops: 1.0.1
+
+  '@ably/spaces@0.4.0(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      ably: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0)
+      nanoid: 3.3.11
+    optionalDependencies:
+      react: 19.0.0
 
   '@colors/colors@1.5.0':
     optional: true
@@ -2478,6 +2506,8 @@ snapshots:
   ms@2.1.3: {}
 
   mute-stream@2.0.0: {}
+
+  nanoid@3.3.11: {}
 
   natural-orderby@2.0.3: {}
 
