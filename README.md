@@ -263,7 +263,7 @@ FLAGS
   --host=<value>          Override the host endpoint for all product API calls
   --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
   --limit=<value>         [default: 10] Maximum number of stats records to return
-  --live                  Subscribe to live stats updates
+  --live                  Subscribe to live stats updates (uses minute interval)
   --start=<value>         Start time in milliseconds since epoch
   --unit=<option>         [default: minute] Time unit for stats
                           <options: minute|hour|day|month>
@@ -624,7 +624,7 @@ FLAGS
   --host=<value>          Override the host endpoint for all product API calls
   --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
   --limit=<value>         [default: 10] Maximum number of stats records to return
-  --live                  Subscribe to live stats updates
+  --live                  Subscribe to live stats updates (uses minute interval)
   --start=<value>         Start time in milliseconds since epoch
   --unit=<option>         [default: minute] Time unit for stats
                           <options: minute|hour|day|month>
@@ -1568,22 +1568,24 @@ View connection statistics for an Ably app
 ```
 USAGE
   $ ably connections stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--client-id <value>] [--live] [--interval minute|hour|day|month] [--unit minute|hour|day|month]
-    [--limit <value>] [--json]
+    [--api-key <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit minute|hour|day|month] [--limit
+    <value>] [--format json|pretty] [--live] [--interval <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
   --api-key=<value>       Overrides any configured API key used for the product APIs
   --client-id=<value>     Overrides any default client ID when using API authentication
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format
+                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
-  --interval=<option>     [default: minute] Stats interval granularity
-                          <options: minute|hour|day|month>
-  --json                  Output results as JSON
-  --limit=<value>         [default: 10] Maximum number of intervals to retrieve
-  --live                  Poll for stats every 6 seconds and display live updates
-  --unit=<option>         [default: minute] Unit of time for the interval
+  --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
+  --limit=<value>         [default: 10] Maximum number of stats records to return
+  --live                  Subscribe to live stats updates (uses minute interval)
+  --start=<value>         Start time in milliseconds since epoch
+  --unit=<option>         [default: minute] Time unit for stats
                           <options: minute|hour|day|month>
 
 DESCRIPTION
@@ -1592,9 +1594,15 @@ DESCRIPTION
 EXAMPLES
   $ ably connections stats
 
-  $ ably connections stats --live
+  $ ably connections stats --unit hour
 
-  $ ably connections stats --interval hour
+  $ ably connections stats --start 1618005600000 --end 1618091999999
+
+  $ ably connections stats --limit 10
+
+  $ ably connections stats --format json
+
+  $ ably connections stats --live
 ```
 
 _See code: [src/commands/connections/stats.ts](https://github.com/ably/cli/blob/v0.1.3/src/commands/connections/stats.ts)_

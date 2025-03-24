@@ -49,12 +49,14 @@ export default class MessagesSubscribe extends ChatBaseCommand {
         const timestamp = new Date(message.timestamp).toLocaleTimeString()
         const author = message.clientId || 'Unknown'
         
+        // Message content with consistent formatting
         this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`${author}:`)} ${message.text}`)
         
         // Show metadata if enabled and available
         if (flags['show-metadata'] && message.metadata) {
-          this.log(`${chalk.gray('  Metadata:')} ${chalk.yellow(JSON.stringify(message.metadata))}`)
+          this.log(`${chalk.blue('  Metadata:')} ${chalk.yellow(JSON.stringify(message.metadata))}`)
         }
+        this.log('') // Empty line for better readability
       })
       
       // Subscribe to room status changes

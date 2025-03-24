@@ -119,21 +119,23 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
 
       // Subscribe to messages on all channels
       channels.forEach((channel: Ably.RealtimeChannel) => {
-        this.log(`Subscribing to channel: ${channel.name}`)
+        this.log(`${chalk.green('Subscribing to channel:')} ${chalk.cyan(channel.name)}`)
         
         channel.subscribe((message: Ably.Message) => {
           const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
           const name = message.name ? message.name : '(none)'
           
-          this.log(`[${timestamp}] Channel: ${channel.name} | Event: ${name}`)
+          // Message header with timestamp and channel info
+          this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`Channel: ${channel.name}`)} | ${chalk.yellow(`Event: ${name}`)}`)
           
-          // Use the new JSON formatter for message data
+          // Message data with consistent formatting
           if (isJsonData(message.data)) {
-            this.log(`Data:`)
+            this.log(chalk.blue('Data:'))
             this.log(formatJson(message.data))
           } else {
-            this.log(`Data: ${message.data}`)
+            this.log(`${chalk.blue('Data:')} ${message.data}`)
           }
+          this.log('') // Empty line for better readability
         })
       })
       

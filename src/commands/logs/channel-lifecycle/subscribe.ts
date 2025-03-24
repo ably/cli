@@ -81,17 +81,18 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
           eventColor = chalk.magenta
         }
 
-        // Format the log output
-        this.log(`${chalk.dim(`[${timestamp}]`)} Channel: ${chalk.cyan(channelName)} | Event: ${eventColor(event)}`)
+        // Format the log output with consistent styling
+        this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`Channel: ${channelName}`)} | ${eventColor(`Event: ${event}`)}`)
+        
         if (message.data) {
           if (isJsonData(message.data)) {
-            this.log('Data:')
+            this.log(chalk.blue('Data:'))
             this.log(formatJson(message.data))
           } else {
-            this.log(`Data: ${message.data}`)
+            this.log(`${chalk.blue('Data:')} ${message.data}`)
           }
         }
-        this.log('')
+        this.log('') // Empty line for better readability
       })
 
       // Set up cleanup for when the process is terminated

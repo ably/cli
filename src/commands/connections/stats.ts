@@ -1,111 +1,94 @@
 import {Flags} from '@oclif/core'
 import {AblyBaseCommand} from '../../base-command.js'
 import * as Ably from 'ably'
-import chalk from 'chalk'
+import { StatsDisplay } from '../../services/stats-display.js'
 
 export default class ConnectionsStats extends AblyBaseCommand {
   static override description = 'View connection statistics for an Ably app'
 
   static override examples = [
     '$ ably connections stats',
+    '$ ably connections stats --unit hour',
+    '$ ably connections stats --start 1618005600000 --end 1618091999999',
+    '$ ably connections stats --limit 10',
+    '$ ably connections stats --format json',
     '$ ably connections stats --live',
-    '$ ably connections stats --interval hour',
   ]
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    live: Flags.boolean({
-      description: 'Poll for stats every 6 seconds and display live updates',
-      default: false,
+    'start': Flags.integer({
+      description: 'Start time in milliseconds since epoch',
     }),
-    interval: Flags.string({
-      description: 'Stats interval granularity',
+    'end': Flags.integer({
+      description: 'End time in milliseconds since epoch',
+    }),
+    'unit': Flags.string({
+      description: 'Time unit for stats',
       options: ['minute', 'hour', 'day', 'month'],
       default: 'minute',
     }),
-    unit: Flags.string({
-      description: 'Unit of time for the interval',
-      options: ['minute', 'hour', 'day', 'month'],
-      default: 'minute',
-    }),
-    limit: Flags.integer({
-      description: 'Maximum number of intervals to retrieve',
+    'limit': Flags.integer({
+      description: 'Maximum number of stats records to return',
       default: 10,
     }),
-    json: Flags.boolean({
-      description: 'Output results as JSON',
+    'format': Flags.string({
+      description: 'Output format',
+      options: ['json', 'pretty'],
+      default: 'pretty',
+    }),
+    'live': Flags.boolean({
+      description: 'Subscribe to live stats updates (uses minute interval)',
       default: false,
+    }),
+    'interval': Flags.integer({
+      description: 'Polling interval in seconds (only used with --live)',
+      default: 6,
     }),
   }
 
-  private lastStatsData: any = null
-
-  // Function to format numbers with commas
-  private formatNumber(num: number): string {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  }
-
-  // Format stats data for display
-  private formatStats(stats: any, timestamp?: Date): string {
-    // Extract connection statistics from the entries object
-    const entries = stats.entries || {}
-    
-    // Extract specific connection-related metrics
-    const connectionsAll = entries['connections.all'] || {}
-    const connectionsPeak = entries['connections.all.peak'] || 0
-    const connectionsMean = entries['connections.all.mean'] || 0
-    const connectionsOpened = entries['connections.all.opened'] || 0
-    
-    // Channel stats
-    const channelsPeak = entries['channels.peak'] || 0
-    const channelsOpened = entries['channels.opened'] || 0
-    
-    // Message stats
-    const inboundMsgCount = entries['messages.inbound.all.messages.count'] || 0
-    const inboundMsgData = entries['messages.inbound.all.messages.data'] || 0
-    const outboundMsgCount = entries['messages.outbound.all.messages.count'] || 0
-    const outboundMsgData = entries['messages.outbound.all.messages.data'] || 0
-    
-    // Format the time
-    const displayTime = timestamp ? 
-      timestamp.toISOString() : 
-      (stats.intervalId ? new Date(stats.intervalId).toISOString() : 'Unknown')
-    
-    return [
-      `${chalk.bold('Time:')} ${chalk.cyan(displayTime)}`,
-      `${chalk.bold('Connections:')} ${chalk.yellow('Peak=')}${this.formatNumber(connectionsPeak)} ${chalk.yellow('Mean=')}${this.formatNumber(Math.round(connectionsMean))} ${chalk.yellow('Opened=')}${this.formatNumber(connectionsOpened)}`,
-      `${chalk.bold('Channels:')} ${chalk.green('Peak=')}${this.formatNumber(channelsPeak)} ${chalk.green('Opened=')}${this.formatNumber(channelsOpened)}`,
-      `${chalk.bold('Messages:')} ${chalk.blue('In=')}${this.formatNumber(inboundMsgCount)} (${this.formatBytes(inboundMsgData)}) ${chalk.blue('Out=')}${this.formatNumber(outboundMsgCount)} (${this.formatBytes(outboundMsgData)})`,
-    ].join('\n')
-  }
-
-  // Format bytes to human-readable format
-  private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B'
-    const k = 1024
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
+  private pollInterval: NodeJS.Timeout | undefined = undefined
+  private statsDisplay: StatsDisplay | null = null
 
   async run(): Promise<void> {
     const {flags} = await this.parse(ConnectionsStats)
     
-    let client: Ably.Rest | null = null
+    // For live stats, enforce minute interval
+    if (flags.live && flags.unit !== 'minute') {
+      this.warn('Live stats only support minute intervals. Using minute interval.')
+      flags.unit = 'minute'
+    }
+    
+    // Get API key from flags or config
+    const apiKey = flags['api-key'] || await this.configManager.getApiKey()
+    if (!apiKey) {
+      this.error('No API key found. Please set an API key using "ably keys add" or set the ABLY_API_KEY environment variable.')
+      return
+    }
+
+    // Create the Ably REST client
+    const options: Ably.ClientOptions = this.getClientOptions(flags)
+    const client = new Ably.Rest(options)
+    
+    // Create stats display
+    this.statsDisplay = new StatsDisplay({
+      live: flags.live,
+      startTime: flags.live ? new Date() : undefined,
+      format: flags.format as 'json' | 'pretty',
+      unit: flags.unit as 'minute' | 'hour' | 'day' | 'month'
+    })
+    
+    if (flags.live) {
+      await this.runLiveStats(flags, client)
+    } else {
+      await this.runOneTimeStats(flags, client)
+    }
+  }
+
+  async runLiveStats(flags: any, client: Ably.Rest): Promise<void> {
     let poller: NodeJS.Timeout | null = null
 
     try {
-      // Get API key from flags or config
-      const apiKey = flags['api-key'] || await this.configManager.getApiKey()
-      if (!apiKey) {
-        await this.ensureAppAndKey(flags)
-        return
-      }
-
-      // Create the Ably REST client
-      const options: Ably.ClientOptions = this.getClientOptions(flags)
-      client = new Ably.Rest(options)
-
       // Function to fetch and display stats
       const fetchAndDisplayStats = async () => {
         // Calculate time range based on the unit
@@ -132,56 +115,16 @@ export default class ConnectionsStats extends AblyBaseCommand {
         }
 
         // Get stats
-        const statsPage = await client!.stats(params)
+        const statsPage = await client.stats(params)
         const stats = statsPage.items
         
         if (stats.length === 0) {
           this.log('No connection stats available.')
           return
         }
-        
-        if (flags.json) {
-          // Output in JSON format
-          this.log(JSON.stringify(stats, null, 2))
-          return
-        }
 
-        // For live mode, check if stats have changed
-        if (flags.live) {
-          const currentStats = stats[0]
-          
-          // Skip if no change
-          if (this.lastStatsData && 
-              JSON.stringify(currentStats) === JSON.stringify(this.lastStatsData)) {
-            return
-          }
-          
-          // Update last stats data
-          this.lastStatsData = currentStats
-          
-          // Clear the console
-          process.stdout.write('\x1Bc')
-          this.log(`${chalk.bold('Ably Connections Stats')} ${chalk.dim('(Live updates every 6 seconds)')}`)
-          this.log(chalk.dim('Press Ctrl+C to exit'))
-          this.log('')
-          
-          // Add current timestamp to show when update occurred
-          const updateTime = new Date()
-          this.log(`Last updated: ${chalk.dim(updateTime.toLocaleTimeString())}`)
-          this.log('')
-        }
-
-        // Format and display each stat
-        for (const stat of stats) {
-          this.log(this.formatStats(stat, flags.live ? new Date() : undefined))
-          if (!flags.live && stats.length > 1) {
-            this.log(chalk.dim('---------------------------------------------------'))
-          }
-        }
-        
-        if (!flags.live) {
-          this.log(`Displayed ${stats.length} stat intervals.`)
-        }
+        // Display stats using the StatsDisplay class
+        this.statsDisplay!.display(stats[0])
       }
       
       // Initial fetch
@@ -209,13 +152,49 @@ export default class ConnectionsStats extends AblyBaseCommand {
         // Wait indefinitely
         await new Promise(() => {})
       }
-    } catch (error: unknown) {
-      const err = error as Error
-      this.error(err.message)
+    } catch (error) {
+      this.error(`Failed to fetch stats: ${error}`)
     } finally {
       if (poller) {
         clearInterval(poller)
       }
     }
+  }
+
+  async runOneTimeStats(flags: any, client: Ably.Rest): Promise<void> {
+    // Calculate time range based on the unit
+    const now = new Date()
+    let startTime = new Date()
+    
+    if (flags.unit === 'minute') {
+      startTime = new Date(now.getTime() - 60 * 60 * 1000) // 1 hour ago for minutes
+    } else if (flags.unit === 'hour') {
+      startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago for hours
+    } else if (flags.unit === 'day') {
+      startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) // 7 days ago for days
+    } else {
+      startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) // 30 days ago for months
+    }
+
+    // Prepare query parameters
+    const params = {
+      start: startTime.getTime(),
+      end: now.getTime(),
+      limit: flags.limit,
+      unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
+      direction: 'backwards' as 'backwards' | 'forwards',
+    }
+
+    // Get stats
+    const statsPage = await client.stats(params)
+    const stats = statsPage.items
+    
+    if (stats.length === 0) {
+      this.log('No connection stats available.')
+      return
+    }
+
+    // Display stats using the StatsDisplay class
+    this.statsDisplay!.display(stats[0])
   }
 } 
