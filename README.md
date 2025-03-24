@@ -70,6 +70,7 @@ USAGE
 * [`ably bench publisher CHANNEL`](#ably-bench-publisher-channel)
 * [`ably bench subscriber CHANNEL`](#ably-bench-subscriber-channel)
 * [`ably channels`](#ably-channels)
+* [`ably channels batch-publish [MESSAGE]`](#ably-channels-batch-publish-message)
 * [`ably channels history CHANNEL`](#ably-channels-history-channel)
 * [`ably channels list`](#ably-channels-list)
 * [`ably channels logs [TOPIC]`](#ably-channels-logs-topic)
@@ -1343,6 +1344,52 @@ EXAMPLES
 ```
 
 _See code: [src/commands/channels/index.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/channels/index.ts)_
+
+## `ably channels batch-publish [MESSAGE]`
+
+Publish messages to multiple Ably channels with a single request
+
+```
+USAGE
+  $ ably channels batch-publish [MESSAGE] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--channels <value> | --channels-json <value> | --spec
+    <value>] [-n <value> | ] [-e <value> | ]
+
+ARGUMENTS
+  MESSAGE  The message to publish (JSON format or plain text, not needed if using --spec)
+
+FLAGS
+  -e, --encoding=<value>       The encoding for the message
+  -n, --name=<value>           The event name (if not specified in the message JSON)
+      --access-token=<value>   Overrides any configured access token used for the Control API
+      --api-key=<value>        Overrides any configured API key used for the product APIs
+      --channels=<value>       Comma-separated list of channel names to publish to
+      --channels-json=<value>  JSON array of channel names to publish to
+      --client-id=<value>      Overrides any default client ID when using API authentication. Use "none" to explicitly
+                               set no client ID. Not applicable when using token authentication.
+      --control-host=<value>   Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>            Override the environment for all product API calls
+      --host=<value>           Override the host endpoint for all product API calls
+      --spec=<value>           Complete batch spec JSON (either a single BatchSpec object or an array of BatchSpec
+                               objects)
+      --token=<value>          Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Publish messages to multiple Ably channels with a single request
+
+EXAMPLES
+  $ ably channels batch-publish --channels channel1,channel2 '{"data":"Message to multiple channels"}'
+
+  $ ably channels batch-publish --channels channel1,channel2 --name event '{"text":"Hello World"}'
+
+  $ ably channels batch-publish --channels-json '["channel1", "channel2"]' '{"data":"Using JSON array for channels"}'
+
+  $ ably channels batch-publish --spec '{"channels": ["channel1", "channel2"], "messages": {"data": "Using complete batch spec"}}'
+
+  $ ably channels batch-publish --spec '[{"channels": "channel1", "messages": {"data": "First spec"}}, {"channels": "channel2", "messages": {"data": "Second spec"}}]'
+```
+
+_See code: [src/commands/channels/batch-publish.ts](https://github.com/ably/cli/blob/v0.1.5/src/commands/channels/batch-publish.ts)_
 
 ## `ably channels history CHANNEL`
 
