@@ -19,7 +19,7 @@ $ npm install -g @ably/cli
 $ ably COMMAND
 running command...
 $ ably (--version)
-@ably/cli/0.1.1 darwin-arm64 node-v22.14.0
+@ably/cli/0.1.2 darwin-arm64 node-v22.14.0
 $ ably --help [COMMAND]
 USAGE
   $ ably COMMAND
@@ -93,7 +93,7 @@ EXAMPLES
   $ ably accounts stats
 ```
 
-_See code: [src/commands/accounts/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/index.ts)_
+_See code: [src/commands/accounts/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/index.ts)_
 
 ## `ably accounts current`
 
@@ -121,7 +121,7 @@ EXAMPLES
   $ ably accounts current
 ```
 
-_See code: [src/commands/accounts/current.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/current.ts)_
+_See code: [src/commands/accounts/current.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/current.ts)_
 
 ## `ably accounts list`
 
@@ -147,7 +147,7 @@ EXAMPLES
   $ ably accounts list
 ```
 
-_See code: [src/commands/accounts/list.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/list.ts)_
+_See code: [src/commands/accounts/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/list.ts)_
 
 ## `ably accounts login [TOKEN]`
 
@@ -180,7 +180,7 @@ EXAMPLES
   $ ably accounts login --alias mycompany
 ```
 
-_See code: [src/commands/accounts/login.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/login.ts)_
+_See code: [src/commands/accounts/login.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/login.ts)_
 
 ## `ably accounts logout [ALIAS]`
 
@@ -212,7 +212,7 @@ EXAMPLES
   $ ably accounts logout mycompany
 ```
 
-_See code: [src/commands/accounts/logout.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/logout.ts)_
+_See code: [src/commands/accounts/logout.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/logout.ts)_
 
 ## `ably accounts stats`
 
@@ -260,7 +260,7 @@ EXAMPLES
   $ ably accounts stats --live --interval 15
 ```
 
-_See code: [src/commands/accounts/stats/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/stats/index.ts)_
+_See code: [src/commands/accounts/stats/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/stats/index.ts)_
 
 ## `ably accounts switch [ALIAS]`
 
@@ -291,7 +291,7 @@ EXAMPLES
   $ ably accounts switch mycompany
 ```
 
-_See code: [src/commands/accounts/switch.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/accounts/switch.ts)_
+_See code: [src/commands/accounts/switch.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/accounts/switch.ts)_
 
 ## `ably apps`
 
@@ -314,7 +314,7 @@ EXAMPLES
   $ ably apps delete
 ```
 
-_See code: [src/commands/apps/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/index.ts)_
+_See code: [src/commands/apps/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/index.ts)_
 
 ## `ably apps create`
 
@@ -348,7 +348,7 @@ EXAMPLES
   $ ably apps create --name "My New App" --access-token "YOUR_ACCESS_TOKEN"
 ```
 
-_See code: [src/commands/apps/create.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/create.ts)_
+_See code: [src/commands/apps/create.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/create.ts)_
 
 ## `ably apps current`
 
@@ -378,7 +378,7 @@ EXAMPLES
   $ ably apps current --format json
 ```
 
-_See code: [src/commands/apps/current.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/current.ts)_
+_See code: [src/commands/apps/current.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/current.ts)_
 
 ## `ably apps delete ID`
 
@@ -412,7 +412,7 @@ EXAMPLES
   $ ably apps delete app-id --force
 ```
 
-_See code: [src/commands/apps/delete.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/delete.ts)_
+_See code: [src/commands/apps/delete.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/delete.ts)_
 
 ## `ably apps list`
 
@@ -444,7 +444,7 @@ EXAMPLES
   $ ably apps list --format json
 ```
 
-_See code: [src/commands/apps/list.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/list.ts)_
+_See code: [src/commands/apps/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/list.ts)_
 
 ## `ably apps set-apns-p12 ID`
 
@@ -483,7 +483,7 @@ EXAMPLES
   $ ably apps set-apns-p12 app-id --certificate /path/to/certificate.p12 --use-for-sandbox
 ```
 
-_See code: [src/commands/apps/set-apns-p12.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/set-apns-p12.ts)_
+_See code: [src/commands/apps/set-apns-p12.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/set-apns-p12.ts)_
 
 ## `ably apps stats ID`
 
@@ -534,7 +534,7 @@ EXAMPLES
   $ ably apps stats app-id --live --interval 15
 ```
 
-_See code: [src/commands/apps/stats/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/stats/index.ts)_
+_See code: [src/commands/apps/stats/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/stats/index.ts)_
 
 ## `ably apps switch [APPID]`
 
@@ -565,7 +565,7 @@ EXAMPLES
   $ ably apps switch
 ```
 
-_See code: [src/commands/apps/switch.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/switch.ts)_
+_See code: [src/commands/apps/switch.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/switch.ts)_
 
 ## `ably apps update ID`
 
@@ -604,7 +604,7 @@ EXAMPLES
   $ ably apps update app-id --name "Updated App Name" --access-token "YOUR_ACCESS_TOKEN"
 ```
 
-_See code: [src/commands/apps/update.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/apps/update.ts)_
+_See code: [src/commands/apps/update.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/update.ts)_
 
 ## `ably auth`
 
@@ -629,7 +629,7 @@ EXAMPLES
   $ ably auth keys switch KEY_ID
 ```
 
-_See code: [src/commands/auth/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/index.ts)_
+_See code: [src/commands/auth/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/index.ts)_
 
 ## `ably auth keys`
 
@@ -654,7 +654,7 @@ EXAMPLES
   $ ably auth keys switch KEY_ID
 ```
 
-_See code: [src/commands/auth/keys/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/index.ts)_
+_See code: [src/commands/auth/keys/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/index.ts)_
 
 ## `ably auth keys current`
 
@@ -687,7 +687,7 @@ EXAMPLES
   $ ably auth keys current --format json
 ```
 
-_See code: [src/commands/auth/keys/current.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/current.ts)_
+_See code: [src/commands/auth/keys/current.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/current.ts)_
 
 ## `ably auth keys get KEYNAMEORVALUE`
 
@@ -723,7 +723,7 @@ EXAMPLES
   $ ably auth keys get APP_ID.KEY_ID --format json
 ```
 
-_See code: [src/commands/auth/keys/get.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/get.ts)_
+_See code: [src/commands/auth/keys/get.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/get.ts)_
 
 ## `ably auth keys list`
 
@@ -756,7 +756,7 @@ EXAMPLES
   $ ably auth keys list --format json
 ```
 
-_See code: [src/commands/auth/keys/list.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/list.ts)_
+_See code: [src/commands/auth/keys/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/list.ts)_
 
 ## `ably auth keys revoke KEYNAME`
 
@@ -791,7 +791,7 @@ EXAMPLES
   $ ably auth keys revoke APP_ID.KEY_ID --force
 ```
 
-_See code: [src/commands/auth/keys/revoke.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/revoke.ts)_
+_See code: [src/commands/auth/keys/revoke.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/revoke.ts)_
 
 ## `ably auth keys switch [KEYNAMEORVALUE]`
 
@@ -825,7 +825,7 @@ EXAMPLES
   $ ably auth keys switch KEY_ID --app APP_ID
 ```
 
-_See code: [src/commands/auth/keys/switch.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/switch.ts)_
+_See code: [src/commands/auth/keys/switch.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/switch.ts)_
 
 ## `ably auth keys update KEYNAME`
 
@@ -861,7 +861,7 @@ EXAMPLES
   $ ably auth keys update APP_ID.KEY_ID --name "New Name" --capabilities "publish,subscribe"
 ```
 
-_See code: [src/commands/auth/keys/update.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/auth/keys/update.ts)_
+_See code: [src/commands/auth/keys/update.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/auth/keys/update.ts)_
 
 ## `ably bench`
 
@@ -879,7 +879,7 @@ EXAMPLES
   $ ably bench subscriber my-channel
 ```
 
-_See code: [src/commands/bench/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/bench/index.ts)_
+_See code: [src/commands/bench/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/bench/index.ts)_
 
 ## `ably bench publisher CHANNEL`
 
@@ -919,7 +919,7 @@ EXAMPLES
   $ ably bench publisher --transport realtime my-channel
 ```
 
-_See code: [src/commands/bench/publisher.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/bench/publisher.ts)_
+_See code: [src/commands/bench/publisher.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/bench/publisher.ts)_
 
 ## `ably bench subscriber CHANNEL`
 
@@ -952,7 +952,7 @@ EXAMPLES
   $ ably bench subscriber --transport realtime my-channel
 ```
 
-_See code: [src/commands/bench/subscriber.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/bench/subscriber.ts)_
+_See code: [src/commands/bench/subscriber.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/bench/subscriber.ts)_
 
 ## `ably channels`
 
@@ -977,7 +977,7 @@ EXAMPLES
   $ ably channels list
 ```
 
-_See code: [src/commands/channels/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/index.ts)_
+_See code: [src/commands/channels/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/index.ts)_
 
 ## `ably channels history CHANNEL`
 
@@ -1027,7 +1027,7 @@ EXAMPLES
   $ ably channels history my-channel --start "2023-01-01T00:00:00Z" --end "2023-01-02T00:00:00Z"
 ```
 
-_See code: [src/commands/channels/history.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/history.ts)_
+_See code: [src/commands/channels/history.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/history.ts)_
 
 ## `ably channels list`
 
@@ -1063,7 +1063,7 @@ EXAMPLES
   $ ably channels list --format json
 ```
 
-_See code: [src/commands/channels/list.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/list.ts)_
+_See code: [src/commands/channels/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/list.ts)_
 
 ## `ably channels occupancy`
 
@@ -1082,7 +1082,7 @@ EXAMPLES
   $ ably channels occupancy live my-channel
 ```
 
-_See code: [src/commands/channels/occupancy.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/occupancy.ts)_
+_See code: [src/commands/channels/occupancy.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/occupancy.ts)_
 
 ## `ably channels occupancy get CHANNEL`
 
@@ -1115,7 +1115,7 @@ EXAMPLES
   $ ably channels occupancy:get --api-key "YOUR_API_KEY" my-channel
 ```
 
-_See code: [src/commands/channels/occupancy/get.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/occupancy/get.ts)_
+_See code: [src/commands/channels/occupancy/get.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/occupancy/get.ts)_
 
 ## `ably channels occupancy subscribe CHANNEL`
 
@@ -1150,7 +1150,7 @@ EXAMPLES
   $ ably channels occupancy subscribe --format json my-channel
 ```
 
-_See code: [src/commands/channels/occupancy/subscribe.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/occupancy/subscribe.ts)_
+_See code: [src/commands/channels/occupancy/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/occupancy/subscribe.ts)_
 
 ## `ably channels presence`
 
@@ -1169,7 +1169,7 @@ EXAMPLES
   $ ably channels presence subscribe my-channel
 ```
 
-_See code: [src/commands/channels/presence.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/presence.ts)_
+_See code: [src/commands/channels/presence.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/presence.ts)_
 
 ## `ably channels presence enter CHANNEL`
 
@@ -1204,7 +1204,7 @@ EXAMPLES
   $ ably channels presence:enter my-channel --client-id "user123"
 ```
 
-_See code: [src/commands/channels/presence/enter.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/presence/enter.ts)_
+_See code: [src/commands/channels/presence/enter.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/presence/enter.ts)_
 
 ## `ably channels presence subscribe CHANNEL`
 
@@ -1237,7 +1237,7 @@ EXAMPLES
   $ ably channels presence:subscribe my-channel --format json
 ```
 
-_See code: [src/commands/channels/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/presence/subscribe.ts)_
+_See code: [src/commands/channels/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/presence/subscribe.ts)_
 
 ## `ably channels publish CHANNEL MESSAGE`
 
@@ -1283,7 +1283,7 @@ EXAMPLES
   $ ably channels publish --count 10 --delay 1000 my-channel "Message at {{.Timestamp}}"
 ```
 
-_See code: [src/commands/channels/publish.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/publish.ts)_
+_See code: [src/commands/channels/publish.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/publish.ts)_
 
 ## `ably channels subscribe CHANNELS`
 
@@ -1329,7 +1329,7 @@ EXAMPLES
   $ ably channels subscribe --cipher-key YOUR_CIPHER_KEY my-channel
 ```
 
-_See code: [src/commands/channels/subscribe.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/channels/subscribe.ts)_
+_See code: [src/commands/channels/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/subscribe.ts)_
 
 ## `ably config`
 
@@ -1356,7 +1356,7 @@ EXAMPLES
   $ ably config edit
 ```
 
-_See code: [src/commands/config.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/config.ts)_
+_See code: [src/commands/config.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/config.ts)_
 
 ## `ably login [TOKEN]`
 
@@ -1389,7 +1389,7 @@ EXAMPLES
   $ ably login --alias mycompany
 ```
 
-_See code: [src/commands/login.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/login.ts)_
+_See code: [src/commands/login.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/login.ts)_
 
 ## `ably rooms`
 
@@ -1416,7 +1416,7 @@ EXAMPLES
   $ ably rooms typing start my-room
 ```
 
-_See code: [src/commands/rooms/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/index.ts)_
+_See code: [src/commands/rooms/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/index.ts)_
 
 ## `ably rooms list`
 
@@ -1452,7 +1452,7 @@ EXAMPLES
   $ ably rooms list --format json
 ```
 
-_See code: [src/commands/rooms/list.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/list.ts)_
+_See code: [src/commands/rooms/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/list.ts)_
 
 ## `ably rooms messages`
 
@@ -1473,7 +1473,7 @@ EXAMPLES
   $ ably rooms messages get my-room
 ```
 
-_See code: [src/commands/rooms/messages/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/messages/index.ts)_
+_See code: [src/commands/rooms/messages/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/messages/index.ts)_
 
 ## `ably rooms messages get ROOMID`
 
@@ -1510,7 +1510,7 @@ EXAMPLES
   $ ably rooms messages get --show-metadata my-room
 ```
 
-_See code: [src/commands/rooms/messages/get.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/messages/get.ts)_
+_See code: [src/commands/rooms/messages/get.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/messages/get.ts)_
 
 ## `ably rooms messages send ROOMID TEXT`
 
@@ -1551,7 +1551,7 @@ EXAMPLES
   $ ably rooms messages send --count 10 --delay 1000 my-room "Message at {{.Timestamp}}"
 ```
 
-_See code: [src/commands/rooms/messages/send.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/messages/send.ts)_
+_See code: [src/commands/rooms/messages/send.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/messages/send.ts)_
 
 ## `ably rooms messages subscribe ROOMID`
 
@@ -1585,7 +1585,7 @@ EXAMPLES
   $ ably rooms messages subscribe --show-metadata my-room
 ```
 
-_See code: [src/commands/rooms/messages/subscribe.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/messages/subscribe.ts)_
+_See code: [src/commands/rooms/messages/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/messages/subscribe.ts)_
 
 ## `ably rooms typing`
 
@@ -1604,7 +1604,7 @@ EXAMPLES
   $ ably rooms typing start my-room
 ```
 
-_See code: [src/commands/rooms/typing/index.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/typing/index.ts)_
+_See code: [src/commands/rooms/typing/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/typing/index.ts)_
 
 ## `ably rooms typing start ROOMID`
 
@@ -1635,7 +1635,7 @@ EXAMPLES
   $ ably rooms typing start --api-key "YOUR_API_KEY" my-room
 ```
 
-_See code: [src/commands/rooms/typing/start.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/typing/start.ts)_
+_See code: [src/commands/rooms/typing/start.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/typing/start.ts)_
 
 ## `ably rooms typing subscribe ROOMID`
 
@@ -1666,5 +1666,5 @@ EXAMPLES
   $ ably rooms typing subscribe --api-key "YOUR_API_KEY" my-room
 ```
 
-_See code: [src/commands/rooms/typing/subscribe.ts](https://github.com/ably/cli/blob/v0.1.1/src/commands/rooms/typing/subscribe.ts)_
+_See code: [src/commands/rooms/typing/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/rooms/typing/subscribe.ts)_
 <!-- commandsstop -->
