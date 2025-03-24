@@ -65,7 +65,9 @@ export abstract class AblyBaseCommand extends Command {
 
     // If no app is selected, prompt to select one
     if (!appId) {
-      this.log('Select an app to use for this command:')
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log('Select an app to use for this command:')
+      }
       const selectedApp = await this.interactiveHelper.selectApp(controlApi)
       
       if (!selectedApp) return null
@@ -74,7 +76,9 @@ export abstract class AblyBaseCommand extends Command {
       this.configManager.setCurrentApp(appId)
       // Store app name along with app ID
       this.configManager.storeAppInfo(appId, { appName: selectedApp.name })
-      this.log(`Selected app: ${selectedApp.name} (${appId})`)
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log(`Selected app: ${selectedApp.name} (${appId})`)
+      }
     }
 
     // If no key is selected, prompt to select one

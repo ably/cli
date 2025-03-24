@@ -5,6 +5,7 @@ export default class AuthKeys extends AblyBaseCommand {
 
   static examples = [
     '$ ably auth keys list',
+    '$ ably auth keys create --name "My New Key"',
     '$ ably auth keys get KEY_ID',
     '$ ably auth keys revoke KEY_ID',
     '$ ably auth keys update KEY_ID',
@@ -21,6 +22,7 @@ export default class AuthKeys extends AblyBaseCommand {
     this.log('')
     this.log('Commands:')
     this.log('  list     List all keys in the app')
+    this.log('  create   Create a new API key')
     this.log('  get      View details for a key')
     this.log('  revoke   Revoke a key')
     this.log('  update   Update a key\'s properties')

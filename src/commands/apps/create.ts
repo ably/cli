@@ -52,6 +52,11 @@ export default class AppsCreateCommand extends ControlBaseCommand {
         this.log(`Created: ${this.formatDate(app.created)}`)
         this.log(`Updated: ${this.formatDate(app.modified)}`)
       }
+      
+      // Automatically switch to the newly created app
+      this.configManager.setCurrentApp(app.id)
+      this.configManager.storeAppInfo(app.id, { appName: app.name })
+      this.log(`\nAutomatically switched to app: ${app.name} (${app.id})`)
     } catch (error) {
       this.error(`Error creating app: ${error instanceof Error ? error.message : String(error)}`)
     }

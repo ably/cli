@@ -97,8 +97,15 @@ export class ControlApi {
 
   // Get an app by ID
   async getApp(appId: string): Promise<App> {
-    // App ID-specific operations don't need account ID in the path
-    return this.request<App>(`/apps/${appId}`)
+    // There's no single app GET endpoint, need to get all apps and filter
+    const apps = await this.listApps()
+    const app = apps.find(a => a.id === appId)
+    
+    if (!app) {
+      throw new Error(`App with ID "${appId}" not found`)
+    }
+    
+    return app
   }
 
   // Create a new app
@@ -113,13 +120,13 @@ export class ControlApi {
 
   // Update an app
   async updateApp(appId: string, appData: { name?: string, tlsOnly?: boolean }): Promise<App> {
-    // App ID-specific operations don't need account ID in the path
+    // Update app uses /apps/{appId} path
     return this.request<App>(`/apps/${appId}`, 'PATCH', appData)
   }
 
   // Delete an app
   async deleteApp(appId: string): Promise<void> {
-    // App ID-specific operations don't need account ID in the path
+    // Delete app uses /apps/{appId} path
     return this.request<void>(`/apps/${appId}`, 'DELETE')
   }
 
@@ -196,6 +203,14 @@ export class ControlApi {
   // List all keys for an app
   async listKeys(appId: string): Promise<Key[]> {
     return this.request<Key[]>(`/apps/${appId}/keys`)
+  }
+
+  // Create a new key for an app
+  async createKey(appId: string, keyData: {
+    name: string,
+    capability?: any
+  }): Promise<Key> {
+    return this.request<Key>(`/apps/${appId}/keys`, 'POST', keyData)
   }
 
   // Get a specific key by ID or key value

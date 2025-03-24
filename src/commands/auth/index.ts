@@ -9,6 +9,9 @@ export default class Auth extends AblyBaseCommand {
     '$ ably auth keys revoke KEY_ID',
     '$ ably auth keys update KEY_ID',
     '$ ably auth keys switch KEY_ID',
+    '$ ably auth issue-jwt-token',
+    '$ ably auth issue-ably-token',
+    '$ ably auth revoke-token TOKEN',
   ]
 
   async run(): Promise<void> {
@@ -20,11 +23,14 @@ export default class Auth extends AblyBaseCommand {
     this.log('  $ ably auth [COMMAND]')
     this.log('')
     this.log('Commands:')
-    this.log('  keys:list     List all keys in the app')
-    this.log('  keys:get      View details for a key')
-    this.log('  keys:revoke   Revoke a key')
-    this.log('  keys:update   Update a key\'s properties')
-    this.log('  keys:switch   Switch to a key for all client requests')
+    this.log('  keys:list         List all keys in the app')
+    this.log('  keys:get          View details for a key')
+    this.log('  keys:revoke       Revoke a key')
+    this.log('  keys:update       Update a key\'s properties')
+    this.log('  keys:switch       Switch to a key for all client requests')
+    this.log('  issue-jwt-token   Creates an Ably JWT token with capabilities')
+    this.log('  issue-ably-token  Creates an Ably Token with capabilities')
+    this.log('  revoke-token      Revokes a token')
     this.log('')
     this.log('Run $ ably auth [COMMAND] --help for more information on a command.')
   }
