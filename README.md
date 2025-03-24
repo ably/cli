@@ -13,6 +13,13 @@ Please [get in touch](https://ably.com/contact) if you have feedback, feature re
 * [Commands](#commands)
 <!-- tocstop -->
 # Usage
+
+> [!WARNING] 
+> This CLI is not installable from NPM due to a [bug in the TypeScript definitions of the ably-js lib](https://github.com/ably/ably-js/pull/1988). 
+> Once that PR is merged and a new version is released, the usage instructions below will work.
+> Until then, git clone this repo, run `pnpm install` to install dependencies, then build the CLI with `pnpm run pepare`
+> Run the CLI with `pnpm run cli`
+
 <!-- usage -->
 ```sh-session
 $ npm install -g @ably/cli

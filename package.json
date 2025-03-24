@@ -10,8 +10,8 @@
     "prepack": "oclif manifest && oclif readme",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
     "version": "oclif readme && git add README.md",
-    "prepare": "npm run build",
-    "prepublishOnly": "npm run build"
+    "prepare": "npm run build && npm run prepack",
+    "cli": "bin/run.js"
   },
   "author": "Ably <support@ably.com>",
   "license": "Apache-2.0",
