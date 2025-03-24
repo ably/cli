@@ -47,6 +47,9 @@ USAGE
 * [`ably apps current`](#ably-apps-current)
 * [`ably apps delete ID`](#ably-apps-delete-id)
 * [`ably apps list`](#ably-apps-list)
+* [`ably apps logs`](#ably-apps-logs)
+* [`ably apps logs history`](#ably-apps-logs-history)
+* [`ably apps logs subscribe`](#ably-apps-logs-subscribe)
 * [`ably apps set-apns-p12 ID`](#ably-apps-set-apns-p12-id)
 * [`ably apps stats ID`](#ably-apps-stats-id)
 * [`ably apps switch [APPID]`](#ably-apps-switch-appid)
@@ -65,6 +68,7 @@ USAGE
 * [`ably channels`](#ably-channels)
 * [`ably channels history CHANNEL`](#ably-channels-history-channel)
 * [`ably channels list`](#ably-channels-list)
+* [`ably channels logs [TOPIC]`](#ably-channels-logs-topic)
 * [`ably channels occupancy`](#ably-channels-occupancy)
 * [`ably channels occupancy get CHANNEL`](#ably-channels-occupancy-get-channel)
 * [`ably channels occupancy subscribe CHANNEL`](#ably-channels-occupancy-subscribe-channel)
@@ -74,7 +78,22 @@ USAGE
 * [`ably channels publish CHANNEL MESSAGE`](#ably-channels-publish-channel-message)
 * [`ably channels subscribe CHANNELS`](#ably-channels-subscribe-channels)
 * [`ably config`](#ably-config)
+* [`ably connections`](#ably-connections)
+* [`ably connections logs [TOPIC]`](#ably-connections-logs-topic)
+* [`ably connections stats`](#ably-connections-stats)
+* [`ably connections test`](#ably-connections-test)
 * [`ably login [TOKEN]`](#ably-login-token)
+* [`ably logs`](#ably-logs)
+* [`ably logs app`](#ably-logs-app)
+* [`ably logs app history`](#ably-logs-app-history)
+* [`ably logs app subscribe`](#ably-logs-app-subscribe)
+* [`ably logs channel-lifecycle`](#ably-logs-channel-lifecycle)
+* [`ably logs channel-lifecycle subscribe`](#ably-logs-channel-lifecycle-subscribe)
+* [`ably logs connection-lifecycle`](#ably-logs-connection-lifecycle)
+* [`ably logs connection-lifecycle subscribe`](#ably-logs-connection-lifecycle-subscribe)
+* [`ably logs push`](#ably-logs-push)
+* [`ably logs push history`](#ably-logs-push-history)
+* [`ably logs push subscribe`](#ably-logs-push-subscribe)
 * [`ably rooms`](#ably-rooms)
 * [`ably rooms list`](#ably-rooms-list)
 * [`ably rooms messages`](#ably-rooms-messages)
@@ -453,6 +472,91 @@ EXAMPLES
 
 _See code: [src/commands/apps/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/list.ts)_
 
+## `ably apps logs`
+
+Stream or retrieve app logs
+
+```
+USAGE
+  $ ably apps logs
+
+DESCRIPTION
+  Stream or retrieve app logs
+
+EXAMPLES
+  $ ably apps logs subscribe
+
+  $ ably apps logs subscribe --rewind 10
+
+  $ ably apps logs history
+```
+
+_See code: [src/commands/apps/logs/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/logs/index.ts)_
+
+## `ably apps logs history`
+
+Alias for ably logs app history
+
+```
+USAGE
+  $ ably apps logs history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --direction=<option>    [default: backwards] Direction of message history retrieval
+                          <options: backwards|forwards>
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --limit=<value>         [default: 100] Maximum number of messages to retrieve
+
+DESCRIPTION
+  Alias for ably logs app history
+
+EXAMPLES
+  $ ably apps logs history
+
+  $ ably apps logs history --limit 20
+
+  $ ably apps logs history --direction forwards
+```
+
+_See code: [src/commands/apps/logs/history.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/logs/history.ts)_
+
+## `ably apps logs subscribe`
+
+Alias for ably logs app subscribe
+
+```
+USAGE
+  $ ably apps logs subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Alias for ably logs app subscribe
+
+EXAMPLES
+  $ ably apps logs subscribe
+
+  $ ably apps logs subscribe --rewind 10
+```
+
+_See code: [src/commands/apps/logs/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/apps/logs/subscribe.ts)_
+
 ## `ably apps set-apns-p12 ID`
 
 Upload Apple Push Notification Service P12 certificate for an app
@@ -615,14 +719,14 @@ _See code: [src/commands/apps/update.ts](https://github.com/ably/cli/blob/v0.1.2
 
 ## `ably auth`
 
-Authentication commands for Ably
+Authentication for Ably including key management and token generation
 
 ```
 USAGE
   $ ably auth
 
 DESCRIPTION
-  Authentication commands for Ably
+  Authentication for Ably including key management and token generation
 
 EXAMPLES
   $ ably auth keys list
@@ -1072,6 +1176,39 @@ EXAMPLES
 
 _See code: [src/commands/channels/list.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/list.ts)_
 
+## `ably channels logs [TOPIC]`
+
+Alias for ably logs channel-lifecycle subscribe
+
+```
+USAGE
+  $ ably channels logs [TOPIC] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+ARGUMENTS
+  TOPIC  [default: channel-lifecycle] Log topic to subscribe to (currently only channel-lifecycle is supported)
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Alias for ably logs channel-lifecycle subscribe
+
+EXAMPLES
+  $ ably channels logs channel-lifecycle
+
+  $ ably channels logs channel-lifecycle --rewind 10
+```
+
+_See code: [src/commands/channels/logs.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/channels/logs.ts)_
+
 ## `ably channels occupancy`
 
 Get occupancy metrics for a channel
@@ -1365,6 +1502,130 @@ EXAMPLES
 
 _See code: [src/commands/config.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/config.ts)_
 
+## `ably connections`
+
+Interact with Ably Pub/Sub connections
+
+```
+USAGE
+  $ ably connections
+
+DESCRIPTION
+  Interact with Ably Pub/Sub connections
+
+EXAMPLES
+  $ ably connections stats
+
+  $ ably connections logs connections-lifecycle
+
+  $ ably connections test
+```
+
+_See code: [src/commands/connections/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/connections/index.ts)_
+
+## `ably connections logs [TOPIC]`
+
+Alias for ably logs connection-lifecycle subscribe
+
+```
+USAGE
+  $ ably connections logs [TOPIC] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+ARGUMENTS
+  TOPIC  [default: connections-lifecycle] Log topic to subscribe to (currently only connections-lifecycle is supported)
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Alias for ably logs connection-lifecycle subscribe
+
+EXAMPLES
+  $ ably connections logs connections-lifecycle
+
+  $ ably connections logs connections-lifecycle --rewind 10
+```
+
+_See code: [src/commands/connections/logs.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/connections/logs.ts)_
+
+## `ably connections stats`
+
+View connection statistics for an Ably app
+
+```
+USAGE
+  $ ably connections stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--live] [--interval minute|hour|day|month] [--unit minute|hour|day|month]
+    [--limit <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --interval=<option>     [default: minute] Stats interval granularity
+                          <options: minute|hour|day|month>
+  --json                  Output results as JSON
+  --limit=<value>         [default: 10] Maximum number of intervals to retrieve
+  --live                  Poll for stats every 6 seconds and display live updates
+  --unit=<option>         [default: minute] Unit of time for the interval
+                          <options: minute|hour|day|month>
+
+DESCRIPTION
+  View connection statistics for an Ably app
+
+EXAMPLES
+  $ ably connections stats
+
+  $ ably connections stats --live
+
+  $ ably connections stats --interval hour
+```
+
+_See code: [src/commands/connections/stats.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/connections/stats.ts)_
+
+## `ably connections test`
+
+Test connection to Ably
+
+```
+USAGE
+  $ ably connections test [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--transport ws|xhr|all]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --transport=<option>    [default: all] Transport protocol to use (ws for WebSockets, xhr for HTTP)
+                          <options: ws|xhr|all>
+
+DESCRIPTION
+  Test connection to Ably
+
+EXAMPLES
+  $ ably connections test
+
+  $ ably connections test --transport ws
+
+  $ ably connections test --transport xhr
+```
+
+_See code: [src/commands/connections/test.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/connections/test.ts)_
+
 ## `ably login [TOKEN]`
 
 Log in to your Ably account (alias for "ably accounts login")
@@ -1398,16 +1659,322 @@ EXAMPLES
 
 _See code: [src/commands/login.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/login.ts)_
 
+## `ably logs`
+
+Streaming and retrieving logs from Ably
+
+```
+USAGE
+  $ ably logs
+
+DESCRIPTION
+  Streaming and retrieving logs from Ably
+
+EXAMPLES
+  $ ably logs channel-lifecycle subscribe
+
+  $ ably logs connection-lifecycle subscribe
+
+  $ ably logs app subscribe
+
+  $ ably logs app history
+
+  $ ably logs push subscribe
+
+  $ ably logs push history
+```
+
+_See code: [src/commands/logs/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/index.ts)_
+
+## `ably logs app`
+
+Stream or retrieve logs from the app-wide meta channel [meta]log
+
+```
+USAGE
+  $ ably logs app
+
+DESCRIPTION
+  Stream or retrieve logs from the app-wide meta channel [meta]log
+
+EXAMPLES
+  $ ably logs app subscribe
+
+  $ ably logs app subscribe --rewind 10
+
+  $ ably logs app history
+```
+
+_See code: [src/commands/logs/app/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/app/index.ts)_
+
+## `ably logs app history`
+
+View historical app logs from [meta]log
+
+```
+USAGE
+  $ ably logs app history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --direction=<option>    [default: backwards] Direction of message history retrieval
+                          <options: backwards|forwards>
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --limit=<value>         [default: 100] Maximum number of messages to retrieve
+
+DESCRIPTION
+  View historical app logs from [meta]log
+
+EXAMPLES
+  $ ably logs app history
+
+  $ ably logs app history --limit 20
+
+  $ ably logs app history --direction forwards
+```
+
+_See code: [src/commands/logs/app/history.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/app/history.ts)_
+
+## `ably logs app subscribe`
+
+Stream logs from the app-wide meta channel [meta]log
+
+```
+USAGE
+  $ ably logs app subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Stream logs from the app-wide meta channel [meta]log
+
+EXAMPLES
+  $ ably logs app subscribe
+
+  $ ably logs app subscribe --rewind 10
+```
+
+_See code: [src/commands/logs/app/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/app/subscribe.ts)_
+
+## `ably logs channel-lifecycle`
+
+Stream logs from [meta]channel.lifecycle meta channel
+
+```
+USAGE
+  $ ably logs channel-lifecycle [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Stream logs from [meta]channel.lifecycle meta channel
+
+EXAMPLES
+  $ ably logs channel-lifecycle subscribe
+
+  $ ably logs channel-lifecycle subscribe --rewind 10
+```
+
+_See code: [src/commands/logs/channel-lifecycle/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/channel-lifecycle/index.ts)_
+
+## `ably logs channel-lifecycle subscribe`
+
+Stream logs from [meta]channel.lifecycle meta channel
+
+```
+USAGE
+  $ ably logs channel-lifecycle subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Stream logs from [meta]channel.lifecycle meta channel
+
+EXAMPLES
+  $ ably logs channel-lifecycle subscribe
+
+  $ ably logs channel-lifecycle subscribe --rewind 10
+```
+
+_See code: [src/commands/logs/channel-lifecycle/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/channel-lifecycle/subscribe.ts)_
+
+## `ably logs connection-lifecycle`
+
+Stream logs from [meta]connection.lifecycle meta channel
+
+```
+USAGE
+  $ ably logs connection-lifecycle
+
+DESCRIPTION
+  Stream logs from [meta]connection.lifecycle meta channel
+
+EXAMPLES
+  $ ably logs connection-lifecycle subscribe
+
+  $ ably logs connection-lifecycle subscribe --rewind 10
+```
+
+_See code: [src/commands/logs/connection-lifecycle/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/connection-lifecycle/index.ts)_
+
+## `ably logs connection-lifecycle subscribe`
+
+Stream logs from [meta]connection.lifecycle meta channel
+
+```
+USAGE
+  $ ably logs connection-lifecycle subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Stream logs from [meta]connection.lifecycle meta channel
+
+EXAMPLES
+  $ ably logs connection-lifecycle subscribe
+
+  $ ably logs connection-lifecycle subscribe --rewind 10
+```
+
+_See code: [src/commands/logs/connection-lifecycle/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/connection-lifecycle/subscribe.ts)_
+
+## `ably logs push`
+
+Stream or retrieve push notification logs from [meta]log:push
+
+```
+USAGE
+  $ ably logs push
+
+DESCRIPTION
+  Stream or retrieve push notification logs from [meta]log:push
+
+EXAMPLES
+  $ ably logs push subscribe
+
+  $ ably logs push subscribe --rewind 10
+
+  $ ably logs push history
+```
+
+_See code: [src/commands/logs/push/index.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/push/index.ts)_
+
+## `ably logs push history`
+
+View historical push notification logs from [meta]log:push
+
+```
+USAGE
+  $ ably logs push history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --direction=<option>    [default: backwards] Direction of message history retrieval
+                          <options: backwards|forwards>
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --limit=<value>         [default: 100] Maximum number of messages to retrieve
+
+DESCRIPTION
+  View historical push notification logs from [meta]log:push
+
+EXAMPLES
+  $ ably logs push history
+
+  $ ably logs push history --limit 20
+
+  $ ably logs push history --direction forwards
+```
+
+_See code: [src/commands/logs/push/history.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/push/history.ts)_
+
+## `ably logs push subscribe`
+
+Stream logs from the push notifications meta channel [meta]log:push
+
+```
+USAGE
+  $ ably logs push subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--rewind <value>] [--json]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output results as JSON
+  --rewind=<value>        Number of messages to rewind when subscribing
+
+DESCRIPTION
+  Stream logs from the push notifications meta channel [meta]log:push
+
+EXAMPLES
+  $ ably logs push subscribe
+
+  $ ably logs push subscribe --rewind 10
+```
+
+_See code: [src/commands/logs/push/subscribe.ts](https://github.com/ably/cli/blob/v0.1.2/src/commands/logs/push/subscribe.ts)_
+
 ## `ably rooms`
 
-Commands for working with Ably Chat rooms
+Interact with Ably Chat rooms
 
 ```
 USAGE
   $ ably rooms
 
 DESCRIPTION
-  Commands for working with Ably Chat rooms
+  Interact with Ably Chat rooms
 
 EXAMPLES
   $ ably rooms list

@@ -6,13 +6,16 @@ export default class AppsStatsCommand extends ControlBaseCommand {
   static description = 'Get app stats with optional live updates'
 
   static examples = [
+    '$ ably apps stats',
     '$ ably apps stats app-id',
+    '$ ably apps stats --unit hour',
     '$ ably apps stats app-id --unit hour',
     '$ ably apps stats app-id --start 1618005600000 --end 1618091999999',
     '$ ably apps stats app-id --limit 10',
     '$ ably apps stats app-id --format json',
+    '$ ably apps stats --live',
     '$ ably apps stats app-id --live',
-    '$ ably apps stats app-id --live --interval 15',
+    '$ ably apps stats --live --interval 15',
   ]
 
   static flags = {
@@ -49,8 +52,8 @@ export default class AppsStatsCommand extends ControlBaseCommand {
 
   static args = {
     id: Args.string({
-      description: 'App ID to get stats for',
-      required: true,
+      description: 'App ID to get stats for (uses default app if not provided)',
+      required: false,
     }),
   }
 
@@ -60,12 +63,20 @@ export default class AppsStatsCommand extends ControlBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppsStatsCommand)
     
+    // Use provided app ID or fall back to default app ID
+    const appId = args.id || this.configManager.getCurrentAppId()
+    
+    if (!appId) {
+      this.error('No app ID provided and no default app selected. Please specify an app ID or select a default app with "ably apps switch".')
+      return
+    }
+    
     const controlApi = this.createControlApi(flags)
     
     if (flags.live) {
-      await this.runLiveStats(args.id, flags, controlApi)
+      await this.runLiveStats(appId, flags, controlApi)
     } else {
-      await this.runOneTimeStats(args.id, flags, controlApi)
+      await this.runOneTimeStats(appId, flags, controlApi)
     }
   }
 

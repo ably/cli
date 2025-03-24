@@ -1,7 +1,7 @@
 import {Command, Flags} from '@oclif/core'
 
 export default class RoomsIndex extends Command {
-  static override description = 'Commands for working with Ably Chat rooms'
+  static override description = 'Interact with Ably Chat rooms'
 
   static override examples = [
     '$ ably rooms list',

@@ -1,6 +1,8 @@
 import {Args, Flags} from '@oclif/core'
 import {AblyBaseCommand} from '../../base-command.js'
 import * as Ably from 'ably'
+import chalk from 'chalk'
+import { formatJson, isJsonData } from '../../utils/json-formatter.js'
 
 export default class ChannelsSubscribe extends AblyBaseCommand {
   static override description = 'Subscribe to messages published on one or more Ably channels'
@@ -124,7 +126,14 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
           const name = message.name ? message.name : '(none)'
           
           this.log(`[${timestamp}] Channel: ${channel.name} | Event: ${name}`)
-          this.log(`Data: ${JSON.stringify(message.data, null, 2)}`)
+          
+          // Use the new JSON formatter for message data
+          if (isJsonData(message.data)) {
+            this.log(`Data:`)
+            this.log(formatJson(message.data))
+          } else {
+            this.log(`Data: ${message.data}`)
+          }
         })
       })
       

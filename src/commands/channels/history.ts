@@ -2,6 +2,7 @@ import { Args, Flags } from '@oclif/core'
 import { AblyBaseCommand } from '../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+import { formatJson, isJsonData } from '../../utils/json-formatter.js'
 
 export default class ChannelsHistory extends AblyBaseCommand {
   static override description = 'Retrieve message history for a channel'
@@ -17,13 +18,18 @@ export default class ChannelsHistory extends AblyBaseCommand {
   static override flags = {
     ...AblyBaseCommand.globalFlags,
     'limit': Flags.integer({
-      description: 'Maximum number of messages to return',
-      default: 25,
+      description: 'Maximum number of messages to retrieve',
+      default: 50,
     }),
     'direction': Flags.string({
-      description: 'Order of messages',
+      description: 'Direction of message retrieval',
       options: ['backwards', 'forwards'],
       default: 'backwards',
+    }),
+    'format': Flags.string({
+      description: 'Output format',
+      options: ['json', 'pretty'],
+      default: 'pretty',
     }),
     'start': Flags.string({
       description: 'Start time for the history query (ISO 8601 format)',
@@ -31,25 +37,8 @@ export default class ChannelsHistory extends AblyBaseCommand {
     'end': Flags.string({
       description: 'End time for the history query (ISO 8601 format)',
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
-    'cipher-key': Flags.string({
-      description: 'Encryption key for decrypting messages (hex-encoded)',
-    }),
-    'cipher-algorithm': Flags.string({
-      description: 'Encryption algorithm to use',
-      default: 'aes',
-    }),
-    'cipher-key-length': Flags.integer({
-      description: 'Length of encryption key in bits',
-      default: 256,
-    }),
-    'cipher-mode': Flags.string({
-      description: 'Cipher mode to use',
-      default: 'cbc',
+    'cipher': Flags.string({
+      description: 'Decryption key for encrypted messages (AES-128)',
     }),
   }
 
@@ -62,28 +51,33 @@ export default class ChannelsHistory extends AblyBaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsHistory)
-
-    // Create the Ably client
-    const client = await this.createAblyClient(flags)
-    if (!client) return
+    
+    const channelName = args.channel
+    let client: Ably.Rest | null = null
     
     try {
-      const channelName = args.channel
+      // Get API key from flags or config
+      const apiKey = flags['api-key'] || await this.configManager.getApiKey()
+      if (!apiKey) {
+        await this.ensureAppAndKey(flags)
+        return
+      }
+      
+      // Create a REST client
+      const options: Ably.ClientOptions = this.getClientOptions(flags)
+      client = new Ably.Rest(options)
       
       // Setup channel options
       const channelOptions: Ably.ChannelOptions = {}
       
-      // Configure encryption if cipher key is provided
-      if (flags['cipher-key']) {
+      // Add encryption if specified
+      if (flags.cipher) {
         channelOptions.cipher = {
-          key: flags['cipher-key'],
-          algorithm: flags['cipher-algorithm'],
-          keyLength: flags['cipher-key-length'],
-          mode: flags['cipher-mode'],
+          key: flags.cipher,
         }
       }
       
-      // Get the channel
+      // Get the channel with options
       const channel = client.channels.get(channelName, channelOptions)
       
       // Build history query parameters
@@ -92,6 +86,7 @@ export default class ChannelsHistory extends AblyBaseCommand {
         direction: flags.direction as 'backwards' | 'forwards',
       }
       
+      // Add time range if specified
       if (flags.start) {
         historyParams.start = new Date(flags.start).getTime()
       }
@@ -104,7 +99,7 @@ export default class ChannelsHistory extends AblyBaseCommand {
       const history = await channel.history(historyParams)
       const messages = history.items
       
-      // Output messages based on format
+      // Output results based on format
       if (flags.format === 'json') {
         this.log(JSON.stringify(messages, null, 2))
       } else {
@@ -129,14 +124,9 @@ export default class ChannelsHistory extends AblyBaseCommand {
           }
           
           this.log('Data:')
-          try {
-            // Try to pretty-print if data is an object/array
-            if (typeof message.data === 'object' && message.data !== null) {
-              this.log(JSON.stringify(message.data, null, 2))
-            } else {
-              this.log(String(message.data))
-            }
-          } catch (error) {
+          if (isJsonData(message.data)) {
+            this.log(formatJson(message.data))
+          } else {
             this.log(String(message.data))
           }
           
@@ -149,8 +139,6 @@ export default class ChannelsHistory extends AblyBaseCommand {
       }
     } catch (error) {
       this.error(`Error retrieving channel history: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      client.close()
     }
   }
 } 

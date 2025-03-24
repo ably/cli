@@ -75,6 +75,8 @@ $ ably apps set-apns-p12 -> allow a user to upload a P12 cert for use with APNS
 $ ably apps stats -> view app stats, with a --live option which polls every 6 seconds and returns key metrics such as peak connections, channels, message throughput, and cumulative messages sent etc.
 $ ably apps switch -> switch to this app for all subsequent requests
 $ ably apps current -> Show the current app if one is configured for the account.
+$ ably apps logs subscribe -> proxy for ably logs apps subscribe
+$ ably apps logs history -> proxy for ably logs apps history
 
 $ ably channels -> Topic for Ably Pub/Sub channels
 $ ably channels list -> use the channel enumeration API to return a list of live channels
@@ -86,8 +88,13 @@ $ ably channels history -> provides access to historical messages on a channel
 $ ably channels presence -> this is a topic that groups presence functionality together
 $ ably channels presence enter -> enter presence and remain present until the script is terminated. Show who is entering and leaving whilst present,
 $ ably channels presence subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
+$ ably channels logs channel-lifecycle -> set up as an alias to ably logs channel-lifecycle
 
 $ ably config -> opens the config TOML file with the default text editor 
+
+$ ably connections logs connections-lifecycle -> set up as an alias to ably logs connection-lifecycle
+$ ably connections stats -> this is largely a duplication of ably app stats, however it is focussed on connection stats only. This should also support the --live option.
+$ ably connections test -> simply connects to Ably, confirms that the conenction was established, and closes the connection. Allows transport params options so that WebSockets can be disabled for example, and only HTTP is used, or only WebSockets is used without HTTP support.
 
 $ ably rooms -> Topic for Ably Chat
 $ ably rooms list -> list chat rooms using the channel enumeration API, filtering out those that are not chat
@@ -97,6 +104,13 @@ $ ably rooms messages get -> get historical messages
 $ ably rooms typing subscribe -> subscribe to typing indicators and show who is typing and stops typing in realtime
 $ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
 
+$ ably logs -> Topic for streaming and retrieving logs
+$ ably logs channel-lifecycle subscribe -> Stream logs from [meta]channel.lifecycle meta channel, see https://ably.com/docs/metadata-stats/metadata/subscribe#channel-lifecycle for types of evetns, and the data type.
+$ ably logs connection-lifecycle subscribe -> Stream logs from [meta]connection.lifecycle meta channel. 
+$ ably logs app subscribe -> Stream logs from the app-wide meta channel `[meta]log`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
+$ ably logs app history -> View historical app logs from `[meta]log` by using the ably pub/sub history API for channels
+$ ably logs push subscribe  -> Stream logs from the app push notifications `[meta]log:push`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
+$ ably logs push history ->  -> View historical push logs from `[meta]log:push` by using the ably pub/sub history API for channels
 
 $ ably bench -> Topic for benchmark tests
 $ ably bench publisher -> allow a publisher to start publishing messages on a specified channel at a frequency of at most 20 messages per second allowing the total number of messages published to be 10,000. Before the publisher starts publishing though, it will check if there are other subscriber bench clients present on the channel and it will also become present and announce it is a publisher and the details of the test. If there are none, it will ask the user if we should wait for subscribers to be present, or continue with a prompt. Once completed, the client will conrim how many messages were published, if there were any errors, and in the case of REST, what the average latency was for the request to complete, and in the case of Realtime, what the average latency was for a message to be received back. Whilst running the test, the message rate and trailing latency for the last 5 seconds shoudl be shown ,along with the cumulative messages sent and percentage of test execute. This should all be presented in a console UI with a progress bar for example. Support for publishing via REST or Realtime is needed. If a test is already running and another one starts, and error will be shown and the CLI should exit. Each publisher can show others that the test is runing using presence data.
@@ -111,7 +125,7 @@ There are two distinct types of authentication needs for the CLI.
    All control API operations performed with access tokens are made on behalf of the user who issued the token and have the same rights that that user has for that account.
 
 2. App level (Data Plane) -> every call to the Ably product data plane APIs, that is the APIs offered by the products such as Ably Pub/Sub and Ably Chat, requires authentication with an API key or a token generated from an API key.
-   API keys are issued for apps and can only belong to one app. Apps are sandboxed ensuring API keys cannot be shared across apps and data cannot traverse the boundaries of the app.
+API keys are issued for apps and can only belong to one app. Apps are sandboxed ensuring API keys cannot be shared across apps and data cannot traverse the boundaries of the app.
    As a result, users of the CLI, when using commands that depend on the data plane, must provide an API key, a token, or have a default app and API key selected from within the CLI.
    As a convenience, if a user has logged in using `ably accounts login`, but has not yet selected an app and is not explicitly providing auth credentials (like an API key or token), then 
      the user will be told that no app is in use and if they press Enter, we will list the apps and let them select one (using a nice interactive CLI UI).

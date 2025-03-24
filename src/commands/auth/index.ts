@@ -1,7 +1,7 @@
 import { AblyBaseCommand } from '../../base-command.js'
 
 export default class Auth extends AblyBaseCommand {
-  static description = 'Authentication commands for Ably'
+  static description = 'Authentication for Ably including key management and token generation'
 
   static examples = [
     '$ ably auth keys list',
