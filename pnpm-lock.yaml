@@ -10,16 +10,16 @@ importers:
     dependencies:
       '@ably/chat':
         specifier: ^0.5.1
-        version: 0.5.1(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)
+        version: 0.5.1(ably@2.6.5(react@19.0.0))(react@19.0.0)
       '@ably/spaces':
         specifier: ^0.4.0
-        version: 0.4.0(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)
+        version: 0.4.0(ably@2.6.5(react@19.0.0))(react@19.0.0)
       '@oclif/core':
         specifier: ^4.2.10
         version: 4.2.10
       ably:
-        specifier: github:ably/ably-js#type-correction-publishoptions
-        version: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0)
+        specifier: ^2.6.5
+        version: 2.6.5(react@19.0.0)
       chalk:
         specifier: '5'
         version: 5.4.1
@@ -83,7 +83,6 @@ packages:
 
   '@ably/chat@0.5.1':
     resolution: {integrity: sha512-zwCakFcXPgYNfZ6ERv0F0ExFrzY4dyUbcPzajYgbkuJn3YdQxdqIF9oIP66TChi3tDd5opMOPmWTQxOXFU/IrQ==}
-    version: 0.5.1
     engines: {node: '>=18.0.0'}
     peerDependencies:
       ably: ^2.6.3
@@ -100,7 +99,6 @@ packages:
 
   '@ably/spaces@0.4.0':
     resolution: {integrity: sha512-yehNgkv9DOHUBR1c46/5Q4BhkF3TJkKb00kLDhZFWTVJpFSW0Mkw0PUgHLkzAg9Bt9LJPcA0mgZq3mFeLQCrIg==}
-    version: 0.4.0
     peerDependencies:
       ably: ^2.3.0
       react: '>=16.8.0'
@@ -375,9 +373,8 @@ packages:
   '@types/through@0.0.33':
     resolution: {integrity: sha512-HsJ+z3QuETzP3cswwtzt2vEIiHBk/dCcHGhbmG5X3ecnwFD/lPrMpliGXxSCg03L9AhrdwA4Oz/qfspkDW+xGQ==}
 
-  ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee:
-    resolution: {tarball: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee}
-    version: 2.6.4
+  ably@2.6.5:
+    resolution: {integrity: sha512-wsMqriT71numXlvjkoxp6lxDpP0EoUoTG2xGVLFZKSqgUTyVvWx7YFrHxwjRobdskM26oKJJL+DdYvbDnpworQ==}
     engines: {node: '>=16'}
     peerDependencies:
       react: '>=16.8.0'
@@ -1480,9 +1477,9 @@ packages:
 
 snapshots:
 
-  '@ably/chat@0.5.1(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)':
+  '@ably/chat@0.5.1(ably@2.6.5(react@19.0.0))(react@19.0.0)':
     dependencies:
-      ably: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0)
+      ably: 2.6.5(react@19.0.0)
       async-mutex: 0.5.0
       dequal: 2.0.3
       lodash.clonedeep: 4.5.0
@@ -1495,9 +1492,9 @@ snapshots:
     dependencies:
       bops: 1.0.1
 
-  '@ably/spaces@0.4.0(ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0))(react@19.0.0)':
+  '@ably/spaces@0.4.0(ably@2.6.5(react@19.0.0))(react@19.0.0)':
     dependencies:
-      ably: https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0)
+      ably: 2.6.5(react@19.0.0)
       nanoid: 3.3.11
     optionalDependencies:
       react: 19.0.0
@@ -1816,7 +1813,7 @@ snapshots:
     dependencies:
       '@types/node': 22.13.11
 
-  ably@https://codeload.github.com/ably/ably-js/tar.gz/8f94f9c411e5836b8d5af37023f9d514cce78eee(react@19.0.0):
+  ably@2.6.5(react@19.0.0):
     dependencies:
       '@ably/msgpack-js': 0.4.0
       fastestsmallesttextencoderdecoder: 1.0.22

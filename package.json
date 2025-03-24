@@ -36,7 +36,7 @@
     "@ably/chat": "^0.5.1",
     "@ably/spaces": "^0.4.0",
     "@oclif/core": "^4.2.10",
-    "ably": "github:ably/ably-js#type-correction-publishoptions",
+    "ably": "^2.6.5",
     "chalk": "5",
     "cli-table3": "^0.6.5",
     "inquirer": "^12.5.0",
