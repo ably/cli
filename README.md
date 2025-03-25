@@ -130,6 +130,7 @@ USAGE
 * [`ably spaces cursors`](#ably-spaces-cursors)
 * [`ably spaces cursors set SPACEID`](#ably-spaces-cursors-set-spaceid)
 * [`ably spaces cursors subscribe SPACEID`](#ably-spaces-cursors-subscribe-spaceid)
+* [`ably spaces list`](#ably-spaces-list)
 * [`ably spaces locations`](#ably-spaces-locations)
 * [`ably spaces locations get-all SPACEID`](#ably-spaces-locations-get-all-spaceid)
 * [`ably spaces locations set SPACEID`](#ably-spaces-locations-set-spaceid)
@@ -3510,6 +3511,8 @@ DESCRIPTION
   Interact with Ably Spaces
 
 EXAMPLES
+  $ ably spaces list
+
   $ ably spaces members subscribe my-space
 
   $ ably spaces members enter my-space
@@ -3629,6 +3632,44 @@ EXAMPLES
 ```
 
 _See code: [src/commands/spaces/cursors/subscribe.ts](https://github.com/ably/cli/blob/v0.2.2/src/commands/spaces/cursors/subscribe.ts)_
+
+## `ably spaces list`
+
+List active spaces
+
+```
+USAGE
+  $ ably spaces list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>] [--format json|pretty]
+
+FLAGS
+  -p, --prefix=<value>        Filter spaces by prefix
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --format=<option>       [default: pretty] Output format (json or pretty)
+                              <options: json|pretty>
+      --host=<value>          Override the host endpoint for all product API calls
+      --limit=<value>         [default: 100] Maximum number of spaces to return
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  List active spaces
+
+EXAMPLES
+  $ ably spaces list
+
+  $ ably spaces list --prefix my-space
+
+  $ ably spaces list --limit 50
+
+  $ ably spaces list --format json
+```
+
+_See code: [src/commands/spaces/list.ts](https://github.com/ably/cli/blob/v0.2.2/src/commands/spaces/list.ts)_
 
 ## `ably spaces locations`
 

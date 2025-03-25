@@ -1,15 +1,18 @@
 import { Command } from '@oclif/core'
-import SpacesIndex from '../spaces/index.js'
+import Spaces from '../spaces/index.js'
 
-export default class SpaceIndex extends Command {
-  static description = 'Alias for the command `ably spaces`'
-  static hidden = true
-
-  static flags = SpacesIndex.flags
-  static args = SpacesIndex.args
+export default class Space extends Command {
+  static override hidden = true
+  static override description = 'Alias for "ably spaces"'
+  static override flags = Spaces.flags
+  static override args = Spaces.args
+  
+  // Special property to identify this as an alias command
+  static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the original command
-    await SpacesIndex.run(process.argv.slice(2))
+    // Forward to the spaces command
+    const command = new Spaces(this.argv, this.config)
+    await command.run()
   }
 } 

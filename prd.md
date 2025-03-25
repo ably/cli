@@ -115,6 +115,7 @@ $ ably rooms typing subscribe -> subscribe to typing indicators and show who is 
 $ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
 
 $ ably spaces -> Topic for Ably Spaces
+$ ably spaces list -> list Spaces using the channel enumeration API, filtering out those that are not chat
 $ ably spaces members subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
 $ ably spaces members enter -> enter a space and remain present until the script is terminated. Show who is entering and leaving whilst present.
 $ ably spaces locations set -> allow a location to be set, and remain at this location until the script is terminated. Show other location changes whilst the script is running.
