@@ -4,8 +4,9 @@
 
 [Ably](https://ably.com) CLI for [Ably Pub/Sub](https://ably.com/pubsub), [Ably Spaces](https://ably.com/spaces), [Ably Chat](https://ably.com/chat) and the [Ably Control API](https://ably.com/docs/account/control-api).
 
-This project is in beta. This CLI is being actively developed, may change and may have bugs. 
-Please [get in touch](https://ably.com/contact) if you have feedback, feature requests or want to report bugs. We will start an issue tracker shortly.
+> [!NOTE]  
+> This project is in beta and this CLI project is being actively developed.
+> Please [raise an issue](https://github.com/ably/cli/issues) if you have feedback, feature requests or want to  report a bug. We welcome [pull requests too](https://github.com/ably/cli/pulls).
 
 <!-- toc -->
 * [Ably CLI](#ably-cli)
