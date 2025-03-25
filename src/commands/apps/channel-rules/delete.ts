@@ -1,6 +1,7 @@
 import { Flags, Args } from '@oclif/core'
 import { ControlBaseCommand } from '../../../control-base-command.js'
 import * as readline from 'readline'
+import chalk from 'chalk'
 
 export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
   static description = 'Delete a channel rule'
@@ -59,8 +60,40 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
       if (!flags.force) {
         this.log(`\nYou are about to delete the following channel rule:`)
         this.log(`ID: ${namespace.id}`)
-        this.log(`Persisted: ${namespace.persisted ? 'Yes' : 'No'}`)
-        this.log(`Push Enabled: ${namespace.pushEnabled ? 'Yes' : 'No'}`)
+        this.log(`Persisted: ${namespace.persisted ? chalk.green('Yes') : 'No'}`)
+        this.log(`Push Enabled: ${namespace.pushEnabled ? chalk.green('Yes') : 'No'}`)
+        
+        if (namespace.authenticated !== undefined) {
+          this.log(`Authenticated: ${namespace.authenticated ? chalk.green('Yes') : 'No'}`)
+        }
+        if (namespace.persistLast !== undefined) {
+          this.log(`Persist Last: ${namespace.persistLast ? chalk.green('Yes') : 'No'}`)
+        }
+        if (namespace.exposeTimeSerial !== undefined) {
+          this.log(`Expose Time Serial: ${namespace.exposeTimeSerial ? chalk.green('Yes') : 'No'}`)
+        }
+        if (namespace.populateChannelRegistry !== undefined) {
+          this.log(`Populate Channel Registry: ${namespace.populateChannelRegistry ? chalk.green('Yes') : 'No'}`)
+        }
+        if (namespace.batchingEnabled !== undefined) {
+          this.log(`Batching Enabled: ${namespace.batchingEnabled ? chalk.green('Yes') : 'No'}`)
+        }
+        if (namespace.batchingInterval !== undefined) {
+          this.log(`Batching Interval: ${chalk.green(namespace.batchingInterval.toString())}`)
+        }
+        if (namespace.conflationEnabled !== undefined) {
+          this.log(`Conflation Enabled: ${namespace.conflationEnabled ? chalk.green('Yes') : 'No'}`)
+        }
+        if (namespace.conflationInterval !== undefined) {
+          this.log(`Conflation Interval: ${chalk.green(namespace.conflationInterval.toString())}`)
+        }
+        if (namespace.conflationKey !== undefined) {
+          this.log(`Conflation Key: ${chalk.green(namespace.conflationKey)}`)
+        }
+        if (namespace.tlsOnly !== undefined) {
+          this.log(`TLS Only: ${namespace.tlsOnly ? chalk.green('Yes') : 'No'}`)
+        }
+        
         this.log(`Created: ${this.formatDate(namespace.created)}`)
         
         const confirmed = await this.promptForConfirmation(`\nAre you sure you want to delete channel rule with ID "${namespace.id}"? [y/N]`)

@@ -1,5 +1,6 @@
 import { Flags } from '@oclif/core'
 import { ControlBaseCommand } from '../../../control-base-command.js'
+import chalk from 'chalk'
 
 export default class ChannelRulesCreateCommand extends ControlBaseCommand {
   static description = 'Create a channel rule'
@@ -114,38 +115,38 @@ export default class ChannelRulesCreateCommand extends ControlBaseCommand {
       } else {
         this.log('Channel rule created successfully:')
         this.log(`ID: ${createdNamespace.id}`)
-        this.log(`Persisted: ${createdNamespace.persisted ? 'Yes' : 'No'}`)
-        this.log(`Push Enabled: ${createdNamespace.pushEnabled ? 'Yes' : 'No'}`)
+        this.log(`Persisted: ${createdNamespace.persisted ? chalk.green('Yes') : 'No'}`)
+        this.log(`Push Enabled: ${createdNamespace.pushEnabled ? chalk.green('Yes') : 'No'}`)
         
         if (createdNamespace.authenticated !== undefined) {
-          this.log(`Authenticated: ${createdNamespace.authenticated ? 'Yes' : 'No'}`)
+          this.log(`Authenticated: ${createdNamespace.authenticated ? chalk.green('Yes') : 'No'}`)
         }
         if (createdNamespace.persistLast !== undefined) {
-          this.log(`Persist Last: ${createdNamespace.persistLast ? 'Yes' : 'No'}`)
+          this.log(`Persist Last: ${createdNamespace.persistLast ? chalk.green('Yes') : 'No'}`)
         }
         if (createdNamespace.exposeTimeSerial !== undefined) {
-          this.log(`Expose Time Serial: ${createdNamespace.exposeTimeSerial ? 'Yes' : 'No'}`)
+          this.log(`Expose Time Serial: ${createdNamespace.exposeTimeSerial ? chalk.green('Yes') : 'No'}`)
         }
         if (createdNamespace.populateChannelRegistry !== undefined) {
-          this.log(`Populate Channel Registry: ${createdNamespace.populateChannelRegistry ? 'Yes' : 'No'}`)
+          this.log(`Populate Channel Registry: ${createdNamespace.populateChannelRegistry ? chalk.green('Yes') : 'No'}`)
         }
         if (createdNamespace.batchingEnabled !== undefined) {
-          this.log(`Batching Enabled: ${createdNamespace.batchingEnabled ? 'Yes' : 'No'}`)
+          this.log(`Batching Enabled: ${createdNamespace.batchingEnabled ? chalk.green('Yes') : 'No'}`)
         }
         if (createdNamespace.batchingInterval !== undefined) {
-          this.log(`Batching Interval: ${createdNamespace.batchingInterval}`)
+          this.log(`Batching Interval: ${chalk.green(createdNamespace.batchingInterval.toString())}`)
         }
         if (createdNamespace.conflationEnabled !== undefined) {
-          this.log(`Conflation Enabled: ${createdNamespace.conflationEnabled ? 'Yes' : 'No'}`)
+          this.log(`Conflation Enabled: ${createdNamespace.conflationEnabled ? chalk.green('Yes') : 'No'}`)
         }
         if (createdNamespace.conflationInterval !== undefined) {
-          this.log(`Conflation Interval: ${createdNamespace.conflationInterval}`)
+          this.log(`Conflation Interval: ${chalk.green(createdNamespace.conflationInterval.toString())}`)
         }
         if (createdNamespace.conflationKey !== undefined) {
-          this.log(`Conflation Key: ${createdNamespace.conflationKey}`)
+          this.log(`Conflation Key: ${chalk.green(createdNamespace.conflationKey)}`)
         }
         if (createdNamespace.tlsOnly !== undefined) {
-          this.log(`TLS Only: ${createdNamespace.tlsOnly ? 'Yes' : 'No'}`)
+          this.log(`TLS Only: ${createdNamespace.tlsOnly ? chalk.green('Yes') : 'No'}`)
         }
         
         this.log(`Created: ${this.formatDate(createdNamespace.created)}`)

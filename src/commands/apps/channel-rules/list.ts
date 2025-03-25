@@ -51,37 +51,37 @@ export default class ChannelRulesListCommand extends ControlBaseCommand {
         
         namespaces.forEach(namespace => {
           this.log(chalk.bold(`Channel Rule ID: ${namespace.id}`))
-          this.log(`  Persisted: ${namespace.persisted ? 'Yes' : 'No'}`)
-          this.log(`  Push Enabled: ${namespace.pushEnabled ? 'Yes' : 'No'}`)
+          this.log(`  Persisted: ${namespace.persisted ? chalk.bold.green('✓ Yes') : 'No'}`)
+          this.log(`  Push Enabled: ${namespace.pushEnabled ? chalk.bold.green('✓ Yes') : 'No'}`)
           if (namespace.authenticated !== undefined) {
-            this.log(`  Authenticated: ${namespace.authenticated ? 'Yes' : 'No'}`)
+            this.log(`  Authenticated: ${namespace.authenticated ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
           if (namespace.persistLast !== undefined) {
-            this.log(`  Persist Last Message: ${namespace.persistLast ? 'Yes' : 'No'}`)
+            this.log(`  Persist Last Message: ${namespace.persistLast ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
           if (namespace.exposeTimeSerial !== undefined) {
-            this.log(`  Expose Time Serial: ${namespace.exposeTimeSerial ? 'Yes' : 'No'}`)
+            this.log(`  Expose Time Serial: ${namespace.exposeTimeSerial ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
           if (namespace.populateChannelRegistry !== undefined) {
-            this.log(`  Populate Channel Registry: ${namespace.populateChannelRegistry ? 'Yes' : 'No'}`)
+            this.log(`  Populate Channel Registry: ${namespace.populateChannelRegistry ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
           if (namespace.batchingEnabled !== undefined) {
-            this.log(`  Batching Enabled: ${namespace.batchingEnabled ? 'Yes' : 'No'}`)
+            this.log(`  Batching Enabled: ${namespace.batchingEnabled ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
-          if (namespace.batchingInterval !== undefined) {
-            this.log(`  Batching Interval: ${namespace.batchingInterval}`)
+          if (namespace.batchingInterval !== undefined && namespace.batchingInterval !== null && namespace.batchingInterval !== 0) {
+            this.log(`  Batching Interval: ${chalk.bold.green(`✓ ${namespace.batchingInterval}`)}`)
           }
           if (namespace.conflationEnabled !== undefined) {
-            this.log(`  Conflation Enabled: ${namespace.conflationEnabled ? 'Yes' : 'No'}`)
+            this.log(`  Conflation Enabled: ${namespace.conflationEnabled ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
-          if (namespace.conflationInterval !== undefined) {
-            this.log(`  Conflation Interval: ${namespace.conflationInterval}`)
+          if (namespace.conflationInterval !== undefined && namespace.conflationInterval !== null && namespace.conflationInterval !== 0) {
+            this.log(`  Conflation Interval: ${chalk.bold.green(`✓ ${namespace.conflationInterval}`)}`)
           }
-          if (namespace.conflationKey !== undefined) {
-            this.log(`  Conflation Key: ${namespace.conflationKey}`)
+          if (namespace.conflationKey !== undefined && namespace.conflationKey && namespace.conflationKey !== '') {
+            this.log(`  Conflation Key: ${chalk.bold.green(`✓ ${namespace.conflationKey}`)}`)
           }
           if (namespace.tlsOnly !== undefined) {
-            this.log(`  TLS Only: ${namespace.tlsOnly ? 'Yes' : 'No'}`)
+            this.log(`  TLS Only: ${namespace.tlsOnly ? chalk.bold.green('✓ Yes') : 'No'}`)
           }
           this.log(`  Created: ${this.formatDate(namespace.created)}`)
           this.log(`  Updated: ${this.formatDate(namespace.modified)}`)
