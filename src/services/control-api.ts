@@ -41,6 +41,75 @@ export interface Key {
   status: string;
 }
 
+export interface Namespace {
+  id: string;
+  appId: string;
+  persisted: boolean;
+  pushEnabled: boolean;
+  created: number;
+  modified: number;
+  authenticated?: boolean;
+  persistLast?: boolean;
+  exposeTimeSerial?: boolean;
+  populateChannelRegistry?: boolean;
+  batchingEnabled?: boolean;
+  batchingInterval?: number;
+  conflationEnabled?: boolean;
+  conflationInterval?: number;
+  conflationKey?: string;
+  tlsOnly?: boolean;
+}
+
+export interface Rule {
+  id: string;
+  appId: string;
+  ruleType: string;
+  requestMode: string;
+  status: string;
+  source: {
+    channelFilter: string;
+    type: string;
+  };
+  target: any;
+  version: string;
+  created: number;
+  modified: number;
+  _links?: {
+    self: string;
+  };
+}
+
+export interface Queue {
+  id: string;
+  appId: string;
+  name: string;
+  region: string;
+  amqp: {
+    uri: string;
+    queueName: string;
+  };
+  stomp: {
+    uri: string;
+    host: string;
+    destination: string;
+  };
+  state: string;
+  messages: {
+    ready: number;
+    unacknowledged: number;
+    total: number;
+  };
+  stats: {
+    publishRate: number | null;
+    deliveryRate: number | null;
+    acknowledgementRate: number | null;
+  };
+  ttl: number;
+  maxLength: number;
+  deadletter: boolean;
+  deadletterId: string;
+}
+
 export class ControlApi {
   private accessToken: string
   private controlHost: string
@@ -245,5 +314,92 @@ export class ControlApi {
   // Revoke a key
   async revokeKey(appId: string, keyId: string): Promise<void> {
     return this.request<void>(`/apps/${appId}/keys/${keyId}`, 'DELETE')
+  }
+
+  // Namespace (Channel Rules) methods
+  async listNamespaces(appId: string): Promise<Namespace[]> {
+    return this.request<Namespace[]>(`/apps/${appId}/namespaces`)
+  }
+
+  async getNamespace(appId: string, namespaceId: string): Promise<Namespace> {
+    return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`)
+  }
+
+  async createNamespace(appId: string, namespaceData: {
+    channelNamespace: string;
+    persisted?: boolean;
+    pushEnabled?: boolean;
+    authenticated?: boolean;
+    persistLast?: boolean;
+    exposeTimeSerial?: boolean;
+    populateChannelRegistry?: boolean;
+    batchingEnabled?: boolean;
+    batchingInterval?: number;
+    conflationEnabled?: boolean;
+    conflationInterval?: number;
+    conflationKey?: string;
+    tlsOnly?: boolean;
+  }): Promise<Namespace> {
+    return this.request<Namespace>(`/apps/${appId}/namespaces`, 'POST', namespaceData)
+  }
+
+  async updateNamespace(appId: string, namespaceId: string, namespaceData: {
+    persisted?: boolean;
+    pushEnabled?: boolean;
+    authenticated?: boolean;
+    persistLast?: boolean;
+    exposeTimeSerial?: boolean;
+    populateChannelRegistry?: boolean;
+    batchingEnabled?: boolean;
+    batchingInterval?: number;
+    conflationEnabled?: boolean;
+    conflationInterval?: number;
+    conflationKey?: string;
+    tlsOnly?: boolean;
+  }): Promise<Namespace> {
+    return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`, 'PATCH', namespaceData)
+  }
+
+  async deleteNamespace(appId: string, namespaceId: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/namespaces/${namespaceId}`, 'DELETE')
+  }
+
+  // Rules (Integrations) methods
+  async listRules(appId: string): Promise<Rule[]> {
+    return this.request<Rule[]>(`/apps/${appId}/rules`)
+  }
+
+  async getRule(appId: string, ruleId: string): Promise<Rule> {
+    return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`)
+  }
+
+  async createRule(appId: string, ruleData: any): Promise<Rule> {
+    return this.request<Rule>(`/apps/${appId}/rules`, 'POST', ruleData)
+  }
+
+  async updateRule(appId: string, ruleId: string, ruleData: any): Promise<Rule> {
+    return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`, 'PATCH', ruleData)
+  }
+
+  async deleteRule(appId: string, ruleId: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/rules/${ruleId}`, 'DELETE')
+  }
+
+  // Queues methods
+  async listQueues(appId: string): Promise<Queue[]> {
+    return this.request<Queue[]>(`/apps/${appId}/queues`)
+  }
+
+  async createQueue(appId: string, queueData: {
+    name: string;
+    ttl?: number;
+    maxLength?: number;
+    region?: string;
+  }): Promise<Queue> {
+    return this.request<Queue>(`/apps/${appId}/queues`, 'POST', queueData)
+  }
+
+  async deleteQueue(appId: string, queueName: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/queues/${queueName}`, 'DELETE')
   }
 } 

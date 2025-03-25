@@ -36,6 +36,11 @@ USAGE
 * [`ably accounts stats`](#ably-accounts-stats)
 * [`ably accounts switch [ALIAS]`](#ably-accounts-switch-alias)
 * [`ably apps`](#ably-apps)
+* [`ably apps channel-rules`](#ably-apps-channel-rules)
+* [`ably apps channel-rules create`](#ably-apps-channel-rules-create)
+* [`ably apps channel-rules delete NAMEORID`](#ably-apps-channel-rules-delete-nameorid)
+* [`ably apps channel-rules list`](#ably-apps-channel-rules-list)
+* [`ably apps channel-rules update NAMEORID`](#ably-apps-channel-rules-update-nameorid)
 * [`ably apps create`](#ably-apps-create)
 * [`ably apps current`](#ably-apps-current)
 * [`ably apps delete [ID]`](#ably-apps-delete-id)
@@ -80,6 +85,12 @@ USAGE
 * [`ably connections logs [TOPIC]`](#ably-connections-logs-topic)
 * [`ably connections stats`](#ably-connections-stats)
 * [`ably connections test`](#ably-connections-test)
+* [`ably integrations`](#ably-integrations)
+* [`ably integrations create`](#ably-integrations-create)
+* [`ably integrations delete RULEID`](#ably-integrations-delete-ruleid)
+* [`ably integrations get RULEID`](#ably-integrations-get-ruleid)
+* [`ably integrations list`](#ably-integrations-list)
+* [`ably integrations update RULEID`](#ably-integrations-update-ruleid)
 * [`ably login [TOKEN]`](#ably-login-token)
 * [`ably logs`](#ably-logs)
 * [`ably logs app`](#ably-logs-app)
@@ -93,6 +104,10 @@ USAGE
 * [`ably logs push`](#ably-logs-push)
 * [`ably logs push history`](#ably-logs-push-history)
 * [`ably logs push subscribe`](#ably-logs-push-subscribe)
+* [`ably queues`](#ably-queues)
+* [`ably queues create`](#ably-queues-create)
+* [`ably queues delete QUEUENAME`](#ably-queues-delete-queuename)
+* [`ably queues list`](#ably-queues-list)
 * [`ably rooms`](#ably-rooms)
 * [`ably rooms list`](#ably-rooms-list)
 * [`ably rooms messages`](#ably-rooms-messages)
@@ -377,6 +392,203 @@ EXAMPLES
 ```
 
 _See code: [src/commands/apps/index.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/apps/index.ts)_
+
+## `ably apps channel-rules`
+
+Manage Ably channel rules (namespaces)
+
+```
+USAGE
+  $ ably apps channel-rules
+
+DESCRIPTION
+  Manage Ably channel rules (namespaces)
+
+EXAMPLES
+  $ ably apps channel-rules list
+
+  $ ably apps channel-rules create --name "chat" --persisted
+
+  $ ably apps channel-rules update chat --push-enabled
+
+  $ ably apps channel-rules delete chat
+```
+
+_See code: [src/commands/apps/channel-rules/index.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/apps/channel-rules/index.ts)_
+
+## `ably apps channel-rules create`
+
+Create a channel rule
+
+```
+USAGE
+  $ ably apps channel-rules create --name <value> [--host <value>] [--env <value>] [--control-host <value>] [--access-token
+    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted] [--push-enabled]
+    [--authenticated] [--persist-last] [--expose-time-serial] [--populate-channel-registry] [--batching-enabled]
+    [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>] [--conflation-key <value>]
+    [--tls-only] [--app <value>] [--format json|pretty]
+
+FLAGS
+  --access-token=<value>         Overrides any configured access token used for the Control API
+  --api-key=<value>              Overrides any configured API key used for the product APIs
+  --app=<value>                  App ID or name to create the channel rule in
+  --authenticated                Whether channels matching this rule require clients to be authenticated
+  --batching-enabled             Whether to enable batching for messages on channels matching this rule
+  --batching-interval=<value>    The batching interval for messages on channels matching this rule
+  --client-id=<value>            Overrides any default client ID when using API authentication. Use "none" to explicitly
+                                 set no client ID. Not applicable when using token authentication.
+  --conflation-enabled           Whether to enable conflation for messages on channels matching this rule
+  --conflation-interval=<value>  The conflation interval for messages on channels matching this rule
+  --conflation-key=<value>       The conflation key for messages on channels matching this rule
+  --control-host=<value>         Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>                  Override the environment for all product API calls
+  --expose-time-serial           Whether to expose the time serial for messages on channels matching this rule
+  --format=<option>              [default: pretty] Output format (json or pretty)
+                                 <options: json|pretty>
+  --host=<value>                 Override the host endpoint for all product API calls
+  --name=<value>                 (required) Name of the channel rule
+  --persist-last                 Whether to persist only the last message on channels matching this rule
+  --persisted                    Whether messages on channels matching this rule should be persisted
+  --populate-channel-registry    Whether to populate the channel registry for channels matching this rule
+  --push-enabled                 Whether push notifications should be enabled for channels matching this rule
+  --tls-only                     Whether to enforce TLS for channels matching this rule
+  --token=<value>                Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Create a channel rule
+
+EXAMPLES
+  $ ably apps channel-rules create --name "chat" --persisted
+
+  $ ably apps channel-rules create --name "events" --push-enabled
+
+  $ ably apps channel-rules create --name "notifications" --persisted --push-enabled --app "My App"
+```
+
+_See code: [src/commands/apps/channel-rules/create.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/apps/channel-rules/create.ts)_
+
+## `ably apps channel-rules delete NAMEORID`
+
+Delete a channel rule
+
+```
+USAGE
+  $ ably apps channel-rules delete NAMEORID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+
+ARGUMENTS
+  NAMEORID  Name or ID of the channel rule to delete
+
+FLAGS
+  -f, --force                 Force deletion without confirmation
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --app=<value>           App ID or name to delete the channel rule from
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Delete a channel rule
+
+EXAMPLES
+  $ ably apps channel-rules delete chat
+
+  $ ably apps channel-rules delete events --app "My App"
+
+  $ ably apps channel-rules delete notifications --force
+```
+
+_See code: [src/commands/apps/channel-rules/delete.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/apps/channel-rules/delete.ts)_
+
+## `ably apps channel-rules list`
+
+List all channel rules
+
+```
+USAGE
+  $ ably apps channel-rules list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --app=<value>           App ID or name to list channel rules for
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  List all channel rules
+
+EXAMPLES
+  $ ably apps channel-rules list
+
+  $ ably apps channel-rules list --app "My App" --format json
+```
+
+_See code: [src/commands/apps/channel-rules/list.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/apps/channel-rules/list.ts)_
+
+## `ably apps channel-rules update NAMEORID`
+
+Update a channel rule
+
+```
+USAGE
+  $ ably apps channel-rules update NAMEORID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted] [--push-enabled] [--authenticated]
+    [--persist-last] [--expose-time-serial] [--populate-channel-registry] [--batching-enabled] [--batching-interval
+    <value>] [--conflation-enabled] [--conflation-interval <value>] [--conflation-key <value>] [--tls-only] [--app
+    <value>] [--format json|pretty]
+
+ARGUMENTS
+  NAMEORID  Name or ID of the channel rule to update
+
+FLAGS
+  --access-token=<value>            Overrides any configured access token used for the Control API
+  --api-key=<value>                 Overrides any configured API key used for the product APIs
+  --app=<value>                     App ID or name to update the channel rule in
+  --[no-]authenticated              Whether channels matching this rule require clients to be authenticated
+  --[no-]batching-enabled           Whether to enable batching for messages on channels matching this rule
+  --batching-interval=<value>       The batching interval for messages on channels matching this rule
+  --client-id=<value>               Overrides any default client ID when using API authentication. Use "none" to
+                                    explicitly set no client ID. Not applicable when using token authentication.
+  --[no-]conflation-enabled         Whether to enable conflation for messages on channels matching this rule
+  --conflation-interval=<value>     The conflation interval for messages on channels matching this rule
+  --conflation-key=<value>          The conflation key for messages on channels matching this rule
+  --control-host=<value>            Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>                     Override the environment for all product API calls
+  --[no-]expose-time-serial         Whether to expose the time serial for messages on channels matching this rule
+  --format=<option>                 [default: pretty] Output format (json or pretty)
+                                    <options: json|pretty>
+  --host=<value>                    Override the host endpoint for all product API calls
+  --[no-]persist-last               Whether to persist only the last message on channels matching this rule
+  --[no-]persisted                  Whether messages on channels matching this rule should be persisted
+  --[no-]populate-channel-registry  Whether to populate the channel registry for channels matching this rule
+  --[no-]push-enabled               Whether push notifications should be enabled for channels matching this rule
+  --[no-]tls-only                   Whether to enforce TLS for channels matching this rule
+  --token=<value>                   Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Update a channel rule
+
+EXAMPLES
+  $ ably apps channel-rules update chat --persisted
+
+  $ ably apps channel-rules update events --push-enabled=false
+
+  $ ably apps channel-rules update notifications --persisted --push-enabled --app "My App"
+```
+
+_See code: [src/commands/apps/channel-rules/update.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/apps/channel-rules/update.ts)_
 
 ## `ably apps create`
 
@@ -1975,6 +2187,226 @@ EXAMPLES
 
 _See code: [src/commands/connections/test.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/connections/test.ts)_
 
+## `ably integrations`
+
+Manage Ably integrations
+
+```
+USAGE
+  $ ably integrations
+
+DESCRIPTION
+  Manage Ably integrations
+
+EXAMPLES
+  $ ably integrations list
+
+  $ ably integrations get rule123
+
+  $ ably integrations create
+
+  $ ably integrations update rule123
+
+  $ ably integrations delete rule123
+```
+
+_See code: [src/commands/integrations/index.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/integrations/index.ts)_
+
+## `ably integrations create`
+
+Create an integration rule
+
+```
+USAGE
+  $ ably integrations create --rule-type http|amqp|kinesis|firehose|pulsar|kafka|azure|azure-functions|mqtt|cloudmqtt
+    --source-type channel.message|channel.presence|channel.lifecycle|presence.message [--host <value>] [--env <value>]
+    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app
+    <value>] [--channel-filter <value>] [--request-mode single|batch] [--status enabled|disabled] [--target-url <value>]
+    [--format json|pretty]
+
+FLAGS
+  --access-token=<value>    Overrides any configured access token used for the Control API
+  --api-key=<value>         Overrides any configured API key used for the product APIs
+  --app=<value>             App ID or name to create the integration rule in
+  --channel-filter=<value>  Channel filter pattern
+  --client-id=<value>       Overrides any default client ID when using API authentication. Use "none" to explicitly set
+                            no client ID. Not applicable when using token authentication.
+  --control-host=<value>    Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>             Override the environment for all product API calls
+  --format=<option>         [default: pretty] Output format (json or pretty)
+                            <options: json|pretty>
+  --host=<value>            Override the host endpoint for all product API calls
+  --request-mode=<option>   [default: single] Request mode for the rule
+                            <options: single|batch>
+  --rule-type=<option>      (required) Type of integration rule (http, amqp, etc.)
+                            <options: http|amqp|kinesis|firehose|pulsar|kafka|azure|azure-functions|mqtt|cloudmqtt>
+  --source-type=<option>    (required) The event source type
+                            <options: channel.message|channel.presence|channel.lifecycle|presence.message>
+  --status=<option>         [default: enabled] Initial status of the rule
+                            <options: enabled|disabled>
+  --target-url=<value>      Target URL for HTTP rules
+  --token=<value>           Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Create an integration rule
+
+EXAMPLES
+  $ ably integrations create --rule-type "http" --source-type "channel.message" --target-url "https://example.com/webhook"
+
+  $ ably integrations create --rule-type "amqp" --source-type "channel.message" --channel-filter "chat:*"
+```
+
+_See code: [src/commands/integrations/create.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/integrations/create.ts)_
+
+## `ably integrations delete RULEID`
+
+Delete an integration rule
+
+```
+USAGE
+  $ ably integrations delete RULEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+
+ARGUMENTS
+  RULEID  The rule ID to delete
+
+FLAGS
+  -f, --force                 Force deletion without confirmation
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --app=<value>           App ID or name to delete the integration rule from
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Delete an integration rule
+
+EXAMPLES
+  $ ably integrations delete rule123
+
+  $ ably integrations delete rule123 --app "My App"
+
+  $ ably integrations delete rule123 --force
+```
+
+_See code: [src/commands/integrations/delete.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/integrations/delete.ts)_
+
+## `ably integrations get RULEID`
+
+Get an integration rule by ID
+
+```
+USAGE
+  $ ably integrations get RULEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+
+ARGUMENTS
+  RULEID  The rule ID to get
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --app=<value>           App ID or name to get the integration rule from
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Get an integration rule by ID
+
+EXAMPLES
+  $ ably integrations get rule123
+
+  $ ably integrations get rule123 --app "My App" --format json
+```
+
+_See code: [src/commands/integrations/get.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/integrations/get.ts)_
+
+## `ably integrations list`
+
+List all integration rules
+
+```
+USAGE
+  $ ably integrations list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --app=<value>           App ID or name to list integration rules for
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  List all integration rules
+
+EXAMPLES
+  $ ably integrations list
+
+  $ ably integrations list --app "My App" --format json
+```
+
+_See code: [src/commands/integrations/list.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/integrations/list.ts)_
+
+## `ably integrations update RULEID`
+
+Update an integration rule
+
+```
+USAGE
+  $ ably integrations update RULEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--channel-filter <value>] [--status
+    enabled|disabled] [--target-url <value>] [--format json|pretty]
+
+ARGUMENTS
+  RULEID  The rule ID to update
+
+FLAGS
+  --access-token=<value>    Overrides any configured access token used for the Control API
+  --api-key=<value>         Overrides any configured API key used for the product APIs
+  --app=<value>             App ID or name of the app containing the integration rule
+  --channel-filter=<value>  Channel filter pattern
+  --client-id=<value>       Overrides any default client ID when using API authentication. Use "none" to explicitly set
+                            no client ID. Not applicable when using token authentication.
+  --control-host=<value>    Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>             Override the environment for all product API calls
+  --format=<option>         [default: pretty] Output format (json or pretty)
+                            <options: json|pretty>
+  --host=<value>            Override the host endpoint for all product API calls
+  --status=<option>         Status of the rule
+                            <options: enabled|disabled>
+  --target-url=<value>      Target URL for HTTP rules
+  --token=<value>           Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Update an integration rule
+
+EXAMPLES
+  $ ably integrations update rule123 --status disabled
+
+  $ ably integrations update rule123 --channel-filter "chat:*"
+
+  $ ably integrations update rule123 --target-url "https://new-example.com/webhook"
+```
+
+_See code: [src/commands/integrations/update.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/integrations/update.ts)_
+
 ## `ably login [TOKEN]`
 
 Log in to your Ably account (alias for "ably accounts login")
@@ -2374,6 +2806,137 @@ EXAMPLES
 ```
 
 _See code: [src/commands/logs/push/subscribe.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/logs/push/subscribe.ts)_
+
+## `ably queues`
+
+Manage Ably Queues
+
+```
+USAGE
+  $ ably queues
+
+DESCRIPTION
+  Manage Ably Queues
+
+EXAMPLES
+  $ ably queues list
+
+  $ ably queues create --name "my-queue"
+
+  $ ably queues delete my-queue
+```
+
+_See code: [src/commands/queues/index.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/queues/index.ts)_
+
+## `ably queues create`
+
+Create a queue
+
+```
+USAGE
+  $ ably queues create --name <value> [--host <value>] [--env <value>] [--control-host <value>] [--access-token
+    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--ttl <value>] [--max-length <value>]
+    [--region <value>] [--app <value>] [--format json|pretty]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --app=<value>           App ID or name to create the queue in
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --max-length=<value>    [default: 10000] Maximum number of messages in the queue
+  --name=<value>          (required) Name of the queue
+  --region=<value>        [default: us-east-1-a] Region for the queue
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+  --ttl=<value>           [default: 60] Time to live for messages in seconds
+
+DESCRIPTION
+  Create a queue
+
+EXAMPLES
+  $ ably queues create --name "my-queue"
+
+  $ ably queues create --name "my-queue" --ttl 3600 --max-length 100000
+
+  $ ably queues create --name "my-queue" --region "eu-west-1-a" --app "My App"
+```
+
+_See code: [src/commands/queues/create.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/queues/create.ts)_
+
+## `ably queues delete QUEUENAME`
+
+Delete a queue
+
+```
+USAGE
+  $ ably queues delete QUEUENAME [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+
+ARGUMENTS
+  QUEUENAME  Name of the queue to delete
+
+FLAGS
+  -f, --force                 Force deletion without confirmation
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --app=<value>           App ID or name to delete the queue from
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Delete a queue
+
+EXAMPLES
+  $ ably queues delete my-queue
+
+  $ ably queues delete my-queue --app "My App"
+
+  $ ably queues delete my-queue --force
+```
+
+_See code: [src/commands/queues/delete.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/queues/delete.ts)_
+
+## `ably queues list`
+
+List all queues
+
+```
+USAGE
+  $ ably queues list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --app=<value>           App ID or name to list queues for
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --format=<option>       [default: pretty] Output format (json or pretty)
+                          <options: json|pretty>
+  --host=<value>          Override the host endpoint for all product API calls
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  List all queues
+
+EXAMPLES
+  $ ably queues list
+
+  $ ably queues list --app "My App" --format json
+```
+
+_See code: [src/commands/queues/list.ts](https://github.com/ably/cli/blob/v0.2.0/src/commands/queues/list.ts)_
 
 ## `ably rooms`
 

@@ -77,6 +77,11 @@ $ ably apps switch -> switch to this app for all subsequent requests
 $ ably apps current -> Show the current app if one is configured for the account.
 $ ably apps logs subscribe -> proxy for ably logs apps subscribe
 $ ably apps logs history -> proxy for ably logs apps history
+$ ably apps channel-rules -> Manage Ably channel rules (named namespaces in the Control API)
+$ ably apps channel-rules list -> list all channel rules
+$ ably apps channel-rules create -> create a channel rule
+$ ably apps channel-rules update -> update a channel rule
+$ ably apps channel-rules delete -> delete a channel rule (prompt for interactive confirmation)
 
 $ ably channels -> Topic for Ably Pub/Sub channels
 $ ably channels list -> use the channel enumeration API to return a list of live channels
@@ -130,6 +135,18 @@ $ ably logs app subscribe -> Stream logs from the app-wide meta channel `[meta]l
 $ ably logs app history -> View historical app logs from `[meta]log` by using the ably pub/sub history API for channels
 $ ably logs push subscribe  -> Stream logs from the app push notifications `[meta]log:push`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
 $ ably logs push history ->  -> View historical push logs from `[meta]log:push` by using the ably pub/sub history API for channels
+
+$ ably integrations -> Manage Ably integrations (named rules in the Control API)
+$ ably integrations list -> list all integrations in the app
+$ ably integrations get -> get an integration by ID
+$ ably integrations create -> create an integration rule
+$ ably integrations update -> update an integration rule
+$ ably integrations delete -> delete an integration rule (prompt for interactive confirmation)
+
+$ ably queues -> Manage Ably Queues
+$ ably queues list -> list all queues in the app
+$ ably queues create -> create a queue
+$ ably queues delete -> delete a queue (prompt for interactive confirmation)
 
 $ ably bench -> Topic for benchmark tests
 $ ably bench publisher -> allow a publisher to start publishing messages on a specified channel at a frequency of at most 20 messages per second allowing the total number of messages published to be 10,000. Before the publisher starts publishing though, it will check if there are other subscriber bench clients present on the channel and it will also become present and announce it is a publisher and the details of the test. If there are none, it will ask the user if we should wait for subscribers to be present, or continue with a prompt. Once completed, the client will conrim how many messages were published, if there were any errors, and in the case of REST, what the average latency was for the request to complete, and in the case of Realtime, what the average latency was for a message to be received back. Whilst running the test, the message rate and trailing latency for the last 5 seconds shoudl be shown ,along with the cumulative messages sent and percentage of test execute. This should all be presented in a console UI with a progress bar for example. Support for publishing via REST or Realtime is needed. If a test is already running and another one starts, and error will be shown and the CLI should exit. Each publisher can show others that the test is runing using presence data.
