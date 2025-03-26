@@ -7,8 +7,8 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
   static override description = 'Subscribe to presence events on a channel'
 
   static override examples = [
-    '$ ably channels presence:subscribe my-channel',
-    '$ ably channels presence:subscribe my-channel --format json',
+    '$ ably channels presence subscribe my-channel',
+    '$ ably channels presence subscribe my-channel --format json',
   ]
 
   static override flags = {
