@@ -1782,9 +1782,9 @@ DESCRIPTION
   Get current occupancy metrics for a channel
 
 EXAMPLES
-  $ ably channels occupancy:get my-channel
+  $ ably channels occupancy get my-channel
 
-  $ ably channels occupancy:get --api-key "YOUR_API_KEY" my-channel
+  $ ably channels occupancy get --api-key "YOUR_API_KEY" my-channel
 ```
 
 _See code: [src/commands/channels/occupancy/get.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/channels/occupancy/get.ts)_

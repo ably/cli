@@ -15,8 +15,8 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
   static description = 'Get current occupancy metrics for a channel'
 
   static examples = [
-    '$ ably channels occupancy:get my-channel',
-    '$ ably channels occupancy:get --api-key "YOUR_API_KEY" my-channel',
+    '$ ably channels occupancy get my-channel',
+    '$ ably channels occupancy get --api-key "YOUR_API_KEY" my-channel',
   ]
 
   static flags = {
