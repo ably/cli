@@ -1782,9 +1782,9 @@ DESCRIPTION
   Get current occupancy metrics for a channel
 
 EXAMPLES
-  $ ably channels occupancy:get my-channel
+  $ ably channels occupancy get my-channel
 
-  $ ably channels occupancy:get --api-key "YOUR_API_KEY" my-channel
+  $ ably channels occupancy get --api-key "YOUR_API_KEY" my-channel
 ```
 
 _See code: [src/commands/channels/occupancy/get.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/channels/occupancy/get.ts)_
@@ -1873,11 +1873,11 @@ DESCRIPTION
   Enter presence on a channel and remain present until terminated
 
 EXAMPLES
-  $ ably channels presence:enter my-channel
+  $ ably channels presence enter my-channel
 
-  $ ably channels presence:enter my-channel --data '{"status":"online"}'
+  $ ably channels presence enter my-channel --data '{"status":"online"}'
 
-  $ ably channels presence:enter my-channel --client-id "user123"
+  $ ably channels presence enter my-channel --client-id "user123"
 ```
 
 _See code: [src/commands/channels/presence/enter.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/channels/presence/enter.ts)_
@@ -1910,9 +1910,9 @@ DESCRIPTION
   Subscribe to presence events on a channel
 
 EXAMPLES
-  $ ably channels presence:subscribe my-channel
+  $ ably channels presence subscribe my-channel
 
-  $ ably channels presence:subscribe my-channel --format json
+  $ ably channels presence subscribe my-channel --format json
 ```
 
 _See code: [src/commands/channels/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/channels/presence/subscribe.ts)_
