@@ -86,6 +86,11 @@ USAGE
 * [`ably connections logs [TOPIC]`](#ably-connections-logs-topic)
 * [`ably connections stats`](#ably-connections-stats)
 * [`ably connections test`](#ably-connections-test)
+* [`ably help`](#ably-help)
+* [`ably help ask QUESTION`](#ably-help-ask-question)
+* [`ably help contact`](#ably-help-contact)
+* [`ably help status`](#ably-help-status)
+* [`ably help support`](#ably-help-support)
 * [`ably integrations`](#ably-integrations)
 * [`ably integrations create`](#ably-integrations-create)
 * [`ably integrations delete RULEID`](#ably-integrations-delete-ruleid)
@@ -2188,6 +2193,121 @@ EXAMPLES
 ```
 
 _See code: [src/commands/connections/test.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/connections/test.ts)_
+
+## `ably help`
+
+Get help from Ably
+
+```
+USAGE
+  $ ably help [-h]
+
+FLAGS
+  -h, --help  Show CLI help.
+
+DESCRIPTION
+  Get help from Ably
+
+EXAMPLES
+  $ ably help
+```
+
+_See code: [src/commands/help/index.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/index.ts)_
+
+## `ably help ask QUESTION`
+
+Ask a question to the Ably AI agent for help
+
+```
+USAGE
+  $ ably help ask QUESTION [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [-h]
+
+ARGUMENTS
+  QUESTION  The question to ask the Ably AI agent
+
+FLAGS
+  -h, --help                  Show CLI help.
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Ask a question to the Ably AI agent for help
+
+EXAMPLES
+  $ ably help ask "How do I get started with Ably?"
+
+  $ ably help ask "What are the available capabilities for tokens?"
+```
+
+_See code: [src/commands/help/ask.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/ask.ts)_
+
+## `ably help contact`
+
+Contact Ably for assistance
+
+```
+USAGE
+  $ ably help contact [-h]
+
+FLAGS
+  -h, --help  Show CLI help.
+
+DESCRIPTION
+  Contact Ably for assistance
+
+EXAMPLES
+  $ ably help contact
+```
+
+_See code: [src/commands/help/contact.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/contact.ts)_
+
+## `ably help status`
+
+Check the status of the Ably service
+
+```
+USAGE
+  $ ably help status [-h] [-o]
+
+FLAGS
+  -h, --help  Show CLI help.
+  -o, --open  Open the Ably status page in a browser
+
+DESCRIPTION
+  Check the status of the Ably service
+
+EXAMPLES
+  $ ably help status
+```
+
+_See code: [src/commands/help/status.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/status.ts)_
+
+## `ably help support`
+
+Get support from Ably
+
+```
+USAGE
+  $ ably help support [-h]
+
+FLAGS
+  -h, --help  Show CLI help.
+
+DESCRIPTION
+  Get support from Ably
+
+EXAMPLES
+  $ ably help support
+```
+
+_See code: [src/commands/help/support.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/support.ts)_
 
 ## `ably integrations`
 

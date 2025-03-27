@@ -110,6 +110,18 @@ export interface Queue {
   deadletterId: string;
 }
 
+export interface HelpResponse {
+  answer: string;
+  links: {
+    label: string;
+    type: string;
+    url: string;
+    title: string;
+    breadcrumbs: string[];
+    description: string | null;
+  }[];
+}
+
 export class ControlApi {
   private accessToken: string
   private controlHost: string
@@ -401,5 +413,10 @@ export class ControlApi {
 
   async deleteQueue(appId: string, queueName: string): Promise<void> {
     return this.request<void>(`/apps/${appId}/queues/${queueName}`, 'DELETE')
+  }
+
+  // Ask a question to the Ably AI agent
+  async askHelp(question: string): Promise<HelpResponse> {
+    return this.request<HelpResponse>('/help', 'POST', { question });
   }
 } 

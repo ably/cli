@@ -153,6 +153,12 @@ $ ably bench -> Topic for benchmark tests
 $ ably bench publisher -> allow a publisher to start publishing messages on a specified channel at a frequency of at most 20 messages per second allowing the total number of messages published to be 10,000. Before the publisher starts publishing though, it will check if there are other subscriber bench clients present on the channel and it will also become present and announce it is a publisher and the details of the test. If there are none, it will ask the user if we should wait for subscribers to be present, or continue with a prompt. Once completed, the client will conrim how many messages were published, if there were any errors, and in the case of REST, what the average latency was for the request to complete, and in the case of Realtime, what the average latency was for a message to be received back. Whilst running the test, the message rate and trailing latency for the last 5 seconds shoudl be shown ,along with the cumulative messages sent and percentage of test execute. This should all be presented in a console UI with a progress bar for example. Support for publishing via REST or Realtime is needed. If a test is already running and another one starts, and error will be shown and the CLI should exit. Each publisher can show others that the test is runing using presence data.
 $ ably bench subscriber -> will attach to a channel and be present with data in the presence set indicating it's a subscriber and waiting. Once a publisher bercomes present, the subscriber will indicate a test is starting, and using a UI control, will show running metrics whilst the test is running. Once the test is complete, the summary will be printed out with the test ID, summary of the test paramters, confirmation of how many messages were received or failed, average latencies (based on the publish time assuming clocks are in sync, as the published message will have a latency in the data, and the latency it arrives at Ably is coded into the timestamp field) for end to end, and for it to be received by Ably, with p50, p90, p95 shown. Once the test is done, the subscriber will wait patiently for the next test to start. If a test is running and another one starts, and error will be shown and the CLI should exit.
 
+$ ably help -> Topic to get help from Ably
+$ ably help ask -> Ask a question to the Ably AI agent for help. This is done by using the Control API and sending a request to the /v1/help endpoint. Notes on how this works below.
+$ ably help contact -> Contact us -> open a browser to https://ably.com/contact
+$ ably help support -> Get support from Ably -> open a browser to https://ably.com/support
+$ ably help status -> Check the status of the Ably service using the https://ably.com/status/up.json endpoint, and if {status:true} then Ably is up and there are no open incidents, and if {status:false}, then there are open incidents. Either way, tell the user to go to https://status.ably.com to get the Ably status.
+
 ### Authentication
 
 There are two distinct types of authentication needs for the CLI.
@@ -289,4 +295,29 @@ ably channels publish channelName '{"name":"update","data":"Hello, World"}'
 ably subscribe my-channel --app "App name"
 ably apps list
 ably accounts switch account-alias
+```
+
+### Ably AI Agent
+
+The Ably AI agent is available as an endpoint within the control API under /v1/help.
+The request made to that endpont is a POST request with body  {"question":<string with question>}
+An example response is below. When waiting for a response, we will show a "Thinking..." message with an animation to indicate the system is preparing an answer. Once the answer comes back, we should output the response, along with the list of links from the array at the end of the response.
+
+```json
+{
+  "answer": " \n\nHere's how to get started with Ably:\n\n1. Create an Ably account and get your API key [(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n2. Add the Ably Client Library SDK to your project. For JavaScript, you can either:\n\n```html\n<script src=\"https://cdn.ably.com/lib/ably.min-2.js\"></script>\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\nOr install via NPM:\n```\nnpm install ably\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n3. Connect to Ably:\n```javascript\nconst ably = new Ably.Realtime('YOUR-API-KEY');\nawait ably.connection.once('connected');\nconsole.log('Connected to Ably!');\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n4. Subscribe to a channel:\n```javascript\nconst channel = ably.channels.get('quickstart');\nawait channel.subscribe('greeting', (message) => {\n  console.log('Received a greeting message in realtime: ' + message.data)\n});\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n5. Publish a message:\n```javascript\nawait channel.publish('greeting', 'hello!');\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\nNote: For production environments, you should use token authentication instead of basic authentication with an API key to avoid exposing it client-side [(1)](https://ably.com/docs/getting-started/quickstart#step-2)",
+  "links": [
+    {
+      "label": "1",
+      "type": "documentation",
+      "url": "https://ably.com/docs/getting-started/quickstart",
+      "title": "Ably Pub/Sub | Quickstart guide",
+      "breadcrumbs": [
+        "Docs",
+        "Ably Pub/Sub | Quickstart guide"
+      ],
+      "description": null
+    }
+  ]
+}
 ```
