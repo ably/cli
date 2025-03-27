@@ -66,8 +66,10 @@ export default class AccountsSwitch extends ControlBaseCommand {
         this.error('No access token found for this account. Please log in again.')
       }
 
+      const { flags } = await this.parse(AccountsSwitch)
       const controlApi = new ControlApi({
-        accessToken
+        accessToken,
+        controlHost: flags['control-host']
       })
 
       const { user, account } = await controlApi.getMe()

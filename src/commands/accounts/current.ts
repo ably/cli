@@ -49,7 +49,8 @@ export default class AccountsCurrent extends ControlBaseCommand {
       const accessToken = currentAccount.accessToken
       
       const controlApi = new ControlApi({
-        accessToken
+        accessToken,
+        controlHost: flags['control-host']
       })
 
       const { user, account } = await controlApi.getMe()

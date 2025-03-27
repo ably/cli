@@ -84,7 +84,7 @@ export abstract class AblyBaseCommand extends Command {
       return null
     }
 
-    const controlApi = new ControlApi({ accessToken })
+    const controlApi = new ControlApi({ accessToken, controlHost: flags['control-host'] })
 
     // If no app is selected, prompt to select one
     if (!appId) {

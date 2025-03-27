@@ -120,7 +120,7 @@ export class ControlApi {
   }
 
   private async request<T>(path: string, method = 'GET', body?: any): Promise<T> {
-    const url = `https://${this.controlHost}/v1${path}`
+    const url = this.controlHost.includes('local') ? `http://${this.controlHost}/api/v1${path}` : `https://${this.controlHost}/v1${path}`
     
     const options: any = {
       method,

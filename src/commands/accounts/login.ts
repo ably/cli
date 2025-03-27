@@ -41,12 +41,21 @@ export default class AccountsLogin extends ControlBaseCommand {
     if (args.token) {
       accessToken = args.token
     } else {
+      let obtainTokenPath = 'https://ably.com/users/access_tokens';
+      if (flags['control-host']) {
+        this.log('Using control host:', flags['control-host'])
+        if (flags['control-host'].includes('local')) {
+          obtainTokenPath = `http://${flags['control-host']}/users/access_tokens`
+        } else {
+          obtainTokenPath = `https://${flags['control-host']}/users/access_tokens`
+        }
+      }
       // Prompt the user to get a token
       if (!flags['no-browser']) {
         this.log('Opening browser to get an access token...')
-        this.openBrowser('https://ably.com/users/access_tokens')
+        this.openBrowser(obtainTokenPath)
       } else {
-        this.log('Please visit https://ably.com/users/access_tokens to create an access token')
+        this.log(`Please visit ${obtainTokenPath} to create an access token`)
       }
 
       accessToken = await this.promptForToken()
@@ -94,7 +103,8 @@ export default class AccountsLogin extends ControlBaseCommand {
     try {
       // Fetch account information
       const controlApi = new ControlApi({
-        accessToken
+        accessToken,
+        controlHost: flags['control-host']
       })
 
       const { user, account } = await controlApi.getMe()
