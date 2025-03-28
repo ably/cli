@@ -122,6 +122,13 @@ export interface HelpResponse {
   }[];
 }
 
+export interface Conversation {
+  messages: {
+    role: 'user' | 'assistant';
+    content: string;
+  }[];
+}
+
 export class ControlApi {
   private accessToken: string
   private controlHost: string
@@ -416,7 +423,12 @@ export class ControlApi {
   }
 
   // Ask a question to the Ably AI agent
-  async askHelp(question: string): Promise<HelpResponse> {
-    return this.request<HelpResponse>('/help', 'POST', { question });
+  async askHelp(question: string, conversation?: Conversation): Promise<HelpResponse> {
+    const payload = { 
+      question,
+      ...(conversation && { context: conversation.messages })
+    };
+    
+    return this.request<HelpResponse>('/help', 'POST', payload);
   }
 } 

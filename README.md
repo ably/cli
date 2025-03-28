@@ -2221,7 +2221,7 @@ Ask a question to the Ably AI agent for help
 ```
 USAGE
   $ ably help ask QUESTION [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-h]
+    [--api-key <value>] [--token <value>] [--client-id <value>] [-h] [--continue]
 
 ARGUMENTS
   QUESTION  The question to ask the Ably AI agent
@@ -2232,6 +2232,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --continue              Continue the previous conversation with the Ably AI agent
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
@@ -2244,6 +2245,8 @@ EXAMPLES
   $ ably help ask "How do I get started with Ably?"
 
   $ ably help ask "What are the available capabilities for tokens?"
+
+  $ ably help ask --continue "Can you explain more about token capabilities?"
 ```
 
 _See code: [src/commands/help/ask.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/ask.ts)_

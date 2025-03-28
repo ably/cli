@@ -24,11 +24,17 @@ export interface AccountConfig {
 }
 
 export interface AblyConfig {
+  accounts: Record<string, AccountConfig>
   current?: {
     account?: string
   }
-  accounts: {
-    [alias: string]: AccountConfig
+  helpContext?: {
+    conversation: {
+      messages: {
+        role: 'user' | 'assistant'
+        content: string
+      }[]
+    }
   }
 }
 
@@ -102,6 +108,26 @@ export class ConfigManager {
         result += `account = "${config.current.account}"\n`
       }
       result += '\n'
+    }
+
+    // Write help context if it exists
+    if (config.helpContext) {
+      result += '[helpContext]\n'
+      
+      // Format the conversation as TOML array of tables
+      if (config.helpContext.conversation.messages.length > 0) {
+        result += '\n[[helpContext.conversation.messages]]\n'
+        const messages = config.helpContext.conversation.messages
+        
+        for (let i = 0; i < messages.length; i++) {
+          const message = messages[i]
+          if (i > 0) result += '\n[[helpContext.conversation.messages]]\n'
+          result += `role = "${message.role}"\n`
+          result += `content = """${message.content}"""\n`
+        }
+        
+        result += '\n'
+      }
     }
 
     // Write accounts section
@@ -389,5 +415,48 @@ export class ConfigManager {
     }
     
     this.saveConfig()
+  }
+
+  // Get conversation context for AI help
+  public getHelpContext(): { 
+    conversation: { 
+      messages: { 
+        role: 'user' | 'assistant'; 
+        content: string; 
+      }[] 
+    } 
+  } | undefined {
+    return this.config.helpContext;
+  }
+
+  // Store conversation context for AI help
+  public storeHelpContext(question: string, answer: string): void {
+    if (!this.config.helpContext) {
+      this.config.helpContext = {
+        conversation: {
+          messages: []
+        }
+      };
+    }
+    
+    // Add the user's question
+    this.config.helpContext.conversation.messages.push({
+      role: 'user',
+      content: question
+    });
+    
+    // Add the assistant's answer
+    this.config.helpContext.conversation.messages.push({
+      role: 'assistant',
+      content: answer
+    });
+    
+    this.saveConfig();
+  }
+
+  // Clear conversation context
+  public clearHelpContext(): void {
+    delete this.config.helpContext;
+    this.saveConfig();
   }
 } 

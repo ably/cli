@@ -303,6 +303,12 @@ The Ably AI agent is available as an endpoint within the control API under /v1/h
 The request made to that endpont is a POST request with body  {"question":<string with question>}
 An example response is below. When waiting for a response, we will show a "Thinking..." message with an animation to indicate the system is preparing an answer. Once the answer comes back, we should output the response, along with the list of links from the array at the end of the response.
 
+Once an answer is provided:
+- Suggest to the user that they can do a follow up question with syntax `ably help ask --continue "Question"`
+- We should store the last question and answer locally so that we can provide the context if there is a --continue command
+- When the --continue flag is used, inject the previous conversation thread, including all previous questions and answers
+- Any subsequent question without --continue, resets the locally stored info and stores the most recent question and answer
+
 ```json
 {
   "answer": " \n\nHere's how to get started with Ably:\n\n1. Create an Ably account and get your API key [(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n2. Add the Ably Client Library SDK to your project. For JavaScript, you can either:\n\n```html\n<script src=\"https://cdn.ably.com/lib/ably.min-2.js\"></script>\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\nOr install via NPM:\n```\nnpm install ably\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n3. Connect to Ably:\n```javascript\nconst ably = new Ably.Realtime('YOUR-API-KEY');\nawait ably.connection.once('connected');\nconsole.log('Connected to Ably!');\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n4. Subscribe to a channel:\n```javascript\nconst channel = ably.channels.get('quickstart');\nawait channel.subscribe('greeting', (message) => {\n  console.log('Received a greeting message in realtime: ' + message.data)\n});\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\n5. Publish a message:\n```javascript\nawait channel.publish('greeting', 'hello!');\n```\n[(1)](https://ably.com/docs/getting-started/quickstart#step-2)\n\nNote: For production environments, you should use token authentication instead of basic authentication with an API key to avoid exposing it client-side [(1)](https://ably.com/docs/getting-started/quickstart#step-2)",
