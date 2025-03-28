@@ -1,19 +1,20 @@
-# Ably CLI
+# Ably CLI and MCP server
 
 [![npm version](https://badge.fury.io/js/@ably%2Fcli.svg)](https://badge.fury.io/js/@ably%2Fcli)
 
-[Ably](https://ably.com) CLI for [Ably Pub/Sub](https://ably.com/pubsub), [Ably Spaces](https://ably.com/spaces), [Ably Chat](https://ably.com/chat) and the [Ably Control API](https://ably.com/docs/account/control-api).
+[Ably](https://ably.com) CLI and MCP server for [Ably Pub/Sub](https://ably.com/pubsub), [Ably Spaces](https://ably.com/spaces), [Ably Chat](https://ably.com/chat) and the [Ably Control API](https://ably.com/docs/account/control-api).
 
 > [!NOTE]  
-> This project is in beta and this CLI project is being actively developed.
+> This project is in beta and this CLI and MCP server project is being actively developed.
 > Please [raise an issue](https://github.com/ably/cli/issues) if you have feedback, feature requests or want to  report a bug. We welcome [pull requests too](https://github.com/ably/cli/pulls).
 
 <!-- toc -->
-* [Ably CLI](#ably-cli)
-* [Usage](#usage)
+* [Ably CLI and MCP server](#ably-cli-and-mcp-server)
+* [CLI Usage](#cli-usage)
+* [MCP Usage](#mcp-usage)
 * [Commands](#commands)
 <!-- tocstop -->
-# Usage
+# CLI Usage
 <!-- usage -->
 ```sh-session
 $ npm install -g @ably/cli
@@ -27,6 +28,15 @@ USAGE
 ...
 ```
 <!-- usagestop -->
+# MCP Usage
+
+1. Install the CLI following the [CLI usage](#cli-usage) steps.
+2. Follow the instructions for your tool to set up an MCP server, such as [Claude desktop](https://modelcontextprotocol.io/quickstart/user), and configure:
+   1. `command` as ably mcp start-server
+   
+> [!NOTE]  
+> If you are having trouble getting the MCP server running, use [MCP inspector](https://github.com/modelcontextprotocol/inspector)
+
 # Commands
 <!-- commands -->
 * [`ably accounts`](#ably-accounts)
@@ -110,6 +120,7 @@ USAGE
 * [`ably logs push`](#ably-logs-push)
 * [`ably logs push history`](#ably-logs-push-history)
 * [`ably logs push subscribe`](#ably-logs-push-subscribe)
+* [`ably mcp start-server`](#ably-mcp-start-server)
 * [`ably queues`](#ably-queues)
 * [`ably queues create`](#ably-queues-create)
 * [`ably queues delete QUEUENAME`](#ably-queues-delete-queuename)
@@ -2954,6 +2965,23 @@ EXAMPLES
 
 _See code: [src/commands/logs/push/subscribe.ts](https://github.com/ably/cli/blob/v0.2.5/src/commands/logs/push/subscribe.ts)_
 
+## `ably mcp start-server`
+
+Start an MCP server for AI tools to interact with Ably
+
+```
+USAGE
+  $ ably mcp start-server
+
+DESCRIPTION
+  Start an MCP server for AI tools to interact with Ably
+
+EXAMPLES
+  $ ably mcp start-server
+```
+
+_See code: [src/commands/mcp/start-server.ts](https://github.com/ably/cli/blob/v0.2.5/src/commands/mcp/start-server.ts)_
+
 ## `ably queues`
 
 Manage Ably Queues
@@ -4193,3 +4221,55 @@ EXAMPLES
 
 _See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.2.5/src/commands/spaces/members/subscribe.ts)_
 <!-- commandsstop -->
+=======
+_See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/spaces/members/subscribe.ts)_
+
+## MCP Server
+
+The Ably CLI can also act as an MCP (Model Context Protocol) server for AI use cases, specifically focussed on IDE tools and AI desktop tools like Claude that support MCP.
+
+### Using the MCP Server
+
+To start the MCP server, run:
+
+```
+ably-mcp
+```
+
+Or via npm/pnpm script:
+
+```
+pnpm mcp-server
+```
+
+The MCP server runs in file mode (stdio transport) and exposes a subset of Ably CLI commands that AI tools can use to interact with Ably channels.
+
+### Environment Variables
+
+The MCP server supports the following environment variables for authentication and configuration:
+
+- `ABLY_ACCESS_TOKEN` - Overrides the default access token used for the Control API
+- `ABLY_API_KEY` - Overrides the default API key used for the data plane
+- `ABLY_CLIENT_ID` - Overrides the default client ID assigned
+- `ABLY_CONTROL_HOST` - Overrides the default control API host
+- `ABLY_HOST` - Overrides the default data plane host
+- `ABLY_ENVIRONMENT` - Overrides the default data plane environment
+
+### Available MCP Commands
+
+The MCP server exposes the following subset of Ably CLI commands:
+
+- `list_channels` - List active channels using the channel enumeration API
+- `subscribe_to_channel` - Subscribe to messages on an Ably channel
+- `publish_to_channel` - Publish a message to an Ably channel
+- `get_channel_history` - Retrieve message history for a channel
+- Channel Presence - Access presence information for channels
+
+### MCP Resources
+
+The MCP server also provides the following resources:
+
+- `channels` - List of active channels on the Ably platform
+- `channel_history` - Historical messages from a specific Ably channel
+- `channel_presence` - Current presence members on a specific Ably channel
+>>>>>>> adf78a9 (WIP - MCP Server)
