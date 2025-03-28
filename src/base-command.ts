@@ -14,7 +14,8 @@ const WEB_CLI_RESTRICTED_COMMANDS = [
   'accounts:switch',
   'apps:switch',
   'auth:keys:switch',
-  'config'
+  'config',
+  'mcp'
 ];
 
 // List of commands that should not show account/app info
@@ -142,6 +143,8 @@ export abstract class AblyBaseCommand extends Command {
         errorMessage = `You cannot switch API keys from within the web CLI. Please use the web interface to change keys.`
       } else if (commandId === 'config') {
         errorMessage = `Local configuration is not supported in the web CLI version.`
+      } else if (commandId.includes('mcp')) {
+        errorMessage = `MCP server functionality is not available in the web CLI. Please use the standalone CLI installation instead.`
       }
 
       // Exit with the error message

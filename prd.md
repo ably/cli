@@ -291,6 +291,42 @@ This repository should include an example of the CLI running inside of a web bro
 - JSON output format for easy scripting and integration.
 - Ideally potential plugins or extensions for future integrations, but I believe we can lean on the oclif framework for this.
 
+### Model Context Protocol (MCP) Server
+
+This CLI can also act as an MCP server for AI use cases, specifically focussed on IDE tools and AI desktop tools like Claude that support MCP.
+Given MCP passes in ENV vars, we need to ensure the following environmnet variables are supported so that the MCP server can handle authentication with Ably data and control planes.
+Where we currently generate a random client ID with the cli prefix, we should now use an mcp prefix to make it clear the origination of the requests.
+The CLI offers interactive mode in some places. When MCP is being used, we need to ensure interactive features are not enabled so that AI tools can use MCP without any blocking.
+All MCP requests should have a max time of 15s per request, so that if we are, for example, subscribing to messages, we will capture the subscription for 15 seconds, and then gracefully exit the application, indicating we terminated the response from continuing indefinitely.
+Only a subset of commands from the CLI will be available, all of them listed explicitly below. The commands should support relevant arguments and options where available.
+The Node MCP Typescript SDK library should be used to deliver the MCP server, see https://github.com/modelcontextprotocol/typescript-sdk.
+The MCP server should run in file mode i.e. it will be run locally with the MCP client.
+
+#### MCP commands available
+
+The following commands from the CLI should be made available in the MCP server:
+
+```
+ably apps list
+ably apps stats
+
+ably auth keys list
+
+ably channels history
+ably channels publish
+ably channels list
+ably channels presence get
+````
+
+#### Environment variables
+
+- ABLY_ACCESS_TOKEN - overrides the default access token used for the control API
+- ABLY_API_KEY - overrides the default API key used for the data plane
+- ABLY_CLIENT_ID - overrides the default client ID assigned
+- ABLY_CONTROL_HOST - overrides the default control API host
+- ABLY_HOST - overrides the default data plane host
+- ABLY_ENVIRONMENT - overrides the default data plane environment
+
 ### Test coverage
 
 - As features are added to the CLI, suitable tests must be added. 
