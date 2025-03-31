@@ -27,6 +27,9 @@
     "plugins": [
       "./dist"
     ],
+    "hooks": {
+      "init": "./dist/hooks/init/alias-command"
+    },
     "hidden": [
       "aliases"
     ],

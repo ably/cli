@@ -285,28 +285,4 @@ export abstract class AblyBaseCommand extends Command {
       }
     }
   }
-
-  protected async handleSingularPlural(command: string): Promise<void> {
-    // Map of singular to plural commands
-    const singularToPlural: Record<string, string> = {
-      'account': 'accounts',
-      'app': 'apps',
-      'channel': 'channels',
-      'connection': 'connections',
-      'log': 'logs',
-      'room': 'rooms'
-    }
-
-    // Check if the command is a singular form
-    const singularMatch = command.match(/^([a-z]+)(?::|$)/)
-    if (singularMatch && singularToPlural[singularMatch[1]]) {
-      // Replace the singular form with plural in the command
-      const pluralCommand = command.replace(/^[a-z]+/, singularToPlural[singularMatch[1]])
-      await this.config.runCommand(pluralCommand, this.argv)
-      return
-    }
-
-    // If not a singular form, continue with normal command execution
-    return
-  }
 } 

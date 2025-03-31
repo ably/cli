@@ -227,6 +227,11 @@ Note:
 
 - Where applicable, use visually compelling console UI elements to make the experience for a developer delightful
 
+#### Structure of commands
+
+- Whenever a topic (or command with sub-commands) exists with as a plural, such as `ably accounts`, as a convenience, we should ensure anyone typing in `ably account` mistakenly will still be directed to the same command and sub-commands. So `ably account` and `ably account stats`, for example, will work without exactly the same as `ably accounts` and `ably accounts stats` with all supported arguments. The singular version however will not be visible in any commands that list topics or commands thus ensuring the CLI is not polluted with these convenience aliases, that is they are effectively hidden and not discoverable.
+- oclif supports two styles of commands, either with spaces delimiting the commands such as `ably account stats` or colons delimiting the commands such as `ably account:stats`. This CLI uses spaces only and all documentation and helpers in the command files must use spaces consistently.
+
 ### Documentation
 
 - You need to generate Markdown documentation in this repository that explains clearly how users can install, configure, and use the CLI. See good examples of docs at https://vercel.com/docs/cli, https://supabase.com/docs/reference/cli/start and 
