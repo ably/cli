@@ -11,8 +11,7 @@ export default class Log extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the logs command
-    const command = new Logs(this.argv, this.config)
-    await command.run()
+    // Forward to the logs command using static run method
+    await Logs.run(this.argv, this.config)
   }
 } 

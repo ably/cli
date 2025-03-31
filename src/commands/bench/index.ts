@@ -8,8 +8,11 @@ $ ably bench subscriber my-channel`,
   ]
   
   async run(): Promise<void> {
-    // This is a topic command that just displays help
-    await this.parse(BenchTopic)
-    await BenchTopic.run(['--help'])
+    this.log('Ably benchmark testing commands:')
+    this.log('')
+    this.log('  ably bench publisher CHANNEL        - Run a publisher benchmark test')
+    this.log('  ably bench subscriber CHANNEL       - Run a subscriber benchmark test')
+    this.log('')
+    this.log('Run `ably bench COMMAND --help` for more information on a command.')
   }
 } 

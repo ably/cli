@@ -10,6 +10,12 @@ export default class Connections extends Command {
   ]
 
   async run() {
-    this.log('Use one of the connections subcommands. See --help for more information.')
+    this.log('Ably Pub/Sub connection commands:')
+    this.log('')
+    this.log('  ably connections stats                - View connection statistics')
+    this.log('  ably connections logs connections-lifecycle - View connection lifecycle logs')
+    this.log('  ably connections test                 - Test connection to Ably')
+    this.log('')
+    this.log('Run `ably connections COMMAND --help` for more information on a command.')
   }
 } 

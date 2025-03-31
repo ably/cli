@@ -12,17 +12,14 @@ export default class IntegrationsIndexCommand extends ControlBaseCommand {
   ]
 
   async run(): Promise<void> {
-    this.log(IntegrationsIndexCommand.description)
-    this.log('\nCommands:')
-    this.log('  list      List all integrations')
-    this.log('  get       Get an integration by ID')
-    this.log('  create    Create an integration rule')
-    this.log('  update    Update an integration rule')
-    this.log('  delete    Delete an integration rule')
-    
-    this.log('\nExamples:')
-    IntegrationsIndexCommand.examples.forEach(example => {
-      this.log(`  ${example}`)
-    })
+    this.log('Ably integrations management commands:')
+    this.log('')
+    this.log('  ably integrations list       - List all integrations')
+    this.log('  ably integrations get        - Get an integration by ID')
+    this.log('  ably integrations create     - Create an integration rule')
+    this.log('  ably integrations update     - Update an integration rule')
+    this.log('  ably integrations delete     - Delete an integration rule')
+    this.log('')
+    this.log('Run `ably integrations COMMAND --help` for more information on a command.')
   }
 } 

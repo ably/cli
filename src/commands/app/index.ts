@@ -11,8 +11,7 @@ export default class App extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the apps command
-    const command = new Apps(this.argv, this.config)
-    await command.run()
+    // Forward to the apps command using static run method
+    await Apps.run(this.argv, this.config)
   }
 } 

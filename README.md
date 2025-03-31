@@ -162,6 +162,16 @@ DESCRIPTION
   Manage Ably accounts and your configured access tokens
 
 EXAMPLES
+  $ ably accounts login
+
+  $ ably accounts list
+
+  $ ably accounts current
+
+  $ ably accounts logout
+
+  $ ably accounts switch my-account
+
   $ ably accounts stats
 ```
 
@@ -396,6 +406,12 @@ EXAMPLES
   $ ably apps update
 
   $ ably apps delete
+
+  $ ably apps set-apns-p12
+
+  $ ably apps stats
+
+  $ ably apps channel-rules list
 ```
 
 _See code: [src/commands/apps/index.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/apps/index.ts)_
@@ -2209,7 +2225,13 @@ DESCRIPTION
   Get help from Ably
 
 EXAMPLES
-  $ ably help
+  $ ably help ask "How do I publish to a channel?"
+
+  $ ably help status
+
+  $ ably help contact
+
+  $ ably help support
 ```
 
 _See code: [src/commands/help/index.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/help/index.ts)_

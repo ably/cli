@@ -10,15 +10,12 @@ export default class QueuesIndexCommand extends ControlBaseCommand {
   ]
 
   async run(): Promise<void> {
-    this.log(QueuesIndexCommand.description)
-    this.log('\nCommands:')
-    this.log('  list      List all queues')
-    this.log('  create    Create a queue')
-    this.log('  delete    Delete a queue')
-    
-    this.log('\nExamples:')
-    QueuesIndexCommand.examples.forEach(example => {
-      this.log(`  ${example}`)
-    })
+    this.log('Ably queues management commands:')
+    this.log('')
+    this.log('  ably queues list             - List all queues')
+    this.log('  ably queues create           - Create a queue')
+    this.log('  ably queues delete           - Delete a queue')
+    this.log('')
+    this.log('Run `ably queues COMMAND --help` for more information on a command.')
   }
 } 

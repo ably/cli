@@ -11,8 +11,7 @@ export default class Integration extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the integrations command
-    const command = new Integrations(this.argv, this.config)
-    await command.run()
+    // Forward to the integrations command using static run method
+    await Integrations.run(this.argv, this.config)
   }
 } 

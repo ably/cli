@@ -13,10 +13,19 @@ export default class RoomsIndex extends Command {
   ]
 
   async run(): Promise<void> {
-    this.log('Use one of the rooms subcommands:')
+    this.log('Ably Chat rooms commands:')
     this.log('')
-    this.log('  ably rooms list        - List chat rooms')
-    this.log('  ably rooms messages    - Commands for managing messages in chat rooms')
-    this.log('  ably rooms typing      - Commands for typing indicators in chat rooms')
+    this.log('  ably rooms list                  - List chat rooms')
+    this.log('  ably rooms messages              - Commands for managing messages in chat rooms')
+    this.log('  ably rooms messages send         - Send a message to a chat room')
+    this.log('  ably rooms messages subscribe    - Subscribe to messages in a chat room')
+    this.log('  ably rooms messages get          - Get historical messages from a chat room')
+    this.log('  ably rooms typing                - Commands for typing indicators in chat rooms')
+    this.log('  ably rooms typing subscribe      - Subscribe to typing indicators in a chat room')
+    this.log('  ably rooms typing start          - Start typing in a chat room')
+    this.log('  ably rooms presence              - Manage presence on chat rooms')
+    this.log('  ably rooms reactions             - Manage reactions in chat rooms')
+    this.log('')
+    this.log('Run `ably rooms COMMAND --help` for more information on a command.')
   }
 } 

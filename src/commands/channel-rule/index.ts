@@ -11,8 +11,7 @@ export default class ChannelRule extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the channel-rules command
-    const command = new ChannelRules(this.argv, this.config)
-    await command.run()
+    // Forward to the channel-rules command using static run method
+    await ChannelRules.run(this.argv, this.config)
   }
 } 

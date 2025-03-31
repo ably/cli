@@ -11,8 +11,7 @@ export default class Queue extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the queues command
-    const command = new Queues(this.argv, this.config)
-    await command.run()
+    // Forward to the queues command using static run method
+    await Queues.run(this.argv, this.config)
   }
 } 

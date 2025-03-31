@@ -11,8 +11,7 @@ export default class Space extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the spaces command
-    const command = new Spaces(this.argv, this.config)
-    await command.run()
+    // Forward to the spaces command using static run method
+    await Spaces.run(this.argv, this.config)
   }
 } 

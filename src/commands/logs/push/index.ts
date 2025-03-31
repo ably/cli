@@ -10,6 +10,11 @@ export default class LogsPush extends Command {
   ]
 
   async run() {
-    this.log('Use one of the push logs subcommands. See --help for more information.')
+    this.log('Push notification logs commands:')
+    this.log('')
+    this.log('  ably logs push subscribe    - Stream logs from the app push notifications')
+    this.log('  ably logs push history      - View historical push logs')
+    this.log('')
+    this.log('Run `ably logs push COMMAND --help` for more information on a command.')
   }
 } 

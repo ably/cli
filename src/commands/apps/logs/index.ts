@@ -10,6 +10,11 @@ export default class AppsLogs extends Command {
   ]
 
   async run() {
-    this.log('Use one of the apps logs subcommands. See --help for more information.')
+    this.log('App logs commands:')
+    this.log('')
+    this.log('  ably apps logs subscribe    - Stream logs from the app-wide meta channel')
+    this.log('  ably apps logs history      - View historical app logs')
+    this.log('')
+    this.log('Run `ably apps logs COMMAND --help` for more information on a command.')
   }
 } 

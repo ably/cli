@@ -20,12 +20,14 @@ export default class SpacesIndex extends Command {
   ]
 
   async run(): Promise<void> {
-    this.log('Use one of the spaces subcommands:')
+    this.log('Ably Spaces commands:')
     this.log('')
     this.log('  ably spaces list              - List spaces')
     this.log('  ably spaces members           - Commands for managing members in spaces')
     this.log('  ably spaces locations         - Commands for managing locations in spaces')
     this.log('  ably spaces cursors           - Commands for managing cursors in spaces')
     this.log('  ably spaces locks             - Commands for managing locks in spaces')
+    this.log('')
+    this.log('Run `ably spaces COMMAND --help` for more information on a command.')
   }
 } 

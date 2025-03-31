@@ -8,17 +8,23 @@ export default class AppsCommand extends ControlBaseCommand {
     '$ ably apps create',
     '$ ably apps update',
     '$ ably apps delete',
+    '$ ably apps set-apns-p12',
+    '$ ably apps stats',
+    '$ ably apps channel-rules list',
   ]
 
   async run(): Promise<void> {
-    this.log('Ably apps management commands')
-    this.log('\nAvailable Commands:')
-    this.log('  list          List all apps')
-    this.log('  create        Create a new app')
-    this.log('  update        Update an app')
-    this.log('  delete        Delete an app')
-    this.log('  set-apns-p12  Upload Apple Push Notification Service P12 certificate for an app')
-    this.log('  stats         Get app stats with optional live updates')
-    this.log('\nRun ably apps COMMAND --help for more information on a command')
+    this.log('Ably apps management commands:')
+    this.log('')
+    this.log('  ably apps list              - List all apps')
+    this.log('  ably apps create            - Create a new app')
+    this.log('  ably apps update            - Update an app')
+    this.log('  ably apps delete            - Delete an app')
+    this.log('  ably apps set-apns-p12      - Upload Apple Push Notification Service P12 certificate')
+    this.log('  ably apps stats             - Get app stats with optional live updates')
+    this.log('  ably apps channel-rules     - Manage Ably channel rules (namespaces)')
+    this.log('  ably apps logs              - Stream or retrieve app logs')
+    this.log('')
+    this.log('Run `ably apps COMMAND --help` for more information on a command.')
   }
 } 

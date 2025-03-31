@@ -11,8 +11,7 @@ export default class Room extends Command {
   static isAlias = true
 
   async run(): Promise<void> {
-    // Forward to the rooms command
-    const command = new Rooms(this.argv, this.config)
-    await command.run()
+    // Forward to the rooms command using static run method
+    await Rooms.run(this.argv, this.config)
   }
 } 
