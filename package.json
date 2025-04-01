@@ -7,9 +7,9 @@
   "scripts": {
     "build": "rm -rf dist && rm -f tsconfig.tsbuildinfo && tsc",
     "postpack": "rm -f oclif.manifest.json",
-    "prepack": "oclif manifest && oclif readme",
+    "prepack": "node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
-    "version": "oclif readme && git add README.md",
+    "version": "node_modules/.bin/oclif readme && git add README.md",
     "prepare": "npm run build && npm run prepack",
     "cli": "bin/run.js"
   },
@@ -52,6 +52,7 @@
     "toml": "^3.0.0"
   },
   "devDependencies": {
+    "oclif": "^4.17.42",
     "@oclif/test": "^3",
     "@types/chai": "^4",
     "@types/inquirer": "^9.0.7",
