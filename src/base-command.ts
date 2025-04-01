@@ -72,14 +72,14 @@ export abstract class AblyBaseCommand extends Command {
 
     // Otherwise, we need to interactively select them
     if (!this.shouldSuppressOutput(flags)) {
-      this.log('No app or API key configured for this command.')
+      this.log(chalk.yellow('No app or API key configured for this command.\n'))
     }
     
     // Get access token for control API
     const accessToken = flags['access-token'] || this.configManager.getAccessToken()
     if (!accessToken) {
       if (!this.shouldSuppressOutput(flags)) {
-        this.log('Please log in first with "ably accounts login" or provide an access token with --access-token.')
+        this.log(`Please log in first with "${chalk.cyan('ably accounts login')}" or provide an access token with ${chalk.cyan('--access-token')} argument.`)
       }
       return null
     }
@@ -100,7 +100,7 @@ export abstract class AblyBaseCommand extends Command {
       // Store app name along with app ID
       this.configManager.storeAppInfo(appId, { appName: selectedApp.name })
       if (!this.shouldSuppressOutput(flags)) {
-        this.log(`Selected app: ${selectedApp.name} (${appId})`)
+        this.log(`  Selected app: ${selectedApp.name} (${appId})\n`)
       }
     }
 
@@ -124,7 +124,7 @@ export abstract class AblyBaseCommand extends Command {
         }
       )
       if (!this.shouldSuppressOutput(flags)) {
-        this.log(`Selected key: ${selectedKey.name || 'Unnamed key'} (${selectedKey.id})`)
+        this.log(`  Selected key: ${selectedKey.name || 'Unnamed key'} (${selectedKey.id})\n`)
       }
     }
 

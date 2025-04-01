@@ -3,6 +3,8 @@ import { ControlBaseCommand } from '../../control-base-command.js'
 import { ControlApi } from '../../services/control-api.js'
 import { execSync } from 'child_process'
 import * as readline from 'readline'
+import chalk from 'chalk'
+import { displayLogo } from '../../utils/logo.js'
 
 export default class AccountsLogin extends ControlBaseCommand {
   static override description = 'Log in to your Ably account'
@@ -35,7 +37,7 @@ export default class AccountsLogin extends ControlBaseCommand {
     const { args, flags } = await this.parse(AccountsLogin)
 
     // Display ASCII art logo
-    this.displayLogo()
+    displayLogo(this.log.bind(this))
 
     let accessToken: string
     if (args.token) {
@@ -117,7 +119,7 @@ export default class AccountsLogin extends ControlBaseCommand {
         accountName: account.name
       })
 
-      this.log(`Successfully logged in to ${account.name} (${account.id})`)
+      this.log(`Successfully logged in to ${chalk.cyan(account.name)} (account ID: ${chalk.greenBright(account.id)})`)
       
       if (alias !== 'default') {
         this.log(`Account stored with alias: ${alias}`)
@@ -125,23 +127,11 @@ export default class AccountsLogin extends ControlBaseCommand {
       
       // Switch to this account
       this.configManager.switchAccount(alias)
-      this.log(`Account ${alias} is now the current account`)
+      this.log(`Account ${chalk.cyan(alias)} is now the current account`)
       
     } catch (error) {
       this.error(`Failed to authenticate: ${error}`)
     }
-  }
-
-  private displayLogo(): void {
-    // Simple ASCII art for Ably logo
-    this.log('\n')
-    this.log('   _    _     _       ')
-    this.log('  /_\\  | |__ | |_   _ ')
-    this.log(' //_\\\\ | \'_ \\| | | | |')
-    this.log('/  _  \\| |_) | | |_| |')
-    this.log('\\_/ \\_/|_.__/|_|\\__, |')
-    this.log('                |___/ ')
-    this.log('\n')
   }
 
   private openBrowser(url: string): void {
