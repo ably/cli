@@ -28,7 +28,8 @@
       "./dist"
     ],
     "hooks": {
-      "init": "./dist/hooks/init/alias-command"
+      "init": "./dist/hooks/init/alias-command",
+      "command_not_found": "./dist/hooks/command_not_found/alias-command"
     },
     "hidden": [
       "aliases"

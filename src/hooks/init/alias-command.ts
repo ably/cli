@@ -20,40 +20,22 @@ const singularToPluralMap: Record<string, string> = {
  * without requiring separate alias files for each command
  */
 const hook: Hook<'init'> = async function() {
-  // Get the raw command arguments
-  const rawArgs = process.argv.slice(2)
+  // We need access to the arguments to modify them
+  // The first two arguments are node and the script path, 
+  // so process.argv[2] contains the first CLI command (e.g., 'account')
+  if (process.argv.length <= 2) return // Not enough arguments
   
-  // If no args or no first argument, exit early
-  if (!rawArgs.length) return
+  const firstArg = process.argv[2]
   
-  const firstArg = rawArgs[0]
-  
-  // Only handle singular forms that map to plural forms (e.g., account → accounts)
-  // Skip for commands that are already in plural form
+  // Check if this is a singular form that has a plural equivalent
   const pluralForm = singularToPluralMap[firstArg]
   if (!pluralForm || firstArg === pluralForm) return
   
-  // If we get here, we're handling a singular form that needs to be replaced with plural
-  // Create the command by replacing singular with plural
-  const newArgs = [pluralForm, ...rawArgs.slice(1)]
+  // If we have a match, replace the singular form with its plural version
+  process.argv[2] = pluralForm 
   
-  // Try the command with space format first (as configured in package.json)
-  try {
-    const spaceCommand = newArgs.join(' ')
-    await this.config.runCommand(spaceCommand)
-    this.exit(0) // Success!
-  } catch (spaceError) {
-    // If space format fails, try with colon format
-    try {
-      const colonCommand = newArgs.join(':')
-      await this.config.runCommand(colonCommand)
-      this.exit(0) // Success!
-    } catch (colonError) {
-      // Both formats failed, let normal command processing continue
-      // This will allow standard error messages to be shown
-      return
-    }
-  }
+  // We're relying on the command_not_found hook to handle executing 
+  // the command properly and handle any errors.
 }
 
 export default hook 
