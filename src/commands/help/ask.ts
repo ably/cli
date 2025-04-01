@@ -1,11 +1,11 @@
 import {Args, Command, Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../base-command.js'
+import {ControlBaseCommand} from '../../control-base-command.js'
 import {ControlApi, HelpResponse, Conversation} from '../../services/control-api.js'
 import chalk from 'chalk'
 import ora from 'ora'
 import open from 'open'
 
-export default class AskCommand extends AblyBaseCommand {
+export default class AskCommand extends ControlBaseCommand {
   static description = 'Ask a question to the Ably AI agent for help'
 
   static examples = [
@@ -15,7 +15,7 @@ export default class AskCommand extends AblyBaseCommand {
   ]
 
   static flags = {
-    ...AblyBaseCommand.globalFlags,
+    ...ControlBaseCommand.globalFlags,
     help: Flags.help({char: 'h'}),
     continue: Flags.boolean({
       description: 'Continue the previous conversation with the Ably AI agent',
@@ -33,14 +33,7 @@ export default class AskCommand extends AblyBaseCommand {
   async run(): Promise<void> {
     const {args, flags} = await this.parse(AskCommand)
     
-    // Get access token for control API
-    const accessToken = flags['access-token'] || this.configManager.getAccessToken()
-    if (!accessToken) {
-      this.log('Please log in first with "ably accounts login" or provide an access token with --access-token.')
-      return
-    }
-
-    const controlApi = new ControlApi({ accessToken, controlHost: flags['control-host'] })
+    const controlApi = this.createControlApi(flags)
     const spinner = ora('Thinking...').start()
     
     try {

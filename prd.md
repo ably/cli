@@ -159,6 +159,8 @@ $ ably help contact -> Contact us -> open a browser to https://ably.com/contact
 $ ably help support -> Get support from Ably -> open a browser to https://ably.com/support
 $ ably help status -> Check the status of the Ably service using the https://ably.com/status/up.json endpoint, and if {status:true} then Ably is up and there are no open incidents, and if {status:false}, then there are open incidents. Either way, tell the user to go to https://status.ably.com to get the Ably status.
 
+$ ably --version -> returns the version of the CLI
+
 ### Authentication
 
 There are two distinct types of authentication needs for the CLI.

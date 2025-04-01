@@ -870,7 +870,7 @@ export class AblyMcpServer {
   private async getControlApi(): Promise<any> {
     try {
       const { ControlApi } = await import('../services/control-api.js')
-      const accessToken = this.configManager.getAccessToken()
+      const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken()
       
       if (!accessToken) {
         throw new Error('No access token configured. Please run "ably login" to authenticate.')

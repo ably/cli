@@ -29,6 +29,11 @@ USAGE
 ...
 ```
 <!-- usagestop -->
+```sh-session
+LOGIN (recommended first step)
+  $ ably login
+```
+
 # Commands
 <!-- commands -->
 - [Ably CLI](#ably-cli)

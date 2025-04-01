@@ -70,17 +70,9 @@ export abstract class AblyBaseCommand extends Command {
       return { appId, apiKey }
     }
 
-    // Otherwise, we need to interactively select them
-    if (!this.shouldSuppressOutput(flags)) {
-      this.log(chalk.yellow('No app or API key configured for this command.\n'))
-    }
-    
     // Get access token for control API
-    const accessToken = flags['access-token'] || this.configManager.getAccessToken()
+    const accessToken = process.env.ABLY_ACCESS_TOKEN || flags['access-token'] || this.configManager.getAccessToken()
     if (!accessToken) {
-      if (!this.shouldSuppressOutput(flags)) {
-        this.log(`Please log in first with "${chalk.cyan('ably accounts login')}" or provide an access token with ${chalk.cyan('--access-token')} argument.`)
-      }
       return null
     }
 
@@ -160,7 +152,7 @@ export abstract class AblyBaseCommand extends Command {
   protected getClientOptions(flags: any): Ably.ClientOptions {
     const options: Ably.ClientOptions = {}
 
-    // Handle authentication - try token first, then api-key, then config
+    // Handle authentication - try token first, then api-key, then environment variable, then config
     if (flags.token) {
       options.token = flags.token
       
@@ -176,6 +168,11 @@ export abstract class AblyBaseCommand extends Command {
       }
     } else if (flags['api-key']) {
       options.key = flags['api-key']
+      
+      // Handle client ID for API key auth
+      this.setClientId(options, flags)
+    } else if (process.env.ABLY_API_KEY) {
+      options.key = process.env.ABLY_API_KEY
       
       // Handle client ID for API key auth
       this.setClientId(options, flags)
@@ -217,10 +214,11 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   protected async createAblyClient(flags: any): Promise<Ably.Realtime | null> {
-    // If token is provided, we can skip the ensureAppAndKey step
-    if (!flags.token && !flags['api-key']) {
+    // If token is provided or API key is in environment, we can skip the ensureAppAndKey step
+    if (!flags.token && !flags['api-key'] && !process.env.ABLY_API_KEY) {
       const appAndKey = await this.ensureAppAndKey(flags)
       if (!appAndKey) {
+        this.error(`${chalk.yellow('No app or API key configured for this command')}.\nPlease log in first with "${chalk.cyan('ably accounts login')}" (recommended approach).\nAlternatively you can provide an API key with the ${chalk.cyan('--api-key')} argument or set the ${chalk.cyan('ABLY_API_KEY')} environment variable.`)
         return null
       }
       flags['api-key'] = appAndKey.apiKey
