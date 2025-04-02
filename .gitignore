@@ -1,13 +1,38 @@
+# Logs
 *-debug.log
 *-error.log
+
+# Runtime data
 /.nyc_output
-/dist
-/lib
+tmp
+
+# Build output
+# Ignore root dist folder
+/dist/
+# Explicitly ignore package dist folders
+/packages/*/dist/
+# Explicitly ignore examples dist folders
+/examples/*/dist/
+# Ignore root lib folder
+/lib/
+# Explicitly ignore package lib folders
+/packages/*/lib/
+# Explicitly ignore examples lib folders
+/examples/*/lib/
+
+# Dependency directories
+/node_modules
+
+# Optional Deps
 /package-lock.json
-/tmp
-node_modules
+
+# oclif files
 oclif.manifest.json
 oclif.lock
+
+# OS generated files
 **/.DS_Store
+
+# Editor directories and files
 /.idea
 tsconfig.tsbuildinfo

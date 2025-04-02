@@ -239,6 +239,20 @@ Note:
 
 - You need to generate Markdown documentation in this repository that explains clearly how users can install, configure, and use the CLI. See good examples of docs at https://vercel.com/docs/cli, https://supabase.com/docs/reference/cli/start and 
 
+### Embeddable web example and React component for CLI
+
+This repository should include an example of the CLI running inside of a web browser using direct command execution. This will be achieved by:
+
+- Create a React Ably CLI component that can be used by other web applications to provide this CLI as an interactive terminal inside a browser.
+- The React Ably CLI component will open a WebSocket connetion to a terminal server.
+- This repository will include a new terminal server role which will listen for new WebSocket connections, and when a new connection comes in, it will open a new docker container, and connect the WebSocket to that container. If the WebSocket connection drops, the docker session will be closed and all artefacts deleted. Sessions older than 30 minutes are terminated, and there will be a configurable number of max concurrent sessions.
+- The docker container will be based on an node:22-alpine base image, with the Ably CLI installed using `npm intall @ably/cli`. 
+- The docker container will prevent the user from doing anything apart from running the `ably` command. Every other command should be rejected to prevent any abuse of these containers running when new websocket connections are established.
+- The React Ably CLI will use Xterm JS (https://xtermjs.org/docs/) to display a fully functional terminal inside the browser. Note https://github.com/Qovery/react-xtermjs may be a useful library to consider as well.
+- The React component should require two arguments, a control access token and an API key. This will map to the ABLY_ACCESS_TOKEN env var OR --access-token global argument, and ABLY_API_KEY env var or --api-key global argument.
+- The demo web example should be built with Vite and kept very simple. It should require the user to start the server with ENV vars for the ABLY_ACCESS_TOKEN and ABLY_API_KEY defined in the environment or in a .env file in that folder. The demo should exist in a folder /example/web-cli.
+- Please include an example for how developers can use the React Web CLI component from installing it to embedding it in the README.md file. 
+
 ## Technical Requirements
 
 ### Supported Platforms

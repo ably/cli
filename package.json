@@ -1,17 +1,26 @@
 {
   "name": "@ably/cli",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Ably CLI for Pub/Sub, Chat, Spaces and the Control API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "build": "rm -rf dist && rm -f tsconfig.tsbuildinfo && tsc",
+    "lint": "eslint .",
     "postpack": "rm -f oclif.manifest.json",
-    "prepack": "node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme",
-    "test": "mocha --forbid-only \"test/**/*.test.ts\"",
-    "version": "node_modules/.bin/oclif readme && git add README.md",
+    "posttest": "npm run lint",
+    "prepack": "npm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
     "prepare": "npm run build && npm run prepack",
-    "cli": "bin/run.js"
+    "test": "mocha --forbid-only \"test/**/*.test.ts\"",
+    "version": "oclif readme && git add README.md",
+    "cli": "bin/run.js",
+    "terminal-server": "node dist/scripts/terminal-server.js",
+    "terminal-server:test-client": "node dist/scripts/terminal-test-client.js",
+    "build:packages": "pnpm -r --filter './packages/*' build",
+    "build:examples": "pnpm -r --filter './examples/*' build"
   },
   "author": "Ably <support@ably.com>",
   "license": "Apache-2.0",
@@ -22,45 +31,55 @@
   "oclif": {
     "bin": "ably",
     "dirname": "ably",
-    "commands": "./dist/commands",
+    "commands": "./dist/src/commands",
     "topicSeparator": " ",
     "plugins": [
-      "./dist"
+      "./dist/src"
     ],
     "hooks": {
-      "init": "./dist/hooks/init/alias-command",
-      "command_not_found": "./dist/hooks/command_not_found/alias-command"
+      "init": "./dist/src/hooks/init/alias-command",
+      "command_not_found": "./dist/src/hooks/command_not_found/alias-command"
     },
     "hidden": [
       "aliases"
     ],
-    "helpClass": "./dist/help.js"
+    "helpClass": "./dist/src/help.js"
   },
   "dependencies": {
     "@ably/chat": "^0.5.1",
     "@ably/spaces": "^0.4.0",
     "@oclif/core": "^4.2.10",
+    "@types/react": "^18.3.20",
+    "@types/react-dom": "^18.3.5",
+    "@xterm/addon-fit": "^0.9.0",
+    "@xterm/xterm": "^5.5.0",
     "ably": "^2.6.5",
     "chalk": "5",
     "cli-table3": "^0.6.5",
-    "inquirer": "^12.5.0",
+    "inquirer": "^9.2.16",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",
     "open": "^10.1.0",
     "ora": "^8.2.0",
-    "react": "^19.0.0",
-    "toml": "^3.0.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "toml": "^3.0.0",
+    "ws": "^8.16.0"
   },
   "devDependencies": {
-    "oclif": "^4.17.42",
-    "@oclif/test": "^3",
-    "@types/chai": "^4",
+    "@oclif/test": "^2.5.5",
+    "@types/chai": "^4.3.11",
     "@types/inquirer": "^9.0.7",
-    "@types/jsonwebtoken": "^9.0.9",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "^22.13.11",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.10.0",
     "@types/node-fetch": "^2.6.12",
-    "chai": "^4",
+    "@types/ws": "^8.5.11",
+    "@types/dockerode": "^3.3.29",
+    "chai": "^4.4.1",
+    "dockerode": "^4.0.2",
+    "eslint": "^8.54.0",
+    "oclif": "^4.17.42",
     "mocha": "^11",
     "shx": "^0.4",
     "ts-node": "^10.9.2",
@@ -72,6 +91,7 @@
   "files": [
     "/bin",
     "/dist",
+    "/example/web-cli",
     "/oclif.manifest.json"
   ],
   "repository": {
