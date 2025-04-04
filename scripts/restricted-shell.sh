@@ -15,8 +15,24 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lo
 # Note: We will bypass this later in the loop for robustness
 export PS1='$ '
 
-# Remove the argument handling logic - exec starts this script directly
-# if [ $# -gt 0 ]; then ... fi
+# Define colors for prompt and messages
+GREEN='\033[32m'
+RESET='\033[0m'
+YELLOW='\033[33m'
+
+# Flag to indicate if read was interrupted by our trap
+interrupted=0
+
+# Function to handle interrupt signals
+handle_interrupt() {
+  interrupted=1 # Set the flag
+  # Print message on a new line
+  printf "\n${YELLOW}Signal received. To exit this shell, type 'exit' and press Enter.${RESET}\n"
+  # No need to redraw prompt here, the loop will handle it after continuing
+}
+
+# Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
+trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
 
 # -- Interactive Restricted Shell starts here --
 
@@ -31,32 +47,42 @@ printf "Welcome to the Ably Web CLI shell.\n\n"
 printf "Usage: $ ably [command] [options]\n"
 printf "View supported commands: $ ably\n\n"
 
-# Define colors for prompt
-GREEN='\033[32m'
-RESET='\033[0m'
-
 # Read commands in a loop with proper handling
 while true; do
-    # Show the prompt without newline - Force '$ ' directly, now with color
-    # Use echo -ne to interpret ANSI escapes
+    interrupted=0 # Reset flag at the start of each loop iteration
+    # Show the prompt without newline
     echo -ne "${GREEN}$ ${RESET}"
     
-    # Read the command line with proper argument handling
+    # Read the command line
     read -r cmd rest_of_line
+    read_exit_status=$? # Capture exit status immediately
+
+    # Check if the read was interrupted by our signal trap
+    if [ "$interrupted" -eq 1 ]; then
+        continue # Trap handled it, loop again for fresh input
+    fi
+
+    # If read failed AND it wasn't due to our trap, assume EOF or other error
+    if [ $read_exit_status -ne 0 ]; then
+        printf "\nExiting Ably CLI shell.\n" # Handle Ctrl+D (EOF) or read errors
+        break
+    fi
     
     # Trim leading/trailing whitespace from cmd
     cmd=$(printf '%s' "$cmd" | sed 's/^ *//;s/ *$//')
     
     case "$cmd" in
         ably)
+            # Disable trap before running the command
+            trap '' SIGINT SIGTSTP SIGQUIT
             # Execute the ably command with all arguments exactly as provided
             if [ -n "$rest_of_line" ]; then
-                # Use 'eval' here to correctly handle quotes and arguments within the interactive loop
                 eval "ably $rest_of_line"
             else
-                # Just run ably with no arguments
                 ably
             fi
+            # Re-enable trap after command finishes
+            trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
             ;;
         exit)
             # Exit the shell
