@@ -5,6 +5,7 @@ alwaysApply: true
 ---
 # Ably knowledge
 
+- Please look at the prd.md file in the root which is the Product Requirements docuemnt. This document describes the project goals, technical considerations, and features. It's important to consider this context whenever you are making decisions.
 - When in doubt, refer to the Ably docs so that you can provide idiomatic suggestions in the CLI.
 - The docs you need to pay attention to are:
   - Ably Pub/Sub guides https://ably.com/docs/basics and API references at https://ably.com/docs/api/realtime-sdk (note at this time, some of the API references are out of date, so please use https://ably.com/docs/sdk/js/v2.0/ when this is mentioned on the page)
