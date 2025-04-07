@@ -11,6 +11,7 @@ export default class AppsCommand extends ControlBaseCommand {
     '$ ably apps set-apns-p12',
     '$ ably apps stats',
     '$ ably apps channel-rules list',
+    '$ ably apps switch my-app',
   ]
 
   async run(): Promise<void> {
@@ -24,6 +25,7 @@ export default class AppsCommand extends ControlBaseCommand {
     this.log('  ably apps stats             - Get app stats with optional live updates')
     this.log('  ably apps channel-rules     - Manage Ably channel rules (namespaces)')
     this.log('  ably apps logs              - Stream or retrieve app logs')
+    this.log('  ably apps switch            - Switch to a different app')
     this.log('')
     this.log('Run `ably apps COMMAND --help` for more information on a command.')
   }
