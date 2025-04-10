@@ -138,7 +138,7 @@ async function createContainer(
             `ABLY_ACCESS_TOKEN=${accessToken}`,
             // Simple PS1 prompt at container level
             'PS1=$ ',
-            // Enable history
+            // Enable history with reasonable defaults
             'HISTSIZE=1000',
             'HISTFILE=/home/appuser/.bash_history'
         ];

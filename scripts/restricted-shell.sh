@@ -32,7 +32,7 @@ handle_interrupt() {
   interrupted=1 # Set the flag
   # Print message on a new line
   printf "\n${YELLOW}Signal received. To exit this shell, type 'exit' and press Enter.${RESET}\n"
-  # No need to redraw prompt here, the loop will handle it after continuing
+  # We'll show the prompt in the main loop
 }
 
 # Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
@@ -60,11 +60,33 @@ if [ -f /etc/bash_completion ]; then
   . /etc/bash_completion
 fi
 
+# Use simple PS1 prompt for more reliable terminal behavior
+PS1='$ '
+export PS1
+
+# Special double prompt for xterm.js compatibility
+# This creates a more robust prompt display that works around race conditions
+show_robust_prompt() {
+  # Using sleep for up to 0.1 seconds to ensure terminal rendering catches up
+  sleep 0.1
+  # Reset cursor position, clear line, set prompt
+  printf "\033[G\033[K"  
+  # First prompt - sets the color and displays $ prompt
+  printf "${GREEN}$ ${RESET}"
+  # Small delay to ensure the first prompt is registered
+  sleep 0.05
+  # Move cursor back to start of line to "refresh" the prompt
+  printf "\033[G"
+  # Redisplay the prompt to ensure it's visible
+  printf "${GREEN}$ ${RESET}"
+}
+
 # Read commands in a loop with proper handling
 while true; do
     interrupted=0 # Reset flag at the start of each loop iteration
-    # Show the prompt without newline
-    printf "${GREEN}$ ${RESET}"
+    
+    # Show the robust double prompt
+    show_robust_prompt
     
     # Read the command line with bash's readline support (the -e flag is crucial for arrow keys)
     read -e -r cmd rest_of_line
@@ -72,7 +94,7 @@ while true; do
 
     # Check if the read was interrupted by our signal trap
     if [ "$interrupted" -eq 1 ]; then
-        continue # Trap handled it, loop again for fresh input
+        continue # Trap handled it, loop will show a new prompt
     fi
 
     # If read failed AND it wasn't due to our trap, assume EOF or other error
@@ -81,7 +103,7 @@ while true; do
         break
     fi
     
-    # Only add non-empty commands to history
+    # Add command to history for up-arrow recall
     if [ -n "$cmd" ]; then
         history -s "$cmd $rest_of_line"
     fi
