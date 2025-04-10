@@ -54,7 +54,7 @@ printf '\033[2J\033[H'
 # Print welcome message
 printf "Welcome to the Ably Web CLI shell.\n\n"
 printf "Usage: $ ably [command] [options]\n"
-printf "View supported commands: $ ably\n\n"
+printf "View supported commands: $ ably\n"
 
 # Enable bash completion if available
 if [ -f /etc/bash_completion ]; then
