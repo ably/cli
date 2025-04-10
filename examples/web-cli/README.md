@@ -19,7 +19,7 @@ It connects to a local `terminal-server` (provided in the main CLI package) via 
 * Node.js and pnpm installed.
 * Docker Desktop running (required by the `terminal-server`).
 * The main Ably CLI package built (`pnpm install && pnpm prepare` in the project root).
-* The Ably CLI Docker image built (`docker build -t ably-cli-sandbox .` in the project root).
+* The Ably CLI Docker image built (`docker build --no-cache -t ably-cli-sandbox .` in the project root).
 
 ## Setup
 
