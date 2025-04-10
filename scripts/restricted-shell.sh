@@ -1,17 +1,18 @@
 #!/bin/bash
 
+# Set up history to completely disable it at first
+unset HISTFILE
+export HISTSIZE=0
+export HISTFILESIZE=0
+export HISTCONTROL=ignoreboth:erasedups
+history -c
+
 # Set critical environment variables for proper UTF-8 handling and terminal behavior
-# These should ideally be inherited from the 'exec' Env, but setting them here ensures robustness.
 export TERM=${TERM:-xterm-256color}
 export LANG=${LANG:-en_US.UTF-8}
 export LC_ALL=${LC_ALL:-en_US.UTF-8} 
 export LC_CTYPE=${LC_CTYPE:-en_US.UTF-8}
 export CLICOLOR=${CLICOLOR:-1}
-
-# Setup history for bash
-export HISTFILE=~/.bash_history
-export HISTSIZE=1000
-export HISTCONTROL=ignoredups
 
 # Essential path setup
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/lib/node_modules/.bin:$PATH
@@ -32,7 +33,8 @@ handle_interrupt() {
   interrupted=1 # Set the flag
   # Print message on a new line
   printf "\n${YELLOW}Signal received. To exit this shell, type 'exit' and press Enter.${RESET}\n"
-  # We'll show the prompt in the main loop
+  # Print prompt immediately
+  printf "${GREEN}$ ${RESET}"
 }
 
 # Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
@@ -48,24 +50,13 @@ printf "Welcome to the Ably Web CLI shell.\n\n"
 printf "Usage: $ ably [command] [options]\n"
 printf "View supported commands: $ ably\n\n"
 
-# Create history file if it doesn't exist
-touch ~/.bash_history
-
-# Enable readline features for command history
-set -o history
-shopt -s histappend
-
 # Enable bash completion if available
 if [ -f /etc/bash_completion ]; then
   . /etc/bash_completion
 fi
 
-# Use simple PS1 prompt for more reliable terminal behavior
-PS1='$ '
-export PS1
-
 # Special double prompt for xterm.js compatibility
-# This creates a more robust prompt display that works around race conditions
+# This creates a robust prompt display that works around race conditions
 show_robust_prompt() {
   # Using sleep for up to 0.1 seconds to ensure terminal rendering catches up
   sleep 0.1
@@ -81,20 +72,39 @@ show_robust_prompt() {
   printf "${GREEN}$ ${RESET}"
 }
 
+# Now that we're ready to accept user input, set up a clean history environment
+export HISTSIZE=1000
+export HISTFILE=$(mktemp -u)
+history -c
+
+# Custom array to store valid command history
+HISTORY_ARRAY=()
+
 # Read commands in a loop with proper handling
 while true; do
     interrupted=0 # Reset flag at the start of each loop iteration
     
-    # Show the robust double prompt
+    # Show the robust double prompt for terminal compatibility
     show_robust_prompt
     
-    # Read the command line with bash's readline support (the -e flag is crucial for arrow keys)
+    # Read the command line with bash's readline support
+    if [ ${#HISTORY_ARRAY[@]} -gt 0 ]; then
+        # Add our clean history items to the readline history
+        history -c
+        for item in "${HISTORY_ARRAY[@]}"; do
+            history -s "$item"
+        done
+    fi
+    
     read -e -r cmd rest_of_line
     read_exit_status=$? # Capture exit status immediately
+    
+    # Clear readline history immediately to prevent contamination
+    history -c
 
     # Check if the read was interrupted by our signal trap
     if [ "$interrupted" -eq 1 ]; then
-        continue # Trap handled it, loop will show a new prompt
+        continue # Trap handled it, loop again for fresh input
     fi
 
     # If read failed AND it wasn't due to our trap, assume EOF or other error
@@ -103,16 +113,21 @@ while true; do
         break
     fi
     
-    # Add command to history for up-arrow recall
-    if [ -n "$cmd" ]; then
-        history -s "$cmd $rest_of_line"
-    fi
-    
     # Trim leading/trailing whitespace from cmd
     cmd=$(printf '%s' "$cmd" | sed 's/^ *//;s/ *$//')
     
     case "$cmd" in
         ably)
+            # Store in our custom history array
+            FULL_CMD="ably $rest_of_line"
+            # Add to front of array (newest first)
+            HISTORY_ARRAY=("$FULL_CMD" "${HISTORY_ARRAY[@]}")
+            # Keep array size manageable
+            if [ ${#HISTORY_ARRAY[@]} -gt 100 ]; then
+                # Remove oldest entry
+                unset 'HISTORY_ARRAY[${#HISTORY_ARRAY[@]}-1]'
+            fi
+            
             # Disable trap before running the command
             trap '' SIGINT SIGTSTP SIGQUIT
             # Execute the ably command with all arguments exactly as provided
@@ -137,4 +152,7 @@ while true; do
             printf '\033[31mError: Only commands "ably" and "exit" are allowed.\033[0m\n'
             ;;
     esac
-done 
+done
+
+# Clean up
+history -c 

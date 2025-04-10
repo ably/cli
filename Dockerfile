@@ -3,7 +3,7 @@ FROM node:22-alpine
 WORKDIR /usr/src/app
 
 # Install bash with readline support for better terminal interaction
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash coreutils
 
 # Install Ably CLI globally
 RUN npm install -g @ably/cli && \
@@ -21,10 +21,6 @@ COPY scripts/restricted-shell.sh /scripts/restricted-shell.sh
 
 # Make the script executable
 RUN chmod +x /scripts/restricted-shell.sh
-
-# Create .ably_cli_history file and set permissions
-RUN touch /home/appuser/.ably_cli_history && \
-    chown appuser:appgroup /home/appuser/.ably_cli_history
 
 # Switch to the non-root user
 USER appuser
