@@ -31,7 +31,7 @@ WORKDIR /usr/src/app
 # Ensure PATH includes npm bins and our scripts directory
 ENV PATH=/usr/local/lib/node_modules/.bin:/scripts:$PATH
 
-# Set the entrypoint to our restricted shell
+# Set the entrypoint to our restricted web shell
 ENTRYPOINT ["/scripts/restricted-shell.sh"]
 
 # Empty CMD as default arguments for the entrypoint

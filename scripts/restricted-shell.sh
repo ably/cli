@@ -20,6 +20,10 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lo
 # Force simple prompt, overriding any inherited value
 export PS1='$ '
 
+# Ensure .ably directory exists with proper permissions
+# This prevents race conditions when multiple processes try to create it
+mkdir -p ~/.ably
+
 # Define colors for prompt and messages
 GREEN='\033[32m'
 RESET='\033[0m'
@@ -51,10 +55,8 @@ trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
 # Clear screen to start with a clean terminal 
 printf '\033[2J\033[H'
 
-# Print welcome message
-printf "Welcome to the Ably Web CLI shell.\n\n"
-printf "Usage: $ ably [command] [options]\n"
-printf "View supported commands: $ ably\n"
+# Print welcome message using ably CLI's built-in help
+ably --web-cli-help
 
 # Enable bash completion if available
 if [ -f /etc/bash_completion ]; then
