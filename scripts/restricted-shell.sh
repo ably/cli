@@ -33,8 +33,14 @@ handle_interrupt() {
   interrupted=1 # Set the flag
   # Print message on a new line
   printf "\n${YELLOW}Signal received. To exit this shell, type 'exit' and press Enter.${RESET}\n"
-  # Print prompt immediately
+  
+  # Show the prompt immediately
   printf "${GREEN}$ ${RESET}"
+  
+  # Reset readline and terminal state
+  # Send an empty readline command to reset input state
+  # We don't use true since we want to reset terminal state
+  read -t 0.001 -n 1 >/dev/null 2>&1 || true
 }
 
 # Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
@@ -80,12 +86,22 @@ history -c
 # Custom array to store valid command history
 HISTORY_ARRAY=()
 
+# Use stty to ensure echo is on and signals are handled properly
+stty echo
+stty intr '^C'
+
 # Read commands in a loop with proper handling
 while true; do
-    interrupted=0 # Reset flag at the start of each loop iteration
+    # Skip showing prompt if we've just processed an interrupt
+    # (since the interrupt handler already showed one)
+    if [ "$interrupted" -eq 0 ]; then
+        # Show the robust double prompt for terminal compatibility
+        show_robust_prompt
+    fi
     
-    # Show the robust double prompt for terminal compatibility
-    show_robust_prompt
+    # Reset interrupted flag AFTER checking it for prompt display,
+    # but BEFORE reading the command so we're ready for the next interrupt
+    interrupted=0
     
     # Read the command line with bash's readline support
     if [ ${#HISTORY_ARRAY[@]} -gt 0 ]; then
@@ -96,20 +112,16 @@ while true; do
         done
     fi
     
-    read -e -r cmd rest_of_line
-    read_exit_status=$? # Capture exit status immediately
+    # Handle terminal input
+    read -e cmd rest_of_line
+    read_status=$?
     
     # Clear readline history immediately to prevent contamination
     history -c
 
-    # Check if the read was interrupted by our signal trap
-    if [ "$interrupted" -eq 1 ]; then
-        continue # Trap handled it, loop again for fresh input
-    fi
-
-    # If read failed AND it wasn't due to our trap, assume EOF or other error
-    if [ $read_exit_status -ne 0 ]; then
-        printf "\nExiting Ably CLI shell.\n" # Handle Ctrl+D (EOF) or read errors
+    # Check for EOF (Ctrl+D)
+    if [ $read_status -ne 0 ]; then
+        printf "\nExiting Ably CLI shell.\n"
         break
     fi
     
@@ -128,16 +140,12 @@ while true; do
                 unset 'HISTORY_ARRAY[${#HISTORY_ARRAY[@]}-1]'
             fi
             
-            # Disable trap before running the command
-            trap '' SIGINT SIGTSTP SIGQUIT
             # Execute the ably command with all arguments exactly as provided
             if [ -n "$rest_of_line" ]; then
                 eval "ably $rest_of_line"
             else
                 ably
             fi
-            # Re-enable trap after command finishes
-            trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
             ;;
         exit)
             # Exit the shell
