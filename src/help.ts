@@ -8,12 +8,18 @@ export default class CustomHelp extends Help {
 
   // Override the formatCommands method to filter out our alias commands
   formatCommands(commands: Command.Loadable[]): string {
-    // Filter out commands that have the isAlias property
+    // Filter out commands that have the isAlias property or start with -
     const filteredCommands = commands.filter(c => {
       try {
         // Access the command class to check for our custom isAlias property
         const CommandClass = c.load()
-        return !(CommandClass as any).isAlias
+        
+        // Skip alias commands, internal commands, and commands starting with --
+        return !(
+          (CommandClass as any).isAlias || 
+          (CommandClass as any).isInternal ||
+          c.id.startsWith('--')
+        )
       } catch (error) {
         return true // Include command if there's an error loading it
       }
@@ -128,14 +134,19 @@ export default class CustomHelp extends Help {
     // Process all commands, filtering for root-level commands only
     for (const c of this.config.commands) {
       try {
+        // Skip commands with dashes in name
+        if (c.id.startsWith('--')) {
+          continue;
+        }
+        
         // Only process commands with no spaces or colons (top-level commands)
         if (c.id.includes(' ') || c.id.includes(':')) {
           continue
         }
         
-        // Skip alias commands
+        // Skip alias and internal commands
         const cmd = await c.load()
-        if ((cmd as any).isAlias) {
+        if ((cmd as any).isAlias || (cmd as any).isInternal || (cmd as any).hidden) {
           continue
         }
         
