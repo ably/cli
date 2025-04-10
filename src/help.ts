@@ -25,8 +25,15 @@ export default class CustomHelp extends Help {
 
   // Completely override the root help to implement custom welcome screen
   async showRootHelp(): Promise<void> {
+    // Check if this is a web CLI help request
+    // @ts-ignore oclif Help class has argv property in its options
+    const isWebCliHelp = this.opts.argv?.includes('--web-cli-help')
+
     // Don't use the default root help output
-    const output = await this.createCustomWelcomeScreen()
+    const output = isWebCliHelp
+      ? await this.createWebCliWelcomeScreen()
+      : await this.createCustomWelcomeScreen()
+
     this.log(output)
   }
 
@@ -35,11 +42,50 @@ export default class CustomHelp extends Help {
     // Only proceed with default behavior if we're not at the root
     // @ts-ignore oclif Help class has argv property in its options
     if (this.opts.argv && this.opts.argv.length > 0) {
+      // Hide the --web-cli-help flag from regular help output
+      // @ts-ignore oclif Help class has argv property in its options
+      const isWebCliHelpRequest = this.opts.argv.includes('--web-cli-help')
+      if (isWebCliHelpRequest) {
+        return ''
+      }
       return super.formatRoot()
     }
     
     // Return empty string for root help since we're using showRootHelp
     return ''
+  }
+
+  // Create web CLI specific welcome screen
+  private async createWebCliWelcomeScreen(): Promise<string> {
+    const lines: string[] = []
+
+    // 1. Display the Ably logo
+    const captureLog: string[] = []
+    displayLogo((message) => captureLog.push(message))
+    lines.push(...captureLog)
+
+    // 2. Show the CLI description with web-specific wording
+    lines.push(chalk.bold('ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API'))
+    lines.push('')
+
+    // 3. Show the web CLI specific instructions
+    lines.push(`${chalk.bold('COMMON COMMANDS')}`)
+    lines.push(`  ${chalk.cyan('View Ably commands:')} ably --help`)
+    lines.push(`  ${chalk.cyan('Publish a message:')} ably channels publish [channel] [message]`)
+    lines.push(`  ${chalk.cyan('View live channel lifecycle events:')} ably channels logs`)
+    lines.push('')
+
+    // 4. Check if login recommendation is needed
+    const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken()
+    const apiKey = process.env.ABLY_API_KEY
+    
+    if (!accessToken && !apiKey) {
+      lines.push('')
+      lines.push(chalk.yellow('You are not logged in. Run the following command to log in:'))
+      lines.push(chalk.cyan('  $ ably login'))
+    }
+
+    return lines.join('\n')
   }
 
   // Create our custom welcome screen

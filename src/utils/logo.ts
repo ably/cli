@@ -65,6 +65,4 @@ export function displayLogo(
     
     log(coloredLine);
   }
-
-  console.log('\n')
 } 

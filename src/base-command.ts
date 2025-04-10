@@ -10,13 +10,13 @@ export abstract class AblyBaseCommand extends Command {
   protected configManager: ConfigManager
   protected interactiveHelper: InteractiveHelper
 
-  constructor(argv: string[], config: any) {
-    super(argv, config)
-    this.configManager = new ConfigManager()
-    this.interactiveHelper = new InteractiveHelper(this.configManager)
-  }
-
+  // Add static flags that will be available to all commands
   static globalFlags = {
+    // Web CLI specific flag, hidden from regular help
+    'web-cli-help': Flags.boolean({
+      description: 'Show help formatted for the web CLI',
+      hidden: true, // Hide from regular help output
+    }),
     host: Flags.string({
       description: 'Override the host endpoint for all product API calls',
     }),
@@ -38,6 +38,12 @@ export abstract class AblyBaseCommand extends Command {
     'client-id': Flags.string({
       description: 'Overrides any default client ID when using API authentication. Use "none" to explicitly set no client ID. Not applicable when using token authentication.',
     }),
+  }
+
+  constructor(argv: string[], config: any) {
+    super(argv, config)
+    this.configManager = new ConfigManager()
+    this.interactiveHelper = new InteractiveHelper(this.configManager)
   }
 
   // Add this method to check if we should suppress output
