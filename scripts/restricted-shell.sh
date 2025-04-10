@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Set critical environment variables for proper UTF-8 handling and terminal behavior
 # These should ideally be inherited from the 'exec' Env, but setting them here ensures robustness.
@@ -8,11 +8,15 @@ export LC_ALL=${LC_ALL:-en_US.UTF-8}
 export LC_CTYPE=${LC_CTYPE:-en_US.UTF-8}
 export CLICOLOR=${CLICOLOR:-1}
 
+# Setup history for bash
+export HISTFILE=~/.bash_history
+export HISTSIZE=1000
+export HISTCONTROL=ignoredups
+
 # Essential path setup
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/lib/node_modules/.bin:$PATH
 
 # Force simple prompt, overriding any inherited value
-# Note: We will bypass this later in the loop for robustness
 export PS1='$ '
 
 # Define colors for prompt and messages
@@ -39,22 +43,31 @@ trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
 # Clear screen to start with a clean terminal 
 printf '\033[2J\033[H'
 
-# Verify locale settings within the script
-# Removed: locale check was here
-
 # Print welcome message
 printf "Welcome to the Ably Web CLI shell.\n\n"
 printf "Usage: $ ably [command] [options]\n"
 printf "View supported commands: $ ably\n\n"
 
+# Create history file if it doesn't exist
+touch ~/.bash_history
+
+# Enable readline features for command history
+set -o history
+shopt -s histappend
+
+# Enable bash completion if available
+if [ -f /etc/bash_completion ]; then
+  . /etc/bash_completion
+fi
+
 # Read commands in a loop with proper handling
 while true; do
     interrupted=0 # Reset flag at the start of each loop iteration
     # Show the prompt without newline
-    echo -ne "${GREEN}$ ${RESET}"
+    printf "${GREEN}$ ${RESET}"
     
-    # Read the command line
-    read -r cmd rest_of_line
+    # Read the command line with bash's readline support (the -e flag is crucial for arrow keys)
+    read -e -r cmd rest_of_line
     read_exit_status=$? # Capture exit status immediately
 
     # Check if the read was interrupted by our signal trap
@@ -66,6 +79,11 @@ while true; do
     if [ $read_exit_status -ne 0 ]; then
         printf "\nExiting Ably CLI shell.\n" # Handle Ctrl+D (EOF) or read errors
         break
+    fi
+    
+    # Only add non-empty commands to history
+    if [ -n "$cmd" ]; then
+        history -s "$cmd $rest_of_line"
     fi
     
     # Trim leading/trailing whitespace from cmd

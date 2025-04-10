@@ -138,8 +138,9 @@ async function createContainer(
             `ABLY_ACCESS_TOKEN=${accessToken}`,
             // Simple PS1 prompt at container level
             'PS1=$ ',
-            // Disable history
-            'HISTSIZE=0'
+            // Enable history
+            'HISTSIZE=1000',
+            'HISTFILE=/home/appuser/.bash_history'
         ];
         
         // Add any custom environment variables
@@ -309,7 +310,7 @@ async function handleAuth(message: Buffer, ws: WebSocketType, authTimeoutIdRef: 
         log(`Executing restricted shell in container ${sessionId}...`);
         const exec = await container.exec({
             // Explicitly run the restricted shell script
-            Cmd: ['/scripts/restricted-shell.sh'], 
+            Cmd: ['/bin/bash', '/scripts/restricted-shell.sh'], 
             AttachStdin: true,
             AttachStdout: true,
             AttachStderr: true,
