@@ -2,6 +2,7 @@ import { Flags } from '@oclif/core'
 import { ControlBaseCommand } from '../../../control-base-command.js'
 import { AccountStats } from '../../../services/control-api.js'
 import { StatsDisplay } from '../../../services/stats-display.js'
+import chalk from 'chalk'
 
 export default class AccountsStatsCommand extends ControlBaseCommand {
   static description = 'Get account stats with optional live updates'
@@ -46,10 +47,15 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
       description: 'Polling interval in seconds (only used with --live)',
       default: 6,
     }),
+    'debug': Flags.boolean({
+      description: 'Show debug information for live stats polling',
+      default: false,
+    }),
   }
 
   private pollInterval: NodeJS.Timeout | undefined = undefined
   private statsDisplay: StatsDisplay | null = null
+  private isPolling = false // Track when we're already fetching stats
 
   async run(): Promise<void> {
     const { flags } = await this.parse(AccountsStatsCommand)
@@ -71,7 +77,8 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
       startTime: flags.live ? new Date() : undefined,
       format: flags.format as 'json' | 'pretty',
       unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
-      isAccountStats: true
+      isAccountStats: true,
+      intervalSeconds: flags.interval
     })
     
     if (flags.live) {
@@ -133,11 +140,15 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
       // Show stats immediately before starting polling
       await this.fetchAndDisplayStats(flags, controlApi)
       
-      this.log(`Polling every ${flags.interval} seconds. Press Ctrl+C to exit.\n`)
-      
       // Poll for stats at the specified interval
-      this.pollInterval = setInterval(async () => {
-        await this.fetchAndDisplayStats(flags, controlApi)
+      this.pollInterval = setInterval(() => {
+        // Use non-blocking polling - don't wait for previous poll to complete
+        if (!this.isPolling) {
+          this.pollStats(flags, controlApi)
+        } else if (flags.debug) {
+          // Only show this message if debug flag is enabled
+          console.log(chalk.yellow('Skipping poll - previous request still in progress'))
+        }
       }, flags.interval * 1000)
       
       // Keep the process running
@@ -151,6 +162,23 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
       if (this.pollInterval) {
         clearInterval(this.pollInterval)
       }
+    }
+  }
+
+  private async pollStats(flags: any, controlApi: any): Promise<void> {
+    try {
+      this.isPolling = true
+      if (flags.debug) {
+        console.log(chalk.dim(`\n[${new Date().toISOString()}] Polling for new stats...`))
+      }
+      
+      await this.fetchAndDisplayStats(flags, controlApi)
+    } catch (error) {
+      if (flags.debug) {
+        console.error(chalk.red(`Error during stats polling: ${error instanceof Error ? error.message : String(error)}`))
+      }
+    } finally {
+      this.isPolling = false
     }
   }
 
