@@ -1,11 +1,14 @@
 import { AblyBaseCommand } from '../../base-command.js'
 import { ConfigManager } from '../../services/config-manager.js'
 import { AblyMcpServer } from '../../mcp/index.js'
+import { Flags } from '@oclif/core'
 
 export default class StartMcpServer extends AblyBaseCommand {
   static description = 'Start an MCP server for AI tools to interact with Ably (currently experimental)'
   
-  static flags = {}
+  static flags = {
+    // AblyBaseCommand already defines control-host as a global flag
+  }
   
   static examples = [
     '<%= config.bin %> <%= command.id %>',
@@ -15,6 +18,9 @@ export default class StartMcpServer extends AblyBaseCommand {
     // Check if this command is allowed in web CLI mode
     this.checkWebCliRestrictions()
     
+    // Parse flags
+    const { flags } = await this.parse(StartMcpServer)
+    
     // Initialize Config Manager
     const configManager = new ConfigManager()
     
@@ -22,7 +28,9 @@ export default class StartMcpServer extends AblyBaseCommand {
       // Start the server, write to stderr only
       console.error('Starting Ably CLI MCP server...')
       
-      const server = new AblyMcpServer(configManager)
+      const server = new AblyMcpServer(configManager, {
+        controlHost: flags['control-host']
+      })
       await server.start()
       
       // The server.start() will block until the server is terminated

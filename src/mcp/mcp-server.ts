@@ -16,9 +16,11 @@ export class AblyMcpServer {
   private configManager: ConfigManager
   private server: McpServer
   private activeOperations: Set<AbortController> = new Set()
+  private controlHost?: string
 
-  constructor(configManager: ConfigManager) {
+  constructor(configManager: ConfigManager, options?: { controlHost?: string }) {
     this.configManager = configManager
+    this.controlHost = options?.controlHost
     
     // Initialize the MCP server
     this.server = new McpServer({
@@ -163,7 +165,7 @@ export class AblyMcpServer {
     // Apps List tool
     this.server.tool(
       "list_apps",
-      "List all Ably apps",
+      "List Ably apps within the current account",
       {
         format: z.enum(["json", "pretty"]).optional().default("json").describe("Output format (json or pretty)")
       },
@@ -876,7 +878,10 @@ export class AblyMcpServer {
         throw new Error('No access token configured. Please run "ably login" to authenticate.')
       }
       
-      return new ControlApi(accessToken)
+      return new ControlApi({
+        accessToken,
+        controlHost: this.controlHost || process.env.ABLY_CONTROL_HOST
+      })
     } catch (error) {
       console.error('Error creating Control API client:', error)
       throw new Error(`Failed to create Control API client: ${error instanceof Error ? error.message : String(error)}`)
