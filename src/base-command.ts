@@ -6,9 +6,35 @@ import { InteractiveHelper } from './services/interactive-helper.js'
 import { ControlApi } from './services/control-api.js'
 import chalk from 'chalk'
 
+// List of commands not allowed in web CLI mode
+const WEB_CLI_RESTRICTED_COMMANDS = [
+  'accounts:login',
+  'accounts:list',
+  'accounts:logout',
+  'accounts:switch',
+  'apps:switch',
+  'auth:keys:switch',
+  'config'
+];
+
+// List of commands that should not show account/app info
+const SKIP_AUTH_INFO_COMMANDS = [
+  'accounts:list',
+  'accounts:switch',
+  'accounts:login',
+  'accounts:current',
+  'apps:current',
+  'auth:keys:current',
+  'config',
+  'help:contact',
+  'help:support',
+  'help:status',
+];
+
 export abstract class AblyBaseCommand extends Command {
   protected configManager: ConfigManager
   protected interactiveHelper: InteractiveHelper
+  protected isWebCliMode: boolean
 
   // Add static flags that will be available to all commands
   static globalFlags = {
@@ -44,6 +70,83 @@ export abstract class AblyBaseCommand extends Command {
     super(argv, config)
     this.configManager = new ConfigManager()
     this.interactiveHelper = new InteractiveHelper(this.configManager)
+    // Check if we're running in web CLI mode
+    this.isWebCliMode = process.env.ABLY_WEB_CLI_MODE === 'true'
+  }
+
+  /**
+   * Checks if a command is allowed to run in web CLI mode
+   * This should be called by commands that are restricted in web CLI mode
+   * 
+   * @returns True if command can run, false if it's restricted
+   */
+  protected isAllowedInWebCliMode(command?: string): boolean {
+    if (!this.isWebCliMode) {
+      return true // Not in web CLI mode, allow all commands
+    }
+    
+    // Use the current command ID if none provided
+    const commandId = command || this.id || ''
+
+    // Normalize command ID by replacing spaces with colons for comparison
+    const normalizedCommandId = commandId.replace(/ /g, ':')
+    
+    // Check if the command or any parent command is restricted
+    for (const restrictedCmd of WEB_CLI_RESTRICTED_COMMANDS) {
+      // Check exact match
+      if (normalizedCommandId === restrictedCmd) {
+        return false
+      }
+      
+      // Check if this is a subcommand of a restricted command
+      if (normalizedCommandId.startsWith(restrictedCmd + ':')) {
+        return false
+      }
+      
+      // Check if command ID path includes the restricted command
+      // This covers case when command ID is space-separated
+      const spacedCommandId = commandId.toLowerCase()
+      const spacedRestrictedCmd = restrictedCmd.replace(/:/g, ' ').toLowerCase()
+      
+      if (spacedCommandId === spacedRestrictedCmd || 
+          spacedCommandId.startsWith(spacedRestrictedCmd + ' ')) {
+        return false
+      }
+    }
+    
+    return true
+  }
+
+  /**
+   * Check if this is a web CLI version and return a consistent error message
+   * for commands that are not allowed in web CLI mode
+   */
+  protected checkWebCliRestrictions(): void {
+    if (this.isWebCliMode && !this.isAllowedInWebCliMode()) {
+      let errorMessage = `This command is not available in the web CLI.`
+      
+      const commandId = (this.id || '').replace(/:/g, ' ')
+      
+      // Add specific messages for certain commands
+      if (commandId.includes('accounts login')) {
+        errorMessage = `You are already logged in via the web CLI. This command is not available in the web CLI.`
+      } else if (commandId.includes('accounts list')) {
+        errorMessage = `This feature is not available in the web CLI. Please use the web dashboard at https://ably.com/accounts/ instead.`
+      } else if (commandId.includes('accounts logout')) {
+        errorMessage = `You cannot log out via the web CLI.`
+      } else if (commandId.includes('accounts switch')) {
+        errorMessage = `You cannot change accounts in the web CLI. Please use the dashboard at https://ably.com/accounts/ to switch accounts.`
+      } else if (commandId.includes('apps switch')) {
+        errorMessage = `You cannot switch apps from within the web CLI. Please use the web dashboard at https://ably.com/dashboard instead.`
+      } else if (commandId.includes('auth keys switch')) {
+        errorMessage = `You cannot switch API keys from within the web CLI. Please use the web interface to change keys.`
+      } else if (commandId === 'config') {
+        errorMessage = `Local configuration is not supported in the web CLI version.`
+      }
+
+      // Exit with the error message
+      this.error(chalk.red(errorMessage))
+    }
   }
 
   // Add this method to check if we should suppress output
@@ -52,6 +155,31 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   protected async ensureAppAndKey(flags: any): Promise<{appId: string, apiKey: string} | null> {
+    // If in web CLI mode, use environment variables directly
+    if (this.isWebCliMode) {
+      // Extract app ID from ABLY_API_KEY environment variable
+      const apiKey = process.env.ABLY_API_KEY || ''
+      if (!apiKey) {
+        this.log('ABLY_API_KEY environment variable is not set')
+        return null
+      }
+      
+      // Debug log the API key format (masking the secret part)
+      const keyParts = apiKey.split(':')
+      const maskedKey = keyParts.length > 1 ? `${keyParts[0]}:***` : apiKey
+      this.debug(`Using API key format: ${maskedKey}`)
+      
+      // The app ID is the part before the first period in the key
+      const appId = apiKey.split('.')[0] || ''
+      if (!appId) {
+        this.log('Failed to extract app ID from API key')
+        return null
+      }
+      
+      this.debug(`Extracted app ID: ${appId}`)
+      return { appId, apiKey }
+    }
+  
     // If token auth is being used, we don't need an API key
     if (flags.token) {
       // For token auth, we still need an app ID for some operations
@@ -69,10 +197,6 @@ export abstract class AblyBaseCommand extends Command {
 
     // If we have both, return them
     if (appId && apiKey) {
-      // Display app and key info in non-JSON mode, unless output should be suppressed
-      if (flags.format !== 'json' && !flags.json && !flags.quiet && !this.shouldSuppressOutput(flags)) {
-        this.displayAppAndKeyInfo(appId, apiKey)
-      }
       return { appId, apiKey }
     }
 
@@ -129,30 +253,36 @@ export abstract class AblyBaseCommand extends Command {
     return { appId, apiKey }
   }
 
-  private displayAppAndKeyInfo(appId: string, apiKey: string): void {
-    // Get app and key information from config
-    const appName = this.configManager.getAppName(appId) || 'Unknown App'
-    const keyId = apiKey.split(':')[0] // Extract key ID (part before colon)
-    const keyName = this.configManager.getKeyName(appId) || 'Unknown Key'
-    // Format the full key name (app_id.key_id)
-    const formattedKeyName = keyId.includes('.') ? keyId : `${appId}.${keyId}`
-    const currentAccount = this.configManager.getCurrentAccount()
-    const accountName = currentAccount?.accountName || this.configManager.getCurrentAccountAlias() || 'Unknown Account'
-
-    this.log(`${chalk.dim('Using:')} ${chalk.cyan('Account=')}${chalk.cyan.bold(accountName)} ${chalk.dim('•')} ${chalk.green('App=')}${chalk.green.bold(appName)} ${chalk.gray(`(${appId})`)} ${chalk.dim('•')} ${chalk.yellow('Key=')}${chalk.yellow.bold(keyName)} ${chalk.gray(`(${formattedKeyName})`)}`)
-    this.log('') // Add blank line for readability
-  }
-
-  private displayTokenAuthInfo(appId?: string): void {
-    // Display token authentication info
-    let appInfo = ''
-    if (appId) {
-      const appName = this.configManager.getAppName(appId) || 'Unknown App'
-      appInfo = ` ${chalk.dim('•')} ${chalk.green('App=')}${chalk.green.bold(appName)} ${chalk.gray(`(${appId})`)}`
+  /**
+   * Helper method to parse and validate an API key
+   * Returns null if invalid, or the parsed components if valid
+   */
+  protected parseApiKey(apiKey: string): { appId: string, keyId: string, keySecret: string } | null {
+    if (!apiKey) return null;
+    
+    // API key format should be APP_ID.KEY_ID:KEY_SECRET
+    const parts = apiKey.split(':');
+    if (parts.length !== 2) {
+      this.debug(`Invalid API key format: missing colon separator`);
+      return null;
     }
     
-    this.log(`${chalk.dim('Using:')} ${chalk.magenta('Auth=')}${chalk.magenta.bold('Token')}${appInfo}`)
-    this.log('') // Add blank line for readability
+    const keyParts = parts[0].split('.');
+    if (keyParts.length !== 2) {
+      this.debug(`Invalid API key format: missing period separator in key`);
+      return null;
+    }
+    
+    const appId = keyParts[0];
+    const keyId = keyParts[1];
+    const keySecret = parts[1];
+    
+    if (!appId || !keyId || !keySecret) {
+      this.debug(`Invalid API key format: missing required parts`);
+      return null;
+    }
+    
+    return { appId, keyId, keySecret };
   }
 
   protected getClientOptions(flags: any): Ably.ClientOptions {
@@ -162,10 +292,6 @@ export abstract class AblyBaseCommand extends Command {
     if (flags.token) {
       options.token = flags.token
       
-      // Show token auth info if not in JSON mode and not suppressing output
-      if (flags.format !== 'json' && !flags.json && !flags.quiet && !this.shouldSuppressOutput(flags)) {
-        this.displayTokenAuthInfo(flags.app || this.configManager.getCurrentAppId())
-      }
       
       // When using token auth, we don't set the clientId as it may conflict
       // with any clientId embedded in the token
@@ -175,10 +301,36 @@ export abstract class AblyBaseCommand extends Command {
     } else if (flags['api-key']) {
       options.key = flags['api-key']
       
+      // In web CLI mode, validate the API key format
+      if (this.isWebCliMode) {
+        const parsedKey = this.parseApiKey(flags['api-key']);
+        if (parsedKey) {
+          this.debug(`Using API key with appId=${parsedKey.appId}, keyId=${parsedKey.keyId}`);
+          // In web CLI mode, we need to explicitly configure the client for Ably.js browser library
+          options.key = flags['api-key'];
+        } else {
+          this.log(chalk.yellow(`Warning: API key format appears to be invalid. Expected format: APP_ID.KEY_ID:KEY_SECRET`));
+        }
+      }
+      
       // Handle client ID for API key auth
       this.setClientId(options, flags)
     } else if (process.env.ABLY_API_KEY) {
-      options.key = process.env.ABLY_API_KEY
+      const apiKey = process.env.ABLY_API_KEY
+      options.key = apiKey
+      
+      // In web CLI mode, validate the API key format
+      if (this.isWebCliMode) {
+        const parsedKey = this.parseApiKey(apiKey);
+        if (parsedKey) {
+          this.debug(`Using API key with appId=${parsedKey.appId}, keyId=${parsedKey.keyId}`);
+          
+          // Ensure API key is properly formatted for Node.js SDK
+          options.key = apiKey;
+        } else {
+          this.log(chalk.yellow(`Warning: API key format appears to be invalid. Expected format: APP_ID.KEY_ID:KEY_SECRET`));
+        }
+      }
       
       // Handle client ID for API key auth
       this.setClientId(options, flags)
@@ -228,6 +380,11 @@ export abstract class AblyBaseCommand extends Command {
         return null
       }
       flags['api-key'] = appAndKey.apiKey
+    }
+
+    // Show auth info at the start of the command (but not in Web CLI mode)
+    if (!this.isWebCliMode) {
+      this.showAuthInfoIfNeeded(flags)
     }
 
     const options = this.getClientOptions(flags)
@@ -287,6 +444,167 @@ export abstract class AblyBaseCommand extends Command {
         this.configManager.removeApiKey(appId)
         this.log('Invalid key removed from configuration.')
       }
+    }
+  }
+
+  // Initialize command and check restrictions
+  async init() {
+    await super.init()
+    
+    // Check if command is allowed to run in web CLI mode
+    this.checkWebCliRestrictions()
+  }
+
+  /**
+   * Determine if this command should show account/app info
+   * Based on a centralized list of exceptions
+   */
+  protected shouldShowAuthInfo(): boolean {
+    // Convert command ID to normalized format for comparison
+    const commandId = (this.id || '').replace(/ /g, ':').toLowerCase()
+    
+    // Check if command is in the exceptions list
+    for (const skipCmd of SKIP_AUTH_INFO_COMMANDS) {
+      // Check exact match
+      if (commandId === skipCmd) {
+        return false
+      }
+      
+      // Check if this is a subcommand of a skip command
+      if (commandId.startsWith(skipCmd + ':')) {
+        return false
+      }
+      
+      // Check if command ID path includes the skip command
+      // This covers case when command ID is space-separated
+      const spacedCommandId = this.id?.toLowerCase() || ''
+      const spacedSkipCmd = skipCmd.replace(/:/g, ' ').toLowerCase()
+      
+      if (spacedCommandId === spacedSkipCmd || 
+          spacedCommandId.startsWith(spacedSkipCmd + ' ')) {
+        return false
+      }
+    }
+    
+    return true
+  }
+  
+  /**
+   * This hook runs before command execution
+   * It's the oclif standard hook that runs before the run() method
+   */
+  async finally(err: Error | undefined): Promise<void> {
+    // Call super to maintain the parent class functionality
+    await super.finally(err);
+  }
+  
+  /**
+   * Display auth info at the beginning of command execution
+   * This should be called at the start of run() in command implementations 
+   */
+  protected showAuthInfoIfNeeded(flags: any = {}): void {
+    // Skip auth info if specified in the exceptions list
+    if (!this.shouldShowAuthInfo()) {
+      this.debug(`Skipping auth info display for command: ${this.id}`);
+      return;
+    }
+    
+    // Skip auth info display in Web CLI mode
+    if (this.isWebCliMode) {
+      this.debug(`Skipping auth info display in Web CLI mode: ${this.id}`);
+      return;
+    }
+    
+    // Check for flags that would affect display (json, quiet, token-only)
+    const shouldSuppress = flags.quiet || flags.format === 'json' || flags['token-only'] || this.shouldSuppressOutput(flags);
+    if (shouldSuppress) {
+      return;
+    }
+    
+    // Determine command type and show appropriate info
+    if (this.id?.startsWith('apps') || this.id?.startsWith('channels') || 
+        this.id?.startsWith('auth') || this.id?.startsWith('rooms') || 
+        this.id?.startsWith('spaces') || this.id?.startsWith('logs') ||
+        this.id?.startsWith('connections') || this.id?.startsWith('queues') ||
+        this.id?.startsWith('bench')) {
+      // Data plane commands (product API)
+      this.displayDataPlaneInfo(flags);
+    } else if (this.id?.startsWith('accounts') || this.id?.startsWith('integrations')) {
+      // Control plane commands
+      this.displayControlPlaneInfo(flags);
+    }
+  }
+  
+  /**
+   * Display the current account, app, and authentication information
+   * This provides context to the user about which resources they're working with
+   * 
+   * @param flags Command flags that may contain auth overrides
+   * @param showAppInfo Whether to show app info (for data plane commands)
+   */
+  protected displayAuthInfo(flags: any, showAppInfo: boolean = true): void {
+    // Get account info
+    const currentAccount = this.configManager.getCurrentAccount()
+    const accountName = currentAccount?.accountName || this.configManager.getCurrentAccountAlias() || 'Unknown Account'
+    const accountId = currentAccount?.accountId || ''
+    
+    // Start building the display string
+    let displayParts: string[] = []
+    
+    // Always add account info
+    displayParts.push(`${chalk.cyan('Account=')}${chalk.cyan.bold(accountName)}${accountId ? chalk.gray(` (${accountId})`) : ''}`)
+    
+    // For data plane commands, show app and auth info
+    if (showAppInfo) {
+      // Get app info
+      const appId = flags.app || this.configManager.getCurrentAppId()
+      if (appId) {
+        const appName = this.configManager.getAppName(appId) || 'Unknown App'
+        displayParts.push(`${chalk.green('App=')}${chalk.green.bold(appName)} ${chalk.gray(`(${appId})`)}`)
+        
+        // Check auth method - token or API key
+        if (flags.token) {
+          // For token auth, show truncated token
+          const truncatedToken = flags.token.length > 20 
+            ? `${flags.token.substring(0, 17)}...` 
+            : flags.token
+          displayParts.push(`${chalk.magenta('Auth=')}${chalk.magenta.bold('Token')} ${chalk.gray(`(${truncatedToken})`)}`)
+        } else {
+          // For API key auth
+          const apiKey = flags['api-key'] || this.configManager.getApiKey(appId)
+          if (apiKey) {
+            const keyId = apiKey.split(':')[0] // Extract key ID (part before colon)
+            const keyName = this.configManager.getKeyName(appId) || 'Default Key'
+            // Format the full key name (app_id.key_id)
+            const formattedKeyName = keyId.includes('.') ? keyId : `${appId}.${keyId}`
+            displayParts.push(`${chalk.yellow('Key=')}${chalk.yellow.bold(keyName)} ${chalk.gray(`(${formattedKeyName})`)}`)
+          }
+        }
+      }
+    }
+    
+    // Display the info on a single line with separator bullets
+    this.log(`${chalk.dim('Using:')} ${displayParts.join(` ${chalk.dim('•')} `)}`)
+    this.log('') // Add blank line for readability
+  }
+  
+  /**
+   * Display information for data plane (product API) commands
+   * Shows account, app, and authentication information
+   */
+  protected displayDataPlaneInfo(flags: any): void {
+    if (!flags.quiet && flags.format !== 'json' && !this.shouldSuppressOutput(flags)) {
+      this.displayAuthInfo(flags, true);
+    }
+  }
+  
+  /**
+   * Display information for control plane commands
+   * Shows only account information
+   */
+  protected displayControlPlaneInfo(flags: any): void {
+    if (!flags.quiet && flags.format !== 'json' && !this.shouldSuppressOutput(flags)) {
+      this.displayAuthInfo(flags, false);
     }
   }
 } 

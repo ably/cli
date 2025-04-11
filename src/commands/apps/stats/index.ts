@@ -78,6 +78,9 @@ export default class AppsStatsCommand extends ControlBaseCommand {
       flags.unit = 'minute'
     }
     
+    // Display authentication information
+    this.showAuthInfoIfNeeded(flags)
+    
     const controlApi = this.createControlApi(flags)
     
     // Create stats display

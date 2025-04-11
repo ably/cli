@@ -12,3 +12,4 @@ alwaysApply: true
 - The user experience of developers using this CLI really matters. We want to delight developers who use this CLI. Ensure you have helpful help messages, error messages, and offer interactive modes where applicable. Don't overload users with options, consider what data they need to know etc.
 - This project uses pnpm locally for development. Use pnpm as opposed to npm or yard.
 - After code changes are made, you must run `pnpm prepare` which builds the project, does linting, TypeScript checks, and updates the manifest which is needed by the CLI.
+- When running the CLI locally, use `bin/run.js [commands]` following `pnpm prepare` completing to simulate the `ably` command for an installed CLI. `bin/dev.js [command]` can be used to run in development mode.

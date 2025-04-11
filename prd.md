@@ -250,8 +250,21 @@ This repository should include an example of the CLI running inside of a web bro
 - The docker container will prevent the user from doing anything apart from running the `ably` command. Every other command should be rejected to prevent any abuse of these containers running when new websocket connections are established.
 - The React Ably CLI will use Xterm JS (https://xtermjs.org/docs/) to display a fully functional terminal inside the browser. Note https://github.com/Qovery/react-xtermjs may be a useful library to consider as well.
 - The React component should require two arguments, a control access token and an API key. This will map to the ABLY_ACCESS_TOKEN env var OR --access-token global argument, and ABLY_API_KEY env var or --api-key global argument.
-- The demo web example should be built with Vite and kept very simple. It should require the user to start the server with ENV vars for the ABLY_ACCESS_TOKEN and ABLY_API_KEY defined in the environment or in a .env file in that folder. The demo should exist in a folder /example/web-cli.
+- The demo web example should be built with Vite and kept very simple. It assumes the user is running the CLI in the context of a single app, account and key, and chosing a different key, app or account is handlded from within the UI of the web interface in real use case examples.
+- The environment variables ABLY_ACCESS_TOKEN and ABLY_API_KEY are defined in the environment or in a .env file in that folder. The demo should exist in a folder /example/web-cli.
 - Please include an example for how developers can use the React Web CLI component from installing it to embedding it in the README.md file. 
+- The web terminal that is run from Docker should exit immediately with a suitable error message is ABLY_ACCESS_TOKEN and ABLY_API_KEY are not valid. ABLY_API_KEY has three parts, app ID, key ID, and key secret in the format [APP_ID].[KEY_ID]:[KEY_SECRET]. Ensure all are present and exit with a suitable error message if not.
+- When the web terminal is running, the CLI should be able to detect that it is running in web mode via an environment variable set by the Docker terminal scripts. When running in this mode, the Ably CLI will have some intentionally reduced functionality to reflect the fact that switching accounts, apps, or keys is done via the UI, not the terminal, and the need for a local configuration is thus not needed. The CLI code should introduce a mechanism to clearly manage the rules of which commands are not runnable in Web CLI mode along with suitable error messages shown to the user. The commands not allowed at present are:
+  - ably accounts login -> should tell the user they are already logged in and cannot log in again via the web CLI
+  - ably accounts list -> should tell the user this feature is not available in the web CLI, please use the web dashboard at https://ably.com/accounts/
+  - ably accounts current -> should show the current account information by using the me control API request, but needs to assume a local config does not exist
+  - ably accounts logout -> should tell the user they cannot log out via the web CLI
+  - ably accounts switch -> should tell the user they cannot change accounts in the web CLI, and should use the dashboard at https://ably.com/accounts/ to switch accounts
+  - ably apps switch -> should tell the user they cannot switch apps from within the web CLI and should use the web dashboard at https://ably.com/dashboard
+  - ably apps current -> should determine the app info by using the app ID extacted from the ABLY_API_KEY, adn then using the control API to get the app information,.
+  - ably auth keys switch -> should tell the user they cannot switch apps from within the web CLI and should use the web interface to change keys
+  - ably config -> should not be visible in the list of comamnds, but if called explicitly, should tell the user that a local config is not supported in the web CLI version
+  - ably config -> should not be visible in the list of comamnds, but if called explicitly, should tell the user the same message as above for ably accounts login
 
 ## Technical Requirements
 

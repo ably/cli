@@ -34,19 +34,24 @@ export default class AppsLogsHistory extends AblyBaseCommand {
   async run(): Promise<void> {
     const {flags} = await this.parse(AppsLogsHistory)
     
-    let client: Ably.Rest | null = null
-    
     try {
       // Get API key from flags or config
       const apiKey = flags['api-key'] || await this.configManager.getApiKey()
       if (!apiKey) {
-        await this.ensureAppAndKey(flags)
-        return
+        const appAndKey = await this.ensureAppAndKey(flags)
+        if (!appAndKey) {
+          this.error('No API key provided. Please specify --api-key or set an app with "ably apps switch"')
+          return
+        }
+        flags['api-key'] = appAndKey.apiKey
       }
+      
+      // Show auth info at the start of the command
+      this.showAuthInfoIfNeeded(flags)
       
       // Create a REST client
       const options: Ably.ClientOptions = this.getClientOptions(flags)
-      client = new Ably.Rest(options)
+      const client = new Ably.Rest(options)
       
       // Get the channel
       const channel = client.channels.get('[meta]log:app')
@@ -61,47 +66,43 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       const history = await channel.history(historyParams)
       const messages = history.items
       
-      // Output results based on format
-      if (flags.json) {
+      // Display results based on format
+      if (flags.format === 'json') {
         this.log(JSON.stringify(messages, null, 2))
       } else {
         if (messages.length === 0) {
-          this.log('No app logs found in history.')
+          this.log('No application log messages found.')
           return
         }
         
-        this.log(`Found ${chalk.cyan(messages.length.toString())} app logs:`)
+        this.log(`Found ${chalk.cyan(messages.length.toString())} application log messages:`)
         this.log('')
         
-        messages.forEach((message, index) => {
-          const timestamp = message.timestamp 
-            ? new Date(message.timestamp).toISOString() 
-            : 'Unknown timestamp'
+        messages.forEach(message => {
+          // Format timestamp
+          const timestamp = new Date(message.timestamp).toISOString()
+          this.log(`${chalk.gray(timestamp)} [${chalk.yellow(message.name || 'message')}]`)
           
-          this.log(chalk.dim(`[${index + 1}] ${timestamp}`))
-          if (message.name) {
-            this.log(`Event: ${chalk.yellow(message.name)}`)
-          }
-          
-          // Display message data
-          if (message.data) {
-            this.log('Data:')
-            if (isJsonData(message.data)) {
-              this.log(formatJson(message.data))
-            } else {
+          // Format data based on type
+          if (typeof message.data === 'object') {
+            try {
+              this.log(JSON.stringify(message.data, null, 2))
+            } catch {
               this.log(String(message.data))
             }
+          } else {
+            this.log(String(message.data))
           }
           
-          this.log('')
+          this.log('') // Add a blank line between messages
         })
         
         if (messages.length === flags.limit) {
-          this.log(chalk.yellow(`Showing maximum of ${flags.limit} logs. Use --limit to show more.`))
+          this.log(chalk.yellow(`Showing maximum of ${flags.limit} messages. Use --limit to show more.`))
         }
       }
     } catch (error) {
-      this.error(`Error retrieving app logs: ${error instanceof Error ? error.message : String(error)}`)
+      this.error(`Error retrieving application logs: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 } 

@@ -7,6 +7,25 @@ export HISTFILESIZE=0
 export HISTCONTROL=ignoreboth:erasedups
 history -c
 
+# Validate required environment variables
+if [[ -z "$ABLY_API_KEY" ]]; then
+  echo -e "\033[31mError: ABLY_API_KEY environment variable is not set.\033[0m"
+  echo "The ABLY_API_KEY must be provided in the format [APP_ID].[KEY_ID]:[KEY_SECRET]."
+  exit 1
+fi
+
+# Validate API key format
+if ! [[ "$ABLY_API_KEY" =~ ^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$ ]]; then
+  echo -e "\033[31mError: Invalid ABLY_API_KEY format.\033[0m"
+  echo "The ABLY_API_KEY must be provided in the format [APP_ID].[KEY_ID]:[KEY_SECRET]."
+  exit 1
+fi
+
+if [[ -z "$ABLY_ACCESS_TOKEN" ]]; then
+  echo -e "\033[31mError: ABLY_ACCESS_TOKEN environment variable is not set.\033[0m"
+  exit 1
+fi
+
 # Set critical environment variables for proper UTF-8 handling and terminal behavior
 export TERM=${TERM:-xterm-256color}
 export LANG=${LANG:-en_US.UTF-8}

@@ -1,21 +1,67 @@
+import { Flags } from '@oclif/core'
 import { AblyBaseCommand } from './base-command.js'
 import { ControlApi } from './services/control-api.js'
 import chalk from 'chalk'
 
 export abstract class ControlBaseCommand extends AblyBaseCommand {
+  // Add flags specific to control API commands
+  static globalFlags = {
+    ...AblyBaseCommand.globalFlags,
+    // Other Control API specific flags can be added here
+  }
+
+  /**
+   * Create a Control API instance for making requests
+   */
   protected createControlApi(flags: any): ControlApi {
-    // Try to get access token from environment variable, then flags, then from config
-    const accessToken = process.env.ABLY_ACCESS_TOKEN || flags['access-token'] || this.configManager.getAccessToken()
-
-    // Validate access token is provided
+    let accessToken = flags['access-token'] || process.env.ABLY_ACCESS_TOKEN
+    
     if (!accessToken) {
-      this.error(`${chalk.yellow('An access token is required for Control API operations')}.\nPlease log in first with "${chalk.cyan('ably accounts login')}" (recommended approach).\nAlternatively you can provide an access token with the ${chalk.cyan('--access-token')} argument or set the ${chalk.cyan('ABLY_ACCESS_TOKEN')} environment variable.`)
+      const account = this.configManager.getCurrentAccount()
+      if (!account) {
+        this.error(`No access token provided. Please specify --access-token or configure an account with "ably accounts login".`)
+      }
+      accessToken = account.accessToken
     }
-
+    
+    if (!accessToken) {
+      this.error(`No access token provided. Please specify --access-token or configure an account with "ably accounts login".`)
+    }
+    
     return new ControlApi({
       accessToken,
-      controlHost: flags['control-host'],
+      controlHost: flags['control-host']
     })
+  }
+  
+  /**
+   * Helper method to show account info for control plane commands
+   * This is called by the child class when it wants to show account info
+   */
+  protected showControlPlaneInfo(flags: any): void {
+    // Use the base class method for consistent display
+    this.showAuthInfoIfNeeded(flags)
+  }
+  
+  /**
+   * Run the Control API command with standard error handling
+   */
+  protected async runControlCommand<T>(
+    flags: any,
+    apiCall: (api: ControlApi) => Promise<T>,
+    errorMessage = 'Error executing command'
+  ): Promise<T | null> {
+    try {
+      // Display account info at start of command
+      this.showAuthInfoIfNeeded(flags)
+      
+      // Create API and execute the command
+      const api = this.createControlApi(flags)
+      return await apiCall(api)
+    } catch (error) {
+      this.error(`${errorMessage}: ${error instanceof Error ? error.message : String(error)}`)
+      return null
+    }
   }
 
   protected formatDate(timestamp: number): string {

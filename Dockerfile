@@ -28,6 +28,9 @@ USER appuser
 # Define default working directory
 WORKDIR /usr/src/app
 
+# Set environment variable to indicate web CLI mode
+ENV ABLY_WEB_CLI_MODE=true
+
 # Ensure PATH includes npm bins and our scripts directory
 ENV PATH=/usr/local/lib/node_modules/.bin:/scripts:$PATH
 

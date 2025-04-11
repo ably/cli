@@ -33,6 +33,9 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(IntegrationsGetCommand)
     
+    // Display authentication information
+    this.showAuthInfoIfNeeded(flags)
+    
     const controlApi = this.createControlApi(flags)
     
     try {
