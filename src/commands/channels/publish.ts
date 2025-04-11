@@ -1,6 +1,7 @@
 import {Args, Flags} from '@oclif/core'
 import * as Ably from 'ably'
 import {AblyBaseCommand} from '../../base-command.js'
+import chalk from 'chalk'
 
 export default class ChannelsPublish extends AblyBaseCommand {
   static override description = 'Publish a message to an Ably channel'
@@ -58,6 +59,9 @@ export default class ChannelsPublish extends AblyBaseCommand {
   async run(): Promise<void> {
     const {args, flags} = await this.parse(ChannelsPublish)
     
+    // Show authentication information
+    this.showAuthInfoIfNeeded(flags)
+    
     // Use REST by default now - only create Realtime client if explicitly requested
     if (flags.transport === 'realtime') {
       await this.publishWithRealtime(args, flags)
@@ -68,12 +72,26 @@ export default class ChannelsPublish extends AblyBaseCommand {
   
   async publishWithRest(args: any, flags: any): Promise<void> {
     try {
+      // First ensure the app and key are set up properly for consistent auth display
+      if (!flags.token && !flags['api-key'] && !process.env.ABLY_API_KEY) {
+        const appAndKey = await this.ensureAppAndKey(flags)
+        if (!appAndKey) {
+          this.error(`${chalk.yellow('No app or API key configured for this command')}.\nPlease log in first with "${chalk.cyan('ably accounts login')}" (recommended approach).\nAlternatively you can provide an API key with the ${chalk.cyan('--api-key')} argument or set the ${chalk.cyan('ABLY_API_KEY')} environment variable.`)
+          return
+        }
+        flags['api-key'] = appAndKey.apiKey
+      }
+
       // Create REST client with the same options as we would for Realtime
       const options = this.getClientOptions(flags)
       const rest = new Ably.Rest(options)
       
       // Get the channel
       const channel = rest.channels.get(args.channel)
+      
+      if (!this.shouldSuppressOutput(flags)) {
+        this.log('Using REST transport')
+      }
       
       // Validate count and delay
       const count = Math.max(1, flags.count)
@@ -89,9 +107,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       
       // If sending multiple messages, show a progress indication
       if (count > 1 && !this.shouldSuppressOutput(flags)) {
-        this.log(`Publishing ${count} messages with ${delay}ms delay using REST transport...`)
-      } else if (!this.shouldSuppressOutput(flags)) {
-        this.log('Using REST transport')
+        this.log(`Publishing ${count} messages with ${delay}ms delay...`)
       }
       
       // Track publish progress
@@ -147,17 +163,20 @@ export default class ChannelsPublish extends AblyBaseCommand {
             message.encoding = flags.encoding
           }
 
-          // Publish the message without awaiting
-          channel.publish(message)
-            .then(() => {
-              publishedCount++
-            })
-            .catch(err => {
-              errorCount++
-              if (!this.shouldSuppressOutput(flags)) {
-                this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
-              }
-            })
+          try {
+            // Publish the message
+            await channel.publish(message)
+            publishedCount++
+            
+            if (!this.shouldSuppressOutput(flags)) {
+              this.log(`${chalk.green('✓')} Message published successfully.`)
+            }
+          } catch (err) {
+            errorCount++
+            if (!this.shouldSuppressOutput(flags)) {
+              this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
           
           // Delay before sending next message if not the last one
           if (i < count - 1 && delay > 0) {
@@ -180,7 +199,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
         })
         
         if (!this.shouldSuppressOutput(flags)) {
-          this.log(`${publishedCount}/${count} messages published successfully (${errorCount} errors).`)
+          this.log(`${chalk.green('✓')} ${publishedCount}/${count} messages published successfully${errorCount > 0 ? ` (${chalk.red(errorCount)} errors)` : ''}.`)
         }
       } else {
         // Single message - await the publish for better error handling
@@ -225,7 +244,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
           // Publish the message
           await channel.publish(message)
           if (!this.shouldSuppressOutput(flags)) {
-            this.log('Message published successfully.')
+            this.log(`${chalk.green('✓')} Message published successfully.`)
           }
         } catch (error) {
           this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
@@ -326,17 +345,16 @@ export default class ChannelsPublish extends AblyBaseCommand {
             message.encoding = flags.encoding
           }
 
-          // Publish the message without awaiting
-          channel.publish(message)
+          // Publish the message
+          await channel.publish(message)
             .then(() => {
-              publishedCount++
-            })
-            .catch(err => {
-              errorCount++
               if (!this.shouldSuppressOutput(flags)) {
-                this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+                this.log(`${chalk.green('✓')} Message published successfully.`);
               }
             })
+            .catch(error => {
+              this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
+            });
           
           // Delay before sending next message if not the last one
           if (i < count - 1 && delay > 0) {
@@ -359,7 +377,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
         })
         
         if (!this.shouldSuppressOutput(flags)) {
-          this.log(`${publishedCount}/${count} messages published successfully (${errorCount} errors).`)
+          this.log(`${chalk.green('✓')} ${publishedCount}/${count} messages published successfully${errorCount > 0 ? ` (${chalk.red(errorCount)} errors)` : ''}.`)
         }
       } else {
         // Single message - await the publish for better error handling
@@ -403,11 +421,16 @@ export default class ChannelsPublish extends AblyBaseCommand {
 
           // Publish the message
           await channel.publish(message)
-          if (!this.shouldSuppressOutput(flags)) {
-            this.log('Message published successfully.')
-          }
+            .then(() => {
+              if (!this.shouldSuppressOutput(flags)) {
+                this.log(`${chalk.green('✓')} Message published successfully.`);
+              }
+            })
+            .catch(error => {
+              this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
+            });
         } catch (error) {
-          this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+          this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
       

@@ -1,17 +1,16 @@
-import { Flags } from '@oclif/core'
 import { ControlBaseCommand } from '../../control-base-command.js'
 import chalk from 'chalk'
+import { Flags } from '@oclif/core'
 
-export default class AppsListCommand extends ControlBaseCommand {
-  static description = 'List all apps'
+export default class AppsList extends ControlBaseCommand {
+  static override description = 'List all apps in the current account'
 
-  static examples = [
-    '$ ably apps list',
-    '$ ably apps list --access-token "YOUR_ACCESS_TOKEN"',
-    '$ ably apps list --format json',
+  static override examples = [
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --format json'
   ]
 
-  static flags = {
+  static override flags = {
     ...ControlBaseCommand.globalFlags,
     'format': Flags.string({
       description: 'Output format (json or pretty)',
@@ -21,51 +20,67 @@ export default class AppsListCommand extends ControlBaseCommand {
   }
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(AppsListCommand)
+    const { flags } = await this.parse(AppsList)
     
-    const controlApi = this.createControlApi(flags)
-    
-    try {
-      const apps = await controlApi.listApps()
-      
-      // Get the current app ID for highlighting
-      const currentAppId = this.configManager.getCurrentAppId()
-      
-      if (flags.format === 'json') {
-        // Add a "current" flag to the app if it's the currently selected one
-        const appsWithCurrent = apps.map(app => ({
-          ...app,
-          current: app.id === currentAppId
-        }))
-        this.log(JSON.stringify(appsWithCurrent))
-      } else {
+    await this.runControlCommand(
+      flags,
+      async (controlApi) => {
+        const apps = await controlApi.listApps()
+        
+        // Get current app ID from config
+        const currentAppId = this.configManager.getCurrentAppId()
+        
+        if (flags.format === 'json') {
+          // Mark current app in JSON output
+          const appsWithCurrentFlag = apps.map(app => ({
+            ...app,
+            isCurrent: app.id === currentAppId
+          }))
+          
+          this.log(JSON.stringify(appsWithCurrentFlag, null, 2))
+          return
+        }
+        
         if (apps.length === 0) {
-          this.log('No apps found')
+          this.log('No apps found in this account.')
           return
         }
         
         this.log(`Found ${apps.length} apps:\n`)
         
-        apps.forEach(app => {
+        // Sort apps so current app is first, then alphabetically by name
+        const sortedApps = [...apps].sort((a, b) => {
+          // Current app first
+          if (a.id === currentAppId) return -1
+          if (b.id === currentAppId) return 1
+          
+          // Then alphabetically by name
+          return (a.name || '').localeCompare(b.name || '')
+        })
+        
+        sortedApps.forEach(app => {
           const isCurrent = app.id === currentAppId
           const prefix = isCurrent ? chalk.green('▶ ') : '  '
-          const titleStyle = isCurrent ? chalk.green.bold : chalk.bold
+          const nameStyle = isCurrent ? chalk.green.bold : chalk.white
           
-          this.log(prefix + titleStyle(`App ID: ${app.id}`) + (isCurrent ? chalk.green(' (current)') : ''))
-          this.log(`  Name: ${app.name}`)
+          this.log(`${prefix}App ID: ${nameStyle(app.id)}${isCurrent ? ' (current)' : ''}`)
+          this.log(`  Name: ${app.name || 'Unnamed App'}`)
           this.log(`  Status: ${app.status}`)
           this.log(`  Account ID: ${app.accountId}`)
           this.log(`  TLS Only: ${app.tlsOnly ? 'Yes' : 'No'}`)
-          this.log(`  Created: ${this.formatDate(app.created)}`)
-          this.log(`  Updated: ${this.formatDate(app.modified)}`)
-          if (app.apnsUsesSandboxCert !== undefined) {
-            this.log(`  APNS Uses Sandbox Cert: ${app.apnsUsesSandboxCert ? 'Yes' : 'No'}`)
+          
+          if (app.created) {
+            this.log(`  Created: ${this.formatDate(app.created)}`)
           }
+          
+          if (app.modified) {
+            this.log(`  Updated: ${this.formatDate(app.modified)}`)
+          }
+          
           this.log('') // Add a blank line between apps
         })
-      }
-    } catch (error) {
-      this.error(`Error listing apps: ${error instanceof Error ? error.message : String(error)}`)
-    }
+      },
+      'Error listing apps'
+    )
   }
 } 

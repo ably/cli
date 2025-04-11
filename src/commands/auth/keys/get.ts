@@ -33,6 +33,9 @@ export default class KeysGetCommand extends ControlBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(KeysGetCommand)
     
+    // Display authentication information
+    this.showAuthInfoIfNeeded(flags)
+    
     const controlApi = this.createControlApi(flags)
     
     let appId = flags.app || this.configManager.getCurrentAppId()

@@ -33,7 +33,7 @@ export default class ChannelsList extends AblyBaseCommand {
   async run(): Promise<void> {
     const { flags } = await this.parse(ChannelsList)
 
-    // Create the Ably client
+    // Create the Ably client - this will handle displaying data plane info
     const client = await this.createAblyClient(flags)
     if (!client) return
 

@@ -51,9 +51,11 @@ export default class ChannelsHistory extends AblyBaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsHistory)
-    
     const channelName = args.channel
-    let client: Ably.Rest | null = null
+    let client: Ably.Rest
+    
+    // Show authentication information
+    this.showAuthInfoIfNeeded(flags)
     
     try {
       // Get API key from flags or config

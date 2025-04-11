@@ -49,6 +49,9 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
   async run(): Promise<void> {
     const {args, flags} = await this.parse(ChannelsBatchPublish)
     
+    // Show authentication information
+    this.showAuthInfoIfNeeded(flags)
+    
     try {
       // Create REST client with the options
       const options = this.getClientOptions(flags)

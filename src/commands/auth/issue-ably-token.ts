@@ -56,6 +56,11 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
     const { appId, apiKey } = appAndKey
     
     try {
+      // Display auth info if not token-only output
+      if (!flags['token-only']) {
+        this.showAuthInfoIfNeeded(flags)
+      }
+      
       // Parse capabilities
       let capabilities
       try {

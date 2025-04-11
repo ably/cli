@@ -42,6 +42,9 @@ export default class AppsSetApnsP12Command extends ControlBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppsSetApnsP12Command)
     
+    // Display authentication information
+    this.showAuthInfoIfNeeded(flags)
+    
     const controlApi = this.createControlApi(flags)
     
     try {
