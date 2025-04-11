@@ -319,7 +319,7 @@ Get account stats with optional live updates
 USAGE
   $ ably accounts stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
     [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit
-    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>]
+    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>] [--debug]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -327,6 +327,7 @@ FLAGS
   --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --debug                 Show debug information for live stats polling
   --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
   --format=<option>       [default: pretty] Output format
@@ -728,7 +729,7 @@ _See code: [src/commands/apps/delete.ts](https://github.com/ably/cli/blob/v0.2.8
 
 ## `ably apps list`
 
-List all apps
+List all apps in the current account
 
 ```
 USAGE
@@ -748,12 +749,10 @@ FLAGS
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  List all apps
+  List all apps in the current account
 
 EXAMPLES
   $ ably apps list
-
-  $ ably apps list --access-token "YOUR_ACCESS_TOKEN"
 
   $ ably apps list --format json
 ```
@@ -901,7 +900,7 @@ Get app stats with optional live updates
 USAGE
   $ ably apps stats [ID] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
     [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit
-    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>]
+    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>] [--debug]
 
 ARGUMENTS
   ID  App ID to get stats for (uses default app if not provided)
@@ -912,6 +911,7 @@ FLAGS
   --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --debug                 Show debug information for live stats polling
   --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
   --format=<option>       [default: pretty] Output format
@@ -2143,7 +2143,7 @@ View connection statistics for an Ably app
 USAGE
   $ ably connections stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
     [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit
-    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>]
+    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>] [--debug]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2151,6 +2151,7 @@ FLAGS
   --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --debug                 Show debug information for live stats polling
   --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
   --format=<option>       [default: pretty] Output format

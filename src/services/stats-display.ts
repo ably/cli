@@ -6,6 +6,8 @@ export interface StatsDisplayOptions {
   format?: 'json' | 'pretty'
   unit?: 'minute' | 'hour' | 'day' | 'month'
   isAccountStats?: boolean
+  intervalSeconds?: number
+  isConnectionStats?: boolean
 }
 
 export interface StatsDisplayData {
@@ -14,6 +16,10 @@ export interface StatsDisplayData {
     [key: string]: any
   }
   unit?: string
+  inProgress?: string
+  schema?: string
+  appId?: string
+  accountId?: string
 }
 
 export class StatsDisplay {
@@ -182,47 +188,275 @@ export class StatsDisplay {
     }
   }
 
+  private parseIntervalId(intervalId: string, unit: string): { start: Date, period: string } {
+    // Parse intervalId which is in format yyyy-mm-dd:hh:mm for minute or yyyy-mm-dd:hh for hour, etc.
+    let date: Date
+    let period: string
+    
+    try {
+      if (unit === 'minute') {
+        // Format: yyyy-mm-dd:hh:mm
+        const parts = intervalId.split(':')
+        if (parts.length >= 3) {
+          const [year, month, day] = parts[0].split('-').map(Number)
+          const hour = parseInt(parts[1])
+          const minute = parseInt(parts[2])
+          date = new Date(Date.UTC(year, month - 1, day, hour, minute))
+          
+          const utcTime = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} UTC`
+          const localTime = date.toLocaleString()
+          period = `${utcTime} (local: ${localTime}) - 1 minute interval`
+        } else {
+          // Try alternative format with colon separator: yyyy-mm-dd:hh:mm
+          const match = intervalId.match(/^(\d{4})-(\d{2})-(\d{2}):(\d{2}):(\d{2})$/)
+          if (match) {
+            const [_, year, month, day, hour, minute] = match.map(Number)
+            date = new Date(Date.UTC(year, month - 1, day, hour, minute))
+            
+            const utcTime = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} UTC`
+            const localTime = date.toLocaleString()
+            period = `${utcTime} (local: ${localTime}) - 1 minute interval`
+          } else {
+            throw new Error('Invalid minute format')
+          }
+        }
+      } else if (unit === 'hour') {
+        // Format: yyyy-mm-dd:hh
+        const match = intervalId.match(/^(\d{4})-(\d{2})-(\d{2}):(\d{2})$/)
+        if (match) {
+          const [_, year, month, day, hour] = match.map(Number)
+          date = new Date(Date.UTC(year, month - 1, day, hour))
+          
+          const utcTime = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:00 UTC`
+          const localTime = date.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit' })
+          period = `${utcTime} (local: ${localTime}) - 1 hour interval`
+        } else {
+          throw new Error('Invalid hour format')
+        }
+      } else if (unit === 'day') {
+        // Format: yyyy-mm-dd or yyyy-mm-dd:00
+        let match = intervalId.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+        if (!match) {
+          // Try with hour component (e.g., 2025-04-11:00)
+          match = intervalId.match(/^(\d{4})-(\d{2})-(\d{2}):(\d{2})$/)
+        }
+        
+        if (match) {
+          const [_, year, month, day] = match.map(Number)
+          date = new Date(Date.UTC(year, month - 1, day))
+          
+          const utcTime = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')} UTC`
+          const localTime = date.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric' })
+          period = `${utcTime} (local: ${localTime}) - 1 day interval`
+        } else {
+          throw new Error('Invalid day format')
+        }
+      } else if (unit === 'month') {
+        // Format: yyyy-mm or yyyy-mm-dd:00 where dd is always 01
+        let match = intervalId.match(/^(\d{4})-(\d{2})$/)
+        if (!match) {
+          // Try with day and hour component (e.g., 2025-04-01:00)
+          match = intervalId.match(/^(\d{4})-(\d{2})-\d{2}:(\d{2})$/)
+        }
+        
+        if (match) {
+          const year = parseInt(match[1])
+          const month = parseInt(match[2])
+          date = new Date(Date.UTC(year, month - 1, 1))
+          
+          const utcTime = `${year}-${month.toString().padStart(2, '0')} UTC`
+          const localTime = date.toLocaleString([], { year: 'numeric', month: 'long' })
+          period = `${utcTime} (local: ${localTime}) - 1 month interval`
+        } else {
+          throw new Error('Invalid month format')
+        }
+      } else {
+        throw new Error('Unknown unit format')
+      }
+    } catch (error) {
+      // If parsing fails, use a more direct approach
+      console.log(chalk.yellow(`Note: Could not parse intervalId '${intervalId}' with unit '${unit}'. Using original format.`))
+      date = new Date()
+      
+      // Format based on the unit
+      const utcNote = chalk.cyan('UTC')
+      if (unit === 'minute') {
+        period = `${intervalId} ${utcNote} - 1 minute interval`
+      } else if (unit === 'hour') {
+        period = `${intervalId} ${utcNote} - 1 hour interval`
+      } else if (unit === 'day') {
+        period = `${intervalId} ${utcNote} - 1 day interval`
+      } else if (unit === 'month') {
+        period = `${intervalId} ${utcNote} - 1 month interval`
+      } else {
+        period = `${intervalId} - Unknown interval format`
+      }
+    }
+    
+    return { start: date, period }
+  }
+
+  private calculateTimeToNextInterval(): number {
+    const now = new Date()
+    const nextMinute = new Date(now)
+    nextMinute.setSeconds(0)
+    nextMinute.setMilliseconds(0)
+    nextMinute.setMinutes(nextMinute.getMinutes() + 1)
+    return Math.ceil((nextMinute.getTime() - now.getTime()) / 1000)
+  }
+
   public display(stats: StatsDisplayData): void {
     if (this.options.format === 'json') {
       console.log(JSON.stringify(stats))
       return
     }
 
-    // Skip if no valid stats or no change from last update
-    if (!stats || (this.lastStats && JSON.stringify(this.lastStats) === JSON.stringify(stats))) {
+    // For JSON format or no stats, just return
+    if (!stats) {
       return
     }
-
-    this.lastStats = stats
-    this.updateCumulativeStats(stats)
-    this.calculatePeakRates(stats)
 
     const entries = stats.entries || {}
     const getEntry = (key: string, defaultVal = 0) => entries[key] ?? defaultVal
 
-    // Clear the console for live updates
     if (this.options.live) {
+      // For live stats, we need to update the cumulative totals if stats have changed
+      const statsChanged = !this.lastStats || JSON.stringify(this.lastStats.entries) !== JSON.stringify(stats.entries)
+      
+      if (statsChanged) {
+        this.lastStats = stats
+        this.updateCumulativeStats(stats)
+        this.calculatePeakRates(stats)
+      }
+      
+      // Always clear the console and redisplay for live updates, even if just updating the timer
       process.stdout.write('\x1Bc')
+      
+      if (this.options.isConnectionStats) {
+        this.displayConnectionLiveStats(stats, getEntry)
+      } else {
+        this.displayLiveStats(stats, getEntry)
+      }
+    } else {
+      // Skip if it's the same stats we displayed before (for historical stats only)
+      if (this.lastStats && JSON.stringify(this.lastStats) === JSON.stringify(stats)) {
+        return
+      }
+      
+      // For historical stats, just display the data for this interval
+      this.lastStats = stats
+      this.displayHistoricalStats(stats, getEntry)
     }
+  }
 
+  private displayHistoricalStats(stats: StatsDisplayData, getEntry: (key: string, defaultVal?: number) => number): void {
+    const unit = stats.unit || this.options.unit || 'minute'
+    const intervalInfo = stats.intervalId ? this.parseIntervalId(stats.intervalId, unit) : { start: new Date(), period: 'Unknown period' }
+    
+    console.log(chalk.bold(`Stats for ${intervalInfo.period}`))
+    
+    if (this.options.isAccountStats) {
+      // Account-specific metrics
+      this.displayAccountHistoricalMetrics(stats, getEntry)
+    } else {
+      // App-specific metrics
+      this.displayAppHistoricalMetrics(stats, getEntry)
+    }
+    
+    console.log('') // Empty line between intervals
+  }
+
+  private displayConnectionLiveStats(stats: StatsDisplayData, getEntry: (key: string, defaultVal?: number) => number): void {
     // Display header
-    console.log(chalk.bold('Ably Stats Dashboard'))
-    if (this.options.live) {
-      console.log(chalk.dim('Live updates every 6 seconds. Press Ctrl+C to exit.\n'))
-    }
+    console.log(chalk.bold('Ably Connection Stats Dashboard - Live Updates'))
+    console.log(chalk.dim(`Polling every ${this.options.intervalSeconds || 6} seconds. Press Ctrl+C to exit.\n`))
 
-    // Display time information
+    // Get current minute interval and seconds to next interval
     const now = new Date()
-    console.log(chalk.cyan(`Time: ${now.toLocaleString()}`))
+    const secondsToNextMinute = this.calculateTimeToNextInterval()
+    
+    // Display time information in a single, clear line
+    const currentUtcTime = now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+    const currentLocalTime = now.toLocaleString()
+    console.log(chalk.cyan(`Current time: ${currentUtcTime} (local: ${currentLocalTime})`))
+    console.log(chalk.cyan(`Stats interval resets in: ${secondsToNextMinute} seconds`))
+    
     if (this.startTime) {
-      console.log(chalk.cyan(`Elapsed: ${this.formatElapsedTime()}`))
+      console.log(chalk.cyan(`Monitoring since: ${this.startTime.toLocaleString()} (${this.formatElapsedTime()})`))
     }
     console.log('')
 
-    // Display current stats
-    console.log(chalk.bold('Current Stats:'))
+    // Connection stats - simplified version with just the essential metrics
+    console.log(chalk.bold('Current Minute Stats:'))
+    
+    // Connections - simplified
+    console.log(chalk.yellow('Connections:'), 
+      `${this.formatNumber(getEntry('connections.all.peak'))} peak, ` +
+      `${this.formatNumber(getEntry('connections.all.mean'))} current`
+    )
+    
+    // Channels - simplified
+    console.log(chalk.green('Channels:'), 
+      `${this.formatNumber(getEntry('channels.peak'))} peak`
+    )
+    
+    // Messages - simplified
+    console.log(chalk.blue('Messages:'), 
+      `${this.formatNumber(getEntry('messages.inbound.all.messages.count'))} published, ` +
+      `${this.formatNumber(getEntry('messages.outbound.all.messages.count'))} delivered`
+    )
+    
+    console.log('')
+
+    // Display simplified cumulative stats
+    console.log(chalk.bold('Cumulative Stats (since monitoring started):'))
+    this.displayConnectionCumulativeStats()
+  }
+
+  private displayConnectionCumulativeStats(): void {
+    const avgRates = this.calculateAverageRates()
+    
+    // Connections stats - simplified
+    console.log(chalk.yellow('Connections:'), 
+      `${this.formatNumber(this.cumulativeStats.connections.peak)} peak`
+    )
+    
+    // Channels stats - simplified
+    console.log(chalk.green('Channels:'), 
+      `${this.formatNumber(this.cumulativeStats.channels.peak)} peak`
+    )
+    
+    // Messages stats - simplified
+    console.log(chalk.blue('Messages:'), 
+      `${this.formatNumber(this.cumulativeStats.messages.published)} published, ` +
+      `${this.formatNumber(this.cumulativeStats.messages.delivered)} delivered`
+    )
+  }
+
+  private displayLiveStats(stats: StatsDisplayData, getEntry: (key: string, defaultVal?: number) => number): void {
+    // Display header
+    console.log(chalk.bold('Ably Stats Dashboard - Live Updates'))
+    console.log(chalk.dim(`Polling every ${this.options.intervalSeconds || 6} seconds. Press Ctrl+C to exit.\n`))
+
+    // Get current minute interval and seconds to next interval
+    const now = new Date()
+    const secondsToNextMinute = this.calculateTimeToNextInterval()
+    
+    // Display time information in a single, clear line
+    const currentUtcTime = now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
+    const currentLocalTime = now.toLocaleString()
+    console.log(chalk.cyan(`Current time: ${currentUtcTime} (local: ${currentLocalTime})`))
+    console.log(chalk.cyan(`Stats interval resets in: ${secondsToNextMinute} seconds`))
+    
+    if (this.startTime) {
+      console.log(chalk.cyan(`Monitoring since: ${this.startTime.toLocaleString()} (${this.formatElapsedTime()})`))
+    }
+    console.log('')
+
+    // Display current stats (for the current minute interval)
+    console.log(chalk.bold('Current Minute Stats:'))
     if (this.options.isAccountStats) {
-      // For account stats, show both current values and peak rates
+      // Account-specific metrics for live view (including peak rates)
       console.log(chalk.blue('Messages:'), 
         `${this.formatNumber(getEntry('messages.inbound.all.messages.count'))} published, ` +
         `${this.formatNumber(getEntry('messages.outbound.all.messages.count'))} delivered ` +
@@ -230,11 +464,14 @@ export class StatsDisplay {
       )
       console.log(chalk.yellow('Connections:'), 
         `${this.formatNumber(getEntry('connections.all.peak'))} peak, ` +
-        `${this.formatNumber(getEntry('connections.all.mean'))} current ` +
+        `${this.formatNumber(getEntry('connections.all.min'))} min, ` +
+        `${this.formatNumber(getEntry('connections.all.mean'))} current, ` +
+        `${this.formatNumber(getEntry('connections.all.opened'))} opened ` +
         `(${this.formatRate(getEntry('peakRates.connections'))} new conns/s peak)`
       )
       console.log(chalk.green('Channels:'), 
         `${this.formatNumber(getEntry('channels.peak'))} peak, ` +
+        `${this.formatNumber(getEntry('channels.min'))} min, ` +
         `${this.formatNumber(getEntry('channels.mean'))} current ` +
         `(${this.formatRate(getEntry('peakRates.channels'))} new chans/s peak)`
       )
@@ -251,15 +488,104 @@ export class StatsDisplay {
         `(${this.formatRate(getEntry('peakRates.tokenRequests'))} tokens/s peak)`
       )
     } else {
-      // For app stats, show current period peak values
-      console.log(chalk.yellow('Connections:'), `${this.formatNumber(getEntry('connections.all.peak'))} peak`)
-      console.log(chalk.green('Channels:'), `${this.formatNumber(getEntry('channels.peak'))} peak`)
-      console.log(chalk.blue('Messages:'), `${this.formatNumber(getEntry('messages.inbound.all.messages.count'))} published, ${this.formatNumber(getEntry('messages.outbound.all.messages.count'))} delivered`)
+      // App-specific metrics for live view (more detailed, like account stats but without peak rates)
+      console.log(chalk.yellow('Connections:'), 
+        `${this.formatNumber(getEntry('connections.all.peak'))} peak, ` + 
+        `${this.formatNumber(getEntry('connections.all.min'))} min, ` +
+        `${this.formatNumber(getEntry('connections.all.mean'))} mean, ` +
+        `${this.formatNumber(getEntry('connections.all.opened'))} opened, ` +
+        `${this.formatNumber(getEntry('connections.all.refused'))} refused`
+      )
+      console.log(chalk.green('Channels:'), 
+        `${this.formatNumber(getEntry('channels.peak'))} peak, ` +
+        `${this.formatNumber(getEntry('channels.min'))} min, ` +
+        `${this.formatNumber(getEntry('channels.mean'))} mean, ` +
+        `${this.formatNumber(getEntry('channels.opened'))} opened`
+      )
+      console.log(chalk.blue('Messages:'), 
+        `${this.formatNumber(getEntry('messages.all.all.count'))} total, ` +
+        `${this.formatNumber(getEntry('messages.inbound.all.messages.count'))} published, ` +
+        `${this.formatNumber(getEntry('messages.outbound.all.messages.count'))} delivered, ` +
+        `${this.formatBytes(getEntry('messages.all.all.data'))} data volume`
+      )
+      console.log(chalk.magenta('API Requests:'), 
+        `${this.formatNumber(getEntry('apiRequests.all.succeeded'))} succeeded, ` +
+        `${this.formatNumber(getEntry('apiRequests.all.failed'))} failed, ` +
+        `${this.formatNumber(getEntry('apiRequests.all.refused'))} refused, ` +
+        `${this.formatNumber(getEntry('apiRequests.all.succeeded') + getEntry('apiRequests.all.failed') + getEntry('apiRequests.all.refused'))} total`
+      )
+      console.log(chalk.cyan('Token Requests:'), 
+        `${this.formatNumber(getEntry('apiRequests.tokenRequests.succeeded'))} succeeded, ` +
+        `${this.formatNumber(getEntry('apiRequests.tokenRequests.failed'))} failed, ` +
+        `${this.formatNumber(getEntry('apiRequests.tokenRequests.refused'))} refused`
+      )
     }
     console.log('')
 
-    // Display cumulative stats
-    console.log(chalk.bold('Cumulative Stats:'))
+    // Display cumulative stats (since live monitoring started)
+    console.log(chalk.bold('Cumulative Stats (since monitoring started):'))
+    this.displayCumulativeStats()
+  }
+
+  private displayAppHistoricalMetrics(stats: StatsDisplayData, getEntry: (key: string, defaultVal?: number) => number): void {
+    // Connections
+    console.log(chalk.yellow('Connections:'), 
+      `${this.formatNumber(getEntry('connections.all.peak'))} peak, ` +
+      `${this.formatNumber(getEntry('connections.all.min'))} min, ` +
+      `${this.formatNumber(getEntry('connections.all.mean'))} mean, ` +
+      `${this.formatNumber(getEntry('connections.all.opened'))} opened, ` +
+      `${this.formatNumber(getEntry('connections.all.refused'))} refused, ` +
+      `${this.formatNumber(getEntry('connections.all.count'))} active`
+    )
+    
+    // Channels
+    console.log(chalk.green('Channels:'), 
+      `${this.formatNumber(getEntry('channels.peak'))} peak, ` +
+      `${this.formatNumber(getEntry('channels.min'))} min, ` +
+      `${this.formatNumber(getEntry('channels.mean'))} mean, ` +
+      `${this.formatNumber(getEntry('channels.opened'))} opened, ` +
+      `${this.formatNumber(getEntry('channels.refused'))} refused, ` +
+      `${this.formatNumber(getEntry('channels.count'))} active`
+    )
+    
+    // Messages
+    console.log(chalk.blue('Messages:'), 
+      `${this.formatNumber(getEntry('messages.all.all.count'))} total, ` +
+      `${this.formatNumber(getEntry('messages.inbound.all.messages.count'))} published, ` +
+      `${this.formatNumber(getEntry('messages.outbound.all.messages.count'))} delivered, ` +
+      `${this.formatBytes(getEntry('messages.all.all.data'))} data volume`
+    )
+    
+    // API Requests
+    console.log(chalk.magenta('API Requests:'), 
+      `${this.formatNumber(getEntry('apiRequests.all.succeeded'))} succeeded, ` +
+      `${this.formatNumber(getEntry('apiRequests.all.failed'))} failed, ` +
+      `${this.formatNumber(getEntry('apiRequests.all.refused'))} refused, ` +
+      `${this.formatNumber(getEntry('apiRequests.all.succeeded') + getEntry('apiRequests.all.failed') + getEntry('apiRequests.all.refused'))} total`
+    )
+    
+    // Token Requests
+    console.log(chalk.cyan('Token Requests:'), 
+      `${this.formatNumber(getEntry('apiRequests.tokenRequests.succeeded'))} succeeded, ` +
+      `${this.formatNumber(getEntry('apiRequests.tokenRequests.failed'))} failed, ` +
+      `${this.formatNumber(getEntry('apiRequests.tokenRequests.refused'))} refused`
+    )
+  }
+
+  private displayAccountHistoricalMetrics(stats: StatsDisplayData, getEntry: (key: string, defaultVal?: number) => number): void {
+    // Include account-specific metrics like peak rates
+    this.displayAppHistoricalMetrics(stats, getEntry)
+    
+    // Add peak rates section
+    console.log(chalk.magenta('Peak Rates:'))
+    console.log(`  Messages: ${this.formatRate(getEntry('peakRates.messages'))} msgs/s`)
+    console.log(`  Connections: ${this.formatRate(getEntry('peakRates.connections'))} conns/s`)
+    console.log(`  Channels: ${this.formatRate(getEntry('peakRates.channels'))} chans/s`)
+    console.log(`  API Requests: ${this.formatRate(getEntry('peakRates.apiRequests'))} reqs/s`)
+    console.log(`  Token Requests: ${this.formatRate(getEntry('peakRates.tokenRequests'))} tokens/s`)
+  }
+
+  private displayCumulativeStats(): void {
     const avgRates = this.calculateAverageRates()
     
     // Connections stats
