@@ -1,6 +1,6 @@
 {
   "name": "@ably/react-web-cli",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "React component for embedding the Ably CLI in a web terminal",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
