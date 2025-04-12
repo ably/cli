@@ -41,125 +41,127 @@ ensuring each command has an intuitive name that ensures a developer can discove
 
 Below is the proposed information architecture / interface for the CLI, which maps to the conceptual concepts of the Ably platform and products.
 
-# The following commands are scoped to the account and depend on the control API access token for authentication
+#### The following commands are scoped to the account and depend on the control API access token for authentication
 
-$ ably login -> proxy convenience to $ ably accounts login
-$ ably accounts login -> this command will take the user through the authentication process, and then persist the access token in the local config which will be used by default for all subsequent commands that depend on the control API. When logging in, if no alias is provided, the default account token is overwritten. If an alias is provided, an additional token is stored in the config indexed by that alias name.
-$ ably accounts list -> list all the accounts already configured in the local config indexed by their alias name (unless `default`), which includes the the token ID, capabilities, user email, and account ID and name.
-$ ably accounts logout -> will warn the user that this is descructive and all configuration for this account will be deleted. If executed, this will remove the access token and any associated data from the local config file.
-$ ably accounts current -> confirms which account is currently selected (including the assigned alias name unless `default`) and makes a call to the control API https://control.ably.net/v1/me endpoint to confirm the token is valid and confirm the account details
-$ ably accounts stats -> view account stats, with a --live option which polls every 6 seconds and returns key metrics such as peak connections, channels, message throughput, and cumulative messages sent etc.
-$ ably accounts switch -> switch to the provided account ID or account alias
+- `$ ably login` -> proxy convenience to $ ably accounts login
+- `$ ably accounts login` -> this command will take the user through the authentication process, and then persist the access token in the local config which will be used by default for all subsequent commands that depend on the control API. When logging in, if no alias is provided, the default account token is overwritten. If an alias is provided, an additional token is stored in the config indexed by that alias name.
+- `$ ably accounts list` -> list all the accounts already configured in the local config indexed by their alias name (unless `default`), which includes the the token ID, capabilities, user email, and account ID and name.
+- `$ ably accounts logout` -> will warn the user that this is descructive and all configuration for this account will be deleted. If executed, this will remove the access token and any associated data from the local config file.
+- `$ ably accounts current` -> confirms which account is currently selected (including the assigned alias name unless `default`) and makes a call to the control API https://control.ably.net/v1/me endpoint to confirm the token is valid and confirm the account details
+- `$ ably accounts stats` -> view account stats, with a --live option which polls every 6 seconds and returns key metrics such as peak connections, channels, message throughput, and cumulative messages sent etc.
+- `$ ably accounts switch` -> switch to the provided account ID or account alias
 
-$ ably auth -> Topic that houses all product authentication commands (those used to access the data planes of those products).
+- `$ ably auth` -> Topic that houses all product authentication commands (those used to access the data planes of those products).
 
-# The following commands are all scoped to an app, so if there is not a default app in the config, the --app [name OR ID] argument is required, or a key or token must be provided as an argument
+#### The following commands are all scoped to an app, so if there is not a default app in the config, the --app [name OR ID] argument is required, or a key or token must be provided as an argument
 
-$ ably auth issue-jwt-token -> Creates an Ably JWT, which is the preferred approach for tokens. Capabilities and other token options can be specified. (see https://ably.com/docs/auth/token and https://ably.com/docs/auth/capabilities)
-$ ably auth issue-ably-token -> Creates an Ably Token. Capabilities and other token options can be specified (see https://ably.com/docs/auth/token and https://ably.com/docs/auth/capabilities)
-$ ably auth revoke-token [token] -> Revokes the token provided (see https://ably.com/docs/auth/revocation)
-$ ably auth keys -> This is a sub-topic for key management
-$ ably auth keys list -> list all keys in the app (uses the Control API)
-$ ably auth keys revoke [key identifier or complete key] -> revoke a key in the app (uses the Control API)
-$ ably auth keys get [key identifier or complete key] -> view all the details for a key (uses the Control API)
-$ ably auth keys update [key identifier or complete key] -> update properties of the key such as capabilities and the name
-$ ably auth keys switch [key identifier or complete key] -> switch to this key for all client requests for this app. This API key will be stored in the config for the currently selected app.
-$ ably auth keys current -> Show the current key if one is configured for this app in the config. Note that for each app only one key can be configured, but switching between apps will remember the last configured key for the app if used before.
+- `$ ably auth issue-jwt-token` -> Creates an Ably JWT, which is the preferred approach for tokens. Capabilities and other token options can be specified. (see https://ably.com/docs/auth/token and https://ably.com/docs/auth/capabilities)
+- `$ ably auth issue-ably-token` -> Creates an Ably Token. Capabilities and other token options can be specified (see https://ably.com/docs/auth/token and https://ably.com/docs/auth/capabilities)
+- `$ ably auth revoke-token [token]` -> Revokes the token provided (see https://ably.com/docs/auth/revocation)
+- `$ ably auth keys` -> This is a sub-topic for key management
+- `$ ably auth keys list` -> list all keys in the app (uses the Control API)
+- `$ ably auth keys revoke [key identifier or complete key]` -> revoke a key in the app (uses the Control API)
+- `$ ably auth keys get [key identifier or complete key]` -> view all the details for a key (uses the Control API)
+- `$ ably auth keys update [key identifier or complete key]` -> update properties of the key such as capabilities and the name
+- `$ ably auth keys switch [key identifier or complete key]` -> switch to this key for all client requests for this app. This API key will be stored in the config for the currently selected app.
+- `$ ably auth keys current` -> Show the current key if one is configured for this app in the config. Note that for each app only one key can be configured, but switching between apps will remember the last configured key for the app if used before.
 
-$ ably apps -> Topic for manage apps
-$ ably apps list -> list all apps available 
-$ ably apps create -> create a new app 
-$ ably apps update -> update the current app or named app from the --app argument 
-$ ably apps delete -> delete the app following confirmation by the user in the CLI
-$ ably apps set-apns-p12 -> allow a user to upload a P12 cert for use with APNS
-$ ably apps stats -> view app stats, with a --live option which polls every 6 seconds and returns key metrics such as peak connections, channels, message throughput, and cumulative messages sent etc.
-$ ably apps switch -> switch to this app for all subsequent requests
-$ ably apps current -> Show the current app if one is configured for the account.
-$ ably apps logs subscribe -> proxy for ably logs apps subscribe
-$ ably apps logs history -> proxy for ably logs apps history
-$ ably apps channel-rules -> Manage Ably channel rules (named namespaces in the Control API)
-$ ably apps channel-rules list -> list all channel rules
-$ ably apps channel-rules create -> create a channel rule
-$ ably apps channel-rules update -> update a channel rule
-$ ably apps channel-rules delete -> delete a channel rule (prompt for interactive confirmation)
+- `$ ably apps` -> Topic for manage apps
+- `$ ably apps list` -> list all apps available 
+- `$ ably apps create` -> create a new app 
+- `$ ably apps update` -> update the current app or named app from the --app argument 
+- `$ ably apps delete` -> delete the app following confirmation by the user in the CLI
+- `$ ably apps set-apns-p12` -> allow a user to upload a P12 cert for use with APNS
+- `$ ably apps stats` -> view app stats, with a --live option which polls every 6 seconds and returns key metrics such as peak connections, channels, message throughput, and cumulative messages sent etc.
+- `$ ably apps switch` -> switch to this app for all subsequent requests
+- `$ ably apps current` -> Show the current app if one is configured for the account.
+- `$ ably apps logs` subscribe -> proxy for ably logs apps subscribe
+- `$ ably apps logs` history -> proxy for ably logs apps history
+- `$ ably apps channel-rules` -> Manage Ably channel rules (named namespaces in the Control API)
+- `$ ably apps channel-rules list` -> list all channel rules
+- `$ ably apps channel-rules create` -> create a channel rule
+- `$ ably apps channel-rules update` -> update a channel rule
+- `$ ably apps channel-rules delete` -> delete a channel rule (prompt for interactive confirmation)
 
-$ ably channels -> Topic for Ably Pub/Sub channels
-$ ably channels list -> use the channel enumeration API to return a list of live channels
-$ ably channels publish -> publish a message to a channel with optional support for encryption. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
-$ ably channels batch-publish -> use the REST batch publish API to publish a batch of messages
-$ ably channels subscribe -> subscribe to messages published on one or more provided channels. Support for encryption, deltas, and rewind are available as arguments. Stay subscribed until terminated.
-$ ably channels occupancy -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
-$ ably channels history -> provides access to historical messages on a channel
-$ ably channels presence -> this is a topic that groups presence functionality together
-$ ably channels presence enter -> enter presence and remain present until the script is terminated. Show who is entering and leaving whilst present,
-$ ably channels presence subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
-$ ably channels logs channel-lifecycle -> set up as an alias to ably logs channel-lifecycle
+- `$ ably channels` -> Topic for Ably Pub/Sub channels
+- `$ ably channels list` -> use the channel enumeration API to return a list of live channels
+- `$ ably channels publish` -> publish a message to a channel with optional support for encryption. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
+- `$ ably channels batch-publish` -> use the REST batch publish API to publish a batch of messages
+- `$ ably channels subscribe` -> subscribe to messages published on one or more provided channels. Support for encryption, deltas, and rewind are available as arguments. Stay subscribed until terminated.
+- `$ ably channels occupancy` -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
+- `$ ably channels history` -> provides access to historical messages on a channel
+- `$ ably channels presence` -> this is a topic that groups presence functionality together
+- `$ ably channels presence` enter -> enter presence and remain present until the script is terminated. Show who is entering and leaving whilst present,
+- `$ ably channels presence subscribe` -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
+- `$ ably channels logs` channel-lifecycle -> set up as an alias to ably logs channel-lifecycle
 
-$ ably config -> opens the config TOML file with the default text editor 
+- `$ ably config` -> opens the config TOML file with the default text editor 
 
-$ ably connections logs connections-lifecycle -> set up as an alias to ably logs connection-lifecycle
-$ ably connections stats -> this is largely a duplication of ably app stats, however it is focussed on connection stats only. This should also support the --live option.
-$ ably connections test -> simply connects to Ably, confirms that the conenction was established, and closes the connection. Allows transport params options so that WebSockets can be disabled for example, and only HTTP is used, or only WebSockets is used without HTTP support.
+- `$ ably connections logs` connections-lifecycle -> set up as an alias to ably logs connection-lifecycle
+- `$ ably connections stats` -> this is largely a duplication of ably app stats, however it is focussed on connection stats only. This should also support the --live option.
+- `$ ably connections test` -> simply connects to Ably, confirms that the conenction was established, and closes the connection. Allows transport params options so that WebSockets can be disabled for example, and only HTTP is used, or only WebSockets is used without HTTP support.
 
-$ ably rooms -> Topic for Ably Chat
-$ ably rooms list -> list chat rooms using the channel enumeration API, filtering out those that are not chat
-$ ably rooms messages send -> send a chat message. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
-$ ably rooms messages subscribe -> subscribe to chat messages
-$ ably rooms messages get -> get historical messages
-$ ably rooms occupancy -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
-$ ably rooms presence subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
-$ ably rooms presence enter -> enter a room and remain present until the script is terminated. Show who is entering and leaving whilst present,
-$ ably rooms reactions subscribe -> subscribe to room reactions
-$ ably rooms reactions send -> send a room reaction
-$ ably rooms typing subscribe -> subscribe to typing indicators and show who is typing and stops typing in realtime
-$ ably rooms typing start -> start typing, and remain typing until the CLI is terminated
+- `$ ably rooms` -> Topic for Ably Chat
+- `$ ably rooms list` -> list chat rooms using the channel enumeration API, filtering out those that are not chat
+- `$ ably rooms messages` send -> send a chat message. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
+- `$ ably rooms messages` subscribe -> subscribe to chat messages
+- `$ ably rooms messages` get -> get historical messages
+- `$ ably rooms occupancy` -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
+- `$ ably rooms presence subscribe` -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
+- `$ ably rooms presence enter` -> enter a room and remain present until the script is terminated. Show who is entering and leaving whilst present,
+- `$ ably rooms reactions subscribe` -> subscribe to room reactions
+- `$ ably rooms reactions send` -> send a room reaction
+- `$ ably rooms typing subscribe` -> subscribe to typing indicators and show who is typing and stops typing in realtime
+- `$ ably rooms typing start` -> start typing, and remain typing until the CLI is terminated
 
-$ ably spaces -> Topic for Ably Spaces
-$ ably spaces list -> list Spaces using the channel enumeration API, filtering out those that are not chat
-$ ably spaces members subscribe -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
-$ ably spaces members enter -> enter a space and remain present until the script is terminated. Show who is entering and leaving whilst present.
-$ ably spaces locations set -> allow a location to be set, and remain at this location until the script is terminated. Show other location changes whilst the script is running.
-$ ably spaces locations subscribe -> subcribe to the set of locations, show all locations, and then show location changes as they happen
-$ ably spaces locations get-all -> show all current locations for a space and then exit
-$ ably spaces cursors set -> allows a specific x and y location to be set, but if not position is set, then the client will simulate movements of a mouse moving periodically.
-$ ably spaces cursors subscribe -> show a table of all cursors and their positions, and show changes as they happen. Use colour coding to show when changes have been made, and after 2s revert back to the default colour.
-$ ably spaces cursors get-all -> retrieve all current cursors, show the details, and exit.
-$ ably spaces locks acquire -> acquire a lock for the provided ID, and keep that lock until the script is terminated. Show any other changes to locks whilst the script is running.
-$ ably spaces locks subscribe -> show a table of all locks and show live updates. Use colour coding to show when changes have been made, and after 2s revert back to the default colour.
-$ ably spaces locks get -> a lock ID argument is required, confirm if a lock exists or not and show the lock if one does exist
-$ ably spaces locks get-all -> show a list of all locks and exit
+- `$ ably spaces` -> Topic for Ably Spaces
+- `$ ably spaces list` -> list Spaces using the channel enumeration API, filtering out those that are not chat
+- `$ ably spaces members subscribe` -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
+- `$ ably spaces members enter` -> enter a space and remain present until the script is terminated. Show who is entering and leaving whilst present.
+- `$ ably spaces locations set` -> allow a location to be set, and remain at this location until the script is terminated. Show other location changes whilst the script is running.
+- `$ ably spaces locations subscribe` -> subcribe to the set of locations, show all locations, and then show location changes as they happen
+- `$ ably spaces locations get-all` -> show all current locations for a space and then exit
+- `$ ably spaces cursors set` -> allows a specific x and y location to be set, but if not position is set, then the client will simulate movements of a mouse moving periodically.
+- `$ ably spaces cursors subscribe` -> show a table of all cursors and their positions, and show changes as they happen. Use colour coding to show when changes have been made, and after 2s revert back to the default colour.
+- `$ ably spaces cursors get-all` -> retrieve all current cursors, show the details, and exit.
+- `$ ably spaces locks acquire` -> acquire a lock for the provided ID, and keep that lock until the script is terminated. Show any other changes to locks whilst the script is running.
+- `$ ably spaces locks subscribe` -> show a table of all locks and show live updates. Use colour coding to show when changes have been made, and after 2s revert back to the default colour.
+- `$ ably spaces locks get` -> a lock ID argument is required, confirm if a lock exists or not and show the lock if one does exist
+- `$ ably spaces locks get-all` -> show a list of all locks and exit
 
-$ ably logs -> Topic for streaming and retrieving logs
-$ ably logs channel-lifecycle subscribe -> Stream logs from [meta]channel.lifecycle meta channel, see https://ably.com/docs/metadata-stats/metadata/subscribe#channel-lifecycle for types of evetns, and the data type.
-$ ably logs connection-lifecycle subscribe -> Stream logs from [meta]connection.lifecycle meta channel. 
-$ ably logs app subscribe -> Stream logs from the app-wide meta channel `[meta]log`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
-$ ably logs app history -> View historical app logs from `[meta]log` by using the ably pub/sub history API for channels
-$ ably logs push subscribe  -> Stream logs from the app push notifications `[meta]log:push`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
-$ ably logs push history ->  -> View historical push logs from `[meta]log:push` by using the ably pub/sub history API for channels
+- `$ ably logs` -> Topic for streaming and retrieving logs
+- `$ ably logs channel-lifecycle subscribe` -> Stream logs from [meta]channel.lifecycle meta channel, see https://ably.com/docs/metadata-stats/metadata/subscribe#channel-lifecycle for types of evetns, and the data type.
+- `$ ably logs connection-lifecycle subscribe` -> Stream logs from [meta]connection.lifecycle meta channel. 
+- `$ ably logs app subscribe` -> Stream logs from the app-wide meta channel `[meta]log`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
+- `$ ably logs app history` -> View historical app logs from `[meta]log` by using the ably pub/sub history API for channels
+- `$ ably logs push subscribe` -> Stream logs from the app push notifications `[meta]log:push`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
+- `$ ably logs push history` -> View historical push logs from `[meta]log:push` by using the ably pub/sub history API for channels
 
-$ ably integrations -> Manage Ably integrations (named rules in the Control API)
-$ ably integrations list -> list all integrations in the app
-$ ably integrations get -> get an integration by ID
-$ ably integrations create -> create an integration rule
-$ ably integrations update -> update an integration rule
-$ ably integrations delete -> delete an integration rule (prompt for interactive confirmation)
+- `$ ably integrations` -> Manage Ably integrations (named rules in the Control API)
+- `$ ably integrations list` -> list all integrations in the app
+- `$ ably integrations get` -> get an integration by ID
+- `$ ably integrations create` -> create an integration rule
+- `$ ably integrations update` -> update an integration rule
+- `$ ably integrations delete` -> delete an integration rule (prompt for interactive confirmation)
 
-$ ably queues -> Manage Ably Queues
-$ ably queues list -> list all queues in the app
-$ ably queues create -> create a queue
-$ ably queues delete -> delete a queue (prompt for interactive confirmation)
+- `$ ably queues` -> Manage Ably Queues
+- `$ ably queues list` -> list all queues in the app
+- `$ ably queues create` -> create a queue
+- `$ ably queues delete` -> delete a queue (prompt for interactive confirmation)
 
-$ ably bench -> Topic for benchmark tests
-$ ably bench publisher -> allow a publisher to start publishing messages on a specified channel at a frequency of at most 20 messages per second allowing the total number of messages published to be 10,000. Before the publisher starts publishing though, it will check if there are other subscriber bench clients present on the channel and it will also become present and announce it is a publisher and the details of the test. If there are none, it will ask the user if we should wait for subscribers to be present, or continue with a prompt. Once completed, the client will conrim how many messages were published, if there were any errors, and in the case of REST, what the average latency was for the request to complete, and in the case of Realtime, what the average latency was for a message to be received back. Whilst running the test, the message rate and trailing latency for the last 5 seconds shoudl be shown ,along with the cumulative messages sent and percentage of test execute. This should all be presented in a console UI with a progress bar for example. Support for publishing via REST or Realtime is needed. If a test is already running and another one starts, and error will be shown and the CLI should exit. Each publisher can show others that the test is runing using presence data.
-$ ably bench subscriber -> will attach to a channel and be present with data in the presence set indicating it's a subscriber and waiting. Once a publisher bercomes present, the subscriber will indicate a test is starting, and using a UI control, will show running metrics whilst the test is running. Once the test is complete, the summary will be printed out with the test ID, summary of the test paramters, confirmation of how many messages were received or failed, average latencies (based on the publish time assuming clocks are in sync, as the published message will have a latency in the data, and the latency it arrives at Ably is coded into the timestamp field) for end to end, and for it to be received by Ably, with p50, p90, p95 shown. Once the test is done, the subscriber will wait patiently for the next test to start. If a test is running and another one starts, and error will be shown and the CLI should exit.
+- `$ ably bench` -> Topic for benchmark tests
+- `$ ably bench publisher` -> allow a publisher to start publishing messages on a specified channel at a frequency of at most 20 messages per second allowing the total number of messages published to be 10,000. Before the publisher starts publishing though, it will check if there are other subscriber bench clients present on the channel and it will also become present and announce it is a publisher and the details of the test. If there are none, it will ask the user if we should wait for subscribers to be present, or continue with a prompt. Once completed, the client will conrim how many messages were published, if there were any errors, and in the case of REST, what the average latency was for the request to complete, and in the case of Realtime, what the average latency was for a message to be received back. Whilst running the test, the message rate and trailing latency for the last 5 seconds shoudl be shown ,along with the cumulative messages sent and percentage of test execute. This should all be presented in a console UI with a progress bar for example. Support for publishing via REST or Realtime is needed. If a test is already running and another one starts, and error will be shown and the CLI should exit. Each publisher can show others that the test is runing using presence data.
+- `$ ably bench subscriber` -> will attach to a channel and be present with data in the presence set indicating it's a subscriber and waiting. Once a publisher bercomes present, the subscriber will indicate a test is starting, and using a UI control, will show running metrics whilst the test is running. Once the test is complete, the summary will be printed out with the test ID, summary of the test paramters, confirmation of how many messages were received or failed, average latencies (based on the publish time assuming clocks are in sync, as the published message will have a latency in the data, and the latency it arrives at Ably is coded into the timestamp field) for end to end, and for it to be received by Ably, with p50, p90, p95 shown. Once the test is done, the subscriber will wait patiently for the next test to start. If a test is running and another one starts, and error will be shown and the CLI should exit.
 
-$ ably help -> Topic to get help from Ably
-$ ably help ask -> Ask a question to the Ably AI agent for help. This is done by using the Control API and sending a request to the /v1/help endpoint. Notes on how this works below.
-$ ably help contact -> Contact us -> open a browser to https://ably.com/contact
-$ ably help support -> Get support from Ably -> open a browser to https://ably.com/support
-$ ably help status -> Check the status of the Ably service using the https://ably.com/status/up.json endpoint, and if {status:true} then Ably is up and there are no open incidents, and if {status:false}, then there are open incidents. Either way, tell the user to go to https://status.ably.com to get the Ably status.
+#### The following commands are mostly not scoped to accounts or apps, but may use auth for identification
 
-$ ably --version -> returns the version of the CLI
+- `$ ably help` -> Topic to get help from Ably
+- `$ ably help ask` -> Ask a question to the Ably AI agent for help. This is done by using the Control API and sending a request to the /v1/help endpoint. Notes on how this works below.
+- `$ ably help contact` -> Contact us -> open a browser to https://ably.com/contact
+- `$ ably help support` -> Get support from Ably -> open a browser to https://ably.com/support
+- `$ ably help status` -> Check the status of the Ably service using the https://ably.com/status/up.json endpoint, and if {status:true} then Ably is up and there are no open incidents, and if {status:false}, then there are open incidents. Either way, tell the user to go to https://status.ably.com to get the Ably status.
+
+- `$ ably --version` -> returns the version of the CLI
 
 ### Authentication
 
@@ -171,20 +173,18 @@ There are two distinct types of authentication needs for the CLI.
 
 2. App level (Data Plane) -> every call to the Ably product data plane APIs, that is the APIs offered by the products such as Ably Pub/Sub and Ably Chat, requires authentication with an API key or a token generated from an API key.
 API keys are issued for apps and can only belong to one app. Apps are sandboxed ensuring API keys cannot be shared across apps and data cannot traverse the boundaries of the app.
-   As a result, users of the CLI, when using commands that depend on the data plane, must provide an API key, a token, or have a default app and API key selected from within the CLI.
-   As a convenience, if a user has logged in using `ably accounts login`, but has not yet selected an app and is not explicitly providing auth credentials (like an API key or token), then 
-     the user will be told that no app is in use and if they press Enter, we will list the apps and let them select one (using a nice interactive CLI UI).
-     Once they have selected an app, they will then be shown a list of API keys, and they will too select one.
-     Once that is done, the default app ID will be stored in the config for the current access token, and the API key will be stored alongside the list of known apps so that subsequent 
-     requests for that app can be automatically authenticated.
+2.1. As a result, users of the CLI, when using commands that depend on the data plane, must provide an API key, a token, or have a default app and API key selected from within the CLI.
+2.2. As a convenience, if a user has logged in using `ably accounts login`, but has not yet selected an app and is not explicitly providing auth credentials (like an API key or token), then:
+2.2.1 The user will be told that no app is in use and if they press Enter, we will list the apps and let them select one (using a nice interactive CLI UI).
+2.2.2 Once they have selected an app, they will then be shown a list of API keys, and they will too select one.
+2.2.4 Once that is done, the default app ID will be stored in the config for the current access token, and the API key will be stored alongside the list of known apps so that subsequent requests for that app can be automatically authenticated.
   
-Note:
+*Note:*
 
 - The expected behaviour is that users will obtain an access token, log into the CLI with this token, and this in turn will be used to browse apps and select an API key for all data plane operations.
 - However, it is also perfectly valid for a user to use the CLI and simply pass in an explicit API key, Ably JWT token or Control API access token with an argument, and the CLI will operate without any local config needed.
 - We provide conveniences in the `ably auth` commands so that users can issue Ably JWT Tokens or Ably Tokens for testing purposes. Whilst we support CLI data plane commands being issued with Ably JWT Tokens or Ably native Tokens, we expect this is unlikely and API keys will be used instead given they are not short-lived.
 - When users run the command `ably login`, we should delight with some colourful ASCII art derived from the Ably.com logo. Then ask the user to Press Enter to open the browser to obtain a token, which in turn will take the user to https://ably.com/users/access_tokens. They will then be asked to enter the token in the CLI, once entered, they will be offered the option of entering an alias name for the account or leave empty for the default account.
-
 
 ### Debugging & Logging
 
@@ -214,7 +214,6 @@ Note:
 - When users switch accounts, the config must store which account is current.
 - When users switch apps, the config must store which app is current. Multiple app configs are stored with each account so that users can switch between apps and the last configured key will be used automatically.
 - When users switch keys, the config should replace the existing app key with the new switched one. Each app has only one associated key.
-
 
 ### Global arguments
 
