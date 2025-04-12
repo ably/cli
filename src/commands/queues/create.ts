@@ -35,11 +35,7 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
       description: 'App ID or name to create the queue in',
       required: false,
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   async run(): Promise<void> {
@@ -65,8 +61,8 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
       
       const createdQueue = await controlApi.createQueue(appId, queueData)
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(createdQueue))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(createdQueue, flags))
       } else {
         this.log('Queue created successfully:')
         this.log(`Queue ID: ${createdQueue.id}`)

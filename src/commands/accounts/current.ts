@@ -7,16 +7,14 @@ export default class AccountsCurrent extends ControlBaseCommand {
   static override description = 'Show the current Ably account'
 
   static override examples = [
-    '<%= config.bin %> <%= command.id %>'
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
     ...ControlBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   public async run(): Promise<void> {
@@ -103,15 +101,15 @@ export default class AccountsCurrent extends ControlBaseCommand {
       // Get account details from the Control API
       const { user, account } = await controlApi.getMe()
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify({
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
           account: {
             accountId: account.id,
             accountName: account.name,
             userEmail: user.email
           },
           mode: 'web-cli'
-        }))
+        }, flags))
       } else {
         // Extract app ID from ABLY_API_KEY
         const apiKey = process.env.ABLY_API_KEY
@@ -135,11 +133,11 @@ export default class AccountsCurrent extends ControlBaseCommand {
       }
     } catch (error) {
       // If we can't get account details, show an error message
-      if (flags.format === 'json') {
-        this.log(JSON.stringify({
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
           error: error instanceof Error ? error.message : String(error),
           mode: 'web-cli'
-        }))
+        }, flags))
       } else {
         this.log(`${chalk.red('Error:')} ${error instanceof Error ? error.message : String(error)}`)
         this.log(`${chalk.yellow('Info:')} Your access token may have expired or is invalid.`)

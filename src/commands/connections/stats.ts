@@ -12,7 +12,8 @@ export default class ConnectionsStats extends AblyBaseCommand {
     '$ ably connections stats --unit hour',
     '$ ably connections stats --start 1618005600000 --end 1618091999999',
     '$ ably connections stats --limit 10',
-    '$ ably connections stats --format json',
+    '$ ably connections stats --json',
+    '$ ably connections stats --pretty-json',
     '$ ably connections stats --live',
   ]
 
@@ -33,11 +34,7 @@ export default class ConnectionsStats extends AblyBaseCommand {
       description: 'Maximum number of stats records to return',
       default: 10,
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'live': Flags.boolean({
       description: 'Subscribe to live stats updates (uses minute interval)',
       default: false,
@@ -80,7 +77,7 @@ export default class ConnectionsStats extends AblyBaseCommand {
     this.statsDisplay = new StatsDisplay({
       live: flags.live,
       startTime: flags.live ? new Date() : undefined,
-      format: flags.format as 'json' | 'pretty',
+      json: this.shouldOutputJson(flags),
       unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
       isConnectionStats: true,
       intervalSeconds: flags.interval

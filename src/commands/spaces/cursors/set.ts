@@ -25,11 +25,6 @@ interface CursorUpdate {
   data?: CursorData;
 }
 
-interface CursorRemove {
-  position: null;
-  data?: CursorData;
-}
-
 export default class SpacesCursorsSet extends SpacesBaseCommand {
   static override description = 'Set your cursor position in a space'
 
@@ -48,11 +43,6 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       description: 'Simulate cursor movements automatically',
       exclusive: ['position'],
       default: false,
-    }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
     }),
   }
 
@@ -73,7 +63,17 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
     try {
       // Create Spaces client
       clients = await this.createSpacesClient(flags)
-      if (!clients) return
+      if (!clients) {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error: 'Failed to create Spaces client',
+            status: 'error',
+            spaceId: args.spaceId
+          }, flags));
+        }
+        return;
+      }
 
       const { spacesClient, realtimeClient } = clients
       const spaceId = args.spaceId
@@ -84,7 +84,17 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         try {
           positionData = JSON.parse(flags.position)
         } catch (error) {
-          this.error(`Invalid position JSON: ${error instanceof Error ? error.message : String(error)}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              error: `Invalid position JSON: ${error instanceof Error ? error.message : String(error)}`,
+              status: 'error',
+              spaceId
+            }, flags));
+          } else {
+            this.error(`Invalid position JSON: ${error instanceof Error ? error.message : String(error)}`);
+          }
+          return;
         }
       } else if (flags.simulate) {
         // Use initial random position if simulating
@@ -93,7 +103,17 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
           y: Math.floor(Math.random() * 1000)
         }
       } else {
-        this.error('Either --position or --simulate must be specified')
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error: 'Either --position or --simulate must be specified',
+            status: 'error',
+            spaceId
+          }, flags));
+        } else {
+          this.error('Either --position or --simulate must be specified');
+        }
+        return;
       }
       
       // Make sure we have a connection before proceeding
@@ -114,7 +134,9 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       });
       
       // Get the space
-      this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
+      }
       const space = await spacesClient.get(spaceId)
       
       // Enter the space first
@@ -132,7 +154,17 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
             // Check realtime client state
             if (realtimeClient.connection.state === 'connected') {
               clearTimeout(timeout);
-              this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  timestamp: new Date().toISOString(),
+                  status: 'connected',
+                  spaceId,
+                  connectionId: realtimeClient.connection.id
+                }, flags));
+              } else {
+                this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
+              }
               resolve();
             } else if (realtimeClient.connection.state === 'failed' || 
                       realtimeClient.connection.state === 'closed' || 
@@ -156,116 +188,134 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       // Create update object with position property as required by the API
       const cursorUpdate: CursorUpdate = { position: positionData };
       await space.cursors.set(cursorUpdate);
-      this.log(`${chalk.green('Set initial cursor position:')} ${JSON.stringify(positionData, null, 2)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          timestamp: new Date().toISOString(),
+          spaceId,
+          type: 'cursor_set',
+          cursor: {
+            position: positionData
+          }
+        }, flags));
+      } else {
+        this.log(`${chalk.green('Successfully set cursor position:')} ${JSON.stringify(positionData)}`);
+      }
       
-      // If simulating, start movement simulation
+      // If simulating, start moving the cursor randomly
       if (flags.simulate) {
-        this.log(`\n${chalk.dim('Simulating cursor movements. Press Ctrl+C to exit.')}\n`)
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            timestamp: new Date().toISOString(),
+            spaceId,
+            type: 'simulation_started',
+            message: 'Starting cursor movement simulation'
+          }, flags));
+        } else {
+          this.log('\nSimulating cursor movements. Press Ctrl+C to exit.\n');
+        }
         
-        // Update cursor position randomly every 2 seconds
+        // Start simulation
         simulationInterval = setInterval(async () => {
           try {
-            // Simulate random movement
-            const newPosition: CursorPosition = {
-              x: Math.floor(Math.random() * 1000),
-              y: Math.floor(Math.random() * 1000)
-            }
-            
-            // Create update object with position property
-            const cursorUpdate: CursorUpdate = { position: newPosition };
-            await space.cursors.set(cursorUpdate);
-            
-            if (flags.format === 'json') {
-              this.log(JSON.stringify({
-                timestamp: new Date().toISOString(),
-                action: 'update',
-                position: newPosition
-              }, null, 2))
-            } else {
-              this.log(`${chalk.yellow('Updated cursor position:')} ${JSON.stringify(newPosition, null, 2)}`)
-            }
-          } catch (error) {
-            this.log(`Error updating cursor: ${error instanceof Error ? error.message : String(error)}`)
-          }
-        }, 2000)
-      } else {
-        this.log(`\n${chalk.dim('Cursor position set. Press Ctrl+C to exit.')}\n`)
-      }
-
-      // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
-        const cleanup = async () => {
-          if (cleanupInProgress) return
-          cleanupInProgress = true
-          
-          this.log(`\n${chalk.yellow('Cleaning up and closing connection...')}`)
-          
-          // Set a force exit timeout
-          const forceExitTimeout = setTimeout(() => {
-            this.log(chalk.red('Force exiting after timeout...'))
-            process.exit(1)
-          }, 5000)
-          
-          try {
-            // Stop simulation if running
-            if (simulationInterval) {
-              clearInterval(simulationInterval)
-            }
-            
-            try {
-              // Use raw object to clear cursor (set to null)
-              await space.cursors.set({ position: null } as any);
-              this.log(chalk.green('Successfully removed cursor.'))
+            if (!cleanupInProgress) {
+              const newPosition = {
+                x: Math.floor(Math.random() * 1000),
+                y: Math.floor(Math.random() * 1000)
+              };
               
-              // Leave the space
-              await space.leave()
-              this.log(chalk.green('Successfully left the space.'))
-            } catch (error) {
-              this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
-              this.log('Continuing with cleanup.')
+              await space.cursors.set({ position: newPosition });
+              
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  timestamp: new Date().toISOString(),
+                  spaceId,
+                  type: 'cursor_update',
+                  cursor: {
+                    position: newPosition
+                  }
+                }, flags));
+              } else {
+                this.log(`Cursor moved to: ${JSON.stringify(newPosition)}`);
+              }
             }
-            
-            if (clients?.realtimeClient) {
-              clients.realtimeClient.close()
-              this.log(chalk.green('Successfully closed realtime connection.'))
-            }
-            
-            this.log(chalk.green('Successfully disconnected.'))
-            clearTimeout(forceExitTimeout)
-            resolve()
-            // Force exit after cleanup
-            process.exit(0)
           } catch (error) {
-            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
-            clearTimeout(forceExitTimeout)
-            process.exit(1)
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+                status: 'error',
+                spaceId,
+                type: 'simulation_error'
+              }, flags));
+            } else {
+              this.error(`Error updating cursor: ${error instanceof Error ? error.message : String(error)}`);
+            }
           }
-        }
-
-        process.once('SIGINT', () => void cleanup())
-        process.once('SIGTERM', () => void cleanup())
-      })
-    } catch (error) {
-      if (error === undefined || error === null) {
-        this.log(chalk.red('An unknown error occurred (error object is undefined or null)'))
-      } else {
-        const errorMessage = error instanceof Error ? error.message : String(error || 'Unknown error')
-        this.log(chalk.red(`Error: ${errorMessage}`))
-      }
-      process.exit(1)
-    } finally {
-      // Clean up the interval if it's still running
-      if (simulationInterval) {
-        clearInterval(simulationInterval)
+        }, 1000);
       }
       
-      try {
-        if (clients?.realtimeClient) {
-          clients.realtimeClient.close()
+      // Set up cleanup for both simulation and regular modes
+      const cleanup = async () => {
+        if (cleanupInProgress) return;
+        cleanupInProgress = true;
+        
+        if (simulationInterval) {
+          clearInterval(simulationInterval);
         }
-      } catch (closeError) {
-        // Just log, don't throw
-        this.log(chalk.yellow(`Error closing client: ${closeError instanceof Error ? closeError.message : String(closeError)}`))
+        
+        if (space) {
+          try {
+            await space.leave();
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                timestamp: new Date().toISOString(),
+                spaceId,
+                type: 'cleanup',
+                status: 'completed'
+              }, flags));
+            }
+          } catch (error) {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+                status: 'error',
+                spaceId,
+                type: 'cleanup_error'
+              }, flags));
+            }
+          }
+        }
+        
+        if (realtimeClient) {
+          realtimeClient.close();
+        }
+        
+        process.exit();
+      };
+      
+      process.on('SIGINT', cleanup);
+      process.on('SIGTERM', cleanup);
+      
+    } catch (error) {
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error',
+          spaceId: args.spaceId
+        }, flags));
+      } else {
+        this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      
+      // Clean up on error
+      if (clients?.realtimeClient) {
+        clients.realtimeClient.close();
       }
     }
   }

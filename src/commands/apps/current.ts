@@ -7,16 +7,13 @@ export default class AppsCurrent extends ControlBaseCommand {
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --format json'
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
     ...ControlBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   public async run(): Promise<void> {
@@ -44,7 +41,7 @@ export default class AppsCurrent extends ControlBaseCommand {
     const appName = this.configManager.getAppName(currentAppId) || currentAppId
     
     try {
-      if (flags.format === 'json') {
+      if (this.shouldOutputJson(flags)) {
         // Get key information for JSON output
         const apiKey = this.configManager.getApiKey(currentAppId)
         let keyInfo = null
@@ -60,7 +57,7 @@ export default class AppsCurrent extends ControlBaseCommand {
           }
         }
         
-        this.log(JSON.stringify({
+        this.log(this.formatJsonOutput({
           account: {
             alias: currentAccountAlias,
             ...currentAccount
@@ -70,7 +67,7 @@ export default class AppsCurrent extends ControlBaseCommand {
             name: appName
           },
           key: keyInfo
-        }))
+        }, flags))
       } else {
         this.log(`${chalk.cyan('Account:')} ${chalk.cyan.bold(currentAccount.accountName || currentAccountAlias)} ${chalk.gray(`(${currentAccount.accountId || 'Unknown ID'})`)}`)
         this.log(`${chalk.green('App:')} ${chalk.green.bold(appName)} ${chalk.gray(`(${currentAppId})`)}`)
@@ -118,8 +115,8 @@ export default class AppsCurrent extends ControlBaseCommand {
       // Get app details from the Control API
       const appDetails = await controlApi.getApp(appId)
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify({
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
           app: {
             id: appId,
             name: appDetails.name
@@ -129,7 +126,7 @@ export default class AppsCurrent extends ControlBaseCommand {
             label: 'Web CLI Key'
           },
           mode: 'web-cli'
-        }))
+        }, flags))
       } else {
         // Get account info if possible
         let accountName = 'Web CLI Account'
@@ -150,8 +147,8 @@ export default class AppsCurrent extends ControlBaseCommand {
       }
     } catch (error) {
       // If we can't get app details, just show what we know
-      if (flags.format === 'json') {
-        this.log(JSON.stringify({
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
           app: {
             id: appId,
             name: 'Unknown'
@@ -161,7 +158,7 @@ export default class AppsCurrent extends ControlBaseCommand {
             label: 'Web CLI Key'
           },
           mode: 'web-cli'
-        }))
+        }, flags))
       } else {
         this.log(`${chalk.green('App:')} ${chalk.green.bold('Unknown')} ${chalk.gray(`(${appId})`)}`)
         this.log(`${chalk.yellow('API Key:')} ${chalk.yellow.bold(keyId)}`)

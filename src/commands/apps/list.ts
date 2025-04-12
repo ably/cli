@@ -7,16 +7,13 @@ export default class AppsList extends ControlBaseCommand {
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --format json'
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
     ...ControlBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   async run(): Promise<void> {
@@ -30,14 +27,14 @@ export default class AppsList extends ControlBaseCommand {
         // Get current app ID from config
         const currentAppId = this.configManager.getCurrentAppId()
         
-        if (flags.format === 'json') {
+        if (this.shouldOutputJson(flags)) {
           // Mark current app in JSON output
           const appsWithCurrentFlag = apps.map(app => ({
             ...app,
             isCurrent: app.id === currentAppId
           }))
           
-          this.log(JSON.stringify(appsWithCurrentFlag, null, 2))
+          this.log(this.formatJsonOutput(appsWithCurrentFlag, flags))
           return
         }
         

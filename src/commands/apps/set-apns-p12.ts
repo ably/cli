@@ -25,11 +25,7 @@ export default class AppsSetApnsP12Command extends ControlBaseCommand {
       description: 'Whether to use this certificate for the APNS sandbox environment',
       default: false,
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static args = {
@@ -69,8 +65,8 @@ export default class AppsSetApnsP12Command extends ControlBaseCommand {
         }
       )
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(result))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(result, flags))
       } else {
         this.log(`\nAPNS P12 certificate uploaded successfully!`)
         this.log(`Certificate ID: ${result.id}`)

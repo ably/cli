@@ -9,6 +9,8 @@ export default class MessagesSubscribe extends ChatBaseCommand {
     '$ ably rooms messages subscribe my-room',
     '$ ably rooms messages subscribe --api-key "YOUR_API_KEY" my-room',
     '$ ably rooms messages subscribe --show-metadata my-room',
+    '$ ably rooms messages subscribe my-room --json',
+    '$ ably rooms messages subscribe my-room --pretty-json'
   ]
 
   static override flags = {
@@ -45,27 +47,58 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       const { unsubscribe } = room.messages.subscribe((messageEvent) => {
         const message = messageEvent.message
         
-        // Format message with timestamp, author and content
-        const timestamp = new Date(message.timestamp).toLocaleTimeString()
-        const author = message.clientId || 'Unknown'
-        
-        // Message content with consistent formatting
-        this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`${author}:`)} ${message.text}`)
-        
-        // Show metadata if enabled and available
-        if (flags['show-metadata'] && message.metadata) {
-          this.log(`${chalk.blue('  Metadata:')} ${chalk.yellow(JSON.stringify(message.metadata))}`)
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            message: {
+              text: message.text,
+              clientId: message.clientId,
+              timestamp: message.timestamp,
+              ...(message.metadata ? { metadata: message.metadata } : {})
+            },
+            roomId: args.roomId
+          }, flags))
+        } else {
+          // Format message with timestamp, author and content
+          const timestamp = new Date(message.timestamp).toLocaleTimeString()
+          const author = message.clientId || 'Unknown'
+          
+          // Message content with consistent formatting
+          this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`${author}:`)} ${message.text}`)
+          
+          // Show metadata if enabled and available
+          if (flags['show-metadata'] && message.metadata) {
+            this.log(`${chalk.blue('  Metadata:')} ${chalk.yellow(this.formatJsonOutput(message.metadata, flags))}`)
+          }
+          this.log('') // Empty line for better readability
         }
-        this.log('') // Empty line for better readability
       })
       
       // Subscribe to room status changes
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
         if (statusChange.current === 'attached') {
-          this.log(`${chalk.green('Connected to room:')} ${chalk.bold(args.roomId)}`)
-          this.log(`${chalk.dim('Listening for messages. Press Ctrl+C to exit.')}`)
+          if (!this.shouldSuppressOutput(flags)) {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                status: 'connected',
+                roomId: args.roomId
+              }, flags))
+            } else {
+              this.log(`${chalk.green('Connected to room:')} ${chalk.bold(args.roomId)}`)
+              this.log(`${chalk.dim('Listening for messages. Press Ctrl+C to exit.')}`)
+            }
+          }
         } else if (statusChange.current === 'failed') {
-          this.error(`Failed to attach to room: ${room.error?.message || 'Unknown error'}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              error: room.error?.message || 'Unknown error',
+              roomId: args.roomId
+            }, flags))
+          } else {
+            this.error(`Failed to attach to room: ${room.error?.message || 'Unknown error'}`)
+          }
         }
       })
       
@@ -76,7 +109,17 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       await new Promise(() => {
         // This promise intentionally never resolves
         process.on('SIGINT', async () => {
-          this.log(`\n${chalk.yellow('Disconnecting from room...')}`)
+          if (!this.shouldSuppressOutput(flags)) {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                status: 'disconnecting',
+                roomId: args.roomId
+              }, flags))
+            } else {
+              this.log(`\n${chalk.yellow('Disconnecting from room...')}`)
+            }
+          }
           
           // Clean up subscriptions
           unsubscribe()
@@ -86,7 +129,17 @@ export default class MessagesSubscribe extends ChatBaseCommand {
           await chatClient.rooms.release(args.roomId)
           realtimeClient.close()
           
-          this.log(`${chalk.green('Successfully disconnected.')}`)
+          if (!this.shouldSuppressOutput(flags)) {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                status: 'disconnected',
+                roomId: args.roomId
+              }, flags))
+            } else {
+              this.log(`${chalk.green('Successfully disconnected.')}`)
+            }
+          }
           process.exit(0)
         })
       })
@@ -95,7 +148,15 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       if (clients?.realtimeClient) {
         clients.realtimeClient.close()
       }
-      this.error(`Failed to subscribe to messages: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          roomId: args.roomId
+        }, flags))
+      } else {
+        this.error(`Failed to subscribe to messages: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

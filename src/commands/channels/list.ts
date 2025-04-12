@@ -3,6 +3,25 @@ import { AblyBaseCommand } from '../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
+interface ChannelMetrics {
+  connections?: number;
+  publishers?: number;
+  subscribers?: number;
+  presenceConnections?: number;
+  presenceMembers?: number;
+}
+
+interface ChannelStatus {
+  occupancy?: {
+    metrics?: ChannelMetrics;
+  };
+}
+
+interface ChannelItem {
+  channelId: string;
+  status?: ChannelStatus;
+}
+
 export default class ChannelsList extends AblyBaseCommand {
   static override description = 'List active channels using the channel enumeration API'
 
@@ -10,7 +29,8 @@ export default class ChannelsList extends AblyBaseCommand {
     '$ ably channels list',
     '$ ably channels list --prefix my-channel',
     '$ ably channels list --limit 50',
-    '$ ably channels list --format json',
+    '$ ably channels list --json',
+    '$ ably channels list --pretty-json',
   ]
 
   static override flags = {
@@ -22,11 +42,6 @@ export default class ChannelsList extends AblyBaseCommand {
     'limit': Flags.integer({
       description: 'Maximum number of channels to return',
       default: 100,
-    }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
     }),
   }
 
@@ -61,8 +76,17 @@ export default class ChannelsList extends AblyBaseCommand {
       const channels = channelsResponse.items || []
 
       // Output channels based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(channels, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          timestamp: new Date().toISOString(),
+          channels: channels.map((channel: ChannelItem) => ({
+            channelId: channel.channelId,
+            metrics: channel.status?.occupancy?.metrics || {}
+          })),
+          total: channels.length,
+          hasMore: channels.length === flags.limit
+        }, flags))
       } else {
         if (channels.length === 0) {
           this.log('No active channels found.')
@@ -71,7 +95,7 @@ export default class ChannelsList extends AblyBaseCommand {
 
         this.log(`Found ${chalk.cyan(channels.length.toString())} active channels:`)
         
-        channels.forEach(channel => {
+        channels.forEach((channel: ChannelItem) => {
           this.log(`${chalk.green(channel.channelId)}`)
           
           // Show occupancy if available
@@ -98,7 +122,15 @@ export default class ChannelsList extends AblyBaseCommand {
         }
       }
     } catch (error) {
-      this.error(`Error listing channels: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error'
+        }, flags))
+      } else {
+        this.error(`Error listing channels: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       client.close()
     }

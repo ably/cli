@@ -13,16 +13,11 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
   static override examples = [
     '$ ably rooms reactions subscribe my-room',
-    '$ ably rooms reactions subscribe my-room --format json',
-  ]
+    '$ ably rooms reactions subscribe my-room --json',
+    '$ ably rooms reactions subscribe my-room --pretty-json']
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   static override args = {
@@ -45,7 +40,9 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       const { chatClient } = clients
       const roomId = args.roomId
       
-      this.log(`Connecting to Ably and subscribing to reactions in room ${chalk.cyan(roomId)}...`)
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Connecting to Ably and subscribing to reactions in room ${chalk.cyan(roomId)}...`)
+      }
       
       // Get the room
       const room = await chatClient.rooms.get(roomId, {
@@ -55,12 +52,37 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       // Subscribe to room status changes
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
         if (statusChange.current === RoomStatus.Attached) {
-          this.log(chalk.green('Successfully connected to Ably'))
-          this.log(`Listening for reactions in room ${chalk.cyan(roomId)}. Press Ctrl+C to exit.`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: true,
+              status: 'connected',
+              roomId
+            }, flags))
+          } else {
+            this.log(chalk.green('Successfully connected to Ably'))
+            this.log(`Listening for reactions in room ${chalk.cyan(roomId)}. Press Ctrl+C to exit.`)
+          }
         } else if (statusChange.current === RoomStatus.Detached) {
-          this.log(chalk.yellow('Disconnected from Ably'))
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              status: 'disconnected',
+              roomId
+            }, flags))
+          } else {
+            this.log(chalk.yellow('Disconnected from Ably'))
+          }
         } else if (statusChange.current === RoomStatus.Failed) {
-          this.error(`${chalk.red('Connection failed:')} ${room.error?.message || 'Unknown error'}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              status: 'failed',
+              error: room.error?.message || 'Unknown error',
+              roomId
+            }, flags))
+          } else {
+            this.error(`${chalk.red('Connection failed:')} ${room.error?.message || 'Unknown error'}`)
+          }
         }
       })
       
@@ -71,20 +93,21 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       const { unsubscribe: unsubscribeReactions } = room.reactions.subscribe((reaction) => {
         const timestamp = new Date().toISOString()
         
-        if (flags.format === 'json') {
-          const jsonOutput = {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
             timestamp,
             type: reaction.type,
             clientId: reaction.clientId,
-            metadata: reaction.metadata
-          }
-          this.log(JSON.stringify(jsonOutput))
+            metadata: reaction.metadata,
+            roomId
+          }, flags))
         } else {
           this.log(`[${chalk.dim(timestamp)}] ${chalk.green('⚡')} ${chalk.blue(reaction.clientId || 'Unknown')} reacted with ${chalk.yellow(reaction.type || 'unknown')}`)
           
           // Show any additional metadata in the reaction
           if (reaction.metadata && Object.keys(reaction.metadata).length > 0) {
-            this.log(`  ${chalk.dim('Metadata:')} ${JSON.stringify(reaction.metadata, null, 2)}`)
+            this.log(`  ${chalk.dim('Metadata:')} ${this.formatJsonOutput(reaction.metadata, flags)}`)
           }
         }
       })
@@ -92,7 +115,9 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       // Keep the process running until interrupted
       await new Promise<void>((resolve) => {
         const cleanup = async () => {
-          this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`)
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`)
+          }
           
           // Unsubscribe from reactions
           unsubscribeReactions()
@@ -103,14 +128,24 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
           try {
             await chatClient.rooms.release(roomId)
           } catch (error) {
-            this.log(`Error releasing room: ${error instanceof Error ? error.message : String(error)}`)
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+                roomId
+              }, flags))
+            } else {
+              this.log(`Error releasing room: ${error instanceof Error ? error.message : String(error)}`)
+            }
           }
           
           if (clients?.realtimeClient) {
             clients.realtimeClient.close()
           }
           
-          this.log(chalk.green('Successfully disconnected.'))
+          if (!this.shouldOutputJson(flags)) {
+            this.log(chalk.green('Successfully disconnected.'))
+          }
           resolve()
         }
 
@@ -118,7 +153,15 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
         process.on('SIGTERM', () => void cleanup())
       })
     } catch (error) {
-      this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          roomId: args.roomId
+        }, flags))
+      } else {
+        this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (clients?.realtimeClient) {
         clients.realtimeClient.close()

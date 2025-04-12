@@ -7,19 +7,14 @@ export default class KeysGetCommand extends ControlBaseCommand {
   static examples = [
     '$ ably auth keys get APP_ID.KEY_ID',
     '$ ably auth keys get KEY_ID --app APP_ID',
-    '$ ably auth keys get APP_ID.KEY_ID --format json'
-  ]
+    '$ ably auth keys get APP_ID.KEY_ID --json',
+    '$ ably auth keys get APP_ID.KEY_ID --pretty-json']
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
     'app': Flags.string({
       description: 'App ID the key belongs to (uses current app if not specified)',
       env: 'ABLY_APP_ID',
-    }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
     }),
   }
 
@@ -52,18 +47,29 @@ export default class KeysGetCommand extends ControlBaseCommand {
     }
     
     if (!appId) {
-      this.error('No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".')
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".'
+        }, flags))
+      } else {
+        this.error('No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".')
+      }
+      return
     }
     
     try {
       const key = await controlApi.getKey(appId, keyId)
       
-      if (flags.format === 'json') {
+      if (this.shouldOutputJson(flags)) {
         // Add the full key name to the JSON output
-        this.log(JSON.stringify({
-          ...key,
-          keyName: `${key.appId}.${key.id}`
-        }))
+        this.log(this.formatJsonOutput({
+          success: true,
+          key: {
+            ...key,
+            keyName: `${key.appId}.${key.id}`
+          }
+        }, flags))
       } else {
         this.log(`Key Details:\n`)
         
@@ -94,7 +100,16 @@ export default class KeysGetCommand extends ControlBaseCommand {
         this.log(`Full key: ${key.key}`)
       }
     } catch (error) {
-      this.error(`Error getting key details: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          appId,
+          keyId
+        }, flags))
+      } else {
+        this.error(`Error getting key details: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

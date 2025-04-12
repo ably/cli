@@ -7,7 +7,9 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
   static examples = [
     '$ ably auth keys revoke APP_ID.KEY_ID',
     '$ ably auth keys revoke KEY_ID --app APP_ID',
-    '$ ably auth keys revoke APP_ID.KEY_ID --force'
+    '$ ably auth keys revoke APP_ID.KEY_ID --force',
+    '$ ably auth keys revoke APP_ID.KEY_ID --json',
+    '$ ably auth keys revoke APP_ID.KEY_ID --pretty-json'
   ]
 
   static flags = {
@@ -48,7 +50,15 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
     }
     
     if (!appId) {
-      this.error('No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".')
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".'
+        }, flags))
+      } else {
+        this.error('No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".')
+      }
+      return
     }
     
     try {
@@ -56,30 +66,33 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
       const key = await controlApi.getKey(appId, keyId)
       
       const keyName = `${key.appId}.${key.id}`
-      this.log(`Key to revoke:`)
-      this.log(`Key Name: ${keyName}`)
-      this.log(`Key Label: ${key.name || 'Unnamed key'}`)
-      this.log(`Full key: ${key.key}`)
       
-      // Format the capabilities
-      if (key.capability) {
-        const capEntries = Object.entries(key.capability)
-        if (capEntries.length === 0) {
-          this.log(`Capabilities: None`)
-        } else if (capEntries.length === 1) {
-          const [scope, privileges] = capEntries[0]
-          this.log(`Capabilities: ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Key to revoke:`)
+        this.log(`Key Name: ${keyName}`)
+        this.log(`Key Label: ${key.name || 'Unnamed key'}`)
+        this.log(`Full key: ${key.key}`)
+        
+        // Format the capabilities
+        if (key.capability) {
+          const capEntries = Object.entries(key.capability)
+          if (capEntries.length === 0) {
+            this.log(`Capabilities: None`)
+          } else if (capEntries.length === 1) {
+            const [scope, privileges] = capEntries[0]
+            this.log(`Capabilities: ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
+          } else {
+            this.log(`Capabilities:`)
+            capEntries.forEach(([scope, privileges]) => {
+              this.log(`  • ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
+            })
+          }
         } else {
-          this.log(`Capabilities:`)
-          capEntries.forEach(([scope, privileges]) => {
-            this.log(`  • ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
-          })
+          this.log(`Capabilities: None`)
         }
-      } else {
-        this.log(`Capabilities: None`)
+        
+        this.log('')
       }
-      
-      this.log('')
       
       let confirmed = flags.force
       
@@ -90,13 +103,29 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
       }
       
       if (!confirmed) {
-        this.log('Revocation cancelled.')
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error: 'Revocation cancelled by user',
+            keyName
+          }, flags))
+        } else {
+          this.log('Revocation cancelled.')
+        }
         return
       }
       
       await controlApi.revokeKey(appId, keyId)
       
-      this.log(`Key ${keyName} has been revoked.`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          keyName,
+          message: 'Key has been revoked'
+        }, flags))
+      } else {
+        this.log(`Key ${keyName} has been revoked.`)
+      }
       
       // Check if the revoked key is the current key for this app
       const currentKey = this.configManager.getApiKey(appId)
@@ -108,11 +137,22 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
         
         if (shouldRemove) {
           this.configManager.removeApiKey(appId)
-          this.log('Key removed from configuration.')
+          if (!this.shouldOutputJson(flags)) {
+            this.log('Key removed from configuration.')
+          }
         }
       }
     } catch (error) {
-      this.error(`Error revoking key: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          appId,
+          keyId
+        }, flags))
+      } else {
+        this.error(`Error revoking key: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

@@ -8,19 +8,14 @@ export default class KeysListCommand extends ControlBaseCommand {
   static examples = [
     '$ ably auth keys list',
     '$ ably auth keys list --app APP_ID',
-    '$ ably auth keys list --format json'
-  ]
+    '$ ably auth keys list --json',
+    '$ ably auth keys list --pretty-json']
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
     'app': Flags.string({
       description: 'App ID to list keys for (uses current app if not specified)',
       env: 'ABLY_APP_ID',
-    }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
     }),
   }
 
@@ -36,7 +31,15 @@ export default class KeysListCommand extends ControlBaseCommand {
     const appId = flags.app || this.configManager.getCurrentAppId()
     
     if (!appId) {
-      this.error('No app specified. Please provide --app flag or switch to an app with "ably apps switch".')
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'No app specified. Please provide --app flag or switch to an app with "ably apps switch".'
+        }, flags))
+      } else {
+        this.error('No app specified. Please provide --app flag or switch to an app with "ably apps switch".')
+      }
+      return
     }
     
     try {
@@ -48,7 +51,7 @@ export default class KeysListCommand extends ControlBaseCommand {
         ? currentKeyId 
         : currentKeyId ? `${appId}.${currentKeyId}` : undefined
       
-      if (flags.format === 'json') {
+      if (this.shouldOutputJson(flags)) {
         // Add a "current" flag to the key if it's the currently selected one
         const keysWithCurrent = keys.map(key => {
           const keyName = `${key.appId}.${key.id}`
@@ -58,7 +61,11 @@ export default class KeysListCommand extends ControlBaseCommand {
             current: keyName === currentKeyName
           }
         })
-        this.log(JSON.stringify(keysWithCurrent))
+        this.log(this.formatJsonOutput({
+          success: true,
+          appId,
+          keys: keysWithCurrent
+        }, flags))
       } else {
         if (keys.length === 0) {
           this.log('No keys found for this app')
@@ -94,14 +101,19 @@ export default class KeysListCommand extends ControlBaseCommand {
             this.log(`  Capabilities: None`)
           }
           
-          this.log(`  Created: ${this.formatDate(key.created)}`)
-          this.log(`  Updated: ${this.formatDate(key.modified)}`)
-          this.log(`  Full key: ${key.key}`)
-          this.log('') // Add a blank line between keys
+          this.log('')
         })
       }
     } catch (error) {
-      this.error(`Error listing keys: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          appId
+        }, flags))
+      } else {
+        this.error(`Error listing keys: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

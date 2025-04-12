@@ -14,7 +14,8 @@ export default class AppsStatsCommand extends ControlBaseCommand {
     '$ ably apps stats app-id --unit hour',
     '$ ably apps stats app-id --start 1618005600000 --end 1618091999999',
     '$ ably apps stats app-id --limit 10',
-    '$ ably apps stats app-id --format json',
+    '$ ably apps stats app-id --json',
+    '$ ably apps stats app-id --pretty-json',
     '$ ably apps stats --live',
     '$ ably apps stats app-id --live',
     '$ ably apps stats --live --interval 15',
@@ -37,11 +38,7 @@ export default class AppsStatsCommand extends ControlBaseCommand {
       description: 'Maximum number of stats records to return',
       default: 10,
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'live': Flags.boolean({
       description: 'Subscribe to live stats updates (uses minute interval)',
       default: false,
@@ -93,7 +90,7 @@ export default class AppsStatsCommand extends ControlBaseCommand {
     this.statsDisplay = new StatsDisplay({
       live: flags.live,
       startTime: flags.live ? new Date() : undefined,
-      format: flags.format as 'json' | 'pretty',
+      json: this.shouldOutputJson(flags),
       unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
       intervalSeconds: flags.interval
     })

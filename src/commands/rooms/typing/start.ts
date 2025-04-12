@@ -8,6 +8,8 @@ export default class TypingStart extends ChatBaseCommand {
   static override examples = [
     '$ ably rooms typing start my-room',
     '$ ably rooms typing start --api-key "YOUR_API_KEY" my-room',
+    '$ ably rooms typing start my-room --json',
+    '$ ably rooms typing start my-room --pretty-json'
   ]
 
   static override flags = {
@@ -44,12 +46,29 @@ export default class TypingStart extends ChatBaseCommand {
       // Subscribe to room status changes
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
         if (statusChange.current === 'attached') {
-          this.log(`${chalk.green('Connected to room:')} ${chalk.bold(args.roomId)}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: true,
+              status: 'connected',
+              roomId: args.roomId
+            }, flags))
+          } else {
+            this.log(`${chalk.green('Connected to room:')} ${chalk.bold(args.roomId)}`)
+          }
           
           // Start typing immediately
           room.typing.start()
-          this.log(`${chalk.green('Started typing in room.')}`)
-          this.log(`${chalk.dim('Will remain typing until this command is terminated. Press Ctrl+C to exit.')}`)
+          
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: true,
+              status: 'typing_started',
+              roomId: args.roomId
+            }, flags))
+          } else {
+            this.log(`${chalk.green('Started typing in room.')}`)
+            this.log(`${chalk.dim('Will remain typing until this command is terminated. Press Ctrl+C to exit.')}`)
+          }
           
           // Keep typing active by calling start() periodically
           // We want this to be less than the timeout value to ensure continuous typing
@@ -57,7 +76,16 @@ export default class TypingStart extends ChatBaseCommand {
             room.typing.start()
           }, 4000) // Slightly less than the 5 second timeout
         } else if (statusChange.current === 'failed') {
-          this.error(`Failed to attach to room: ${room.error?.message || 'Unknown error'}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              status: 'failed',
+              error: room.error?.message || 'Unknown error',
+              roomId: args.roomId
+            }, flags))
+          } else {
+            this.error(`Failed to attach to room: ${room.error?.message || 'Unknown error'}`)
+          }
         }
       })
       
@@ -68,8 +96,10 @@ export default class TypingStart extends ChatBaseCommand {
       await new Promise(() => {
         // This promise intentionally never resolves
         process.on('SIGINT', async () => {
-          this.log('')
-          this.log(`${chalk.yellow('Stopping typing and disconnecting from room...')}`)
+          if (!this.shouldOutputJson(flags)) {
+            this.log('')
+            this.log(`${chalk.yellow('Stopping typing and disconnecting from room...')}`)
+          }
           
           // Clear the typing interval
           if (typingInterval) {
@@ -83,7 +113,9 @@ export default class TypingStart extends ChatBaseCommand {
           await chatClient.rooms.release(args.roomId)
           realtimeClient.close()
           
-          this.log(`${chalk.green('Successfully disconnected.')}`)
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`${chalk.green('Successfully disconnected.')}`)
+          }
           process.exit(0)
         })
       })
@@ -92,7 +124,16 @@ export default class TypingStart extends ChatBaseCommand {
       if (clients?.realtimeClient) {
         clients.realtimeClient.close()
       }
-      this.error(`Failed to start typing: ${error instanceof Error ? error.message : String(error)}`)
+      
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          roomId: args.roomId
+        }, flags))
+      } else {
+        this.error(`Failed to start typing: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

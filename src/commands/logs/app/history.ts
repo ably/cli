@@ -12,7 +12,7 @@ export default class LogsAppHistory extends AblyBaseCommand {
     '$ ably logs app history --limit 20',
     '$ ably logs app history --direction forwards',
     '$ ably logs app history --json',
-  ]
+    '$ ably logs app history --pretty-json']
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
@@ -25,16 +25,10 @@ export default class LogsAppHistory extends AblyBaseCommand {
       options: ['backwards', 'forwards'],
       default: 'backwards',
     }),
-    json: Flags.boolean({
-      description: 'Output results in JSON format',
-      default: false,
-    }),
   }
 
   async run(): Promise<void> {
     const {flags} = await this.parse(LogsAppHistory)
-
-    let client: Ably.Rest | null = null
 
     try {
       // Get API key from flags or config
@@ -46,7 +40,7 @@ export default class LogsAppHistory extends AblyBaseCommand {
 
       // Create a REST client
       const options: Ably.ClientOptions = this.getClientOptions(flags)
-      client = new Ably.Rest(options)
+      const client = new Ably.Rest(options)
 
       // Get the channel
       const channel = client.channels.get('[meta]log:app')
@@ -62,8 +56,19 @@ export default class LogsAppHistory extends AblyBaseCommand {
       const messages = history.items
 
       // Output results based on format
-      if (flags.json) {
-        this.log(JSON.stringify(messages, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          messages: messages.map(msg => ({
+            timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString(),
+            name: msg.name,
+            data: msg.data,
+            encoding: msg.encoding,
+            clientId: msg.clientId,
+            connectionId: msg.connectionId,
+            id: msg.id
+          }))
+        }, flags))
       } else {
         if (messages.length === 0) {
           this.log('No application logs found in history.')
@@ -114,7 +119,14 @@ export default class LogsAppHistory extends AblyBaseCommand {
         }
       }
     } catch (error) {
-      this.error(`Error retrieving application logs: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }, flags))
+      } else {
+        this.error(`Error retrieving application logs: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

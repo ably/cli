@@ -126,6 +126,7 @@ LOGIN (recommended first step)
 * [`ably logs connection-lifecycle`](#ably-logs-connection-lifecycle)
 * [`ably logs connection-lifecycle history`](#ably-logs-connection-lifecycle-history)
 * [`ably logs connection-lifecycle subscribe`](#ably-logs-connection-lifecycle-subscribe)
+* [`ably logs connection subscribe`](#ably-logs-connection-subscribe)
 * [`ably logs push`](#ably-logs-push)
 * [`ably logs push history`](#ably-logs-push-history)
 * [`ably logs push subscribe`](#ably-logs-push-subscribe)
@@ -155,6 +156,7 @@ LOGIN (recommended first step)
 * [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
 * [`ably spaces`](#ably-spaces)
 * [`ably spaces cursors`](#ably-spaces-cursors)
+* [`ably spaces cursors get-all SPACEID`](#ably-spaces-cursors-get-all-spaceid)
 * [`ably spaces cursors set SPACEID`](#ably-spaces-cursors-set-spaceid)
 * [`ably spaces cursors subscribe SPACEID`](#ably-spaces-cursors-subscribe-spaceid)
 * [`ably spaces list`](#ably-spaces-list)
@@ -204,8 +206,8 @@ Show the current Ably account
 
 ```
 USAGE
-  $ ably accounts current [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably accounts current [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -214,9 +216,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -224,6 +226,10 @@ DESCRIPTION
 
 EXAMPLES
   $ ably accounts current
+
+  $ ably accounts current --json
+
+  $ ably accounts current --pretty-json
 ```
 
 _See code: [src/commands/accounts/current.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/accounts/current.ts)_
@@ -234,8 +240,8 @@ List locally configured Ably accounts
 
 ```
 USAGE
-  $ ably accounts list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably accounts list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -245,6 +251,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -252,6 +260,10 @@ DESCRIPTION
 
 EXAMPLES
   $ ably accounts list
+
+  $ ably accounts list --json
+
+  $ ably accounts list --pretty-json
 ```
 
 _See code: [src/commands/accounts/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/accounts/list.ts)_
@@ -262,8 +274,8 @@ Log in to your Ably account
 
 ```
 USAGE
-  $ ably accounts login [TOKEN] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-a <value>] [--no-browser]
+  $ ably accounts login [TOKEN] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-a <value>] [--no-browser]
 
 ARGUMENTS
   TOKEN  Access token (if not provided, will prompt for it)
@@ -277,7 +289,9 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --no-browser            Do not open a browser
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -287,6 +301,10 @@ EXAMPLES
   $ ably accounts login
 
   $ ably accounts login --alias mycompany
+
+  $ ably accounts login --json
+
+  $ ably accounts login --pretty-json
 ```
 
 _See code: [src/commands/accounts/login.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/accounts/login.ts)_
@@ -297,8 +315,8 @@ Log out from an Ably account
 
 ```
 USAGE
-  $ ably accounts logout [ALIAS] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-f]
+  $ ably accounts logout [ALIAS] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-f]
 
 ARGUMENTS
   ALIAS  Alias of the account to log out from (defaults to current account)
@@ -312,6 +330,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -321,6 +341,10 @@ EXAMPLES
   $ ably accounts logout
 
   $ ably accounts logout mycompany
+
+  $ ably accounts logout --json
+
+  $ ably accounts logout --pretty-json
 ```
 
 _See code: [src/commands/accounts/logout.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/accounts/logout.ts)_
@@ -331,9 +355,9 @@ Get account stats with optional live updates
 
 ```
 USAGE
-  $ ably accounts stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit
-    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>] [--debug]
+  $ ably accounts stats [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end
+    <value>] [--unit minute|hour|day|month] [--limit <value>] [--live] [--interval <value>] [--debug]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -344,12 +368,12 @@ FLAGS
   --debug                 Show debug information for live stats polling
   --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
   --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
+  --json                  Output in JSON format
   --limit=<value>         [default: 10] Maximum number of stats records to return
   --live                  Subscribe to live stats updates (uses minute interval)
+  --pretty-json           Output in colorized JSON format
   --start=<value>         Start time in milliseconds since epoch
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --unit=<option>         [default: minute] Time unit for stats
@@ -367,7 +391,9 @@ EXAMPLES
 
   $ ably accounts stats --limit 10
 
-  $ ably accounts stats --format json
+  $ ably accounts stats --json
+
+  $ ably accounts stats --pretty-json
 
   $ ably accounts stats --live
 
@@ -382,8 +408,8 @@ Switch to a different Ably account
 
 ```
 USAGE
-  $ ably accounts switch [ALIAS] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably accounts switch [ALIAS] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ALIAS  Alias of the account to switch to
@@ -396,6 +422,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -405,6 +433,10 @@ EXAMPLES
   $ ably accounts switch
 
   $ ably accounts switch mycompany
+
+  $ ably accounts switch --json
+
+  $ ably accounts switch --pretty-json
 ```
 
 _See code: [src/commands/accounts/switch.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/accounts/switch.ts)_
@@ -469,11 +501,11 @@ Create a channel rule
 
 ```
 USAGE
-  $ ably apps channel-rules create --name <value> [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted] [--push-enabled]
-    [--authenticated] [--persist-last] [--expose-time-serial] [--populate-channel-registry] [--batching-enabled]
-    [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>] [--conflation-key <value>]
-    [--tls-only] [--app <value>] [--format json|pretty]
+  $ ably apps channel-rules create --name <value> [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted]
+    [--push-enabled] [--authenticated] [--persist-last] [--expose-time-serial] [--populate-channel-registry]
+    [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>]
+    [--conflation-key <value>] [--tls-only] [--app <value>]
 
 FLAGS
   --access-token=<value>         Overrides any configured access token used for the Control API
@@ -490,13 +522,13 @@ FLAGS
   --control-host=<value>         Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>                  Override the environment for all product API calls
   --expose-time-serial           Whether to expose the time serial for messages on channels matching this rule
-  --format=<option>              [default: pretty] Output format (json or pretty)
-                                 <options: json|pretty>
   --host=<value>                 Override the host endpoint for all product API calls
+  --json                         Output in JSON format
   --name=<value>                 (required) Name of the channel rule
   --persist-last                 Whether to persist only the last message on channels matching this rule
   --persisted                    Whether messages on channels matching this rule should be persisted
   --populate-channel-registry    Whether to populate the channel registry for channels matching this rule
+  --pretty-json                  Output in colorized JSON format
   --push-enabled                 Whether push notifications should be enabled for channels matching this rule
   --tls-only                     Whether to enforce TLS for channels matching this rule
   --token=<value>                Authenticate using an Ably Token or JWT Token instead of an API key
@@ -520,8 +552,8 @@ Delete a channel rule
 
 ```
 USAGE
-  $ ably apps channel-rules delete NAMEORID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+  $ ably apps channel-rules delete NAMEORID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
 
 ARGUMENTS
   NAMEORID  Name or ID of the channel rule to delete
@@ -536,6 +568,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -547,39 +581,33 @@ EXAMPLES
   $ ably apps channel-rules delete events --app "My App"
 
   $ ably apps channel-rules delete notifications --force
+
+  $ ably apps channel-rules delete chat --json
+
+  $ ably apps channel-rules delete chat --pretty-json
 ```
 
 _See code: [src/commands/apps/channel-rules/delete.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/apps/channel-rules/delete.ts)_
 
 ## `ably apps channel-rules list`
 
-List all channel rules
+List channel rules for an app
 
 ```
 USAGE
-  $ ably apps channel-rules list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
-
-FLAGS
-  --access-token=<value>  Overrides any configured access token used for the Control API
-  --api-key=<value>       Overrides any configured API key used for the product APIs
-  --app=<value>           App ID or name to list channel rules for
-  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
-                          client ID. Not applicable when using token authentication.
-  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
-  --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
-  --host=<value>          Override the host endpoint for all product API calls
-  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
-
-DESCRIPTION
-  List all channel rules
-
-EXAMPLES
   $ ably apps channel-rules list
 
-  $ ably apps channel-rules list --app "My App" --format json
+DESCRIPTION
+  List channel rules for an app
+
+EXAMPLES
+  $ ably apps:channel-rules:list
+
+  $ ably apps:channel-rules:list --app-id my-app-id
+
+  $ ably apps:channel-rules:list --json
+
+  $ ably apps:channel-rules:list --pretty-json
 ```
 
 _See code: [src/commands/apps/channel-rules/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/apps/channel-rules/list.ts)_
@@ -590,11 +618,11 @@ Update a channel rule
 
 ```
 USAGE
-  $ ably apps channel-rules update NAMEORID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted] [--push-enabled] [--authenticated]
-    [--persist-last] [--expose-time-serial] [--populate-channel-registry] [--batching-enabled] [--batching-interval
-    <value>] [--conflation-enabled] [--conflation-interval <value>] [--conflation-key <value>] [--tls-only] [--app
-    <value>] [--format json|pretty]
+  $ ably apps channel-rules update NAMEORID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted] [--push-enabled]
+    [--authenticated] [--persist-last] [--expose-time-serial] [--populate-channel-registry] [--batching-enabled]
+    [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>] [--conflation-key <value>]
+    [--tls-only] [--app <value>]
 
 ARGUMENTS
   NAMEORID  Name or ID of the channel rule to update
@@ -614,12 +642,12 @@ FLAGS
   --control-host=<value>            Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>                     Override the environment for all product API calls
   --[no-]expose-time-serial         Whether to expose the time serial for messages on channels matching this rule
-  --format=<option>                 [default: pretty] Output format (json or pretty)
-                                    <options: json|pretty>
   --host=<value>                    Override the host endpoint for all product API calls
+  --json                            Output in JSON format
   --[no-]persist-last               Whether to persist only the last message on channels matching this rule
   --[no-]persisted                  Whether messages on channels matching this rule should be persisted
   --[no-]populate-channel-registry  Whether to populate the channel registry for channels matching this rule
+  --pretty-json                     Output in colorized JSON format
   --[no-]push-enabled               Whether push notifications should be enabled for channels matching this rule
   --[no-]tls-only                   Whether to enforce TLS for channels matching this rule
   --token=<value>                   Authenticate using an Ably Token or JWT Token instead of an API key
@@ -643,8 +671,8 @@ Create a new app
 
 ```
 USAGE
-  $ ably apps create --name <value> [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--tls-only] [--format json|pretty]
+  $ ably apps create --name <value> [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--tls-only]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -653,10 +681,10 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --name=<value>          (required) Name of the app
+  --pretty-json           Output in colorized JSON format
   --tls-only              Whether the app should accept TLS connections only
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -679,8 +707,8 @@ Show the currently selected app
 
 ```
 USAGE
-  $ ably apps current [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably apps current [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -689,9 +717,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -700,7 +728,9 @@ DESCRIPTION
 EXAMPLES
   $ ably apps current
 
-  $ ably apps current --format json
+  $ ably apps current --json
+
+  $ ably apps current --pretty-json
 ```
 
 _See code: [src/commands/apps/current.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/apps/current.ts)_
@@ -711,8 +741,8 @@ Delete an app
 
 ```
 USAGE
-  $ ably apps delete [ID] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-f]
+  $ ably apps delete [ID] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-f]
 
 ARGUMENTS
   ID  App ID to delete (uses current app if not specified)
@@ -726,6 +756,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -739,6 +771,10 @@ EXAMPLES
   $ ably apps delete app-id --access-token "YOUR_ACCESS_TOKEN"
 
   $ ably apps delete app-id --force
+
+  $ ably apps delete app-id --json
+
+  $ ably apps delete app-id --pretty-json
 ```
 
 _See code: [src/commands/apps/delete.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/apps/delete.ts)_
@@ -749,8 +785,8 @@ List all apps in the current account
 
 ```
 USAGE
-  $ ably apps list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably apps list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -759,9 +795,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -770,7 +806,9 @@ DESCRIPTION
 EXAMPLES
   $ ably apps list
 
-  $ ably apps list --format json
+  $ ably apps list --json
+
+  $ ably apps list --pretty-json
 ```
 
 _See code: [src/commands/apps/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/apps/list.ts)_
@@ -802,9 +840,9 @@ Alias for `ably logs app history`
 
 ```
 USAGE
-  $ ably apps logs history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards]
-    [--json]
+  $ ably apps logs history [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
+    backwards|forwards]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -818,6 +856,7 @@ FLAGS
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results in JSON format
   --limit=<value>         [default: 100] Maximum number of messages to retrieve
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -831,6 +870,8 @@ EXAMPLES
   $ ably apps logs history --direction forwards
 
   $ ably apps logs history --json
+
+  $ ably apps logs history --pretty-json
 ```
 
 _See code: [src/commands/apps/logs/history.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/apps/logs/history.ts)_
@@ -841,8 +882,8 @@ Alias for ably logs app subscribe
 
 ```
 USAGE
-  $ ably apps logs subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably apps logs subscribe [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -853,6 +894,7 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results as JSON
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -873,9 +915,9 @@ Upload Apple Push Notification Service P12 certificate for an app
 
 ```
 USAGE
-  $ ably apps set-apns-p12 ID --certificate <value> [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--password <value>]
-    [--use-for-sandbox] [--format json|pretty]
+  $ ably apps set-apns-p12 ID --certificate <value> [--json] [--pretty-json] [--host <value>] [--env <value>]
+    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+    [--password <value>] [--use-for-sandbox]
 
 ARGUMENTS
   ID  App ID to set the APNS certificate for
@@ -888,10 +930,10 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --password=<value>      Password for the P12 certificate
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --use-for-sandbox       Whether to use this certificate for the APNS sandbox environment
 
@@ -914,9 +956,9 @@ Get app stats with optional live updates
 
 ```
 USAGE
-  $ ably apps stats [ID] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit
-    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>] [--debug]
+  $ ably apps stats [ID] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end
+    <value>] [--unit minute|hour|day|month] [--limit <value>] [--live] [--interval <value>] [--debug]
 
 ARGUMENTS
   ID  App ID to get stats for (uses default app if not provided)
@@ -930,12 +972,12 @@ FLAGS
   --debug                 Show debug information for live stats polling
   --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
   --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
+  --json                  Output in JSON format
   --limit=<value>         [default: 10] Maximum number of stats records to return
   --live                  Subscribe to live stats updates (uses minute interval)
+  --pretty-json           Output in colorized JSON format
   --start=<value>         Start time in milliseconds since epoch
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --unit=<option>         [default: minute] Time unit for stats
@@ -957,7 +999,9 @@ EXAMPLES
 
   $ ably apps stats app-id --limit 10
 
-  $ ably apps stats app-id --format json
+  $ ably apps stats app-id --json
+
+  $ ably apps stats app-id --pretty-json
 
   $ ably apps stats --live
 
@@ -974,8 +1018,8 @@ Switch to a different Ably app
 
 ```
 USAGE
-  $ ably apps switch [APPID] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably apps switch [APPID] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   APPID  ID of the app to switch to
@@ -988,6 +1032,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1007,8 +1053,8 @@ Update an app
 
 ```
 USAGE
-  $ ably apps update ID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--name <value>] [--tls-only] [--format json|pretty]
+  $ ably apps update ID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--name <value>] [--tls-only]
 
 ARGUMENTS
   ID  App ID to update
@@ -1020,10 +1066,10 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --name=<value>          New name for the app
+  --pretty-json           Output in colorized JSON format
   --tls-only              Whether the app should accept TLS connections only
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -1079,9 +1125,9 @@ Creates an Ably Token with capabilities
 
 ```
 USAGE
-  $ ably auth issue-ably-token [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capability <value>] [--ttl <value>]
-    [--format json|pretty] [--token-only]
+  $ ably auth issue-ably-token [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capability
+    <value>] [--ttl <value>] [--token-only]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -1092,9 +1138,9 @@ FLAGS
                           ID, otherwise a default will be generated.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --token-only            Output only the token string without any formatting or additional information
   --ttl=<value>           [default: 3600] Time to live in seconds
@@ -1107,11 +1153,15 @@ EXAMPLES
 
   $ ably auth issue-ably-token --capability '{"*":["*"]}'
 
-  $ ably auth issue-ably-token --client-id "client123" --ttl 3600
+  $ ably auth issue-ably-token --capability '{"chat:*":["publish","subscribe"], "status:*":["subscribe"]}' --ttl 3600
+
+  $ ably auth issue-ably-token --client-id client123 --ttl 86400
 
   $ ably auth issue-ably-token --client-id "none" --ttl 3600
 
-  $ ably auth issue-ably-token --format json
+  $ ably auth issue-ably-token --json
+
+  $ ably auth issue-ably-token --pretty-json
 
   $ ably auth issue-ably-token --token-only
 
@@ -1126,9 +1176,9 @@ Creates an Ably JWT token with capabilities
 
 ```
 USAGE
-  $ ably auth issue-jwt-token [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capability <value>] [--ttl <value>]
-    [--format json|pretty] [--token-only]
+  $ ably auth issue-jwt-token [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capability
+    <value>] [--ttl <value>] [--token-only]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -1139,9 +1189,9 @@ FLAGS
                           ID, otherwise a default will be generated.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --token-only            Output only the token string without any formatting or additional information
   --ttl=<value>           [default: 3600] Time to live in seconds
@@ -1154,11 +1204,13 @@ EXAMPLES
 
   $ ably auth issue-jwt-token --capability '{"*":["*"]}'
 
-  $ ably auth issue-jwt-token --client-id "client123" --ttl 3600
+  $ ably auth issue-jwt-token --capability '{"chat:*":["publish","subscribe"], "status:*":["subscribe"]}' --ttl 3600
 
-  $ ably auth issue-jwt-token --client-id "none" --ttl 3600
+  $ ably auth issue-jwt-token --client-id client123 --ttl 86400
 
-  $ ably auth issue-jwt-token --format json
+  $ ably auth issue-jwt-token --json
+
+  $ ably auth issue-jwt-token --pretty-json
 
   $ ably auth issue-jwt-token --token-only
 
@@ -1200,9 +1252,9 @@ Create a new API key for an app
 
 ```
 USAGE
-  $ ably auth keys create --name <value> [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capabilities <value>]
-    [--format json|pretty]
+  $ ably auth keys create --name <value> [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+    [--capabilities <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -1213,10 +1265,10 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --name=<value>          (required) Name of the key
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1230,6 +1282,10 @@ EXAMPLES
   $ ably auth keys create --name "My New Key" --capabilities "{\"*\":[\"*\"]}"
 
   $ ably auth keys create --name "My New Key" --capabilities "{\"channel1\":[\"publish\",\"subscribe\"],\"channel2\":[\"history\"]}"
+
+  $ ably auth keys create --name "My New Key" --json
+
+  $ ably auth keys create --name "My New Key" --pretty-json
 ```
 
 _See code: [src/commands/auth/keys/create.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/auth/keys/create.ts)_
@@ -1240,8 +1296,8 @@ Show the current API key for the selected app
 
 ```
 USAGE
-  $ ably auth keys current [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--format json|pretty]
+  $ ably auth keys current [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -1251,9 +1307,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1264,7 +1320,9 @@ EXAMPLES
 
   $ ably auth keys current --app APP_ID
 
-  $ ably auth keys current --format json
+  $ ably auth keys current --json
+
+  $ ably auth keys current --pretty-json
 ```
 
 _See code: [src/commands/auth/keys/current.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/auth/keys/current.ts)_
@@ -1275,8 +1333,8 @@ Get details for a specific key
 
 ```
 USAGE
-  $ ably auth keys get KEYNAMEORVALUE [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--format json|pretty]
+  $ ably auth keys get KEYNAMEORVALUE [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 ARGUMENTS
   KEYNAMEORVALUE  Key name (APP_ID.KEY_ID) or full value of the key to get details for
@@ -1289,9 +1347,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1302,7 +1360,9 @@ EXAMPLES
 
   $ ably auth keys get KEY_ID --app APP_ID
 
-  $ ably auth keys get APP_ID.KEY_ID --format json
+  $ ably auth keys get APP_ID.KEY_ID --json
+
+  $ ably auth keys get APP_ID.KEY_ID --pretty-json
 ```
 
 _See code: [src/commands/auth/keys/get.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/auth/keys/get.ts)_
@@ -1313,8 +1373,8 @@ List all keys in the app
 
 ```
 USAGE
-  $ ably auth keys list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--format json|pretty]
+  $ ably auth keys list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -1324,9 +1384,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1337,7 +1397,9 @@ EXAMPLES
 
   $ ably auth keys list --app APP_ID
 
-  $ ably auth keys list --format json
+  $ ably auth keys list --json
+
+  $ ably auth keys list --pretty-json
 ```
 
 _See code: [src/commands/auth/keys/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/auth/keys/list.ts)_
@@ -1348,8 +1410,8 @@ Revoke an API key (permanently disables the key)
 
 ```
 USAGE
-  $ ably auth keys revoke KEYNAME [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--force]
+  $ ably auth keys revoke KEYNAME [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--force]
 
 ARGUMENTS
   KEYNAME  Key name (APP_ID.KEY_ID) of the key to revoke
@@ -1364,6 +1426,8 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --force                 Skip confirmation prompt
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1375,6 +1439,10 @@ EXAMPLES
   $ ably auth keys revoke KEY_ID --app APP_ID
 
   $ ably auth keys revoke APP_ID.KEY_ID --force
+
+  $ ably auth keys revoke APP_ID.KEY_ID --json
+
+  $ ably auth keys revoke APP_ID.KEY_ID --pretty-json
 ```
 
 _See code: [src/commands/auth/keys/revoke.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/auth/keys/revoke.ts)_
@@ -1385,8 +1453,8 @@ Switch to a different API key for the current app
 
 ```
 USAGE
-  $ ably auth keys switch [KEYNAMEORVALUE] [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably auth keys switch [KEYNAMEORVALUE] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 ARGUMENTS
   KEYNAMEORVALUE  Key name (APP_ID.KEY_ID) or full value of the key to switch to
@@ -1400,6 +1468,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1421,9 +1491,9 @@ Update a key's properties
 
 ```
 USAGE
-  $ ably auth keys update KEYNAME [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--name <value>] [--capabilities
-    <value>]
+  $ ably auth keys update KEYNAME [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--name
+    <value>] [--capabilities <value>]
 
 ARGUMENTS
   KEYNAME  Key name (APP_ID.KEY_ID) of the key to update
@@ -1438,7 +1508,9 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --name=<value>          New name for the key
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1460,8 +1532,8 @@ Revokes the token provided
 
 ```
 USAGE
-  $ ably auth revoke-token TOKEN [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [-c <value>] [--app <value>] [--format json|pretty] [--debug]
+  $ ably auth revoke-token TOKEN [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [-c <value>] [--app <value>] [--debug]
 
 ARGUMENTS
   TOKEN  Token to revoke
@@ -1474,9 +1546,9 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --debug                 Show debug information
       --env=<value>           Override the environment for all product API calls
-      --format=<option>       [default: pretty] Output format (json or pretty)
-                              <options: json|pretty>
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1487,7 +1559,9 @@ EXAMPLES
 
   $ ably auth revoke-token TOKEN --client-id clientid
 
-  $ ably auth revoke-token TOKEN --format json
+  $ ably auth revoke-token TOKEN --json
+
+  $ ably auth revoke-token TOKEN --pretty-json
 ```
 
 _See code: [src/commands/auth/revoke-token.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/auth/revoke-token.ts)_
@@ -1516,9 +1590,9 @@ Run a publisher benchmark test
 
 ```
 USAGE
-  $ ably bench publisher CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-m <value>] [-r <value>] [-t rest|realtime]
-    [--wait-for-subscribers] [--message-size <value>]
+  $ ably bench publisher CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-m <value>] [-r <value>] [-t
+    rest|realtime] [--wait-for-subscribers] [--message-size <value>]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
@@ -1535,7 +1609,9 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --message-size=<value>  [default: 100] Size of the message payload in bytes
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
       --wait-for-subscribers  Wait for subscribers to be present before starting
 
@@ -1558,8 +1634,8 @@ Run a subscriber benchmark test
 
 ```
 USAGE
-  $ ably bench subscriber CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-t rest|realtime]
+  $ ably bench subscriber CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-t rest|realtime]
 
 ARGUMENTS
   CHANNEL  The channel name to subscribe to
@@ -1574,6 +1650,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1618,9 +1696,9 @@ Publish messages to multiple Ably channels with a single request
 
 ```
 USAGE
-  $ ably channels batch-publish [MESSAGE] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--channels <value> | --channels-json <value> | --spec
-    <value>] [-n <value> | ] [-e <value> | ]
+  $ ably channels batch-publish [MESSAGE] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--channels <value> |
+    --channels-json <value> | --spec <value>] [-n <value> | ] [-e <value> | ]
 
 ARGUMENTS
   MESSAGE  The message to publish (JSON format or plain text, not needed if using --spec)
@@ -1637,6 +1715,8 @@ FLAGS
       --control-host=<value>   Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>            Override the environment for all product API calls
       --host=<value>           Override the host endpoint for all product API calls
+      --json                   Output in JSON format
+      --pretty-json            Output in colorized JSON format
       --spec=<value>           Complete batch spec JSON (either a single BatchSpec object or an array of BatchSpec
                                objects)
       --token=<value>          Authenticate using an Ably Token or JWT Token instead of an API key
@@ -1654,6 +1734,10 @@ EXAMPLES
   $ ably channels batch-publish --spec '{"channels": ["channel1", "channel2"], "messages": {"data": "Using complete batch spec"}}'
 
   $ ably channels batch-publish --spec '[{"channels": "channel1", "messages": {"data": "First spec"}}, {"channels": "channel2", "messages": {"data": "Second spec"}}]'
+
+  $ ably channels batch-publish --channels channel1,channel2 '{"data":"Message"}' --json
+
+  $ ably channels batch-publish --channels channel1,channel2 '{"data":"Message"}' --pretty-json
 ```
 
 _See code: [src/commands/channels/batch-publish.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/batch-publish.ts)_
@@ -1664,9 +1748,9 @@ Retrieve message history for a channel
 
 ```
 USAGE
-  $ ably channels history CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards]
-    [--format json|pretty] [--start <value>] [--end <value>] [--cipher <value>]
+  $ ably channels history CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
+    backwards|forwards] [--start <value>] [--end <value>] [--cipher <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to retrieve history for
@@ -1682,10 +1766,10 @@ FLAGS
                           <options: backwards|forwards>
   --end=<value>           End time for the history query (ISO 8601 format)
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --limit=<value>         [default: 50] Maximum number of messages to retrieve
+  --pretty-json           Output in colorized JSON format
   --start=<value>         Start time for the history query (ISO 8601 format)
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -1695,13 +1779,15 @@ DESCRIPTION
 EXAMPLES
   $ ably channels history my-channel
 
-  $ ably channels history my-channel --limit 50
+  $ ably channels history my-channel --json
 
-  $ ably channels history my-channel --direction forwards
-
-  $ ably channels history my-channel --format json
+  $ ably channels history my-channel --pretty-json
 
   $ ably channels history my-channel --start "2023-01-01T00:00:00Z" --end "2023-01-02T00:00:00Z"
+
+  $ ably channels history my-channel --limit 100
+
+  $ ably channels history my-channel --direction forward
 ```
 
 _See code: [src/commands/channels/history.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/history.ts)_
@@ -1712,8 +1798,8 @@ List active channels using the channel enumeration API
 
 ```
 USAGE
-  $ ably channels list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>] [--format json|pretty]
+  $ ably channels list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter channels by prefix
@@ -1723,10 +1809,10 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
-      --format=<option>       [default: pretty] Output format (json or pretty)
-                              <options: json|pretty>
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --limit=<value>         [default: 100] Maximum number of channels to return
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1739,7 +1825,9 @@ EXAMPLES
 
   $ ably channels list --limit 50
 
-  $ ably channels list --format json
+  $ ably channels list --json
+
+  $ ably channels list --pretty-json
 ```
 
 _See code: [src/commands/channels/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/list.ts)_
@@ -1750,8 +1838,8 @@ Alias for ably logs channel-lifecycle subscribe
 
 ```
 USAGE
-  $ ably channels logs [TOPIC] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably channels logs [TOPIC] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 ARGUMENTS
   TOPIC  [default: channel-lifecycle] Log topic to subscribe to (currently only channel-lifecycle is supported)
@@ -1765,6 +1853,7 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results as JSON
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -1804,8 +1893,8 @@ Get current occupancy metrics for a channel
 
 ```
 USAGE
-  $ ably channels occupancy get CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably channels occupancy get CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to get occupancy for
@@ -1817,9 +1906,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1829,6 +1918,10 @@ EXAMPLES
   $ ably channels occupancy get my-channel
 
   $ ably channels occupancy get --api-key "YOUR_API_KEY" my-channel
+
+  $ ably channels occupancy get my-channel --json
+
+  $ ably channels occupancy get my-channel --pretty-json
 ```
 
 _See code: [src/commands/channels/occupancy/get.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/occupancy/get.ts)_
@@ -1839,8 +1932,8 @@ Subscribe to real-time occupancy metrics for a channel
 
 ```
 USAGE
-  $ ably channels occupancy subscribe CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably channels occupancy subscribe CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to subscribe to occupancy for
@@ -1852,9 +1945,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1863,9 +1956,9 @@ DESCRIPTION
 EXAMPLES
   $ ably channels occupancy subscribe my-channel
 
-  $ ably channels occupancy subscribe --api-key "YOUR_API_KEY" my-channel
+  $ ably channels occupancy subscribe my-channel --json
 
-  $ ably channels occupancy subscribe --format json my-channel
+  $ ably channels occupancy subscribe --pretty-json my-channel
 ```
 
 _See code: [src/commands/channels/occupancy/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/occupancy/subscribe.ts)_
@@ -1895,8 +1988,9 @@ Enter presence on a channel and remain present until terminated
 
 ```
 USAGE
-  $ ably channels presence enter CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>] [--show-others]
+  $ ably channels presence enter CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>]
+    [--show-others]
 
 ARGUMENTS
   CHANNEL  Channel name to enter presence on
@@ -1910,6 +2004,8 @@ FLAGS
   --data=<value>          [default: {}] Presence data to publish (JSON string)
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --show-others           Show other presence events while present
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -1932,8 +2028,8 @@ Subscribe to presence events on a channel
 
 ```
 USAGE
-  $ ably channels presence subscribe CHANNEL [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably channels presence subscribe CHANNEL [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to subscribe to presence on
@@ -1945,9 +2041,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -1956,7 +2052,9 @@ DESCRIPTION
 EXAMPLES
   $ ably channels presence subscribe my-channel
 
-  $ ably channels presence subscribe my-channel --format json
+  $ ably channels presence subscribe my-channel --json
+
+  $ ably channels presence subscribe my-channel --pretty-json
 ```
 
 _See code: [src/commands/channels/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/presence/subscribe.ts)_
@@ -1967,9 +2065,9 @@ Publish a message to an Ably channel
 
 ```
 USAGE
-  $ ably channels publish CHANNEL MESSAGE [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-n <value>] [-e <value>] [-c <value>] [-d
-    <value>] [--transport rest|realtime]
+  $ ably channels publish CHANNEL MESSAGE [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-n <value>] [-e
+    <value>] [-c <value>] [-d <value>] [--transport rest|realtime]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
@@ -1987,6 +2085,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
       --transport=<option>    [default: rest] Transport method to use for publishing (rest or realtime)
                               <options: rest|realtime>
@@ -2012,6 +2112,10 @@ EXAMPLES
   $ ably channels publish --count 10 --delay 1000 my-channel "Message at {{.Timestamp}}"
 
   $ ably channels publish --transport realtime my-channel "Using realtime transport"
+
+  $ ably channels publish my-channel "Hello World" --json
+
+  $ ably channels publish my-channel "Hello World" --pretty-json
 ```
 
 _See code: [src/commands/channels/publish.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/publish.ts)_
@@ -2022,9 +2126,9 @@ Subscribe to messages published on one or more Ably channels
 
 ```
 USAGE
-  $ ably channels subscribe CHANNELS... [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--delta] [--cipher-key
-    <value>] [--cipher-algorithm <value>] [--cipher-key-length <value>] [--cipher-mode <value>]
+  $ ably channels subscribe CHANNELS... [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+    [--delta] [--cipher-key <value>] [--cipher-algorithm <value>] [--cipher-key-length <value>] [--cipher-mode <value>]
 
 ARGUMENTS
   CHANNELS...  Channel name(s) to subscribe to
@@ -2042,6 +2146,8 @@ FLAGS
   --delta                      Enable delta compression for messages
   --env=<value>                Override the environment for all product API calls
   --host=<value>               Override the host endpoint for all product API calls
+  --json                       Output in JSON format
+  --pretty-json                Output in colorized JSON format
   --rewind=<value>             Number of messages to rewind when subscribing
   --token=<value>              Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -2062,6 +2168,10 @@ EXAMPLES
   $ ably channels subscribe --delta my-channel
 
   $ ably channels subscribe --cipher-key YOUR_CIPHER_KEY my-channel
+
+  $ ably channels subscribe my-channel --json
+
+  $ ably channels subscribe my-channel --pretty-json
 ```
 
 _See code: [src/commands/channels/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/channels/subscribe.ts)_
@@ -2072,8 +2182,8 @@ Open the Ably config file in the default text editor
 
 ```
 USAGE
-  $ ably config [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-e <value>]
+  $ ably config [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-e <value>]
 
 FLAGS
   -e, --editor=<value>        Text editor to use (defaults to $EDITOR environment variable)
@@ -2084,6 +2194,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2122,8 +2234,8 @@ Alias for ably logs connection-lifecycle subscribe
 
 ```
 USAGE
-  $ ably connections logs [TOPIC] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably connections logs [TOPIC] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 ARGUMENTS
   TOPIC  [default: connections-lifecycle] Log topic to subscribe to (currently only connections-lifecycle is supported)
@@ -2137,6 +2249,7 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results as JSON
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -2157,9 +2270,9 @@ View connection statistics for an Ably app
 
 ```
 USAGE
-  $ ably connections stats [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end <value>] [--unit
-    minute|hour|day|month] [--limit <value>] [--format json|pretty] [--live] [--interval <value>] [--debug]
+  $ ably connections stats [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end
+    <value>] [--unit minute|hour|day|month] [--limit <value>] [--live] [--interval <value>] [--debug]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2170,12 +2283,12 @@ FLAGS
   --debug                 Show debug information for live stats polling
   --end=<value>           End time in milliseconds since epoch
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
   --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
+  --json                  Output in JSON format
   --limit=<value>         [default: 10] Maximum number of stats records to return
   --live                  Subscribe to live stats updates (uses minute interval)
+  --pretty-json           Output in colorized JSON format
   --start=<value>         Start time in milliseconds since epoch
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --unit=<option>         [default: minute] Time unit for stats
@@ -2193,7 +2306,9 @@ EXAMPLES
 
   $ ably connections stats --limit 10
 
-  $ ably connections stats --format json
+  $ ably connections stats --json
+
+  $ ably connections stats --pretty-json
 
   $ ably connections stats --live
 ```
@@ -2206,8 +2321,8 @@ Test connection to Ably
 
 ```
 USAGE
-  $ ably connections test [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--transport ws|xhr|all]
+  $ ably connections test [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--transport ws|xhr|all]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2217,6 +2332,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --transport=<option>    [default: all] Transport protocol to use (ws for WebSockets, xhr for HTTP)
                           <options: ws|xhr|all>
@@ -2266,8 +2383,8 @@ Ask a question to the Ably AI agent for help
 
 ```
 USAGE
-  $ ably help ask QUESTION [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-h] [--continue]
+  $ ably help ask QUESTION [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-h] [--continue]
 
 ARGUMENTS
   QUESTION  The question to ask the Ably AI agent
@@ -2282,6 +2399,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2390,10 +2509,10 @@ Create an integration rule
 ```
 USAGE
   $ ably integrations create --rule-type http|amqp|kinesis|firehose|pulsar|kafka|azure|azure-functions|mqtt|cloudmqtt
-    --source-type channel.message|channel.presence|channel.lifecycle|presence.message [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app
-    <value>] [--channel-filter <value>] [--request-mode single|batch] [--status enabled|disabled] [--target-url <value>]
-    [--format json|pretty]
+    --source-type channel.message|channel.presence|channel.lifecycle|presence.message [--json] [--pretty-json] [--host
+    <value>] [--env <value>] [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>]
+    [--client-id <value>] [--app <value>] [--channel-filter <value>] [--request-mode single|batch] [--status
+    enabled|disabled] [--target-url <value>]
 
 FLAGS
   --access-token=<value>    Overrides any configured access token used for the Control API
@@ -2404,9 +2523,9 @@ FLAGS
                             no client ID. Not applicable when using token authentication.
   --control-host=<value>    Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>             Override the environment for all product API calls
-  --format=<option>         [default: pretty] Output format (json or pretty)
-                            <options: json|pretty>
   --host=<value>            Override the host endpoint for all product API calls
+  --json                    Output in JSON format
+  --pretty-json             Output in colorized JSON format
   --request-mode=<option>   [default: single] Request mode for the rule
                             <options: single|batch>
   --rule-type=<option>      (required) Type of integration rule (http, amqp, etc.)
@@ -2435,8 +2554,8 @@ Delete an integration rule
 
 ```
 USAGE
-  $ ably integrations delete RULEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+  $ ably integrations delete RULEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
 
 ARGUMENTS
   RULEID  The rule ID to delete
@@ -2451,6 +2570,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2472,8 +2593,8 @@ Get an integration rule by ID
 
 ```
 USAGE
-  $ ably integrations get RULEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+  $ ably integrations get RULEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 ARGUMENTS
   RULEID  The rule ID to get
@@ -2486,9 +2607,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2497,7 +2618,9 @@ DESCRIPTION
 EXAMPLES
   $ ably integrations get rule123
 
-  $ ably integrations get rule123 --app "My App" --format json
+  $ ably integrations get rule123 --json
+
+  $ ably integrations get rule123 --app "My App" --pretty-json
 ```
 
 _See code: [src/commands/integrations/get.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/integrations/get.ts)_
@@ -2508,8 +2631,8 @@ List all integration rules
 
 ```
 USAGE
-  $ ably integrations list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+  $ ably integrations list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2519,9 +2642,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2530,7 +2653,9 @@ DESCRIPTION
 EXAMPLES
   $ ably integrations list
 
-  $ ably integrations list --app "My App" --format json
+  $ ably integrations list --app "My App" --json
+
+  $ ably integrations list --app "My App" --pretty-json
 ```
 
 _See code: [src/commands/integrations/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/integrations/list.ts)_
@@ -2541,9 +2666,9 @@ Update an integration rule
 
 ```
 USAGE
-  $ ably integrations update RULEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--channel-filter <value>] [--status
-    enabled|disabled] [--target-url <value>] [--format json|pretty]
+  $ ably integrations update RULEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+    [--channel-filter <value>] [--status enabled|disabled] [--target-url <value>]
 
 ARGUMENTS
   RULEID  The rule ID to update
@@ -2557,9 +2682,9 @@ FLAGS
                             no client ID. Not applicable when using token authentication.
   --control-host=<value>    Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>             Override the environment for all product API calls
-  --format=<option>         [default: pretty] Output format (json or pretty)
-                            <options: json|pretty>
   --host=<value>            Override the host endpoint for all product API calls
+  --json                    Output in JSON format
+  --pretty-json             Output in colorized JSON format
   --status=<option>         Status of the rule
                             <options: enabled|disabled>
   --target-url=<value>      Target URL for HTTP rules
@@ -2584,8 +2709,8 @@ Log in to your Ably account (alias for "ably accounts login")
 
 ```
 USAGE
-  $ ably login [TOKEN] [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-a <value>] [--no-browser]
+  $ ably login [TOKEN] [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-a <value>] [--no-browser]
 
 ARGUMENTS
   TOKEN  Access token (if not provided, will prompt for it)
@@ -2599,7 +2724,9 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --no-browser            Do not open a browser
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2667,9 +2794,9 @@ Retrieve application log history
 
 ```
 USAGE
-  $ ably logs app history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards]
-    [--json]
+  $ ably logs app history [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
+    backwards|forwards]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2681,8 +2808,9 @@ FLAGS
                           <options: backwards|forwards>
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results in JSON format
+  --json                  Output in JSON format
   --limit=<value>         [default: 100] Maximum number of logs to retrieve
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2696,6 +2824,8 @@ EXAMPLES
   $ ably logs app history --direction forwards
 
   $ ably logs app history --json
+
+  $ ably logs app history --pretty-json
 ```
 
 _See code: [src/commands/logs/app/history.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/logs/app/history.ts)_
@@ -2706,8 +2836,8 @@ Stream logs from the app-wide meta channel [meta]log
 
 ```
 USAGE
-  $ ably logs app subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably logs app subscribe [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2717,7 +2847,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results as JSON
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -2728,6 +2859,10 @@ EXAMPLES
   $ ably logs app subscribe
 
   $ ably logs app subscribe --rewind 10
+
+  $ ably logs app subscribe --json
+
+  $ ably logs app subscribe --pretty-json
 ```
 
 _See code: [src/commands/logs/app/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/logs/app/subscribe.ts)_
@@ -2738,8 +2873,8 @@ Stream logs from [meta]channel.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs channel-lifecycle [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably logs channel-lifecycle [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2750,6 +2885,7 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results as JSON
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -2770,8 +2906,8 @@ Stream logs from [meta]channel.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs channel-lifecycle subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably logs channel-lifecycle subscribe [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2782,6 +2918,7 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results as JSON
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -2821,9 +2958,9 @@ Retrieve connection lifecycle log history
 
 ```
 USAGE
-  $ ably logs connection-lifecycle history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards]
-    [--json]
+  $ ably logs connection-lifecycle history [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
+    backwards|forwards]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2835,8 +2972,9 @@ FLAGS
                           <options: backwards|forwards>
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results in JSON format
+  --json                  Output in JSON format
   --limit=<value>         [default: 100] Maximum number of logs to retrieve
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2850,6 +2988,8 @@ EXAMPLES
   $ ably logs connection-lifecycle history --direction forwards
 
   $ ably logs connection-lifecycle history --json
+
+  $ ably logs connection-lifecycle history --pretty-json
 ```
 
 _See code: [src/commands/logs/connection-lifecycle/history.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/logs/connection-lifecycle/history.ts)_
@@ -2860,8 +3000,8 @@ Stream logs from [meta]connection.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs connection-lifecycle subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably logs connection-lifecycle subscribe [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2871,7 +3011,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results as JSON
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -2882,9 +3023,50 @@ EXAMPLES
   $ ably logs connection-lifecycle subscribe
 
   $ ably logs connection-lifecycle subscribe --rewind 10
+
+  $ ably logs connection-lifecycle subscribe --json
+
+  $ ably logs connection-lifecycle subscribe --pretty-json
 ```
 
 _See code: [src/commands/logs/connection-lifecycle/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/logs/connection-lifecycle/subscribe.ts)_
+
+## `ably logs connection subscribe`
+
+Stream logs from [meta]connection meta channel
+
+```
+USAGE
+  $ ably logs connection subscribe [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
+  --rewind=<value>        Number of messages to rewind when subscribing
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Stream logs from [meta]connection meta channel
+
+EXAMPLES
+  $ ably logs connection subscribe
+
+  $ ably logs connection subscribe --rewind 10
+
+  $ ably logs connection subscribe --json
+
+  $ ably logs connection subscribe --pretty-json
+```
+
+_See code: [src/commands/logs/connection/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/logs/connection/subscribe.ts)_
 
 ## `ably logs push`
 
@@ -2913,9 +3095,9 @@ Retrieve push notification log history
 
 ```
 USAGE
-  $ ably logs push history [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction backwards|forwards]
-    [--json]
+  $ ably logs push history [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
+    backwards|forwards]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2927,8 +3109,9 @@ FLAGS
                           <options: backwards|forwards>
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
-  --json                  Output results in JSON format
+  --json                  Output in JSON format
   --limit=<value>         [default: 100] Maximum number of logs to retrieve
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -2942,6 +3125,8 @@ EXAMPLES
   $ ably logs push history --direction forwards
 
   $ ably logs push history --json
+
+  $ ably logs push history --pretty-json
 ```
 
 _See code: [src/commands/logs/push/history.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/logs/push/history.ts)_
@@ -2952,8 +3137,8 @@ Stream logs from the push notifications meta channel [meta]log:push
 
 ```
 USAGE
-  $ ably logs push subscribe [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>] [--json]
+  $ ably logs push subscribe [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -2964,6 +3149,7 @@ FLAGS
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
   --json                  Output results as JSON
+  --pretty-json           Output in colorized JSON format
   --rewind=<value>        Number of messages to rewind when subscribing
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -3039,9 +3225,9 @@ Create a queue
 
 ```
 USAGE
-  $ ably queues create --name <value> [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--ttl <value>] [--max-length <value>]
-    [--region <value>] [--app <value>] [--format json|pretty]
+  $ ably queues create --name <value> [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--ttl <value>]
+    [--max-length <value>] [--region <value>] [--app <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -3051,11 +3237,11 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --max-length=<value>    [default: 10000] Maximum number of messages in the queue
   --name=<value>          (required) Name of the queue
+  --pretty-json           Output in colorized JSON format
   --region=<value>        [default: us-east-1-a] Region for the queue
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
   --ttl=<value>           [default: 60] Time to live for messages in seconds
@@ -3079,8 +3265,8 @@ Delete a queue
 
 ```
 USAGE
-  $ ably queues delete QUEUENAME [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+  $ ably queues delete QUEUENAME [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
 
 ARGUMENTS
   QUEUENAME  Name of the queue to delete
@@ -3095,6 +3281,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3116,8 +3304,8 @@ List all queues
 
 ```
 USAGE
-  $ ably queues list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty] [--app <value>]
+  $ ably queues list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -3127,9 +3315,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3138,7 +3326,9 @@ DESCRIPTION
 EXAMPLES
   $ ably queues list
 
-  $ ably queues list --app "My App" --format json
+  $ ably queues list --json
+
+  $ ably queues list --app "My App" --pretty-json
 ```
 
 _See code: [src/commands/queues/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/queues/list.ts)_
@@ -3176,8 +3366,8 @@ List active chat rooms
 
 ```
 USAGE
-  $ ably rooms list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>] [--format json|pretty]
+  $ ably rooms list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter rooms by prefix
@@ -3187,10 +3377,10 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
-      --format=<option>       [default: pretty] Output format (json or pretty)
-                              <options: json|pretty>
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --limit=<value>         [default: 100] Maximum number of rooms to return
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3203,7 +3393,9 @@ EXAMPLES
 
   $ ably rooms list --limit 50
 
-  $ ably rooms list --format json
+  $ ably rooms list --json
+
+  $ ably rooms list --pretty-json
 ```
 
 _See code: [src/commands/rooms/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/list.ts)_
@@ -3235,8 +3427,8 @@ Get historical messages from an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages get ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-l <value>] [--show-metadata]
+  $ ably rooms messages get ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-l <value>] [--show-metadata]
 
 ARGUMENTS
   ROOMID  The room ID to get messages from
@@ -3250,6 +3442,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --show-metadata         Display message metadata if available
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -3264,6 +3458,10 @@ EXAMPLES
   $ ably rooms messages get --limit 50 my-room
 
   $ ably rooms messages get --show-metadata my-room
+
+  $ ably rooms messages get my-room --json
+
+  $ ably rooms messages get my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/messages/get.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/messages/get.ts)_
@@ -3274,8 +3472,9 @@ Send a message to an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages send ROOMID TEXT [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>] [-c <value>] [-d <value>]
+  $ ably rooms messages send ROOMID TEXT [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>]
+    [-c <value>] [-d <value>]
 
 ARGUMENTS
   ROOMID  The room ID to send the message to
@@ -3291,7 +3490,9 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --metadata=<value>      Additional metadata for the message (JSON format)
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3307,6 +3508,10 @@ EXAMPLES
   $ ably rooms messages send --count 5 my-room "Message number {{.Count}}"
 
   $ ably rooms messages send --count 10 --delay 1000 my-room "Message at {{.Timestamp}}"
+
+  $ ably rooms messages send my-room "Hello World!" --json
+
+  $ ably rooms messages send my-room "Hello World!" --pretty-json
 ```
 
 _See code: [src/commands/rooms/messages/send.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/messages/send.ts)_
@@ -3317,8 +3522,8 @@ Subscribe to messages in an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--show-metadata]
+  $ ably rooms messages subscribe ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--show-metadata]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to messages from
@@ -3331,6 +3536,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --show-metadata         Display message metadata if available
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -3343,6 +3550,10 @@ EXAMPLES
   $ ably rooms messages subscribe --api-key "YOUR_API_KEY" my-room
 
   $ ably rooms messages subscribe --show-metadata my-room
+
+  $ ably rooms messages subscribe my-room --json
+
+  $ ably rooms messages subscribe my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/messages/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/messages/subscribe.ts)_
@@ -3372,8 +3583,8 @@ Get current occupancy metrics for a room
 
 ```
 USAGE
-  $ ably rooms occupancy get ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably rooms occupancy get ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ROOMID  Room ID to get occupancy for
@@ -3385,9 +3596,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3397,6 +3608,10 @@ EXAMPLES
   $ ably rooms occupancy get my-room
 
   $ ably rooms occupancy get --api-key "YOUR_API_KEY" my-room
+
+  $ ably rooms occupancy get my-room --json
+
+  $ ably rooms occupancy get my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/occupancy/get.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/occupancy/get.ts)_
@@ -3407,8 +3622,8 @@ Subscribe to real-time occupancy metrics for a room
 
 ```
 USAGE
-  $ ably rooms occupancy subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably rooms occupancy subscribe ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to occupancy for
@@ -3420,9 +3635,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format (json or pretty)
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3431,9 +3646,9 @@ DESCRIPTION
 EXAMPLES
   $ ably rooms occupancy subscribe my-room
 
-  $ ably rooms occupancy subscribe --api-key "YOUR_API_KEY" my-room
+  $ ably rooms occupancy subscribe my-room --json
 
-  $ ably rooms occupancy subscribe --format json my-room
+  $ ably rooms occupancy subscribe --pretty-json my-room
 ```
 
 _See code: [src/commands/rooms/occupancy/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/occupancy/subscribe.ts)_
@@ -3463,8 +3678,9 @@ Enter presence in a chat room and remain present until terminated
 
 ```
 USAGE
-  $ ably rooms presence enter ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>] [--show-others]
+  $ ably rooms presence enter ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>]
+    [--show-others]
 
 ARGUMENTS
   ROOMID  Room ID to enter presence on
@@ -3478,6 +3694,8 @@ FLAGS
   --data=<value>          [default: {}] Presence data to publish (JSON string)
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --show-others           Show other presence events while present
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -3490,6 +3708,10 @@ EXAMPLES
   $ ably rooms presence enter my-room --data '{"status":"online","username":"john"}'
 
   $ ably rooms presence enter my-room --client-id "user123"
+
+  $ ably rooms presence enter my-room --json
+
+  $ ably rooms presence enter my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/presence/enter.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/presence/enter.ts)_
@@ -3500,8 +3722,8 @@ Subscribe to presence events in a chat room
 
 ```
 USAGE
-  $ ably rooms presence subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably rooms presence subscribe ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to presence for
@@ -3513,9 +3735,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3524,7 +3746,9 @@ DESCRIPTION
 EXAMPLES
   $ ably rooms presence subscribe my-room
 
-  $ ably rooms presence subscribe my-room --format json
+  $ ably rooms presence subscribe my-room --json
+
+  $ ably rooms presence subscribe my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/presence/subscribe.ts)_
@@ -3554,8 +3778,8 @@ Send a reaction to a chat room
 
 ```
 USAGE
-  $ ably rooms reactions send ROOMID TYPE [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>]
+  $ ably rooms reactions send ROOMID TYPE [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>]
 
 ARGUMENTS
   ROOMID  Room ID to send the reaction to
@@ -3569,7 +3793,9 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --metadata=<value>      [default: {}] Optional metadata for the reaction (JSON string)
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3579,6 +3805,10 @@ EXAMPLES
   $ ably rooms reactions send my-room thumbs_up
 
   $ ably rooms reactions send my-room heart --metadata '{"effect":"fireworks"}'
+
+  $ ably rooms reactions send my-room thumbs_up --json
+
+  $ ably rooms reactions send my-room heart --metadata '{"effect":"fireworks"}' --pretty-json
 ```
 
 _See code: [src/commands/rooms/reactions/send.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/reactions/send.ts)_
@@ -3589,8 +3819,8 @@ Subscribe to reactions in a chat room
 
 ```
 USAGE
-  $ ably rooms reactions subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably rooms reactions subscribe ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to reactions in
@@ -3602,9 +3832,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3613,7 +3843,9 @@ DESCRIPTION
 EXAMPLES
   $ ably rooms reactions subscribe my-room
 
-  $ ably rooms reactions subscribe my-room --format json
+  $ ably rooms reactions subscribe my-room --json
+
+  $ ably rooms reactions subscribe my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/reactions/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/reactions/subscribe.ts)_
@@ -3643,8 +3875,8 @@ Start typing in an Ably Chat room (will remain typing until terminated)
 
 ```
 USAGE
-  $ ably rooms typing start ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms typing start ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ROOMID  The room ID to start typing in
@@ -3657,6 +3889,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3666,6 +3900,10 @@ EXAMPLES
   $ ably rooms typing start my-room
 
   $ ably rooms typing start --api-key "YOUR_API_KEY" my-room
+
+  $ ably rooms typing start my-room --json
+
+  $ ably rooms typing start my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/typing/start.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/typing/start.ts)_
@@ -3676,8 +3914,8 @@ Subscribe to typing indicators in an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms typing subscribe ROOMID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms typing subscribe ROOMID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to typing indicators from
@@ -3690,6 +3928,8 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3699,6 +3939,10 @@ EXAMPLES
   $ ably rooms typing subscribe my-room
 
   $ ably rooms typing subscribe --api-key "YOUR_API_KEY" my-room
+
+  $ ably rooms typing subscribe my-room --json
+
+  $ ably rooms typing subscribe my-room --pretty-json
 ```
 
 _See code: [src/commands/rooms/typing/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/rooms/typing/subscribe.ts)_
@@ -3765,14 +4009,52 @@ EXAMPLES
 
 _See code: [src/commands/spaces/cursors/index.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/cursors/index.ts)_
 
+## `ably spaces cursors get-all SPACEID`
+
+Get all current cursors in a space
+
+```
+USAGE
+  $ ably spaces cursors get-all SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+
+ARGUMENTS
+  SPACEID  Space ID to get cursors from
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Get all current cursors in a space
+
+EXAMPLES
+  $ ably spaces cursors get-all my-space
+
+  $ ably spaces cursors get-all my-space --json
+
+  $ ably spaces cursors get-all my-space --pretty-json
+```
+
+_See code: [src/commands/spaces/cursors/get-all.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/cursors/get-all.ts)_
+
 ## `ably spaces cursors set SPACEID`
 
 Set your cursor position in a space
 
 ```
 USAGE
-  $ ably spaces cursors set SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--position <value> | --simulate] [--format json|pretty]
+  $ ably spaces cursors set SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--position <value> |
+    --simulate]
 
 ARGUMENTS
   SPACEID  Space ID to set cursor in
@@ -3784,10 +4066,10 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --position=<value>      Cursor position data to set (JSON format)
+  --pretty-json           Output in colorized JSON format
   --simulate              Simulate cursor movements automatically
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -3808,8 +4090,8 @@ Subscribe to cursor movements in a space
 
 ```
 USAGE
-  $ ably spaces cursors subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces cursors subscribe SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to cursors for
@@ -3821,9 +4103,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3832,7 +4114,9 @@ DESCRIPTION
 EXAMPLES
   $ ably spaces cursors subscribe my-space
 
-  $ ably spaces cursors subscribe my-space --format json
+  $ ably spaces cursors subscribe my-space --json
+
+  $ ably spaces cursors subscribe my-space --pretty-json
 ```
 
 _See code: [src/commands/spaces/cursors/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/cursors/subscribe.ts)_
@@ -3843,8 +4127,8 @@ List active spaces
 
 ```
 USAGE
-  $ ably spaces list [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>] [--format json|pretty]
+  $ ably spaces list [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter spaces by prefix
@@ -3854,10 +4138,10 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
-      --format=<option>       [default: pretty] Output format (json or pretty)
-                              <options: json|pretty>
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
       --limit=<value>         [default: 100] Maximum number of spaces to return
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3870,7 +4154,9 @@ EXAMPLES
 
   $ ably spaces list --limit 50
 
-  $ ably spaces list --format json
+  $ ably spaces list --json
+
+  $ ably spaces list --pretty-json
 ```
 
 _See code: [src/commands/spaces/list.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/list.ts)_
@@ -3881,7 +4167,20 @@ Spaces Locations API commands (Ably Spaces client-to-client location sharing)
 
 ```
 USAGE
-  $ ably spaces locations
+  $ ably spaces locations [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+
+FLAGS
+  --access-token=<value>  Overrides any configured access token used for the Control API
+  --api-key=<value>       Overrides any configured API key used for the product APIs
+  --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly set no
+                          client ID. Not applicable when using token authentication.
+  --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+  --env=<value>           Override the environment for all product API calls
+  --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
+  --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
   Spaces Locations API commands (Ably Spaces client-to-client location sharing)
@@ -3895,8 +4194,8 @@ Get all current locations in a space
 
 ```
 USAGE
-  $ ably spaces locations get-all SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [-f text|json]
+  $ ably spaces locations get-all SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-f text|json]
 
 ARGUMENTS
   SPACEID  Space ID to get locations from
@@ -3911,6 +4210,8 @@ FLAGS
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3919,7 +4220,9 @@ DESCRIPTION
 EXAMPLES
   $ ably spaces locations get-all my-space
 
-  $ ably spaces locations get-all my-space --format json
+  $ ably spaces locations get-all my-space --json
+
+  $ ably spaces locations get-all my-space --pretty-json
 ```
 
 _See code: [src/commands/spaces/locations/get-all.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/locations/get-all.ts)_
@@ -3930,8 +4233,8 @@ Set your location in a space
 
 ```
 USAGE
-  $ ably spaces locations set SPACEID --location <value> [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces locations set SPACEID --location <value> [--json] [--pretty-json] [--host <value>] [--env <value>]
+    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to set location in
@@ -3943,10 +4246,10 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
   --location=<value>      (required) Location data to set (JSON format)
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3966,8 +4269,8 @@ Subscribe to location changes in a space
 
 ```
 USAGE
-  $ ably spaces locations subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces locations subscribe SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to locations for
@@ -3979,9 +4282,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -3990,7 +4293,9 @@ DESCRIPTION
 EXAMPLES
   $ ably spaces locations subscribe my-space
 
-  $ ably spaces locations subscribe my-space --format json
+  $ ably spaces locations subscribe my-space --json
+
+  $ ably spaces locations subscribe my-space --pretty-json
 ```
 
 _See code: [src/commands/spaces/locations/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/locations/subscribe.ts)_
@@ -4024,8 +4329,8 @@ Acquire a lock in a space
 
 ```
 USAGE
-  $ ably spaces locks acquire SPACEID LOCKID [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>] [--format json|pretty]
+  $ ably spaces locks acquire SPACEID LOCKID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>]
 
 ARGUMENTS
   SPACEID  Space ID to acquire lock in
@@ -4039,9 +4344,9 @@ FLAGS
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --data=<value>          Optional data to associate with the lock (JSON format)
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -4057,16 +4362,16 @@ _See code: [src/commands/spaces/locks/acquire.ts](https://github.com/ably/cli/bl
 
 ## `ably spaces locks get SPACEID LOCKID`
 
-Get information about a specific lock
+Get a lock in a space
 
 ```
 USAGE
-  $ ably spaces locks get SPACEID LOCKID [--host <value>] [--env <value>] [--control-host <value>] [--access-token
-    <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces locks get SPACEID LOCKID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host
+    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to get lock from
-  LOCKID   ID of the lock to get
+  LOCKID   Lock ID to get
 
 FLAGS
   --access-token=<value>  Overrides any configured access token used for the Control API
@@ -4075,18 +4380,20 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Get information about a specific lock
+  Get a lock in a space
 
 EXAMPLES
-  $ ably spaces locks get my-space my-lock-id
+  $ ably spaces locks get my-space my-lock
 
-  $ ably spaces locks get my-space my-lock-id --format json
+  $ ably spaces locks get my-space my-lock --json
+
+  $ ably spaces locks get my-space my-lock --pretty-json
 ```
 
 _See code: [src/commands/spaces/locks/get.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/locks/get.ts)_
@@ -4097,8 +4404,8 @@ Get all current locks in a space
 
 ```
 USAGE
-  $ ably spaces locks get-all SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces locks get-all SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to get locks from
@@ -4110,9 +4417,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -4121,7 +4428,9 @@ DESCRIPTION
 EXAMPLES
   $ ably spaces locks get-all my-space
 
-  $ ably spaces locks get-all my-space --format json
+  $ ably spaces locks get-all my-space --json
+
+  $ ably spaces locks get-all my-space --pretty-json
 ```
 
 _See code: [src/commands/spaces/locks/get-all.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/locks/get-all.ts)_
@@ -4132,8 +4441,8 @@ Subscribe to lock changes in a space
 
 ```
 USAGE
-  $ ably spaces locks subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces locks subscribe SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe for locks from
@@ -4145,9 +4454,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -4156,7 +4465,9 @@ DESCRIPTION
 EXAMPLES
   $ ably spaces locks subscribe my-space
 
-  $ ably spaces locks subscribe my-space --format json
+  $ ably spaces locks subscribe my-space --json
+
+  $ ably spaces locks subscribe my-space --pretty-json
 ```
 
 _See code: [src/commands/spaces/locks/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/locks/subscribe.ts)_
@@ -4186,8 +4497,8 @@ Enter a space and remain present until terminated
 
 ```
 USAGE
-  $ ably spaces members enter SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--profile <value>] [--format json|pretty]
+  $ ably spaces members enter SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--profile <value>]
 
 ARGUMENTS
   SPACEID  Space ID to enter
@@ -4199,9 +4510,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --profile=<value>       Optional profile data to include with the member (JSON format)
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -4222,8 +4533,8 @@ Subscribe to member presence events in a space
 
 ```
 USAGE
-  $ ably spaces members subscribe SPACEID [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>]
-    [--api-key <value>] [--token <value>] [--client-id <value>] [--format json|pretty]
+  $ ably spaces members subscribe SPACEID [--json] [--pretty-json] [--host <value>] [--env <value>] [--control-host <value>]
+    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to members for
@@ -4235,9 +4546,9 @@ FLAGS
                           client ID. Not applicable when using token authentication.
   --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
   --env=<value>           Override the environment for all product API calls
-  --format=<option>       [default: pretty] Output format
-                          <options: json|pretty>
   --host=<value>          Override the host endpoint for all product API calls
+  --json                  Output in JSON format
+  --pretty-json           Output in colorized JSON format
   --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -4246,7 +4557,9 @@ DESCRIPTION
 EXAMPLES
   $ ably spaces members subscribe my-space
 
-  $ ably spaces members subscribe my-space --format json
+  $ ably spaces members subscribe my-space --json
+
+  $ ably spaces members subscribe my-space --pretty-json
 ```
 
 _See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.3.1/src/commands/spaces/members/subscribe.ts)_

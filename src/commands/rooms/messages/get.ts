@@ -10,6 +10,8 @@ export default class MessagesGet extends ChatBaseCommand {
     '$ ably rooms messages get --api-key "YOUR_API_KEY" my-room',
     '$ ably rooms messages get --limit 50 my-room',
     '$ ably rooms messages get --show-metadata my-room',
+    '$ ably rooms messages get my-room --json',
+    '$ ably rooms messages get my-room --pretty-json'
   ]
 
   static override flags = {
@@ -50,32 +52,56 @@ export default class MessagesGet extends ChatBaseCommand {
       // Attach to the room
       await room.attach()
       
-      this.log(`${chalk.green('Fetching')} ${chalk.yellow(flags.limit.toString())} ${chalk.green('most recent messages from room:')} ${chalk.bold(args.roomId)}`)
+      if (!this.shouldSuppressOutput(flags)) {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            status: 'fetching',
+            limit: flags.limit,
+            roomId: args.roomId
+          }, flags))
+        } else {
+          this.log(`${chalk.green('Fetching')} ${chalk.yellow(flags.limit.toString())} ${chalk.green('most recent messages from room:')} ${chalk.bold(args.roomId)}`)
+        }
+      }
       
       // Get historical messages
       const messagesResult = await room.messages.get({ limit: flags.limit })
       const items = messagesResult.items
       
-      // Display messages count
-      this.log(`${chalk.green('Retrieved')} ${chalk.yellow(items.length.toString())} ${chalk.green('messages.')}`)
-      
-      if (items.length === 0) {
-        this.log(chalk.dim('No messages found in this room.'))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          messages: items.map(message => ({
+            text: message.text,
+            clientId: message.clientId,
+            timestamp: message.timestamp,
+            ...(flags['show-metadata'] && message.metadata ? { metadata: message.metadata } : {})
+          })),
+          roomId: args.roomId
+        }, flags))
       } else {
-        this.log(chalk.dim('---'))
+        // Display messages count
+        this.log(`${chalk.green('Retrieved')} ${chalk.yellow(items.length.toString())} ${chalk.green('messages.')}`)
         
-        // Display messages in chronological order (oldest first)
-        const messagesInOrder = [...items].reverse()
-        for (const message of messagesInOrder) {
-          // Format message with timestamp, author and content
-          const timestamp = new Date(message.timestamp).toLocaleTimeString()
-          const author = message.clientId || 'Unknown'
+        if (items.length === 0) {
+          this.log(chalk.dim('No messages found in this room.'))
+        } else {
+          this.log(chalk.dim('---'))
           
-          this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`${author}:`)} ${message.text}`)
-          
-          // Show metadata if enabled and available
-          if (flags['show-metadata'] && message.metadata) {
-            this.log(`${chalk.gray('  Metadata:')} ${chalk.yellow(JSON.stringify(message.metadata))}`)
+          // Display messages in chronological order (oldest first)
+          const messagesInOrder = [...items].reverse()
+          for (const message of messagesInOrder) {
+            // Format message with timestamp, author and content
+            const timestamp = new Date(message.timestamp).toLocaleTimeString()
+            const author = message.clientId || 'Unknown'
+            
+            this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`${author}:`)} ${message.text}`)
+            
+            // Show metadata if enabled and available
+            if (flags['show-metadata'] && message.metadata) {
+              this.log(`${chalk.gray('  Metadata:')} ${chalk.yellow(this.formatJsonOutput(message.metadata, flags))}`)
+            }
           }
         }
       }
@@ -84,7 +110,15 @@ export default class MessagesGet extends ChatBaseCommand {
       await chatClient.rooms.release(args.roomId)
       
     } catch (error) {
-      this.error(`Failed to get messages: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          roomId: args.roomId
+        }, flags))
+      } else {
+        this.error(`Failed to get messages: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       // Close the connection
       if (clients?.realtimeClient) {

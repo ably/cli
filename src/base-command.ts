@@ -5,6 +5,7 @@ import { ConfigManager } from './services/config-manager.js'
 import { InteractiveHelper } from './services/interactive-helper.js'
 import { ControlApi } from './services/control-api.js'
 import chalk from 'chalk'
+import colorJson from 'color-json'
 
 // List of commands not allowed in web CLI mode
 const WEB_CLI_RESTRICTED_COMMANDS = [
@@ -43,6 +44,12 @@ export abstract class AblyBaseCommand extends Command {
     'web-cli-help': Flags.boolean({
       description: 'Show help formatted for the web CLI',
       hidden: true, // Hide from regular help output
+    }),
+    json: Flags.boolean({
+      description: 'Output in JSON format',
+    }),
+    'pretty-json': Flags.boolean({
+      description: 'Output in colorized JSON format',
     }),
     host: Flags.string({
       description: 'Override the host endpoint for all product API calls',
@@ -155,6 +162,29 @@ export abstract class AblyBaseCommand extends Command {
   // Add this method to check if we should suppress output
   protected shouldSuppressOutput(flags: any): boolean {
     return flags['token-only'] === true;
+  }
+
+  protected shouldOutputJson(flags: any): boolean {
+    return flags.json === true || flags['pretty-json'] === true || flags.format === 'json';
+  }
+
+  protected isPrettyJsonOutput(flags: any): boolean {
+    return flags['pretty-json'] === true;
+  }
+
+  protected formatJsonOutput(data: any, flags: any): string {
+    if (this.isPrettyJsonOutput(flags)) {
+      try {
+        return colorJson(data);
+      } catch (error) {
+        // Fallback to regular JSON.stringify
+        this.debug(`Error using color-json: ${error instanceof Error ? error.message : String(error)}. Falling back to regular JSON.`);
+        return JSON.stringify(data, null, 2);
+      }
+    }
+    
+    // Regular JSON output
+    return JSON.stringify(data, null, 2);
   }
 
   protected async ensureAppAndKey(flags: any): Promise<{appId: string, apiKey: string} | null> {
@@ -512,15 +542,15 @@ export abstract class AblyBaseCommand extends Command {
       return;
     }
     
-    // Skip auth info display in Web CLI mode
-    if (this.isWebCliMode) {
-      this.debug(`Skipping auth info display in Web CLI mode: ${this.id}`);
+    // Skip auth info if output is suppressed
+    const shouldSuppress = flags.quiet || this.shouldOutputJson(flags) || flags['token-only'] || this.shouldSuppressOutput(flags);
+    if (shouldSuppress) {
       return;
     }
     
-    // Check for flags that would affect display (json, quiet, token-only)
-    const shouldSuppress = flags.quiet || flags.format === 'json' || flags['token-only'] || this.shouldSuppressOutput(flags);
-    if (shouldSuppress) {
+    // Skip auth info display in Web CLI mode
+    if (this.isWebCliMode) {
+      this.debug(`Skipping auth info display in Web CLI mode: ${this.id}`);
       return;
     }
     
@@ -596,7 +626,7 @@ export abstract class AblyBaseCommand extends Command {
    * Shows account, app, and authentication information
    */
   protected displayDataPlaneInfo(flags: any): void {
-    if (!flags.quiet && flags.format !== 'json' && !this.shouldSuppressOutput(flags)) {
+    if (!flags.quiet && !this.shouldOutputJson(flags) && !this.shouldSuppressOutput(flags)) {
       this.displayAuthInfo(flags, true);
     }
   }
@@ -606,7 +636,7 @@ export abstract class AblyBaseCommand extends Command {
    * Shows only account information
    */
   protected displayControlPlaneInfo(flags: any): void {
-    if (!flags.quiet && flags.format !== 'json' && !this.shouldSuppressOutput(flags)) {
+    if (!flags.quiet && !this.shouldOutputJson(flags) && !this.shouldSuppressOutput(flags)) {
       this.displayAuthInfo(flags, false);
     }
   }

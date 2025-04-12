@@ -52,17 +52,17 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
 
       // Subscribe to the channel
       channel.subscribe((message) => {
-        const timestamp = new Date(message.timestamp).toISOString()
+        const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
         const event = message.name || 'unknown'
         
-        if (flags.json) {
-          // Output in JSON format
-          this.log(JSON.stringify({
+        if (this.shouldOutputJson(flags)) {
+          const jsonOutput = {
             timestamp,
             channel: channelName,
-            event,
-            data: message.data,
-          }))
+            event: message.name || 'unknown',
+            data: message.data
+          }
+          this.log(this.formatJsonOutput(jsonOutput, flags))
           return
         }
 
@@ -82,8 +82,10 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
 
         // Format the log output
         this.log(`${chalk.dim(`[${timestamp}]`)} Channel: ${chalk.cyan(channelName)} | Event: ${eventColor(event)}`)
-        if (message.data) {
-          this.log(`Data: ${JSON.stringify(message.data, null, 2)}`)
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput(message.data, flags))
+        } else {
+          this.log(`Data: ${this.formatJsonOutput(message.data, flags)}`)
         }
         this.log('')
       })

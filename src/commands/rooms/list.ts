@@ -10,8 +10,8 @@ export default class RoomsList extends ChatBaseCommand {
     '$ ably rooms list',
     '$ ably rooms list --prefix my-room',
     '$ ably rooms list --limit 50',
-    '$ ably rooms list --format json',
-  ]
+    '$ ably rooms list --json',
+    '$ ably rooms list --pretty-json']
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
@@ -23,11 +23,7 @@ export default class RoomsList extends ChatBaseCommand {
       description: 'Maximum number of rooms to return',
       default: 100,
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   async run(): Promise<void> {
@@ -93,8 +89,8 @@ export default class RoomsList extends ChatBaseCommand {
       const limitedRooms = rooms.slice(0, flags.limit)
 
       // Output rooms based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(limitedRooms, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(limitedRooms, flags))
       } else {
         if (limitedRooms.length === 0) {
           this.log('No active chat rooms found.')

@@ -4,14 +4,14 @@ import * as Ably from 'ably'
 import chalk from 'chalk'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
-export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
-  static override description = 'Stream logs from [meta]connection.lifecycle meta channel'
+export default class LogsConnectionSubscribe extends AblyBaseCommand {
+  static override description = 'Stream logs from [meta]connection meta channel'
 
   static override examples = [
-    '$ ably logs connection-lifecycle subscribe',
-    '$ ably logs connection-lifecycle subscribe --rewind 10',
-    '$ ably logs connection-lifecycle subscribe --json',
-    '$ ably logs connection-lifecycle subscribe --pretty-json'
+    '$ ably logs connection subscribe',
+    '$ ably logs connection subscribe --rewind 10',
+    '$ ably logs connection subscribe --json',
+    '$ ably logs connection subscribe --pretty-json'
   ]
 
   static override flags = {
@@ -23,10 +23,10 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
   }
 
   async run(): Promise<void> {
-    const {flags} = await this.parse(LogsConnectionLifecycleSubscribe)
+    const {flags} = await this.parse(LogsConnectionSubscribe)
 
     let client: Ably.Realtime | null = null;
-    const channelName = '[meta]connection.lifecycle'
+    const channelName = '[meta]connection'
 
     try {
       // Create the Ably client
@@ -108,15 +108,13 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
         // Color-code different event types
         let eventColor = chalk.blue
         
-        // For connection lifecycle events
-        if (event.includes('connection.opened') || event.includes('transport.opened')) {
+        // For connection events
+        if (event.includes('connected') || event.includes('online')) {
           eventColor = chalk.green
-        } else if (event.includes('connection.closed') || event.includes('transport.closed')) {
+        } else if (event.includes('disconnected') || event.includes('offline')) {
           eventColor = chalk.yellow
         } else if (event.includes('failed')) {
           eventColor = chalk.red
-        } else if (event.includes('disconnected')) {
-          eventColor = chalk.magenta
         } else if (event.includes('suspended')) {
           eventColor = chalk.gray
         }

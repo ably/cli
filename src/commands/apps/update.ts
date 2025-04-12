@@ -19,11 +19,6 @@ export default class AppsUpdateCommand extends ControlBaseCommand {
     'tls-only': Flags.boolean({
       description: 'Whether the app should accept TLS connections only',
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   static args = {
@@ -38,44 +33,77 @@ export default class AppsUpdateCommand extends ControlBaseCommand {
     
     // Ensure at least one update parameter is provided
     if (flags.name === undefined && flags['tls-only'] === undefined) {
-      this.error('At least one update parameter (--name or --tls-only) must be provided')
-      return
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'At least one update parameter (--name or --tls-only) must be provided',
+          status: 'error',
+          appId: args.id
+        }, flags));
+      } else {
+        this.error('At least one update parameter (--name or --tls-only) must be provided');
+      }
+      return;
     }
     
     const controlApi = this.createControlApi(flags)
     
     try {
-      this.log(`Updating app ${args.id}...`)
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Updating app ${args.id}...`);
+      }
       
       const updateData: { name?: string; tlsOnly?: boolean } = {}
       
       if (flags.name !== undefined) {
-        updateData.name = flags.name
+        updateData.name = flags.name;
       }
       
       if (flags['tls-only'] !== undefined) {
-        updateData.tlsOnly = flags['tls-only']
+        updateData.tlsOnly = flags['tls-only'];
       }
       
       const app = await controlApi.updateApp(args.id, updateData)
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(app))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          timestamp: new Date().toISOString(),
+          app: {
+            id: app.id,
+            name: app.name,
+            status: app.status,
+            accountId: app.accountId,
+            tlsOnly: app.tlsOnly,
+            created: new Date(app.created).toISOString(),
+            modified: new Date(app.modified).toISOString(),
+            ...(app.apnsUsesSandboxCert !== undefined && { apnsUsesSandboxCert: app.apnsUsesSandboxCert })
+          }
+        }, flags));
       } else {
-        this.log(`\nApp updated successfully!`)
-        this.log(`App ID: ${app.id}`)
-        this.log(`Name: ${app.name}`)
-        this.log(`Status: ${app.status}`)
-        this.log(`Account ID: ${app.accountId}`)
-        this.log(`TLS Only: ${app.tlsOnly ? 'Yes' : 'No'}`)
-        this.log(`Created: ${this.formatDate(app.created)}`)
-        this.log(`Updated: ${this.formatDate(app.modified)}`)
+        this.log(`\nApp updated successfully!`);
+        this.log(`App ID: ${app.id}`);
+        this.log(`Name: ${app.name}`);
+        this.log(`Status: ${app.status}`);
+        this.log(`Account ID: ${app.accountId}`);
+        this.log(`TLS Only: ${app.tlsOnly ? 'Yes' : 'No'}`);
+        this.log(`Created: ${this.formatDate(app.created)}`);
+        this.log(`Updated: ${this.formatDate(app.modified)}`);
         if (app.apnsUsesSandboxCert !== undefined) {
-          this.log(`APNS Uses Sandbox Cert: ${app.apnsUsesSandboxCert ? 'Yes' : 'No'}`)
+          this.log(`APNS Uses Sandbox Cert: ${app.apnsUsesSandboxCert ? 'Yes' : 'No'}`);
         }
       }
     } catch (error) {
-      this.error(`Error updating app: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error',
+          appId: args.id
+        }, flags));
+      } else {
+        this.error(`Error updating app: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 } 

@@ -14,16 +14,12 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
 
   static override examples = [
     '$ ably spaces locks subscribe my-space',
-    '$ ably spaces locks subscribe my-space --format json',
-  ]
+    '$ ably spaces locks subscribe my-space --json',
+    '$ ably spaces locks subscribe my-space --pretty-json']
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -154,8 +150,8 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
         });
         
         // Output current locks based on format
-        if (flags.format === 'json') {
-          this.log(JSON.stringify(locks, null, 2))
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput(locks, flags))
         } else {
           if (!validLocks || validLocks.length === 0) {
             this.log(chalk.yellow('No locks are currently active in this space.'))
@@ -170,7 +166,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
                 this.log(`  ${chalk.dim('Holder:')} ${lock.member?.clientId || 'None'}`);
                 
                 if (lock.attributes && Object.keys(lock.attributes).length > 0) {
-                  this.log(`  ${chalk.dim('Attributes:')} ${JSON.stringify(lock.attributes, null, 2)}`);
+                  this.log(`  ${chalk.dim('Attributes:')} ${this.formatJsonOutput(lock.attributes, flags)}`);
                 }
               } catch (err) {
                 this.log(`- ${chalk.red('Error displaying lock item')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -192,7 +188,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
           return;
         }
         
-        if (flags.format === 'json') {
+        if (this.shouldOutputJson(flags)) {
           this.log(JSON.stringify({
             event: lock.status,
             lock,
@@ -203,7 +199,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
           this.log(`  ${chalk.dim('Status:')} ${lock.status || 'unknown'}`);
           this.log(`  ${chalk.dim('ID:')} ${lock.id || 'None'}`);
           this.log(`  ${chalk.dim('clientId:')} ${lock.member?.clientId || 'None'}`);
-          this.log(`  ${chalk.dim('Attributes:')} ${JSON.stringify(lock.attributes) || 'None'}`);
+          this.log(`  ${chalk.dim('Attributes:')} ${this.formatJsonOutput(lock.attributes, flags)}`);
         }
       });
 

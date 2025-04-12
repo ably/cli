@@ -12,7 +12,8 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     '$ ably accounts stats --unit hour',
     '$ ably accounts stats --start 1618005600000 --end 1618091999999',
     '$ ably accounts stats --limit 10',
-    '$ ably accounts stats --format json',
+    '$ ably accounts stats --json',
+    '$ ably accounts stats --pretty-json',
     '$ ably accounts stats --live',
     '$ ably accounts stats --live --interval 15',
   ]
@@ -34,11 +35,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
       description: 'Maximum number of stats records to return',
       default: 10,
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'live': Flags.boolean({
       description: 'Subscribe to live stats updates (uses minute interval)',
       default: false,
@@ -75,7 +72,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     this.statsDisplay = new StatsDisplay({
       live: flags.live,
       startTime: flags.live ? new Date() : undefined,
-      format: flags.format as 'json' | 'pretty',
+      json: this.shouldOutputJson(flags),
       unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
       isAccountStats: true,
       intervalSeconds: flags.interval

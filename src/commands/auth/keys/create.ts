@@ -9,6 +9,8 @@ export default class KeysCreateCommand extends ControlBaseCommand {
     '$ ably auth keys create --name "My New Key" --app APP_ID',
     '$ ably auth keys create --name "My New Key" --capabilities "{\\"*\\":[\\\"*\\"]}"',
     '$ ably auth keys create --name "My New Key" --capabilities "{\\"channel1\\":[\\\"publish\\\",\\\"subscribe\\"],\\"channel2\\":[\\\"history\\"]}"',
+    '$ ably auth keys create --name "My New Key" --json',
+    '$ ably auth keys create --name "My New Key" --pretty-json'
   ]
 
   static flags = {
@@ -25,11 +27,6 @@ export default class KeysCreateCommand extends ControlBaseCommand {
       description: 'JSON string of capabilities for the key, e.g. "{\\"*\\":[\\\"*\\"]}"',
       default: '{"*":["*"]}',
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   async run(): Promise<void> {
@@ -40,26 +37,50 @@ export default class KeysCreateCommand extends ControlBaseCommand {
     let appId = flags.app || this.configManager.getCurrentAppId()
     
     if (!appId) {
-      this.error('No app specified. Please provide --app flag or switch to an app with "ably apps switch".')
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'No app specified. Please provide --app flag or switch to an app with "ably apps switch".'
+        }, flags))
+      } else {
+        this.error('No app specified. Please provide --app flag or switch to an app with "ably apps switch".')
+      }
+      return
     }
     
     let capabilities
     try {
       capabilities = JSON.parse(flags.capabilities)
     } catch (error) {
-      this.error('Invalid capabilities JSON format. Please provide a valid JSON string.')
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'Invalid capabilities JSON format. Please provide a valid JSON string.'
+        }, flags))
+      } else {
+        this.error('Invalid capabilities JSON format. Please provide a valid JSON string.')
+      }
+      return
     }
     
     try {
-      this.log(`Creating key "${flags.name}" for app ${appId}...`)
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Creating key "${flags.name}" for app ${appId}...`)
+      }
       
       const key = await controlApi.createKey(appId, {
         name: flags.name,
         capability: capabilities,
       })
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(key))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          key: {
+            ...key,
+            keyName: `${key.appId}.${key.id}`
+          }
+        }, flags))
       } else {
         this.log(`\nKey created successfully!`)
         
@@ -93,7 +114,15 @@ export default class KeysCreateCommand extends ControlBaseCommand {
         this.log(`\nTo switch to this key, run: ably auth keys switch ${keyName}`)
       }
     } catch (error) {
-      this.error(`Error creating key: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          appId
+        }, flags))
+      } else {
+        this.error(`Error creating key: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

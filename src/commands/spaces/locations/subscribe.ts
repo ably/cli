@@ -34,16 +34,13 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
 
   static override examples = [
     '$ ably spaces locations subscribe my-space',
-    '$ ably spaces locations subscribe my-space --format json',
+    '$ ably spaces locations subscribe my-space --json',
+    '$ ably spaces locations subscribe my-space --pretty-json',
   ]
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -86,14 +83,15 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
       });
       
       // Get the space
-      this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
+      }
       const space = await spacesClient.get(spaceId);
       
       // Enter the space
       await space.enter()
       
       // Wait for space to be properly entered before fetching locations
-      this.log(`Waiting for space ${chalk.cyan(spaceId)} to be ready...`);
       await new Promise<void>((resolve, reject) => {
         // Set a reasonable timeout to avoid hanging indefinitely
         const timeout = setTimeout(() => {
@@ -106,7 +104,16 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
             // Check realtime client state
             if (realtimeClient.connection.state === 'connected') {
               clearTimeout(timeout);
-              this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'connected',
+                  connectionId: realtimeClient.connection.id,
+                }, flags));
+              } else {
+                this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
+              }
               resolve();
             } else if (realtimeClient.connection.state === 'failed' || 
                        realtimeClient.connection.state === 'closed' || 
@@ -127,241 +134,111 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
       });
       
       // Get current locations
-      this.log(`Fetching current locations for space ${chalk.cyan(spaceId)}...`);
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Fetching current locations for space ${chalk.cyan(spaceId)}...`);
+      }
       
-      let locations: any[] = [];
+      let locations: LocationItem[] = [];
       try {
-        // Make sure to handle the return value correctly
         const result = await space.locations.getAll();
         
-        // Debug info to understand what's being returned
-        if (flags.format === 'json') {
-          this.log(`Raw API response: ${JSON.stringify(result || {})}`);
-        }
-        
-        // The locations API might return an object with location data
         if (result && typeof result === 'object') {
           if (Array.isArray(result)) {
             locations = result;
-            
-            // Add debug info for first item if available
-            if (locations.length > 0 && flags.format === 'json') {
-              this.log(`First location item structure: ${JSON.stringify(locations[0])}`);
-            }
           } else if (Object.keys(result).length > 0) {
-            // If result is an object with member IDs as keys, convert to array with proper format
-            // Convert the object to an array of {memberId, location} objects
             locations = Object.entries(result).map(([memberId, locationData]) => ({
-              memberId,
+              member: {
+                clientId: memberId,
+                connectionId: '',
+                isConnected: true,
+                profileData: null
+              },
               location: locationData
             }));
-            
-            // Add debug info for first item if available
-            if (locations.length > 0 && flags.format === 'json') {
-              this.log(`First location item structure: ${JSON.stringify(locations[0])}`);
-            }
           }
         }
-      } catch (error) {
-        this.log(chalk.yellow(`Error fetching locations: ${error instanceof Error ? error.message : String(error)}`));
-        this.log(chalk.yellow('Continuing with empty locations list.'));
-      }
-      
-      try {
-        // Filter out locations with null/empty data before displaying
-        const validLocations = locations.filter((item: any) => {
-          if (item === null || item === undefined) return false;
-          
-          // Check different structures - get the location data however it's stored
-          let locationData;
-          if (item.location !== undefined) {
-            locationData = item.location;
-          } else if (item.data !== undefined) {
-            locationData = item.data;
-          } else {
-            // For raw object structure, exclude known metadata fields
-            const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
-            // If all that's left is metadata, there's no real location data
-            if (Object.keys(rest).length === 0) return false;
-            locationData = rest;
-          }
-          
-          // Strictly check if location data is empty or null
-          if (locationData === null || locationData === undefined) return false;
-          if (typeof locationData === 'object' && Object.keys(locationData).length === 0) return false;
-          
-          return true;
-        });
-        
-        // Output current locations based on format
-        if (flags.format === 'json') {
-          this.log(JSON.stringify(locations, null, 2));
+
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            type: 'locations_snapshot',
+            locations: locations.map(item => ({
+              member: item.member,
+              location: item.location
+            }))
+          }, flags));
         } else {
-          if (!validLocations || validLocations.length === 0) {
+          if (locations.length === 0) {
             this.log(chalk.yellow('No locations are currently set in this space.'));
           } else {
-            const locationsCount = validLocations.length;
-            this.log(`\n${chalk.cyan('Current locations')} (${chalk.bold(String(locationsCount))}):\n`);
-            
-            validLocations.forEach((locationItem: any) => {
-              try {
-                // The location structure might be different than we expected
-                // Handle the different possible structures
-                
-                let memberId = 'Unknown';
-                let locationData = {};
-                let connectionId = null;
-                
-                // Check different possible structures
-                if (locationItem?.memberId) {
-                  // If we converted it to {memberId, location} format
-                  memberId = locationItem.memberId;
-                  locationData = locationItem.location;
-                } else if (locationItem?.member?.clientId) {
-                  // If we have { member: { clientId }, location }
-                  memberId = locationItem.member.clientId;
-                  connectionId = locationItem.member.connectionId;
-                  locationData = locationItem.location || {};
-                } else if (locationItem?.clientId) {
-                  // If we have { clientId, location } directly
-                  memberId = locationItem.clientId;
-                  connectionId = locationItem.connectionId;
-                  locationData = locationItem.location || locationItem.data || {};
-                } else if (typeof locationItem === 'object' && locationItem !== null) {
-                  // If the item itself is the location data
-                  // Try to extract clientId from somewhere
-                  memberId = locationItem.clientId || locationItem.id || locationItem.userId || 'Unknown';
-                  connectionId = locationItem.connectionId;
-                  
-                  // Use the whole object as location data, excluding some known metadata fields
-                  const { clientId: _, id: __, userId: ___, memberId: ____, connectionId: _____, ...rest } = locationItem;
-                  locationData = Object.keys(rest).length > 0 ? rest : {};
-                }
-                
-                this.log(`- ${chalk.blue(memberId)}:`);
-                
-                // Handle different location data formats
-                if (typeof locationData === 'object' && locationData !== null) {
-                  this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
-                } else if (locationData !== undefined && locationData !== null) {
-                  // Handle primitive location data
-                  this.log(`  ${chalk.dim('Location:')} ${locationData}`);
-                }
-                
-                // Check for current member indicator
-                const selfConnectionId = clients?.realtimeClient.connection.id;
-                if (locationItem?.member?.isCurrentMember || 
-                    (connectionId && selfConnectionId === connectionId)) {
-                  this.log(`  ${chalk.green('(Current member)')}`);
-                }
-              } catch (err) {
-                this.log(`- ${chalk.red('Error displaying location item')}: ${err instanceof Error ? err.message : String(err)}`);
-              }
+            this.log(`\n${chalk.cyan('Current locations')} (${chalk.bold(locations.length.toString())}):\n`);
+            locations.forEach(item => {
+              this.log(`- ${chalk.blue(item.member.clientId || 'Unknown')}`);
+              this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(item.location)}`);
             });
           }
         }
       } catch (error) {
-        this.log(chalk.red(`Error formatting locations: ${error instanceof Error ? error.message : String(error)}`));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            spaceId,
+            error: `Error fetching locations: ${error instanceof Error ? error.message : String(error)}`,
+            status: 'error'
+          }, flags));
+        } else {
+          this.log(chalk.yellow(`Error fetching locations: ${error instanceof Error ? error.message : String(error)}`));
+        }
+      }
+
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`\n${chalk.dim('Subscribing to location changes. Press Ctrl+C to exit.')}\n`);
       }
       
-      // Subscribe to location updates
-      this.log(`\n${chalk.dim('Subscribing to location updates. Press Ctrl+C to exit.')}\n`);
-      
       try {
-        subscription = await space.locations.subscribe('update', (locationUpdate: any) => {
+        subscription = await space.locations.subscribe('update', (update: LocationsEvents.UpdateEvent) => {
           try {
             const timestamp = new Date().toISOString();
-            const action = locationUpdate?.action || 'update';
             
-            // Extract location data first - to check if we should process this update
-            let location = null;
-            
-            // Check different possible location paths
-            if (locationUpdate?.currentLocation !== undefined) {
-              location = locationUpdate.currentLocation;
-            } else if (locationUpdate?.location !== undefined) {
-              location = locationUpdate.location;
-            } else if (locationUpdate?.data !== undefined) {
-              location = locationUpdate.data;
-            } else if (locationUpdate?.update?.location !== undefined) {
-              location = locationUpdate.update.location;
-            }
-            
-            // More strict verification of location data - skip if no valid location
-            if (location === null || location === undefined) return;
-            if (typeof location === 'object' && Object.keys(location).length === 0) return;
-            
-            // Now extract member information since we know there's valid location data
-            let memberId = 'Unknown';
-            let connectionId = null;
-            
-            // Handle different structure possibilities
-            if (locationUpdate?.member?.clientId) {
-              memberId = locationUpdate.member.clientId;
-              connectionId = locationUpdate.member.connectionId;
-            } else if (locationUpdate?.clientId) {
-              memberId = locationUpdate.clientId;
-              connectionId = locationUpdate.connectionId;
-            } else if (locationUpdate?.memberId) {
-              memberId = locationUpdate.memberId;
-            } else if (typeof locationUpdate === 'object' && locationUpdate !== null) {
-              // If this is a raw update with the member ID as a property
-              if (locationUpdate.clientId) {
-                memberId = locationUpdate.clientId;
-              } else if (locationUpdate.id) {
-                memberId = locationUpdate.id;
-              } else if (locationUpdate.name) {
-                memberId = locationUpdate.name;
-              } else {
-                // If none of the above, check for other keys that might contain the member ID
-                const keys = Object.keys(locationUpdate).filter(k => 
-                  k !== 'data' && k !== 'location' && k !== 'currentLocation' && 
-                  k !== 'update' && k !== 'action'
-                );
-                if (keys.length > 0) {
-                  memberId = keys[0]; // Use the first non-data key as member ID
-                }
-              }
-              
-              connectionId = locationUpdate.connectionId;
-            }
-            
-            if (flags.format === 'json') {
-              const jsonOutput = {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                spaceId,
+                type: 'location_update',
                 timestamp,
-                action,
-                member: {
-                  id: memberId,
-                  connectionId,
-                },
-                location
-              };
-              this.log(JSON.stringify(jsonOutput));
+                action: 'update',
+                member: update.member,
+                location: update.currentLocation
+              }, flags));
             } else {
-              // For location updates, use yellow color
-              const actionColor = chalk.yellow;
-              
-              // Check if this is the current member by comparing connectionIds
-              const selfConnectionId = clients?.realtimeClient.connection.id;
-              const isSelf = connectionId === selfConnectionId ? ` ${chalk.green('(you)')}` : '';
-              
-              this.log(`[${timestamp}] ${chalk.blue(memberId)}${isSelf} ${actionColor(action + 'd')} location:`);
-              
-              // Handle different location data formats
-              if (typeof location === 'object' && location !== null) {
-                this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(location, null, 2)}`);
-              } else if (location !== undefined && location !== null) {
-                // Handle primitive location data
-                this.log(`  ${chalk.dim('Location:')} ${location}`);
-              }
+              this.log(`[${timestamp}] ${chalk.blue(update.member.clientId)} ${chalk.dim('update')}`);
+              this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(update.currentLocation)}`);
             }
           } catch (error) {
-            this.log(chalk.red(`Error processing location update: ${error instanceof Error ? error.message : String(error)}`));
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: `Error processing location update: ${error instanceof Error ? error.message : String(error)}`,
+                status: 'error'
+              }, flags));
+            } else {
+              this.log(chalk.red(`Error processing location update: ${error instanceof Error ? error.message : String(error)}`));
+            }
           }
         });
       } catch (error) {
-        this.log(chalk.red(`Error subscribing to location updates: ${error instanceof Error ? error.message : String(error)}`));
-        this.log(chalk.yellow('Will continue running, but may not receive location updates.'));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            spaceId,
+            error: `Error subscribing to location updates: ${error instanceof Error ? error.message : String(error)}`,
+            status: 'error'
+          }, flags));
+        } else {
+          this.log(chalk.red(`Error subscribing to location updates: ${error instanceof Error ? error.message : String(error)}`));
+        }
       }
 
       // Keep the process running until interrupted
@@ -370,76 +247,78 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
           if (cleanupInProgress) return;
           cleanupInProgress = true;
           
-          this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`);
-          
-          // Set a force exit timeout
-          const forceExitTimeout = setTimeout(() => {
-            this.log(chalk.red('Force exiting after timeout...'));
-            process.exit(1);
-          }, 5000);
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`);
+          }
           
           try {
-            // Unsubscribe from location events
             if (subscription) {
-              try {
-                subscription.unsubscribe();
-                this.log(chalk.green('Successfully unsubscribed from location events.'));
-              } catch (error) {
-                this.log(`Note: ${error instanceof Error ? error.message : String(error)}`);
-                this.log('Continuing with cleanup.');
+              subscription.unsubscribe();
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'unsubscribed'
+                }, flags));
               }
             }
             
             try {
-              // Leave the space
               await space.leave();
-              this.log(chalk.green('Successfully left the space.'));
-            } catch (error) {
-              this.log(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`);
-              this.log('Continuing with cleanup.');
-            }
-            
-            try {
-              if (clients?.realtimeClient) {
-                clients.realtimeClient.close();
-                this.log(chalk.green('Successfully closed connection.'));
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'left'
+                }, flags));
               }
             } catch (error) {
-              this.log(`Error closing client: ${error instanceof Error ? error.message : String(error)}`);
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  spaceId,
+                  error: `Error leaving space: ${error instanceof Error ? error.message : String(error)}`,
+                  status: 'error'
+                }, flags));
+              }
             }
             
-            this.log(chalk.green('Successfully disconnected.'));
-            clearTimeout(forceExitTimeout);
+            if (clients?.realtimeClient) {
+              clients.realtimeClient.close();
+            }
+            
             resolve();
-            // Force exit after cleanup
             process.exit(0);
           } catch (error) {
-            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`);
-            clearTimeout(forceExitTimeout);
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`,
+                status: 'error'
+              }, flags));
+            }
             process.exit(1);
           }
         };
 
-        process.once('SIGINT', () => void cleanup());
-        process.once('SIGTERM', () => void cleanup());
+        process.once('SIGINT', cleanup);
+        process.once('SIGTERM', cleanup);
       });
     } catch (error) {
-      // Handle original error more carefully
-      if (error === undefined || error === null) {
-        this.log(chalk.red('An unknown error occurred (error object is undefined or null)'));
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          spaceId: args.spaceId,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error'
+        }, flags));
       } else {
-        const errorMessage = error instanceof Error ? error.message : String(error || 'Unknown error');
-        this.log(chalk.red(`Error: ${errorMessage}`));
+        this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
-      process.exit(1);
     } finally {
-      try {
-        if (clients?.realtimeClient) {
-          clients.realtimeClient.close();
-        }
-      } catch (closeError: unknown) {
-        // Just log, don't throw
-        this.log(chalk.yellow(`Error closing client: ${closeError instanceof Error ? closeError.message : String(closeError)}`));
+      if (clients?.realtimeClient) {
+        clients.realtimeClient.close();
       }
     }
   }

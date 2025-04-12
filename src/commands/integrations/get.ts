@@ -7,16 +7,12 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
 
   static examples = [
     '$ ably integrations get rule123',
-    '$ ably integrations get rule123 --app "My App" --format json',
-  ]
+    '$ ably integrations get rule123 --json',
+    '$ ably integrations get rule123 --app "My App" --pretty-json']
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'app': Flags.string({
       description: 'App ID or name to get the integration rule from',
       required: false,
@@ -49,8 +45,8 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
       
       const rule = await controlApi.getRule(appId, args.ruleId)
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(rule))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(rule, flags))
       } else {
         this.log(chalk.bold(`Rule ID: ${rule.id}`))
         this.log(`App ID: ${rule.appId}`)
@@ -60,7 +56,7 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
         this.log(`Source:`)
         this.log(`  Type: ${rule.source.type}`)
         this.log(`  Channel Filter: ${rule.source.channelFilter || '(none)'}`)
-        this.log(`Target: ${JSON.stringify(rule.target, null, 2).replace(/\n/g, '\n  ')}`)
+        this.log(`Target: ${this.formatJsonOutput(rule.target, flags).replace(/\n/g, '\n  ')}`)
         this.log(`Version: ${rule.version}`)
         this.log(`Created: ${this.formatDate(rule.created)}`)
         this.log(`Updated: ${this.formatDate(rule.modified)}`)

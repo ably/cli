@@ -9,13 +9,28 @@ interface SpacesClients {
   realtimeClient: Ably.Realtime;
 }
 
+interface LocationItem {
+  memberId?: string;
+  member?: {
+    clientId?: string;
+    isCurrentMember?: boolean;
+  };
+  clientId?: string;
+  id?: string;
+  userId?: string;
+  location?: any;
+  data?: any;
+  connectionId?: string;
+  [key: string]: any;
+}
+
 export default class SpacesLocationsGetAll extends SpacesBaseCommand {
   static override description = 'Get all current locations in a space'
 
   static override examples = [
     '$ ably spaces locations get-all my-space',
-    '$ ably spaces locations get-all my-space --format json',
-  ]
+    '$ ably spaces locations get-all my-space --json',
+    '$ ably spaces locations get-all my-space --pretty-json']
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
@@ -104,75 +119,65 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
       });
       
       // Get current locations
-      this.log(`Fetching locations for space ${chalk.cyan(spaceId)}...`);
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Fetching locations for space ${chalk.cyan(spaceId)}...`);
+      }
       
       let locations: any = [];
       try {
-        // Make sure to handle the return value correctly
         const result = await space.locations.getAll();
         
-        // Debug info to understand what's being returned
-        if (flags.format === 'json') {
-          this.log(`Raw API response: ${JSON.stringify(result || {})}`);
-        }
-        
-        // The locations API might return an object with location data
+        // Convert locations to consistent format
         if (result && typeof result === 'object') {
           if (Array.isArray(result)) {
             locations = result;
-            
-            // Add debug info for first item if available
-            if (locations.length > 0 && flags.format === 'json') {
-              this.log(`First location item structure: ${JSON.stringify(locations[0])}`);
-            }
           } else if (Object.keys(result).length > 0) {
-            // If result is an object with member IDs as keys, convert to array with proper format
-            // Convert the object to an array of {memberId, location} objects
             locations = Object.entries(result).map(([memberId, locationData]) => ({
               memberId,
               location: locationData
             }));
-            
-            // Add debug info for first item if available
-            if (locations.length > 0 && flags.format === 'json') {
-              this.log(`First location item structure: ${JSON.stringify(locations[0])}`);
-            }
           }
         }
-      } catch (error) {
-        this.log(chalk.yellow(`Error fetching locations: ${error instanceof Error ? error.message : String(error)}`));
-        this.log(chalk.yellow('Continuing with empty locations list.'));
-      }
-      
-      try {
-        // Filter out locations with null/empty data before displaying
+
+        // Filter out invalid locations
         const validLocations = locations.filter((item: any) => {
           if (item === null || item === undefined) return false;
           
-          // Check different structures - get the location data however it's stored
           let locationData;
           if (item.location !== undefined) {
             locationData = item.location;
           } else if (item.data !== undefined) {
             locationData = item.data;
           } else {
-            // For raw object structure, exclude known metadata fields
             const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
-            // If all that's left is metadata, there's no real location data
             if (Object.keys(rest).length === 0) return false;
             locationData = rest;
           }
           
-          // Strictly check if location data is empty or null
           if (locationData === null || locationData === undefined) return false;
           if (typeof locationData === 'object' && Object.keys(locationData).length === 0) return false;
           
           return true;
         });
         
-        // Output locations based on format
-        if (flags.format === 'json') {
-          this.log(JSON.stringify(locations, null, 2));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            timestamp: new Date().toISOString(),
+            locations: validLocations.map((item: LocationItem) => {
+              const memberId = item.memberId || item.member?.clientId || item.clientId || item.id || item.userId || 'Unknown';
+              const locationData = item.location || item.data || (() => {
+                const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
+                return rest;
+              })();
+              return {
+                memberId,
+                location: locationData,
+                isCurrentMember: item.member?.isCurrentMember || false
+              };
+            })
+          }, flags));
         } else {
           if (!validLocations || validLocations.length === 0) {
             this.log(chalk.yellow('No locations are currently set in this space.'));
@@ -182,46 +187,15 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
             
             validLocations.forEach((locationItem: any) => {
               try {
-                // The location structure might be different than we expected
-                // Handle the different possible structures
-                
-                let memberId = 'Unknown';
-                let locationData = {};
-                
-                // Check different possible structures
-                if (locationItem?.memberId) {
-                  // If we converted it to {memberId, location} format
-                  memberId = locationItem.memberId;
-                  locationData = locationItem.location;
-                } else if (locationItem?.member?.clientId) {
-                  // If we have { member: { clientId }, location }
-                  memberId = locationItem.member.clientId;
-                  locationData = locationItem.location || {};
-                } else if (locationItem?.clientId) {
-                  // If we have { clientId, location } directly
-                  memberId = locationItem.clientId;
-                  locationData = locationItem.location || locationItem.data || {};
-                } else if (typeof locationItem === 'object' && locationItem !== null) {
-                  // If the item itself is the location data
-                  // Try to extract clientId from somewhere
-                  memberId = locationItem.clientId || locationItem.id || locationItem.userId || 'Unknown';
-                  
-                  // Use the whole object as location data, excluding some known metadata fields
-                  const { clientId: _, id: __, userId: ___, memberId: ____, ...rest } = locationItem;
-                  locationData = Object.keys(rest).length > 0 ? rest : {};
-                }
+                const memberId = locationItem.memberId || locationItem.member?.clientId || locationItem.clientId || locationItem.id || locationItem.userId || 'Unknown';
+                const locationData = locationItem.location || locationItem.data || (() => {
+                  const { clientId, id, userId, memberId, connectionId, member, ...rest } = locationItem;
+                  return rest;
+                })();
                 
                 this.log(`- ${chalk.blue(memberId)}:`);
+                this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
                 
-                // Handle different location data formats
-                if (typeof locationData === 'object' && locationData !== null) {
-                  this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
-                } else if (locationData !== undefined && locationData !== null) {
-                  // Handle primitive location data
-                  this.log(`  ${chalk.dim('Location:')} ${locationData}`);
-                }
-                
-                // Check for current member indicator
                 if (locationItem?.member?.isCurrentMember) {
                   this.log(`  ${chalk.green('(Current member)')}`);
                 }
@@ -232,7 +206,16 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
           }
         }
       } catch (error) {
-        this.log(chalk.red(`Error formatting locations: ${error instanceof Error ? error.message : String(error)}`));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            spaceId,
+            error: error instanceof Error ? error.message : String(error),
+            status: 'error'
+          }, flags));
+        } else {
+          this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       
       try {

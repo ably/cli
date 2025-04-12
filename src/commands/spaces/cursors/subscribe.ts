@@ -14,16 +14,12 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
 
   static override examples = [
     '$ ably spaces cursors subscribe my-space',
-    '$ ably spaces cursors subscribe my-space --format json',
-  ]
+    '$ ably spaces cursors subscribe my-space --json',
+    '$ ably spaces cursors subscribe my-space --pretty-json']
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -66,7 +62,9 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
       });
       
       // Get the space
-      this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
+      }
       const space = await spacesClient.get(spaceId)
       
       // Enter the space
@@ -84,7 +82,16 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
             // Check realtime client state
             if (realtimeClient.connection.state === 'connected') {
               clearTimeout(timeout);
-              this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'connected',
+                  connectionId: realtimeClient.connection.id,
+                }, flags));
+              } else {
+                this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
+              }
               resolve();
             } else if (realtimeClient.connection.state === 'failed' || 
                       realtimeClient.connection.state === 'closed' || 
@@ -105,39 +112,55 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
       });
       
       // Subscribe to cursor updates
-      this.log(`\n${chalk.dim('Subscribing to cursor movements. Press Ctrl+C to exit.')}\n`)
-      
-      // Store original colors for cursor positions to detect changes
-      const memberColors: Record<string, string> = {}
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`\n${chalk.dim('Subscribing to cursor movements. Press Ctrl+C to exit.')}\n`)
+      }
       
       try {
         subscription = await space.cursors.subscribe('update', (cursorUpdate: any) => {
           try {
             const timestamp = new Date().toISOString();
             
-            // Extract cursor position data first to check if we should process this update
-            const position = cursorUpdate?.position;
-            
-            if (flags.format === 'json') {
-              const jsonOutput = {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                spaceId,
+                type: 'cursor_update',
                 timestamp,
                 member: {
                   clientId: cursorUpdate.clientId,
                   connectionId: cursorUpdate.connectionId
                 },
-                position
-              };
-              this.log(JSON.stringify(jsonOutput));
+                position: cursorUpdate.position
+              }, flags));
             } else {
-              this.log(`[${timestamp}] ${chalk.blue(cursorUpdate.clientId)} ${chalk.dim('position:')} ${JSON.stringify(position)}`);
+              this.log(`[${timestamp}] ${chalk.blue(cursorUpdate.clientId)} ${chalk.dim('position:')} ${JSON.stringify(cursorUpdate.position)}`);
             }
           } catch (error) {
-            this.log(chalk.red(`Error processing cursor update: ${error instanceof Error ? error.message : String(error)}`));
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: `Error processing cursor update: ${error instanceof Error ? error.message : String(error)}`,
+                status: 'error'
+              }, flags));
+            } else {
+              this.log(chalk.red(`Error processing cursor update: ${error instanceof Error ? error.message : String(error)}`));
+            }
           }
         });
       } catch (error) {
-        this.log(chalk.red(`Error subscribing to cursor updates: ${error instanceof Error ? error.message : String(error)}`));
-        this.log(chalk.yellow('Will continue running, but may not receive cursor updates.'));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            spaceId,
+            error: `Error subscribing to cursor updates: ${error instanceof Error ? error.message : String(error)}`,
+            status: 'error'
+          }, flags));
+        } else {
+          this.log(chalk.red(`Error subscribing to cursor updates: ${error instanceof Error ? error.message : String(error)}`));
+          this.log(chalk.yellow('Will continue running, but may not receive cursor updates.'));
+        }
       }
 
       // Keep the process running until interrupted
@@ -146,11 +169,22 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
           if (cleanupInProgress) return;
           cleanupInProgress = true;
           
-          this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`);
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`);
+          }
           
           // Set a force exit timeout
           const forceExitTimeout = setTimeout(() => {
-            this.log(chalk.red('Force exiting after timeout...'));
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: 'Force exiting after timeout',
+                status: 'disconnected'
+              }, flags));
+            } else {
+              this.log(chalk.red('Force exiting after timeout...'));
+            }
             process.exit(1);
           }, 5000);
           
@@ -159,63 +193,115 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
             if (subscription) {
               try {
                 subscription.unsubscribe();
-                this.log(chalk.green('Successfully unsubscribed from cursor events.'));
+                if (this.shouldOutputJson(flags)) {
+                  this.log(this.formatJsonOutput({
+                    success: true,
+                    spaceId,
+                    status: 'unsubscribed'
+                  }, flags));
+                } else {
+                  this.log(chalk.green('Successfully unsubscribed from cursor events.'));
+                }
               } catch (error) {
-                this.log(`Note: ${error instanceof Error ? error.message : String(error)}`);
-                this.log('Continuing with cleanup.');
+                if (this.shouldOutputJson(flags)) {
+                  this.log(this.formatJsonOutput({
+                    success: false,
+                    spaceId,
+                    error: `Error unsubscribing: ${error instanceof Error ? error.message : String(error)}`,
+                    status: 'error'
+                  }, flags));
+                } else {
+                  this.log(`Note: ${error instanceof Error ? error.message : String(error)}`);
+                  this.log('Continuing with cleanup.');
+                }
               }
             }
             
             try {
               // Leave the space
               await space.leave();
-              this.log(chalk.green('Successfully left the space.'));
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'left'
+                }, flags));
+              } else {
+                this.log(chalk.green('Successfully left the space.'));
+              }
             } catch (error) {
-              this.log(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`);
-              this.log('Continuing with cleanup.');
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  spaceId,
+                  error: `Error leaving space: ${error instanceof Error ? error.message : String(error)}`,
+                  status: 'error'
+                }, flags));
+              } else {
+                this.log(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`);
+                this.log('Continuing with cleanup.');
+              }
             }
             
             try {
               if (clients?.realtimeClient) {
                 clients.realtimeClient.close();
-                this.log(chalk.green('Successfully closed connection.'));
+                if (this.shouldOutputJson(flags)) {
+                  this.log(this.formatJsonOutput({
+                    success: true,
+                    spaceId,
+                    status: 'disconnected'
+                  }, flags));
+                } else {
+                  this.log(chalk.green('Successfully closed connection.'));
+                }
               }
             } catch (error) {
-              this.log(`Error closing client: ${error instanceof Error ? error.message : String(error)}`);
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  spaceId,
+                  error: `Error closing client: ${error instanceof Error ? error.message : String(error)}`,
+                  status: 'error'
+                }, flags));
+              } else {
+                this.log(`Error closing client: ${error instanceof Error ? error.message : String(error)}`);
+              }
             }
             
-            this.log(chalk.green('Successfully disconnected.'));
             clearTimeout(forceExitTimeout);
             resolve();
             // Force exit after cleanup
             process.exit(0);
           } catch (error) {
-            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`);
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`,
+                status: 'error'
+              }, flags));
+            } else {
+              this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`);
+            }
             clearTimeout(forceExitTimeout);
             process.exit(1);
           }
         };
 
-        process.once('SIGINT', () => void cleanup());
-        process.once('SIGTERM', () => void cleanup());
+        process.once('SIGINT', cleanup);
+        process.once('SIGTERM', cleanup);
       });
     } catch (error) {
-      // Handle original error more carefully
-      if (error === undefined || error === null) {
-        this.log(chalk.red('An unknown error occurred (error object is undefined or null)'));
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          spaceId: args.spaceId,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error'
+        }, flags));
       } else {
-        const errorMessage = error instanceof Error ? error.message : String(error || 'Unknown error');
-        this.log(chalk.red(`Error: ${errorMessage}`));
-      }
-      process.exit(1);
-    } finally {
-      try {
-        if (clients?.realtimeClient) {
-          clients.realtimeClient.close();
-        }
-      } catch (closeError: unknown) {
-        // Just log, don't throw
-        this.log(chalk.yellow(`Error closing client: ${closeError instanceof Error ? closeError.message : String(closeError)}`));
+        this.error(`Failed to subscribe to cursors: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }

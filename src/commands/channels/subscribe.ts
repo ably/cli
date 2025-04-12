@@ -15,6 +15,8 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
     '$ ably channels subscribe --rewind 10 my-channel',
     '$ ably channels subscribe --delta my-channel',
     '$ ably channels subscribe --cipher-key YOUR_CIPHER_KEY my-channel',
+    '$ ably channels subscribe my-channel --json',
+    '$ ably channels subscribe my-channel --pretty-json'
   ]
 
   static override flags = {
@@ -58,17 +60,23 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
     const {args, flags, argv} = await this.parse(ChannelsSubscribe)
 
     let client: Ably.Realtime | null = null;
+    // Get all channel names from argv
+    const channelNames = argv as string[]
 
     try {
       // Create the Ably client
       client = await this.createAblyClient(flags)
       if (!client) return
 
-      // Get all channel names from argv
-      const channelNames = argv as string[]
-
       if (channelNames.length === 0) {
-        this.error('At least one channel name is required')
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error: 'At least one channel name is required'
+          }, flags))
+        } else {
+          this.error('At least one channel name is required')
+        }
         return
       }
 
@@ -107,49 +115,105 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
 
       // Setup connection state change handler
       client.connection.on('connected', () => {
-        this.log('Successfully connected to Ably')
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            status: 'connected',
+            channels: channelNames
+          }, flags))
+        } else {
+          this.log('Successfully connected to Ably')
+        }
       })
 
       client.connection.on('disconnected', () => {
-        this.log('Disconnected from Ably')
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            status: 'disconnected',
+            channels: channelNames
+          }, flags))
+        } else {
+          this.log('Disconnected from Ably')
+        }
       })
 
       client.connection.on('failed', (err: Ably.ConnectionStateChange) => {
-        this.error(`Connection failed: ${err.reason?.message || 'Unknown error'}`)
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            status: 'failed',
+            error: err.reason?.message || 'Unknown error',
+            channels: channelNames
+          }, flags))
+        } else {
+          this.error(`Connection failed: ${err.reason?.message || 'Unknown error'}`)
+        }
       })
 
       // Subscribe to messages on all channels
       channels.forEach((channel: Ably.RealtimeChannel) => {
-        this.log(`${chalk.green('Subscribing to channel:')} ${chalk.cyan(channel.name)}`)
+        if (!this.shouldOutputJson(flags)) {
+          this.log(`${chalk.green('Subscribing to channel:')} ${chalk.cyan(channel.name)}`)
+        }
         
         channel.subscribe((message: Ably.Message) => {
           const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
-          const name = message.name ? message.name : '(none)'
           
-          // Message header with timestamp and channel info
-          this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`Channel: ${channel.name}`)} | ${chalk.yellow(`Event: ${name}`)}`)
-          
-          // Message data with consistent formatting
-          if (isJsonData(message.data)) {
-            this.log(chalk.blue('Data:'))
-            this.log(formatJson(message.data))
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: true,
+              timestamp,
+              channel: channel.name,
+              event: message.name || '(none)',
+              data: message.data,
+              encoding: message.encoding,
+              clientId: message.clientId,
+              connectionId: message.connectionId,
+              id: message.id
+            }, flags))
           } else {
-            this.log(`${chalk.blue('Data:')} ${message.data}`)
+            const name = message.name ? message.name : '(none)'
+            
+            // Message header with timestamp and channel info
+            this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`Channel: ${channel.name}`)} | ${chalk.yellow(`Event: ${name}`)}`)
+            
+            // Message data with consistent formatting
+            if (isJsonData(message.data)) {
+              this.log(chalk.blue('Data:'))
+              this.log(formatJson(message.data))
+            } else {
+              this.log(`${chalk.blue('Data:')} ${message.data}`)
+            }
+            this.log('') // Empty line for better readability
           }
-          this.log('') // Empty line for better readability
         })
       })
       
-      this.log('Listening for messages. Press Ctrl+C to exit.')
+      if (!this.shouldOutputJson(flags)) {
+        this.log('Listening for messages. Press Ctrl+C to exit.')
+      }
 
       // Keep the process running until interrupted
       await new Promise<void>((resolve) => {
         const cleanup = () => {
-          this.log('\nUnsubscribing and closing connection...')
+          if (!this.shouldOutputJson(flags)) {
+            this.log('\nUnsubscribing and closing connection...')
+          }
+          
           channels.forEach((channel: Ably.RealtimeChannel) => channel.unsubscribe())
+          
           if (client) {
             client.connection.once('closed', () => {
-              this.log('Connection closed')
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  status: 'closed',
+                  channels: channelNames
+                }, flags))
+              } else {
+                this.log('Connection closed')
+              }
               resolve()
             })
             client.close()
@@ -162,7 +226,15 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         process.on('SIGTERM', cleanup)
       })
     } catch (error) {
-      this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          channels: channelNames
+        }, flags))
+      } else {
+        this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (client) client.close()
     }

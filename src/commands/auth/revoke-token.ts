@@ -9,8 +9,8 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
   static examples = [
     '$ ably auth revoke-token TOKEN',
     '$ ably auth revoke-token TOKEN --client-id clientid',
-    '$ ably auth revoke-token TOKEN --format json',
-  ]
+    '$ ably auth revoke-token TOKEN --json',
+    '$ ably auth revoke-token TOKEN --pretty-json']
 
   static args = {
     token: Args.string({
@@ -26,11 +26,7 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
       description: 'App ID to use (uses current app if not specified)',
       env: 'ABLY_APP_ID',
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'client-id': Flags.string({
       description: 'Client ID to revoke tokens for',
       char: 'c',
@@ -108,12 +104,12 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
           this.log(JSON.stringify(response, null, 2))
         }
         
-        if (flags.format === 'json') {
-          this.log(JSON.stringify({
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
             success: true,
             response: response,
             message: 'Token revocation processed successfully',
-          }))
+          }, flags))
         } else {
           this.log('Token successfully revoked')
         }
@@ -126,11 +122,11 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
         
         const error = requestError as Error
         if (error.message && error.message.includes('token_not_found')) {
-          if (flags.format === 'json') {
-            this.log(JSON.stringify({
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
               success: false,
               error: 'Token not found or already revoked',
-            }))
+            }, flags))
           } else {
             this.log('Error: Token not found or already revoked')
           }

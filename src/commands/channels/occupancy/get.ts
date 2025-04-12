@@ -17,15 +17,12 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
   static examples = [
     '$ ably channels occupancy get my-channel',
     '$ ably channels occupancy get --api-key "YOUR_API_KEY" my-channel',
+    '$ ably channels occupancy get my-channel --json',
+    '$ ably channels occupancy get my-channel --pretty-json'
   ]
 
   static flags = {
     ...AblyBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   static args = {
@@ -84,8 +81,12 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
       })
       
       // Output the occupancy metrics based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(occupancyMetrics))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          channel: channelName,
+          metrics: occupancyMetrics
+        }, flags))
       } else {
         this.log(`Occupancy metrics for channel '${channelName}':\n`)
         this.log(`Connections: ${occupancyMetrics.connections ?? 0}`)
@@ -108,7 +109,15 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
       // Clean up
       await channel.detach()
     } catch (error) {
-      this.error(`Error fetching channel occupancy: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          channel: args.channel
+        }, flags))
+      } else {
+        this.error(`Error fetching channel occupancy: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (client) client.close()
     }

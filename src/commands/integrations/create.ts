@@ -45,11 +45,7 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
       description: 'Target URL for HTTP rules',
       required: false,
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   async run(): Promise<void> {
@@ -112,8 +108,8 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
       
       const createdRule = await controlApi.createRule(appId, ruleData)
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(createdRule))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(createdRule, flags))
       } else {
         this.log('Integration rule created successfully:')
         this.log(`Rule ID: ${createdRule.id}`)

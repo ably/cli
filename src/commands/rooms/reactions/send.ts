@@ -14,6 +14,8 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
   static override examples = [
     '$ ably rooms reactions send my-room thumbs_up',
     '$ ably rooms reactions send my-room heart --metadata \'{"effect":"fireworks"}\'',
+    '$ ably rooms reactions send my-room thumbs_up --json',
+    '$ ably rooms reactions send my-room heart --metadata \'{"effect":"fireworks"}\' --pretty-json'
   ]
 
   static override flags = {
@@ -54,7 +56,16 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       try {
         metadata = JSON.parse(flags.metadata)
       } catch (error) {
-        this.error('Invalid JSON metadata format. Please provide a valid JSON string.')
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error: 'Invalid JSON metadata format. Please provide a valid JSON string.',
+            roomId,
+            reactionType
+          }, flags))
+        } else {
+          this.error('Invalid JSON metadata format. Please provide a valid JSON string.')
+        }
         return
       }
 
@@ -72,9 +83,27 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         metadata: metadata
       })
       
-      this.log(`${chalk.green('✓')} Reaction '${chalk.yellow(reactionType)}' sent successfully to room ${chalk.blue(roomId)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          roomId,
+          reactionType,
+          metadata
+        }, flags))
+      } else {
+        this.log(`${chalk.green('✓')} Reaction '${chalk.yellow(reactionType)}' sent successfully to room ${chalk.blue(roomId)}`)
+      }
     } catch (error) {
-      this.error(`Error sending reaction: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          roomId: args.roomId,
+          reactionType: args.type
+        }, flags))
+      } else {
+        this.error(`Error sending reaction: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (clients?.realtimeClient) {
         clients.realtimeClient.close()

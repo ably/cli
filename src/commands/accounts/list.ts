@@ -5,7 +5,9 @@ export default class AccountsList extends ControlBaseCommand {
   static override description = 'List locally configured Ably accounts'
 
   static override examples = [
-    '<%= config.bin %> <%= command.id %>'
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
@@ -13,12 +15,42 @@ export default class AccountsList extends ControlBaseCommand {
   }
 
   public async run(): Promise<void> {
+    const { flags } = await this.parse(AccountsList)
+    
     // Get all accounts from config
     const accounts = this.configManager.listAccounts()
     const currentAlias = this.configManager.getCurrentAccountAlias()
 
     if (accounts.length === 0) {
-      this.log('No accounts configured. Use "ably accounts login" to add an account.')
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'No accounts configured. Use "ably accounts login" to add an account.',
+          accounts: []
+        }, flags))
+      } else {
+        this.log('No accounts configured. Use "ably accounts login" to add an account.')
+      }
+      return
+    }
+
+    if (this.shouldOutputJson(flags)) {
+      this.log(this.formatJsonOutput({
+        success: true,
+        currentAccount: currentAlias,
+        accounts: accounts.map(({ alias, account }) => ({
+          alias,
+          isCurrent: alias === currentAlias,
+          name: account.accountName || 'Unknown',
+          id: account.accountId || 'Unknown',
+          user: account.userEmail || 'Unknown',
+          appsConfigured: account.apps ? Object.keys(account.apps).length : 0,
+          currentApp: alias === currentAlias && account.currentAppId ? {
+            id: account.currentAppId,
+            name: this.configManager.getAppName(account.currentAppId) || account.currentAppId
+          } : undefined
+        }))
+      }, flags))
       return
     }
 

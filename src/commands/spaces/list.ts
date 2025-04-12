@@ -3,6 +3,25 @@ import { ChatBaseCommand } from '../../chat-base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
+interface SpaceMetrics {
+  connections?: number;
+  publishers?: number;
+  subscribers?: number;
+  presenceConnections?: number;
+  presenceMembers?: number;
+}
+
+interface SpaceStatus {
+  occupancy?: {
+    metrics?: SpaceMetrics;
+  };
+}
+
+interface SpaceItem {
+  spaceName: string;
+  status?: SpaceStatus;
+}
+
 export default class SpacesList extends ChatBaseCommand {
   static override description = 'List active spaces'
 
@@ -10,8 +29,8 @@ export default class SpacesList extends ChatBaseCommand {
     '$ ably spaces list',
     '$ ably spaces list --prefix my-space',
     '$ ably spaces list --limit 50',
-    '$ ably spaces list --format json',
-  ]
+    '$ ably spaces list --json',
+    '$ ably spaces list --pretty-json']
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
@@ -23,11 +42,7 @@ export default class SpacesList extends ChatBaseCommand {
       description: 'Maximum number of spaces to return',
       default: 100,
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   async run(): Promise<void> {
@@ -92,45 +107,62 @@ export default class SpacesList extends ChatBaseCommand {
       // Limit the results to the requested number
       const limitedSpaces = spacesList.slice(0, flags.limit)
 
-      // Output spaces based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(limitedSpaces, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          timestamp: new Date().toISOString(),
+          spaces: limitedSpaces.map((space: SpaceItem) => ({
+            spaceName: space.spaceName,
+            metrics: space.status?.occupancy?.metrics || {}
+          })),
+          total: spacesList.length,
+          shown: limitedSpaces.length,
+          hasMore: spacesList.length > flags.limit
+        }, flags));
       } else {
         if (limitedSpaces.length === 0) {
-          this.log('No active spaces found.')
-          return
+          this.log('No active spaces found.');
+          return;
         }
 
-        this.log(`Found ${chalk.cyan(limitedSpaces.length.toString())} active spaces:`)
+        this.log(`Found ${chalk.cyan(limitedSpaces.length.toString())} active spaces:`);
         
-        limitedSpaces.forEach(space => {
-          this.log(`${chalk.green(space.spaceName)}`)
+        limitedSpaces.forEach((space: SpaceItem) => {
+          this.log(`${chalk.green(space.spaceName)}`);
           
           // Show occupancy if available
           if (space.status?.occupancy?.metrics) {
-            const metrics = space.status.occupancy.metrics
-            this.log(`  ${chalk.dim('Connections:')} ${metrics.connections || 0}`)
-            this.log(`  ${chalk.dim('Publishers:')} ${metrics.publishers || 0}`)
-            this.log(`  ${chalk.dim('Subscribers:')} ${metrics.subscribers || 0}`)
+            const metrics = space.status.occupancy.metrics;
+            this.log(`  ${chalk.dim('Connections:')} ${metrics.connections || 0}`);
+            this.log(`  ${chalk.dim('Publishers:')} ${metrics.publishers || 0}`);
+            this.log(`  ${chalk.dim('Subscribers:')} ${metrics.subscribers || 0}`);
             
             if (metrics.presenceConnections !== undefined) {
-              this.log(`  ${chalk.dim('Presence Connections:')} ${metrics.presenceConnections}`)
+              this.log(`  ${chalk.dim('Presence Connections:')} ${metrics.presenceConnections}`);
             }
             
             if (metrics.presenceMembers !== undefined) {
-              this.log(`  ${chalk.dim('Presence Members:')} ${metrics.presenceMembers}`)
+              this.log(`  ${chalk.dim('Presence Members:')} ${metrics.presenceMembers}`);
             }
           }
           
-          this.log('') // Add a line break between spaces
-        })
+          this.log(''); // Add a line break between spaces
+        });
 
         if (spacesList.length > flags.limit) {
-          this.log(chalk.yellow(`Showing ${flags.limit} of ${spacesList.length} spaces. Use --limit to show more.`))
+          this.log(chalk.yellow(`Showing ${flags.limit} of ${spacesList.length} spaces. Use --limit to show more.`));
         }
       }
     } catch (error) {
-      this.error(`Error listing spaces: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error'
+        }, flags));
+      } else {
+        this.error(`Error listing spaces: ${error instanceof Error ? error.message : String(error)}`);
+      }
     } finally {
       client.close()
     }

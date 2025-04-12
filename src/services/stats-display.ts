@@ -3,7 +3,7 @@ import chalk from 'chalk'
 export interface StatsDisplayOptions {
   live?: boolean
   startTime?: Date
-  format?: 'json' | 'pretty'
+  json?: boolean
   unit?: 'minute' | 'hour' | 'day' | 'month'
   isAccountStats?: boolean
   intervalSeconds?: number
@@ -306,12 +306,12 @@ export class StatsDisplay {
   }
 
   public display(stats: StatsDisplayData): void {
-    if (this.options.format === 'json') {
+    if (this.options.json) {
       console.log(JSON.stringify(stats))
       return
     }
 
-    // For JSON format or no stats, just return
+    // For no stats, just return
     if (!stats) {
       return
     }

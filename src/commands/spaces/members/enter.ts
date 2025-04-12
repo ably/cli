@@ -24,11 +24,6 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
       description: 'Optional profile data to include with the member (JSON format)',
       required: false,
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   static override args = {
@@ -62,6 +57,14 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
         try {
           profileData = JSON.parse(flags.profile)
         } catch (error) {
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              spaceId,
+              error: `Invalid profile JSON: ${error instanceof Error ? error.message : String(error)}`,
+            }, flags))
+            return
+          }
           this.error(`Invalid profile JSON: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
@@ -71,14 +74,26 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
       
       // Enter the space with optional profile
       await space.enter(profileData)
-      this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`)
-      
-      if (profileData) {
-        this.log(`${chalk.dim('Profile:')} ${JSON.stringify(profileData, null, 2)}`)
+
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          spaceId,
+          profile: profileData,
+          status: 'connected',
+          connectionId: clients.realtimeClient.connection.id,
+        }, flags))
+      } else {
+        this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`)
+        if (profileData) {
+          this.log(`${chalk.dim('Profile:')} ${JSON.stringify(profileData, null, 2)}`)
+        }
       }
       
       // Subscribe to member presence events to show other members' activities
-      this.log(`\n${chalk.dim('Watching for other members. Press Ctrl+C to exit.')}\n`)
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`\n${chalk.dim('Watching for other members. Press Ctrl+C to exit.')}\n`)
+      }
       
       subscription = await space.members.subscribe('update', (member) => {
         const timestamp = new Date().toISOString()
@@ -115,8 +130,11 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
           timestamp: now
         })
         
-        if (flags.format === 'json') {
-          const jsonOutput = {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            type: 'member_update',
             timestamp,
             action,
             member: {
@@ -125,8 +143,7 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
               connectionId: member.connectionId,
               isConnected: member.isConnected
             }
-          }
-          this.log(JSON.stringify(jsonOutput))
+          }, flags))
         } else {
           let actionSymbol = '•'
           let actionColor = chalk.white
@@ -168,11 +185,22 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
           if (cleanupInProgress) return
           cleanupInProgress = true
           
-          this.log(`\n${chalk.yellow('Leaving space and closing connection...')}`)
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`\n${chalk.yellow('Leaving space and closing connection...')}`)
+          }
           
           // Set a force exit timeout
           const forceExitTimeout = setTimeout(() => {
-            this.log(chalk.red('Force exiting after timeout...'))
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: 'Force exiting after timeout',
+                status: 'disconnected'
+              }, flags))
+            } else {
+              this.log(chalk.red('Force exiting after timeout...'))
+            }
             process.exit(1)
           }, 5000)
           
@@ -184,35 +212,75 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
             
             try {
               await space.leave()
-              this.log(chalk.green('Successfully left the space.'))
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'left'
+                }, flags))
+              } else {
+                this.log(chalk.green('Successfully left the space.'))
+              }
             } catch (error) {
-              this.log(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`)
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  spaceId,
+                  error: `Error leaving space: ${error instanceof Error ? error.message : String(error)}`,
+                  status: 'error'
+                }, flags))
+              } else {
+                this.log(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`)
+              }
             }
             
             if (clients?.realtimeClient) {
               clients.realtimeClient.close()
             }
             
-            this.log(chalk.green('Successfully disconnected.'))
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                spaceId,
+                status: 'disconnected'
+              }, flags))
+            } else {
+              this.log(chalk.green('Successfully disconnected.'))
+            }
             clearTimeout(forceExitTimeout)
             resolve()
             // Force exit after cleanup
             process.exit(0)
           } catch (error) {
-            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`,
+                status: 'error'
+              }, flags))
+            } else {
+              this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            }
             clearTimeout(forceExitTimeout)
             process.exit(1)
           }
         }
-
-        process.once('SIGINT', () => void cleanup())
-        process.once('SIGTERM', () => void cleanup())
+        
+        // Handle SIGINT (Ctrl+C)
+        process.once('SIGINT', cleanup)
+        process.once('SIGTERM', cleanup)
       })
-    } catch (error) {
-      this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+    } catch (error: any) {
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          spaceId: args.spaceId,
+          error: error.message,
+          status: 'error'
+        }, flags))
+      } else {
+        this.error(`Failed to enter space: ${error.message}`)
       }
     }
   }

@@ -224,6 +224,14 @@ Note:
 - `--access-token`: Overrides any configured access token used for the Control API
 - `--api-key`: Overrides any configured API key used for the Control API
 - `--client-id`: Overrides any default client ID when using API authentication. By default, if API key authentication is being used, then the client ID is automatically defined as `ably-cli-` with a random set of 8 characters generated. This ensures that operations like presence will work, and other clients can easily see that events are being generated from the CLI.
+- `--json`: Instead of regular human readable output from the CLI, only valid JSON will be outputted for consumption by other services such as `jq`
+- `--pretty-json`: Much like the `--json` argument, only JSON will be outputted, however the JSON will be formatted and colorized to make it more human readable.
+
+#### JSON and Pretty JSON modes
+
+1. CLI commands by default provide user-friendly readable outputs, with colour coding, and status updates where useful can be included in the response.
+2. When `--json` argument is used, the assumption is that this is designed as a machine readable format, i.e. when piped into a jq command, or when made available to MCP servers. The JSON output should only include the output expected from the command and exclude any status updates or meta information. For example, subscribing to messages, should only output the messages received and not emit any updates on connection state. The exception to this is when there is a terminal/critical error where the CLI needs to output the error state and stop. In JSON mode, oclif's regular `log` commands suppress logging so that output is limited to intended data as opposed to logging and progress information.
+3. When `--pretty-json` argument is used, this follows the same assumptions as `--json`, with the difference being that the CLI can now assume a human is reading the JSON, and as such, we prettify the JSON output and colour code it to make it more legible.
 
 ### Usability
 

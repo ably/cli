@@ -13,16 +13,12 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
 
   static override examples = [
     '$ ably rooms presence subscribe my-room',
-    '$ ably rooms presence subscribe my-room --format json',
-  ]
+    '$ ably rooms presence subscribe my-room --json',
+    '$ ably rooms presence subscribe my-room --pretty-json']
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -71,8 +67,8 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
       const members = await room.presence.get()
       
       // Output current members based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(members, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(members, flags))
       } else {
         if (members.length === 0) {
           this.log(chalk.yellow('No members are currently present in this room.'))
@@ -83,7 +79,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
             this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`)
             
             if (member.data && Object.keys(member.data).length > 0) {
-              this.log(`  ${chalk.dim('Data:')} ${JSON.stringify(member.data, null, 2)}`)
+              this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`)
             }
             
             // Connection ID isn't available in the Chat SDK's PresenceMember type
@@ -98,7 +94,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
         const timestamp = new Date().toISOString()
         const action = member.action || 'unknown'
         
-        if (flags.format === 'json') {
+        if (this.shouldOutputJson(flags)) {
           const jsonOutput = {
             timestamp,
             action,
@@ -107,7 +103,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
               data: member.data
             }
           }
-          this.log(JSON.stringify(jsonOutput))
+          this.log(this.formatJsonOutput(jsonOutput, flags))
         } else {
           let actionSymbol = '•'
           let actionColor = chalk.white
@@ -130,7 +126,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
           this.log(`[${timestamp}] ${actionColor(actionSymbol)} ${chalk.blue(member.clientId || 'Unknown')} ${actionColor(action)}`)
           
           if (member.data && Object.keys(member.data).length > 0) {
-            this.log(`  ${chalk.dim('Data:')} ${JSON.stringify(member.data, null, 2)}`)
+            this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`)
           }
         }
       })

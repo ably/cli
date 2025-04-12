@@ -8,8 +8,8 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
   static examples = [
     '$ ably auth keys current',
     '$ ably auth keys current --app APP_ID',
-    '$ ably auth keys current --format json'
-  ]
+    '$ ably auth keys current --json',
+    '$ ably auth keys current --pretty-json']
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
@@ -17,11 +17,7 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
       description: 'App ID to check key for (uses current app if not specified)',
       env: 'ABLY_APP_ID',
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   async run(): Promise<void> {
@@ -54,8 +50,8 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
     // Format the full key name (app_id.key_id)
     const keyName = keyId.includes('.') ? keyId : `${appId}.${keyId.split('.')[1] || keyId}`
     
-    if (flags.format === 'json') {
-      this.log(JSON.stringify({
+    if (this.shouldOutputJson(flags)) {
+      this.log(this.formatJsonOutput({
         app: {
           id: appId,
           name: appName
@@ -65,7 +61,7 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
           label: keyLabel,
           value: apiKey
         }
-      }))
+      }, flags))
     } else {
       const currentAccount = this.configManager.getCurrentAccount()
       const currentAccountAlias = this.configManager.getCurrentAccountAlias()
@@ -94,8 +90,8 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
     const keyId = keyComponents.length > 1 ? keyComponents[1] : null
     const keyName = `${appId}.${keyId || ''}`
     
-    if (flags.format === 'json') {
-      this.log(JSON.stringify({
+    if (this.shouldOutputJson(flags)) {
+      this.log(this.formatJsonOutput({
         app: {
           id: appId
         },
@@ -105,7 +101,7 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
           value: apiKey
         },
         mode: 'web-cli'
-      }))
+      }, flags))
     } else {
       // Get account info if possible
       let accountName = 'Web CLI Account'

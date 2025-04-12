@@ -12,6 +12,8 @@ export default class AccountsLogin extends ControlBaseCommand {
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --alias mycompany',
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
@@ -36,8 +38,10 @@ export default class AccountsLogin extends ControlBaseCommand {
   public async run(): Promise<void> {
     const { args, flags } = await this.parse(AccountsLogin)
 
-    // Display ASCII art logo
-    displayLogo(this.log.bind(this))
+    // Display ASCII art logo if not in JSON mode
+    if (!this.shouldOutputJson(flags)) {
+      displayLogo(this.log.bind(this))
+    }
 
     let accessToken: string
     if (args.token) {
@@ -45,7 +49,9 @@ export default class AccountsLogin extends ControlBaseCommand {
     } else {
       let obtainTokenPath = 'https://ably.com/users/access_tokens';
       if (flags['control-host']) {
-        this.log('Using control host:', flags['control-host'])
+        if (!this.shouldOutputJson(flags)) {
+          this.log('Using control host:', flags['control-host'])
+        }
         if (flags['control-host'].includes('local')) {
           obtainTokenPath = `http://${flags['control-host']}/users/access_tokens`
         } else {
@@ -54,9 +60,11 @@ export default class AccountsLogin extends ControlBaseCommand {
       }
       // Prompt the user to get a token
       if (!flags['no-browser']) {
-        this.log('Opening browser to get an access token...')
+        if (!this.shouldOutputJson(flags)) {
+          this.log('Opening browser to get an access token...')
+        }
         this.openBrowser(obtainTokenPath)
-      } else {
+      } else if (!this.shouldOutputJson(flags)) {
         this.log(`Please visit ${obtainTokenPath} to create an access token`)
       }
 
@@ -65,7 +73,7 @@ export default class AccountsLogin extends ControlBaseCommand {
 
     // If no alias flag provided, prompt the user if they want to provide one
     let alias = flags.alias
-    if (!alias) {
+    if (!alias && !this.shouldOutputJson(flags)) {
       // Check if the default account already exists
       const accounts = this.configManager.listAccounts()
       const hasDefaultAccount = accounts.some(account => account.alias === 'default')
@@ -100,6 +108,8 @@ export default class AccountsLogin extends ControlBaseCommand {
           this.log('No alias provided. This will be set as your default account.')
         }
       }
+    } else if (!alias) {
+      alias = 'default'
     }
 
     try {
@@ -119,18 +129,37 @@ export default class AccountsLogin extends ControlBaseCommand {
         accountName: account.name
       })
 
-      this.log(`Successfully logged in to ${chalk.cyan(account.name)} (account ID: ${chalk.greenBright(account.id)})`)
-      
-      if (alias !== 'default') {
-        this.log(`Account stored with alias: ${alias}`)
-      }
-      
       // Switch to this account
       this.configManager.switchAccount(alias)
-      this.log(`Account ${chalk.cyan(alias)} is now the current account`)
-      
+
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          account: {
+            id: account.id,
+            name: account.name,
+            alias,
+            user: {
+              email: user.email
+            }
+          }
+        }, flags))
+      } else {
+        this.log(`Successfully logged in to ${chalk.cyan(account.name)} (account ID: ${chalk.greenBright(account.id)})`)
+        if (alias !== 'default') {
+          this.log(`Account stored with alias: ${alias}`)
+        }
+        this.log(`Account ${chalk.cyan(alias)} is now the current account`)
+      }
     } catch (error) {
-      this.error(`Failed to authenticate: ${error}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }, flags))
+      } else {
+        this.error(`Failed to authenticate: ${error}`)
+      }
     }
   }
 
@@ -198,14 +227,9 @@ export default class AccountsLogin extends ControlBaseCommand {
           
           if (validatedAlias === null) {
             if (!alias.trim()) {
-              // If they don't enter anything, use default
-              this.log('No alias provided. Using "default" instead.')
-              rl.close()
-              resolve('default')
-            } else {
-              // If validation failed, ask again
-              askForAlias()
+              this.log('Error: Alias cannot be empty')
             }
+            askForAlias()
           } else {
             rl.close()
             resolve(validatedAlias)
@@ -216,7 +240,7 @@ export default class AccountsLogin extends ControlBaseCommand {
       askForAlias()
     })
   }
-  
+
   private promptYesNo(question: string): Promise<boolean> {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -224,10 +248,24 @@ export default class AccountsLogin extends ControlBaseCommand {
     })
 
     return new Promise((resolve) => {
-      rl.question(`${question} (y/N): `, (answer) => {
-        rl.close()
-        resolve(answer.toLowerCase() === 'y')
-      })
+      const askQuestion = () => {
+        rl.question(`${question} (y/n) `, (answer) => {
+          const lowercaseAnswer = answer.toLowerCase().trim()
+          
+          if (lowercaseAnswer === 'y' || lowercaseAnswer === 'yes') {
+            rl.close()
+            resolve(true)
+          } else if (lowercaseAnswer === 'n' || lowercaseAnswer === 'no') {
+            rl.close()
+            resolve(false)
+          } else {
+            this.log('Please answer with yes/y or no/n')
+            askQuestion()
+          }
+        })
+      }
+
+      askQuestion()
     })
   }
 } 

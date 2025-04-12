@@ -72,7 +72,15 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
         channel.presence.subscribe('update', (presenceMessage) => {
           if (presenceMessage.clientId !== client?.auth.clientId) {
             this.log(`${chalk.yellow('⟲')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} updated presence data:`)
-            this.log(JSON.stringify(presenceMessage.data, null, 2))
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput(presenceMessage.data, flags))
+            } else {
+              this.log(`Successfully entered presence on channel '${channelName}'`)
+              this.log(`  Client ID: ${presenceMessage.clientId}`)
+              if (presenceMessage.data) {
+                this.log(`  Data: ${this.formatJsonOutput(presenceMessage.data, flags)}`)
+              }
+            }
           }
         })
       }

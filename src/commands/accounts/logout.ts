@@ -8,6 +8,8 @@ export default class AccountsLogout extends ControlBaseCommand {
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> mycompany',
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
@@ -33,7 +35,15 @@ export default class AccountsLogout extends ControlBaseCommand {
     const targetAlias = args.alias || this.configManager.getCurrentAccountAlias()
     
     if (!targetAlias) {
-      this.error('No account is currently selected and no alias provided. Use "ably accounts list" to see available accounts.')
+      const error = 'No account is currently selected and no alias provided. Use "ably accounts list" to see available accounts.'
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error
+        }, flags))
+      } else {
+        this.error(error)
+      }
       return
     }
 
@@ -41,11 +51,20 @@ export default class AccountsLogout extends ControlBaseCommand {
     const accountExists = accounts.some(account => account.alias === targetAlias)
 
     if (!accountExists) {
-      this.error(`Account with alias "${targetAlias}" not found. Use "ably accounts list" to see available accounts.`)
+      const error = `Account with alias "${targetAlias}" not found. Use "ably accounts list" to see available accounts.`
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error
+        }, flags))
+      } else {
+        this.error(error)
+      }
+      return
     }
     
-    // Get confirmation unless force flag is used
-    if (!flags.force) {
+    // Get confirmation unless force flag is used or in JSON mode
+    if (!flags.force && !this.shouldOutputJson(flags)) {
       const confirmed = await this.confirmLogout(targetAlias)
       if (!confirmed) {
         this.log('Logout canceled.')
@@ -57,17 +76,37 @@ export default class AccountsLogout extends ControlBaseCommand {
     const success = this.configManager.removeAccount(targetAlias)
     
     if (success) {
-      this.log(`Successfully logged out from account ${targetAlias}.`)
-      
-      // Suggest switching to another account if there are any left
+      // Get remaining accounts for the response
       const remainingAccounts = this.configManager.listAccounts()
-      if (remainingAccounts.length > 0) {
-        this.log(`Use "ably accounts switch ${remainingAccounts[0].alias}" to select another account.`)
+      
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          account: {
+            alias: targetAlias
+          },
+          remainingAccounts: remainingAccounts.map(account => account.alias)
+        }, flags))
       } else {
-        this.log('No remaining accounts. Use "ably accounts login" to log in to an account.')
+        this.log(`Successfully logged out from account ${targetAlias}.`)
+        
+        // Suggest switching to another account if there are any left
+        if (remainingAccounts.length > 0) {
+          this.log(`Use "ably accounts switch ${remainingAccounts[0].alias}" to select another account.`)
+        } else {
+          this.log('No remaining accounts. Use "ably accounts login" to log in to an account.')
+        }
       }
     } else {
-      this.error(`Failed to log out from account ${targetAlias}.`)
+      const error = `Failed to log out from account ${targetAlias}.`
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error
+        }, flags))
+      } else {
+        this.error(error)
+      }
     }
   }
   

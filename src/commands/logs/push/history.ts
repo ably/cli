@@ -12,7 +12,7 @@ export default class LogsPushHistory extends AblyBaseCommand {
     '$ ably logs push history --limit 20',
     '$ ably logs push history --direction forwards',
     '$ ably logs push history --json',
-  ]
+    '$ ably logs push history --pretty-json']
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
@@ -25,16 +25,10 @@ export default class LogsPushHistory extends AblyBaseCommand {
       options: ['backwards', 'forwards'],
       default: 'backwards',
     }),
-    json: Flags.boolean({
-      description: 'Output results in JSON format',
-      default: false,
-    }),
   }
 
   async run(): Promise<void> {
     const {flags} = await this.parse(LogsPushHistory)
-
-    let client: Ably.Rest | null = null;
 
     try {
       // Get API key from flags or config
@@ -46,12 +40,10 @@ export default class LogsPushHistory extends AblyBaseCommand {
 
       // Create the Ably REST client
       const options: Ably.ClientOptions = this.getClientOptions(flags)
-      client = new Ably.Rest(options)
+      const client = new Ably.Rest(options)
 
       const channelName = '[meta]log:push'
       const channel = client.channels.get(channelName)
-
-      this.log(`Retrieving history from ${chalk.cyan(channelName)}...`)
       
       // Get message history
       const historyOptions = {
@@ -60,64 +52,81 @@ export default class LogsPushHistory extends AblyBaseCommand {
       }
 
       const historyPage = await channel.history(historyOptions)
-      const items = historyPage.items
+      const messages = historyPage.items
       
-      if (items.length === 0) {
-        this.log('No push log messages found in history.')
-        return
-      }
-      
-      if (flags.json) {
-        // Output in JSON format
-        this.log(JSON.stringify(items.map(message => ({
-          timestamp: new Date(message.timestamp).toISOString(),
-          channel: channelName,
-          event: message.name,
-          data: message.data,
-        })), null, 2))
-        return
-      }
-
-      // Format and display the log messages
-      for (const message of items) {
-        const timestamp = new Date(message.timestamp).toISOString()
-        const event = message.name || 'unknown'
-        
-        // Color-code different event types based on severity
-        let eventColor = chalk.blue
-        
-        // For push log events - based on examples and severity
-        if (message.data && typeof message.data === 'object' && 'severity' in message.data) {
-          const severity = message.data.severity as string
-          if (severity === 'error') {
-            eventColor = chalk.red
-          } else if (severity === 'warning') {
-            eventColor = chalk.yellow
-          } else if (severity === 'info') {
-            eventColor = chalk.green
-          } else if (severity === 'debug') {
-            eventColor = chalk.blue
-          }
+      // Output results based on format
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          messages: messages.map(msg => ({
+            timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString(),
+            channel: channelName,
+            name: msg.name,
+            data: msg.data,
+            encoding: msg.encoding,
+            clientId: msg.clientId,
+            connectionId: msg.connectionId,
+            id: msg.id
+          }))
+        }, flags))
+      } else {
+        if (messages.length === 0) {
+          this.log('No push log messages found in history.')
+          return
         }
 
-        // Format the log output
-        this.log(`${chalk.dim(`[${timestamp}]`)} Channel: ${chalk.cyan(channelName)} | Event: ${eventColor(event)}`)
-        if (message.data) {
-          this.log('Data:')
-          if (isJsonData(message.data)) {
-            this.log(formatJson(message.data))
-          } else {
-            this.log(String(message.data))
-          }
-        }
+        this.log(`Found ${chalk.cyan(messages.length.toString())} push log messages:`)
         this.log('')
+
+        messages.forEach((message) => {
+          const timestamp = message.timestamp
+            ? new Date(message.timestamp).toISOString()
+            : 'Unknown timestamp'
+          const event = message.name || 'unknown'
+          
+          // Color-code different event types based on severity
+          let eventColor = chalk.blue
+          
+          // For push log events - based on examples and severity
+          if (message.data && typeof message.data === 'object' && 'severity' in message.data) {
+            const severity = message.data.severity as string
+            if (severity === 'error') {
+              eventColor = chalk.red
+            } else if (severity === 'warning') {
+              eventColor = chalk.yellow
+            } else if (severity === 'info') {
+              eventColor = chalk.green
+            } else if (severity === 'debug') {
+              eventColor = chalk.blue
+            }
+          }
+
+          // Format the log output
+          this.log(`${chalk.dim(`[${timestamp}]`)} Channel: ${chalk.cyan(channelName)} | Event: ${eventColor(event)}`)
+          if (message.data) {
+            this.log('Data:')
+            if (isJsonData(message.data)) {
+              this.log(formatJson(message.data))
+            } else {
+              this.log(String(message.data))
+            }
+          }
+          this.log('')
+        })
+
+        if (messages.length === flags.limit) {
+          this.log(chalk.yellow(`Showing maximum of ${flags.limit} logs. Use --limit to show more.`))
+        }
       }
-
-      this.log(`Displayed ${items.length} push log messages.`)
-
-    } catch (error: unknown) {
-      const err = error as Error
-      this.error(err.message)
+    } catch (error) {
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }, flags))
+      } else {
+        this.error(`Error retrieving push notification logs: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
 } 

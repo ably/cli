@@ -24,11 +24,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
       description: 'Location data to set (JSON format)',
       required: true,
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -87,7 +83,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
           return
         }
         
-        if (flags.format === 'json') {
+        if (this.shouldOutputJson(flags)) {
           const jsonOutput = {
             timestamp,
             action: 'update',

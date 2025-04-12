@@ -16,6 +16,8 @@ export default class ChannelsPublish extends AblyBaseCommand {
     '$ ably channels publish --count 5 my-channel "Message number {{.Count}}"',
     '$ ably channels publish --count 10 --delay 1000 my-channel "Message at {{.Timestamp}}"',
     '$ ably channels publish --transport realtime my-channel "Using realtime transport"',
+    '$ ably channels publish my-channel "Hello World" --json',
+    '$ ably channels publish my-channel "Hello World" --pretty-json'
   ]
 
   static override flags = {
@@ -113,6 +115,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       // Track publish progress
       let publishedCount = 0
       let errorCount = 0
+      let results: any[] = []
       
       // Publish messages
       if (count > 1) {
@@ -167,14 +170,45 @@ export default class ChannelsPublish extends AblyBaseCommand {
             // Publish the message
             await channel.publish(message)
             publishedCount++
+            results.push({
+              success: true,
+              index: i + 1,
+              message,
+              channel: args.channel
+            })
             
             if (!this.shouldSuppressOutput(flags)) {
-              this.log(`${chalk.green('✓')} Message published successfully.`)
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  index: i + 1,
+                  message,
+                  channel: args.channel
+                }, flags))
+              } else {
+                this.log(`${chalk.green('✓')} Message published successfully.`)
+              }
             }
           } catch (err) {
             errorCount++
+            results.push({
+              success: false,
+              index: i + 1,
+              error: err instanceof Error ? err.message : String(err),
+              channel: args.channel
+            })
+            
             if (!this.shouldSuppressOutput(flags)) {
-              this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  index: i + 1,
+                  error: err instanceof Error ? err.message : String(err),
+                  channel: args.channel
+                }, flags))
+              } else {
+                this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              }
             }
           }
           
@@ -199,7 +233,17 @@ export default class ChannelsPublish extends AblyBaseCommand {
         })
         
         if (!this.shouldSuppressOutput(flags)) {
-          this.log(`${chalk.green('✓')} ${publishedCount}/${count} messages published successfully${errorCount > 0 ? ` (${chalk.red(errorCount)} errors)` : ''}.`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: errorCount === 0,
+              total: count,
+              published: publishedCount,
+              errors: errorCount,
+              results
+            }, flags))
+          } else {
+            this.log(`${chalk.green('✓')} ${publishedCount}/${count} messages published successfully${errorCount > 0 ? ` (${chalk.red(errorCount)} errors)` : ''}.`)
+          }
         }
       } else {
         // Single message - await the publish for better error handling
@@ -243,15 +287,39 @@ export default class ChannelsPublish extends AblyBaseCommand {
 
           // Publish the message
           await channel.publish(message)
+          
           if (!this.shouldSuppressOutput(flags)) {
-            this.log(`${chalk.green('✓')} Message published successfully.`)
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                message,
+                channel: args.channel
+              }, flags))
+            } else {
+              this.log(`${chalk.green('✓')} Message published successfully.`)
+            }
           }
         } catch (error) {
-          this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+              channel: args.channel
+            }, flags))
+          } else {
+            this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+          }
         }
       }
     } catch (error) {
-      this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }, flags))
+      } else {
+        this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
   
@@ -264,8 +332,16 @@ export default class ChannelsPublish extends AblyBaseCommand {
       realtime = await this.createAblyClient(flags)
       
       if (!realtime) {
-        this.error('Failed to create Ably client. Please check your API key and try again.')
-        return
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error: 'Failed to create Ably client. Please check your API key and try again.'
+          }, flags))
+          return
+        } else {
+          this.error('Failed to create Ably client. Please check your API key and try again.')
+          return
+        }
       }
 
       if (!this.shouldSuppressOutput(flags)) {
@@ -295,6 +371,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       // Track publish progress
       let publishedCount = 0
       let errorCount = 0
+      let results: any[] = []
       
       // Publish messages
       if (count > 1) {
@@ -345,16 +422,51 @@ export default class ChannelsPublish extends AblyBaseCommand {
             message.encoding = flags.encoding
           }
 
-          // Publish the message
-          await channel.publish(message)
-            .then(() => {
-              if (!this.shouldSuppressOutput(flags)) {
-                this.log(`${chalk.green('✓')} Message published successfully.`);
-              }
+          try {
+            // Publish the message
+            await channel.publish(message)
+            publishedCount++
+            results.push({
+              success: true,
+              index: i + 1,
+              message,
+              channel: args.channel
             })
-            .catch(error => {
-              this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
-            });
+            
+            if (!this.shouldSuppressOutput(flags)) {
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  index: i + 1,
+                  message,
+                  channel: args.channel
+                }, flags))
+              } else {
+                this.log(`${chalk.green('✓')} Message published successfully.`)
+              }
+            }
+          } catch (err) {
+            errorCount++
+            results.push({
+              success: false,
+              index: i + 1,
+              error: err instanceof Error ? err.message : String(err),
+              channel: args.channel
+            })
+            
+            if (!this.shouldSuppressOutput(flags)) {
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  index: i + 1,
+                  error: err instanceof Error ? err.message : String(err),
+                  channel: args.channel
+                }, flags))
+              } else {
+                this.log(`Error publishing message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              }
+            }
+          }
           
           // Delay before sending next message if not the last one
           if (i < count - 1 && delay > 0) {
@@ -377,7 +489,17 @@ export default class ChannelsPublish extends AblyBaseCommand {
         })
         
         if (!this.shouldSuppressOutput(flags)) {
-          this.log(`${chalk.green('✓')} ${publishedCount}/${count} messages published successfully${errorCount > 0 ? ` (${chalk.red(errorCount)} errors)` : ''}.`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: errorCount === 0,
+              total: count,
+              published: publishedCount,
+              errors: errorCount,
+              results
+            }, flags))
+          } else {
+            this.log(`${chalk.green('✓')} ${publishedCount}/${count} messages published successfully${errorCount > 0 ? ` (${chalk.red(errorCount)} errors)` : ''}.`)
+          }
         }
       } else {
         // Single message - await the publish for better error handling
@@ -421,16 +543,28 @@ export default class ChannelsPublish extends AblyBaseCommand {
 
           // Publish the message
           await channel.publish(message)
-            .then(() => {
-              if (!this.shouldSuppressOutput(flags)) {
-                this.log(`${chalk.green('✓')} Message published successfully.`);
-              }
-            })
-            .catch(error => {
-              this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
-            });
+          
+          if (!this.shouldSuppressOutput(flags)) {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                message,
+                channel: args.channel
+              }, flags))
+            } else {
+              this.log(`${chalk.green('✓')} Message published successfully.`)
+            }
+          }
         } catch (error) {
-          this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+              channel: args.channel
+            }, flags))
+          } else {
+            this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+          }
         }
       }
       
@@ -441,7 +575,15 @@ export default class ChannelsPublish extends AblyBaseCommand {
       if (realtime) {
         realtime.close()
       }
-      this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+      
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }, flags))
+      } else {
+        this.error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
   }
   

@@ -23,11 +23,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
       description: 'Optional data to associate with the lock (JSON format)',
       required: false,
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -79,8 +75,10 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
         const lock = await space.locks.acquire(lockId, lockData)
         this.log(`${chalk.green('Successfully acquired lock:')} ${chalk.cyan(lockId)}`)
         
-        if (lockData) {
-          this.log(`${chalk.dim('Lock data:')} ${JSON.stringify(lockData, null, 2)}`)
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput(lockData, flags))
+        } else {
+          this.log(`${chalk.dim('Lock data:')} ${this.formatJsonOutput(lockData, flags)}`)
         }
       } catch (error) {
         this.error(`Failed to acquire lock: ${error instanceof Error ? error.message : String(error)}`)

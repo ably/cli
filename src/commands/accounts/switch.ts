@@ -7,7 +7,9 @@ export default class AccountsSwitch extends ControlBaseCommand {
 
   static override examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> mycompany'
+    '<%= config.bin %> <%= command.id %> mycompany',
+    '<%= config.bin %> <%= command.id %> --json',
+    '<%= config.bin %> <%= command.id %> --pretty-json'
   ]
 
   static override flags = {
@@ -22,38 +24,75 @@ export default class AccountsSwitch extends ControlBaseCommand {
   }
 
   public async run(): Promise<void> {
-    const { args } = await this.parse(AccountsSwitch)
+    const { args, flags } = await this.parse(AccountsSwitch)
     
     // Get available accounts
     const accounts = this.configManager.listAccounts()
     
     if (accounts.length === 0) {
-      this.error('No accounts configured. Use "ably accounts login" to add an account.')
+      const error = 'No accounts configured. Use "ably accounts login" to add an account.'
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error
+        }, flags))
+      } else {
+        this.error(error)
+      }
+      return
     }
     
     // If alias is provided, switch directly
     if (args.alias) {
-      await this.switchToAccount(args.alias, accounts)
+      await this.switchToAccount(args.alias, accounts, flags)
       return
     }
     
-    // Otherwise, show interactive selection
+    // Otherwise, show interactive selection if not in JSON mode
+    if (this.shouldOutputJson(flags)) {
+      const error = 'No account alias provided. Please specify an account alias to switch to.'
+      this.log(this.formatJsonOutput({
+        success: false,
+        error,
+        availableAccounts: accounts.map(({ alias, account }) => ({
+          alias,
+          name: account.accountName || 'Unknown',
+          id: account.accountId || 'Unknown'
+        }))
+      }, flags))
+      return
+    }
+
     this.log('Select an account to switch to:')
     const selectedAccount = await this.interactiveHelper.selectAccount()
     
     if (selectedAccount) {
-      await this.switchToAccount(selectedAccount.alias, accounts)
+      await this.switchToAccount(selectedAccount.alias, accounts, flags)
     } else {
       this.log('Account switch cancelled.')
     }
   }
   
-  private async switchToAccount(alias: string, accounts: Array<{alias: string, account: any}>): Promise<void> {
+  private async switchToAccount(alias: string, accounts: Array<{alias: string, account: any}>, flags: any): Promise<void> {
     // Check if account exists
     const accountExists = accounts.some(account => account.alias === alias)
 
     if (!accountExists) {
-      this.error(`Account with alias "${alias}" not found. Use "ably accounts list" to see available accounts.`)
+      const error = `Account with alias "${alias}" not found. Use "ably accounts list" to see available accounts.`
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error,
+          availableAccounts: accounts.map(({ alias, account }) => ({
+            alias,
+            name: account.accountName || 'Unknown',
+            id: account.accountId || 'Unknown'
+          }))
+        }, flags))
+      } else {
+        this.error(error)
+      }
+      return
     }
 
     // Switch to the account
@@ -63,10 +102,18 @@ export default class AccountsSwitch extends ControlBaseCommand {
     try {
       const accessToken = this.configManager.getAccessToken()
       if (!accessToken) {
-        this.error('No access token found for this account. Please log in again.')
+        const error = 'No access token found for this account. Please log in again.'
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            error
+          }, flags))
+        } else {
+          this.error(error)
+        }
+        return
       }
 
-      const { flags } = await this.parse(AccountsSwitch)
       const controlApi = new ControlApi({
         accessToken,
         controlHost: flags['control-host']
@@ -74,11 +121,33 @@ export default class AccountsSwitch extends ControlBaseCommand {
 
       const { user, account } = await controlApi.getMe()
       
-      this.log(`Switched to account: ${account.name} (${account.id})`)
-      this.log(`User: ${user.email}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          account: {
+            id: account.id,
+            name: account.name,
+            alias,
+            user: {
+              email: user.email
+            }
+          }
+        }, flags))
+      } else {
+        this.log(`Switched to account: ${account.name} (${account.id})`)
+        this.log(`User: ${user.email}`)
+      }
     } catch (error) {
-      this.warn('Switched to account, but the access token may have expired or is invalid.')
-      this.log(`Consider logging in again with "ably accounts login --alias ${alias}".`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: 'Access token may have expired or is invalid.',
+          account: { alias }
+        }, flags))
+      } else {
+        this.warn('Switched to account, but the access token may have expired or is invalid.')
+        this.log(`Consider logging in again with "ably accounts login --alias ${alias}".`)
+      }
     }
   }
 } 

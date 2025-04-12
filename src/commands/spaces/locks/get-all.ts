@@ -9,21 +9,26 @@ interface SpacesClients {
   realtimeClient: Ably.Realtime;
 }
 
+interface LockItem {
+  id: string;
+  status?: string;
+  member?: {
+    clientId?: string;
+  };
+  attributes?: Record<string, any>;
+}
+
 export default class SpacesLocksGetAll extends SpacesBaseCommand {
   static override description = 'Get all current locks in a space'
 
   static override examples = [
     '$ ably spaces locks get-all my-space',
-    '$ ably spaces locks get-all my-space --format json',
-  ]
+    '$ ably spaces locks get-all my-space --json',
+    '$ ably spaces locks get-all my-space --pretty-json']
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static override args = {
@@ -103,42 +108,41 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
       });
       
       // Get all locks
-      this.log(`Fetching locks for space ${chalk.cyan(spaceId)}...`)
-      
-      let locks: any[] = [];
-      try {
-        // Make sure to handle the return value correctly
-        const result = await space.locks.getAll();
-        
-        // Debug info to understand what's being returned
-        if (flags.format === 'json') {
-          this.log(`Raw API response: ${JSON.stringify(result || {})}`);
-        }
-        
-        locks = Array.isArray(result) ? result : [];
-      } catch (error) {
-        this.log(chalk.yellow(`Error fetching locks: ${error instanceof Error ? error.message : String(error)}`));
-        this.log(chalk.yellow('Continuing with empty locks list.'));
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Fetching locks for space ${chalk.cyan(spaceId)}...`);
       }
       
+      let locks: LockItem[] = [];
       try {
+        const result = await space.locks.getAll();
+        locks = Array.isArray(result) ? result : [];
+        
         // Filter out invalid locks
-        const validLocks = locks.filter((lock: any) => {
+        const validLocks = locks.filter((lock: LockItem) => {
           if (!lock || !lock.id) return false;
           return true;
         });
         
-        // Output locks based on format
-        if (flags.format === 'json') {
-          this.log(JSON.stringify(locks, null, 2))
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            timestamp: new Date().toISOString(),
+            locks: validLocks.map(lock => ({
+              id: lock.id,
+              status: lock.status || 'unknown',
+              holder: lock.member?.clientId || null,
+              attributes: lock.attributes || {}
+            }))
+          }, flags));
         } else {
           if (!validLocks || validLocks.length === 0) {
-            this.log(chalk.yellow('No locks are currently active in this space.'))
+            this.log(chalk.yellow('No locks are currently active in this space.'));
           } else {
             const lockCount = validLocks.length;
-            this.log(`\n${chalk.cyan('Current locks')} (${chalk.bold(String(lockCount))}):\n`)
+            this.log(`\n${chalk.cyan('Current locks')} (${chalk.bold(String(lockCount))}):\n`);
             
-            validLocks.forEach((lock: any) => {
+            validLocks.forEach((lock: LockItem) => {
               try {
                 this.log(`- ${chalk.blue(lock.id)}:`);
                 this.log(`  ${chalk.dim('Status:')} ${lock.status || 'unknown'}`);
@@ -154,25 +158,54 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
           }
         }
       } catch (error) {
-        this.log(chalk.red(`Error formatting locks: ${error instanceof Error ? error.message : String(error)}`));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            spaceId: args.spaceId,
+            error: error instanceof Error ? error.message : String(error),
+            status: 'error'
+          }, flags));
+        } else {
+          this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       
       try {
         // Leave the space after fetching locks
-        await space.leave()
-        this.log(chalk.green('\nSuccessfully disconnected.'))
+        await space.leave();
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            status: 'left'
+          }, flags));
+        } else {
+          this.log(chalk.green('\nSuccessfully disconnected.'));
+        }
         process.exit(0);
       } catch (error) {
-        this.log(chalk.yellow(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`));
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            spaceId: args.spaceId,
+            error: error instanceof Error ? error.message : String(error),
+            status: 'error'
+          }, flags));
+        } else {
+          this.log(chalk.yellow(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`));
+        }
         process.exit(1);
       }
     } catch (error) {
-      // Handle original error more carefully
-      if (error === undefined || error === null) {
-        this.log(chalk.red('An unknown error occurred (error object is undefined or null)'));
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          spaceId: args.spaceId,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error'
+        }, flags));
       } else {
-        const errorMessage = error instanceof Error ? error.message : String(error || 'Unknown error');
-        this.log(chalk.red(`Error: ${errorMessage}`));
+        this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
       process.exit(1);
     } finally {

@@ -12,7 +12,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
     '$ ably apps logs history --limit 20',
     '$ ably apps logs history --direction forwards',
     '$ ably apps logs history --json',
-  ]
+    '$ ably apps logs history --pretty-json']
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
@@ -67,8 +67,8 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       const messages = history.items
       
       // Display results based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(messages, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(messages, flags))
       } else {
         if (messages.length === 0) {
           this.log('No application log messages found.')
@@ -86,7 +86,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
           // Format data based on type
           if (typeof message.data === 'object') {
             try {
-              this.log(JSON.stringify(message.data, null, 2))
+              this.log(this.formatJsonOutput(message.data, flags))
             } catch {
               this.log(String(message.data))
             }

@@ -1,5 +1,6 @@
 import {Args, Flags} from '@oclif/core'
 import {ChatBaseCommand} from '../../../chat-base-command.js'
+import chalk from 'chalk'
 
 export default class MessagesSend extends ChatBaseCommand {
   static override description = 'Send a message to an Ably Chat room'
@@ -10,6 +11,8 @@ export default class MessagesSend extends ChatBaseCommand {
     '$ ably rooms messages send --metadata \'{"isImportant":true}\' my-room "Attention please!"',
     '$ ably rooms messages send --count 5 my-room "Message number {{.Count}}"',
     '$ ably rooms messages send --count 10 --delay 1000 my-room "Message at {{.Timestamp}}"',
+    '$ ably rooms messages send my-room "Hello World!" --json',
+    '$ ably rooms messages send my-room "Hello World!" --pretty-json'
   ]
 
   static override flags = {
@@ -58,6 +61,13 @@ export default class MessagesSend extends ChatBaseCommand {
         try {
           metadata = JSON.parse(flags.metadata)
         } catch (error) {
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              error: `Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`
+            }, flags))
+            return
+          }
           this.error(`Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`)
         }
       }
@@ -75,24 +85,31 @@ export default class MessagesSend extends ChatBaseCommand {
       // Enforce minimum delay when sending multiple messages
       if (count > 1 && delay < 10) {
         delay = 10
-        this.log('Using minimum delay of 10ms for multiple messages')
+        if (!this.shouldSuppressOutput(flags)) {
+          this.log('Using minimum delay of 10ms for multiple messages')
+        }
       }
       
       // If sending multiple messages, show a progress indication
-      if (count > 1) {
+      if (count > 1 && !this.shouldSuppressOutput(flags)) {
         this.log(`Sending ${count} messages with ${delay}ms delay...`)
       }
       
       // Track send progress
       let sentCount = 0
       let errorCount = 0
+      let results: any[] = []
       
       // Send messages
       if (count > 1) {
         // Sending multiple messages without awaiting each send
-        const progressInterval = setInterval(() => {
-          this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`)
-        }, 1000)
+        let progressInterval: NodeJS.Timeout | undefined
+        
+        if (!this.shouldSuppressOutput(flags)) {
+          progressInterval = setInterval(() => {
+            this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`)
+          }, 1000)
+        }
         
         for (let i = 0; i < count; i++) {
           // Apply interpolation to the message
@@ -105,10 +122,51 @@ export default class MessagesSend extends ChatBaseCommand {
           })
           .then(() => {
             sentCount++
+            results.push({
+              success: true,
+              index: i + 1,
+              message: {
+                text: interpolatedText,
+                ...(metadata ? { metadata } : {})
+              },
+              roomId: args.roomId
+            })
+            
+            if (!this.shouldSuppressOutput(flags)) {
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  index: i + 1,
+                  message: {
+                    text: interpolatedText,
+                    ...(metadata ? { metadata } : {})
+                  },
+                  roomId: args.roomId
+                }, flags))
+              }
+            }
           })
           .catch(err => {
             errorCount++
-            this.log(`Error sending message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+            results.push({
+              success: false,
+              index: i + 1,
+              error: err instanceof Error ? err.message : String(err),
+              roomId: args.roomId
+            })
+            
+            if (!this.shouldSuppressOutput(flags)) {
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  index: i + 1,
+                  error: err instanceof Error ? err.message : String(err),
+                  roomId: args.roomId
+                }, flags))
+              } else {
+                this.log(`Error sending message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
+              }
+            }
           })
           
           // Delay before sending next message if not the last one
@@ -124,14 +182,26 @@ export default class MessagesSend extends ChatBaseCommand {
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             if (sentCount + errorCount >= count || (Date.now() - startWaitTime > maxWaitTime)) {
-              clearInterval(progressInterval)
+              if (progressInterval) clearInterval(progressInterval)
               clearInterval(checkInterval)
               resolve()
             }
           }, 100)
         })
         
-        this.log(`${sentCount}/${count} messages sent successfully (${errorCount} errors).`)
+        if (!this.shouldSuppressOutput(flags)) {
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: errorCount === 0,
+              total: count,
+              sent: sentCount,
+              errors: errorCount,
+              results
+            }, flags))
+          } else {
+            this.log(`${sentCount}/${count} messages sent successfully (${errorCount} errors).`)
+          }
+        }
       } else {
         // Single message - await the send for better error handling
         try {
@@ -144,9 +214,30 @@ export default class MessagesSend extends ChatBaseCommand {
             ...(metadata ? { metadata } : {}),
           })
           
-          this.log('Message sent successfully.')
+          if (!this.shouldSuppressOutput(flags)) {
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: true,
+                message: {
+                  text: interpolatedText,
+                  ...(metadata ? { metadata } : {})
+                },
+                roomId: args.roomId
+              }, flags))
+            } else {
+              this.log('Message sent successfully.')
+            }
+          }
         } catch (error) {
-          this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({
+              success: false,
+              error: error instanceof Error ? error.message : String(error),
+              roomId: args.roomId
+            }, flags))
+          } else {
+            this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
+          }
         }
       }
       
@@ -154,7 +245,14 @@ export default class MessagesSend extends ChatBaseCommand {
       await chatClient.rooms.release(args.roomId)
       
     } catch (error) {
-      this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }, flags))
+      } else {
+        this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       // Close the connection
       if (clients?.realtimeClient) {

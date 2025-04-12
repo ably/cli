@@ -18,9 +18,10 @@ export default class IssueJwtTokenCommand extends AblyBaseCommand {
   static examples = [
     '$ ably auth issue-jwt-token',
     '$ ably auth issue-jwt-token --capability \'{"*":["*"]}\'',
-    '$ ably auth issue-jwt-token --client-id "client123" --ttl 3600',
-    '$ ably auth issue-jwt-token --client-id "none" --ttl 3600',
-    '$ ably auth issue-jwt-token --format json',
+    '$ ably auth issue-jwt-token --capability \'{"chat:*":["publish","subscribe"], "status:*":["subscribe"]}\' --ttl 3600',
+    '$ ably auth issue-jwt-token --client-id client123 --ttl 86400',
+    '$ ably auth issue-jwt-token --json',
+    '$ ably auth issue-jwt-token --pretty-json',
     '$ ably auth issue-jwt-token --token-only',
     '$ ably channels publish --token "$(ably auth issue-jwt-token --token-only)" my-channel "Hello"',
   ]
@@ -42,11 +43,7 @@ export default class IssueJwtTokenCommand extends AblyBaseCommand {
       description: 'Time to live in seconds',
       default: 3600, // 1 hour
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'token-only': Flags.boolean({
       description: 'Output only the token string without any formatting or additional information',
       default: false,
@@ -119,8 +116,8 @@ export default class IssueJwtTokenCommand extends AblyBaseCommand {
         return
       }
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify({
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
           token,
           type: 'jwt',
           issued: new Date(jwtPayload.iat * 1000).toISOString(),
@@ -130,7 +127,7 @@ export default class IssueJwtTokenCommand extends AblyBaseCommand {
           keyId: keyId,
           clientId: clientId,
           capability: capabilities,
-        }))
+        }, flags))
       } else {
         this.log('Generated Ably JWT Token:')
         this.log(`Token: ${token}`)
@@ -141,7 +138,7 @@ export default class IssueJwtTokenCommand extends AblyBaseCommand {
         this.log(`App ID: ${appId}`)
         this.log(`Key ID: ${keyId}`)
         this.log(`Client ID: ${clientId || 'None'}`)
-        this.log(`Capability: ${JSON.stringify(capabilities, null, 2)}`)
+        this.log(`Capability: ${this.formatJsonOutput(capabilities, flags)}`)
       }
     } catch (error) {
       this.error(`Error issuing JWT token: ${error instanceof Error ? error.message : String(error)}`)

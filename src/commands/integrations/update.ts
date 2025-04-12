@@ -29,11 +29,7 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
       description: 'Target URL for HTTP rules',
       required: false,
     }),
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static args = {
@@ -89,8 +85,8 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
       
       const updatedRule = await controlApi.updateRule(appId, args.ruleId, updateData)
       
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(updatedRule))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(updatedRule, flags))
       } else {
         this.log('Integration rule updated successfully:')
         this.log(`Rule ID: ${updatedRule.id}`)

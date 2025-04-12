@@ -41,6 +41,7 @@ export default class ConnectionsLogs extends AblyBaseCommand {
     await this.config.runCommand('logs:connection-lifecycle:subscribe', [
       '--rewind', flags.rewind.toString(),
       ...(flags.json ? ['--json'] : []),
+      ...(flags.json ? ['--pretty-json'] : []),
       // Forward all global flags
       ...(flags.host ? ['--host', flags.host] : []),
       ...(flags.env ? ['--env', flags.env] : []),

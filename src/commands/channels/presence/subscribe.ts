@@ -8,16 +8,11 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
 
   static override examples = [
     '$ ably channels presence subscribe my-channel',
-    '$ ably channels presence subscribe my-channel --format json',
-  ]
+    '$ ably channels presence subscribe my-channel --json',
+    '$ ably channels presence subscribe my-channel --pretty-json']
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   static override args = {
@@ -42,14 +37,63 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
       // Get the channel
       const channel = client.channels.get(channelName)
       
+      // Setup connection state change handler
+      client.connection.on('connected', () => {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            status: 'connected',
+            channel: channelName
+          }, flags))
+        } else {
+          this.log('Successfully connected to Ably')
+        }
+      })
+
+      client.connection.on('disconnected', () => {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            status: 'disconnected',
+            channel: channelName
+          }, flags))
+        } else {
+          this.log('Disconnected from Ably')
+        }
+      })
+
+      client.connection.on('failed', (err: Ably.ConnectionStateChange) => {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: false,
+            status: 'failed',
+            error: err.reason?.message || 'Unknown error',
+            channel: channelName
+          }, flags))
+        } else {
+          this.error(`Connection failed: ${err.reason?.message || 'Unknown error'}`)
+        }
+      })
+      
       // Get current presence set
-      this.log(`Fetching current presence members for channel ${chalk.cyan(channelName)}...`)
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Fetching current presence members for channel ${chalk.cyan(channelName)}...`)
+      }
       
       const members = await channel.presence.get()
       
       // Output current members based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(members, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          timestamp: new Date().toISOString(),
+          channel: channelName,
+          members: members.map(member => ({
+            clientId: member.clientId,
+            connectionId: member.connectionId,
+            data: member.data
+          }))
+        }, flags))
       } else {
         if (members.length === 0) {
           this.log('No members are currently present on this channel.')
@@ -70,61 +114,80 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
         }
       }
       
-      // Subscribe to presence events
-      this.log('\nSubscribing to presence events. Press Ctrl+C to exit.\n')
+      if (!this.shouldOutputJson(flags)) {
+        this.log('\nSubscribing to presence events. Press Ctrl+C to exit.\n')
+      }
       
       channel.presence.subscribe('enter', (presenceMessage) => {
-        if (flags.format === 'json') {
-          this.log(JSON.stringify({
+        const timestamp = presenceMessage.timestamp 
+          ? new Date(presenceMessage.timestamp).toISOString() 
+          : new Date().toISOString()
+        
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            timestamp,
             action: 'enter',
-            timestamp: new Date().toISOString(),
-            message: presenceMessage,
-          }, null, 2))
+            channel: channelName,
+            member: {
+              clientId: presenceMessage.clientId,
+              connectionId: presenceMessage.connectionId,
+              data: presenceMessage.data
+            }
+          }, flags))
         } else {
-          const timestamp = presenceMessage.timestamp 
-            ? new Date(presenceMessage.timestamp).toISOString() 
-            : new Date().toISOString()
-          
           this.log(`[${chalk.dim(timestamp)}] ${chalk.green('✓')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} entered presence`)
           
           if (presenceMessage.data && Object.keys(presenceMessage.data).length > 0) {
-            this.log(`  Data: ${JSON.stringify(presenceMessage.data, null, 2)}`)
+            this.log(`  Data: ${this.formatJsonOutput(presenceMessage.data, flags)}`)
           }
         }
       })
       
       channel.presence.subscribe('leave', (presenceMessage) => {
-        if (flags.format === 'json') {
-          this.log(JSON.stringify({
+        const timestamp = presenceMessage.timestamp 
+          ? new Date(presenceMessage.timestamp).toISOString() 
+          : new Date().toISOString()
+        
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            timestamp,
             action: 'leave',
-            timestamp: new Date().toISOString(),
-            message: presenceMessage,
-          }, null, 2))
+            channel: channelName,
+            member: {
+              clientId: presenceMessage.clientId,
+              connectionId: presenceMessage.connectionId,
+              data: presenceMessage.data
+            }
+          }, flags))
         } else {
-          const timestamp = presenceMessage.timestamp 
-            ? new Date(presenceMessage.timestamp).toISOString() 
-            : new Date().toISOString()
-          
           this.log(`[${chalk.dim(timestamp)}] ${chalk.red('✗')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} left presence`)
         }
       })
       
       channel.presence.subscribe('update', (presenceMessage) => {
-        if (flags.format === 'json') {
-          this.log(JSON.stringify({
+        const timestamp = presenceMessage.timestamp 
+          ? new Date(presenceMessage.timestamp).toISOString() 
+          : new Date().toISOString()
+        
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            timestamp,
             action: 'update',
-            timestamp: new Date().toISOString(),
-            message: presenceMessage,
-          }, null, 2))
+            channel: channelName,
+            member: {
+              clientId: presenceMessage.clientId,
+              connectionId: presenceMessage.connectionId,
+              data: presenceMessage.data
+            }
+          }, flags))
         } else {
-          const timestamp = presenceMessage.timestamp 
-            ? new Date(presenceMessage.timestamp).toISOString() 
-            : new Date().toISOString()
-          
           this.log(`[${chalk.dim(timestamp)}] ${chalk.yellow('⟲')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} updated presence data:`)
           
           if (presenceMessage.data && Object.keys(presenceMessage.data).length > 0) {
-            this.log(`  Data: ${JSON.stringify(presenceMessage.data, null, 2)}`)
+            this.log(`  Data: ${this.formatJsonOutput(presenceMessage.data, flags)}`)
           }
         }
       })
@@ -137,11 +200,21 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
           if (cleanupInProgress) return
           cleanupInProgress = true
           
-          this.log('\nUnsubscribing from presence events and closing connection...')
+          if (!this.shouldOutputJson(flags)) {
+            this.log('\nUnsubscribing from presence events and closing connection...')
+          }
           
           // Set a force exit timeout
           const forceExitTimeout = setTimeout(() => {
-            this.log(chalk.red('Force exiting after timeout...'))
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                error: 'Force exiting after timeout',
+                channel: channelName
+              }, flags))
+            } else {
+              this.log(chalk.red('Force exiting after timeout...'))
+            }
             process.exit(1)
           }, 5000)
           
@@ -149,24 +222,55 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
             try {
               // Attempt to unsubscribe from presence
               channel.presence.unsubscribe()
-              this.log(chalk.green('Successfully unsubscribed from presence events.'))
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  action: 'unsubscribed',
+                  channel: channelName
+                }, flags))
+              } else {
+                this.log(chalk.green('Successfully unsubscribed from presence events.'))
+              }
             } catch (error) {
-              // If unsubscribing fails (likely due to channel being detached), just log and continue
-              this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
-              this.log('Continuing with connection close.')
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  error: error instanceof Error ? error.message : String(error),
+                  channel: channelName
+                }, flags))
+              } else {
+                this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+                this.log('Continuing with connection close.')
+              }
             }
             
             // Now close the connection
             if (client) {
               client.close()
-              this.log(chalk.green('Successfully closed connection.'))
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  status: 'closed',
+                  channel: channelName
+                }, flags))
+              } else {
+                this.log(chalk.green('Successfully closed connection.'))
+              }
             }
             
             clearTimeout(forceExitTimeout)
             resolve(null)
             process.exit(0)
           } catch (error) {
-            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                error: error instanceof Error ? error.message : String(error),
+                channel: channelName
+              }, flags))
+            } else {
+              this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+            }
             clearTimeout(forceExitTimeout)
             process.exit(1)
           }
@@ -176,7 +280,15 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
         process.once('SIGTERM', () => void cleanup())
       })
     } catch (error) {
-      this.error(`Error subscribing to presence: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          channel: args.channel
+        }, flags))
+      } else {
+        this.error(`Error subscribing to presence: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (client) client.close()
     }

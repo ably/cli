@@ -18,15 +18,13 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
   static examples = [
     '$ ably rooms occupancy get my-room',
     '$ ably rooms occupancy get --api-key "YOUR_API_KEY" my-room',
+    '$ ably rooms occupancy get my-room --json',
+    '$ ably rooms occupancy get my-room --pretty-json'
   ]
 
   static flags = {
     ...ChatBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format (json or pretty)',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
   }
 
   static args = {
@@ -61,8 +59,12 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
       const occupancyMetrics = await room.occupancy.get()
       
       // Output the occupancy metrics based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(occupancyMetrics))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: true,
+          roomId,
+          metrics: occupancyMetrics
+        }, flags))
       } else {
         this.log(`Occupancy metrics for room '${roomId}':\n`)
         this.log(`Connections: ${occupancyMetrics.connections ?? 0}`)
@@ -76,7 +78,15 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
       await chatClient.rooms.release(roomId)
       
     } catch (error) {
-      this.error(`Error fetching room occupancy: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          roomId: args.roomId
+        }, flags))
+      } else {
+        this.error(`Error fetching room occupancy: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (clients?.realtimeClient) {
         clients.realtimeClient.close()

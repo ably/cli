@@ -9,10 +9,11 @@ export default class ChannelsHistory extends AblyBaseCommand {
 
   static override examples = [
     '$ ably channels history my-channel',
-    '$ ably channels history my-channel --limit 50',
-    '$ ably channels history my-channel --direction forwards',
-    '$ ably channels history my-channel --format json',
+    '$ ably channels history my-channel --json',
+    '$ ably channels history my-channel --pretty-json',
     '$ ably channels history my-channel --start "2023-01-01T00:00:00Z" --end "2023-01-02T00:00:00Z"',
+    '$ ably channels history my-channel --limit 100',
+    '$ ably channels history my-channel --direction forward'
   ]
 
   static override flags = {
@@ -26,11 +27,7 @@ export default class ChannelsHistory extends AblyBaseCommand {
       options: ['backwards', 'forwards'],
       default: 'backwards',
     }),
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
+    
     'start': Flags.string({
       description: 'Start time for the history query (ISO 8601 format)',
     }),
@@ -102,8 +99,8 @@ export default class ChannelsHistory extends AblyBaseCommand {
       const messages = history.items
       
       // Output results based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(messages, null, 2))
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(messages, flags))
       } else {
         if (messages.length === 0) {
           this.log('No messages found in the channel history.')

@@ -15,16 +15,11 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
 
   static override examples = [
     '$ ably spaces members subscribe my-space',
-    '$ ably spaces members subscribe my-space --format json',
-  ]
+    '$ ably spaces members subscribe my-space --json',
+    '$ ably spaces members subscribe my-space --pretty-json']
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
-    'format': Flags.string({
-      description: 'Output format',
-      options: ['json', 'pretty'],
-      default: 'pretty',
-    }),
   }
 
   static override args = {
@@ -57,19 +52,35 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
       
       // Attach to the space
       await space.enter()
-      this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`)
       
       // Get current members
-      this.log(`Fetching current members for space ${chalk.cyan(spaceId)}...`)
-      
       const members = await space.members.getAll()
       
-      // Output current members based on format
-      if (flags.format === 'json') {
-        this.log(JSON.stringify(members, null, 2))
-      } else {
-        if (members.length === 0) {
+      // Output current members
+      if (members.length === 0) {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            status: 'connected',
+            members: []
+          }, flags))
+        } else {
           this.log(chalk.yellow('No members are currently present in this space.'))
+        }
+      } else {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            status: 'connected',
+            members: members.map(member => ({
+              clientId: member.clientId,
+              profileData: member.profileData,
+              connectionId: member.connectionId,
+              isConnected: member.isConnected
+            }))
+          }, flags))
         } else {
           this.log(`\n${chalk.cyan('Current members')} (${chalk.bold(members.length.toString())}):\n`)
           
@@ -88,12 +99,11 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
               this.log(`  ${chalk.dim('Status:')} Not connected`)
             }
           })
+          this.log(`\n${chalk.dim('Subscribing to member events. Press Ctrl+C to exit.')}\n`)
         }
       }
       
       // Subscribe to member presence events
-      this.log(`\n${chalk.dim('Subscribing to member events. Press Ctrl+C to exit.')}\n`)
-      
       subscription = await space.members.subscribe('update', (member) => {
         const timestamp = new Date().toISOString()
         const now = Date.now()
@@ -107,7 +117,6 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
         const clientKey = `${clientId}:${connectionId}`
         
         // Check if we've seen this exact event recently (within 500ms)
-        // This helps avoid duplicate enter/leave events that might come through
         const lastEvent = lastSeenEvents.get(clientKey)
         
         if (lastEvent && 
@@ -123,8 +132,11 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
           timestamp: now
         })
         
-        if (flags.format === 'json') {
-          const jsonOutput = {
+        if (this.shouldOutputJson(flags)) {
+          this.log(this.formatJsonOutput({
+            success: true,
+            spaceId,
+            type: 'member_update',
             timestamp,
             action,
             member: {
@@ -133,8 +145,7 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
               connectionId: member.connectionId,
               isConnected: member.isConnected
             }
-          }
-          this.log(JSON.stringify(jsonOutput))
+          }, flags))
         } else {
           let actionSymbol = '•'
           let actionColor = chalk.white
@@ -176,14 +187,6 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
           if (cleanupInProgress) return
           cleanupInProgress = true
           
-          this.log(`\n${chalk.yellow('Unsubscribing and closing connection...')}`)
-          
-          // Set a force exit timeout
-          const forceExitTimeout = setTimeout(() => {
-            this.log(chalk.red('Force exiting after timeout...'))
-            process.exit(1)
-          }, 5000)
-          
           try {
             // Unsubscribe from member events
             if (subscription) {
@@ -192,23 +195,39 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
             
             try {
               await space.leave()
-              this.log(chalk.green('Successfully left the space.'))
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: true,
+                  spaceId,
+                  status: 'left'
+                }, flags))
+              }
             } catch (error) {
-              this.log(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`)
+              if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({
+                  success: false,
+                  spaceId,
+                  error: `Error leaving space: ${error instanceof Error ? error.message : String(error)}`,
+                  status: 'error'
+                }, flags))
+              }
             }
             
             if (clients?.realtimeClient) {
               clients.realtimeClient.close()
             }
             
-            this.log(chalk.green('Successfully disconnected.'))
-            clearTimeout(forceExitTimeout)
             resolve()
-            // Force exit after cleanup
             process.exit(0)
           } catch (error) {
-            this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
-            clearTimeout(forceExitTimeout)
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({
+                success: false,
+                spaceId,
+                error: `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`,
+                status: 'error'
+              }, flags))
+            }
             process.exit(1)
           }
         }
@@ -217,7 +236,16 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
         process.once('SIGTERM', () => void cleanup())
       })
     } catch (error) {
-      this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({
+          success: false,
+          spaceId: args.spaceId,
+          error: error instanceof Error ? error.message : String(error),
+          status: 'error'
+        }, flags))
+      } else {
+        this.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      }
     } finally {
       if (clients?.realtimeClient) {
         clients.realtimeClient.close()
