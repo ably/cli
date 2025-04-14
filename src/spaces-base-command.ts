@@ -6,25 +6,35 @@ type SpacesConstructor = new (client: Ably.Realtime) => any;
 
 export abstract class SpacesBaseCommand extends AblyBaseCommand {
   protected async createSpacesClient(flags: any): Promise<{ spacesClient: any, realtimeClient: Ably.Realtime } | null> {
+    const isJsonMode = this.shouldOutputJson(flags);
     // Create Ably Realtime client first
+    // Error handling within createAblyClient already handles JSON output
     const realtimeClient = await this.createAblyClient(flags)
-    
+
     if (!realtimeClient) {
-      this.error('Failed to create Ably client. Please check your API key and try again.')
+      // createAblyClient handles error output (including JSON) before returning null
       return null
     }
-    
+
     try {
       // Create Spaces client using the Realtime client
       // Use type assertion to handle the nested default export
       const Spaces = (SpacesModule as any).default as SpacesConstructor
       const spacesClient = new Spaces(realtimeClient)
+      this.logCliEvent(flags, 'SpacesClient', 'init', 'Spaces client initialized successfully.');
       return { spacesClient, realtimeClient }
-    } catch (error) {
+    } catch (error: unknown) {
       // Close the Realtime connection if Spaces client creation fails
       realtimeClient.close()
-      this.error(`Failed to create Spaces client: ${error instanceof Error ? error.message : String(error)}`)
-      return null
+      const errorMessage = `Failed to create Spaces client: ${error instanceof Error ? error.message : String(error)}`;
+      if (isJsonMode) {
+        this.outputJsonError(errorMessage, error);
+        // Exit explicitly in JSON mode
+        this.exit(1);
+      } else {
+        this.error(errorMessage);
+      }
+      return null // Unreachable, but required by TypeScript
     }
   }
 } 

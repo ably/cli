@@ -1,7 +1,8 @@
 import { Args, Flags } from '@oclif/core'
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-import { ChatClient, RoomStatus } from '@ably/chat'
+import { ChatClient, RoomStatus, RoomStatusChange } from '@ably/chat'
 import chalk from 'chalk'
+import * as Ably from 'ably'
 
 interface ChatClients {
   chatClient: ChatClient;
@@ -38,150 +39,147 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
     }),
   }
 
+  private clients: ChatClients | null = null;
+  private unsubscribeStatusFn: (() => void) | null = null;
+  private unsubscribePresenceFn: (() => void) | null = null;
+
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsPresenceEnter)
 
-    let clients: ChatClients | null = null
-
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      this.clients = await this.createChatClient(flags)
+      if (!this.clients) return
 
-      const { chatClient } = clients
+      const { chatClient, realtimeClient } = this.clients
       const roomId = args.roomId
-      
+
+      // Add listeners for connection state changes
+      realtimeClient.connection.on((stateChange: any) => {
+        this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+      });
+
       // Parse the data
       let presenceData = {}
       try {
         presenceData = JSON.parse(flags.data)
+        this.logCliEvent(flags, 'presence', 'dataParsed', 'Presence data parsed successfully', { data: presenceData });
       } catch (error) {
+        const errorMsg = 'Invalid JSON data format. Please provide a valid JSON string.';
+        this.logCliEvent(flags, 'presence', 'dataParseError', errorMsg, { error: error instanceof Error ? error.message : String(error) });
         if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({
-            success: false,
-            error: 'Invalid JSON data format. Please provide a valid JSON string.',
-            roomId
-          }, flags))
+          this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId }, flags))
         } else {
-          this.error('Invalid JSON data format. Please provide a valid JSON string.')
+          this.error(errorMsg)
         }
         return
       }
 
       // Get the room
+      this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${roomId}`);
       const room = await chatClient.rooms.get(roomId, {
         presence: {}
       })
-      
+      this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${roomId}`);
+
       // Setup presence event handlers if we're showing other presence events
       if (flags['show-others']) {
         // Subscribe to room status changes
-        const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
+        this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
+        const { off: unsubscribeStatus } = room.onStatusChange((statusChange: RoomStatusChange) => {
+          let reason: string | Ably.ErrorInfo | undefined | null = undefined;
+          if (statusChange.current === RoomStatus.Failed) {
+              reason = room.error; // Get reason from room.error on failure
+          }
+          const reasonMsg = reason instanceof Error ? reason.message : reason;
+          this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: reasonMsg });
           if (statusChange.current === RoomStatus.Attached) {
-            if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({
-                success: true,
-                status: 'connected',
-                roomId
-              }, flags))
-            } else {
-              this.log(`${chalk.green('Successfully connected to room:')} ${chalk.cyan(roomId)}`)
+            if (!this.shouldOutputJson(flags)) {
+              this.log(`${chalk.green('Successfully connected to room:')} ${chalk.cyan(roomId)}`);
             }
           }
-        })
-        
+        });
+        this.unsubscribeStatusFn = unsubscribeStatus;
+
         // Subscribe to presence events using a general listener
-        const { unsubscribe: unsubscribePresence } = room.presence.subscribe(member => {
+        this.logCliEvent(flags, 'presence', 'subscribingToEvents', 'Subscribing to presence events');
+        const { unsubscribe: unsubscribePresence } = room.presence.subscribe((member: any) => {
           // Only show other members, not ourselves
           if (member.clientId !== chatClient.clientId) {
             const timestamp = new Date().toISOString()
-            // Check what kind of presence event it is based on action property
-            if (member.action === 'enter') {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: true,
-                  timestamp,
-                  action: 'enter',
-                  member: {
+            const eventData = {
+                timestamp,
+                action: member.action,
+                member: {
                     clientId: member.clientId,
                     data: member.data
-                  },
-                  roomId
-                }, flags))
-              } else {
-                this.log(`${chalk.green('✓')} ${chalk.blue(member.clientId || 'Unknown')} entered room`)
-              }
-            } else if (member.action === 'leave') {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: true,
-                  timestamp,
-                  action: 'leave',
-                  member: {
-                    clientId: member.clientId,
-                    data: member.data
-                  },
-                  roomId
-                }, flags))
-              } else {
-                this.log(`${chalk.red('✗')} ${chalk.blue(member.clientId || 'Unknown')} left room`)
-              }
-            } else if (member.action === 'update') {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: true,
-                  timestamp,
-                  action: 'update',
-                  member: {
-                    clientId: member.clientId,
-                    data: member.data
-                  },
-                  roomId
-                }, flags))
-              } else {
-                this.log(`${chalk.yellow('⟲')} ${chalk.blue(member.clientId || 'Unknown')} updated presence data:`)
-                this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`)
-              }
+                },
+                roomId
+            };
+            this.logCliEvent(flags, 'presence', member.action, `Presence event '${member.action}' received`, eventData);
+
+            if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({ success: true, ...eventData }, flags))
+            } else {
+                // Check what kind of presence event it is based on action property
+                if (member.action === 'enter') {
+                    this.log(`${chalk.green('✓')} ${chalk.blue(member.clientId || 'Unknown')} entered room`)
+                } else if (member.action === 'leave') {
+                    this.log(`${chalk.red('✗')} ${chalk.blue(member.clientId || 'Unknown')} left room`)
+                } else if (member.action === 'update') {
+                    this.log(`${chalk.yellow('⟲')} ${chalk.blue(member.clientId || 'Unknown')} updated presence data:`);
+                    this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`);
+                }
             }
           }
         })
+        this.unsubscribePresenceFn = unsubscribePresence;
+        this.logCliEvent(flags, 'presence', 'subscribedToEvents', 'Successfully subscribed to presence events');
       }
 
       // Attach to the room then enter
+      this.logCliEvent(flags, 'room', 'attaching', `Attaching to room ${roomId}`);
       await room.attach()
+      // Successful attach logged by onStatusChange handler
+
+      this.logCliEvent(flags, 'presence', 'entering', 'Attempting to enter presence', { data: presenceData });
       await room.presence.enter(presenceData)
-      
-      if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({
-          success: true,
+      const enterEventData = {
           action: 'enter',
           member: {
-            clientId: chatClient.clientId,
-            data: presenceData
+              clientId: chatClient.clientId,
+              data: presenceData
           },
           roomId
-        }, flags))
+      };
+      this.logCliEvent(flags, 'presence', 'entered', 'Successfully entered presence', enterEventData);
+
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({ success: true, ...enterEventData }, flags))
       } else {
         this.log(`${chalk.green('✓')} Entered room ${chalk.cyan(roomId)} as ${chalk.blue(chatClient.clientId || 'Unknown')}`)
       }
-      
+
       if (flags['show-others']) {
         // Get and display current presence members
+        this.logCliEvent(flags, 'presence', 'gettingInitialMembers', 'Fetching initial presence members');
         const members = await room.presence.get()
-        
+        const initialMembers = members.filter(member => member.clientId !== chatClient.clientId).map(member => ({
+            clientId: member.clientId,
+            data: member.data
+        }));
+        this.logCliEvent(flags, 'presence', 'initialMembersFetched', `Fetched ${members.length} total members (${initialMembers.length} others)`, { count: members.length, othersCount: initialMembers.length, members: initialMembers });
+
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
             success: true,
-            members: members.filter(member => member.clientId !== chatClient.clientId).map(member => ({
-              clientId: member.clientId,
-              data: member.data
-            })),
+            members: initialMembers,
             roomId
           }, flags))
         } else {
           if (members.length > 1) {
             this.log(`\n${chalk.cyan('Current users in room')} (${chalk.bold(members.length.toString())}):\n`)
-            
+
             members.forEach(member => {
               if (member.clientId !== chatClient.clientId) {
                 this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`)
@@ -193,96 +191,101 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
           } else {
             this.log(`\n${chalk.yellow('No other users are present in this room')}`)
           }
-          
+
           this.log(`\n${chalk.dim('Listening for presence events until terminated. Press Ctrl+C to exit.')}`)
         }
       } else {
-        if (!this.shouldOutputJson(flags)) {
-          this.log(`\n${chalk.dim('Staying present in the room until terminated. Press Ctrl+C to exit.')}`)
-        }
+          this.logCliEvent(flags, 'presence', 'present', 'Staying present in the room until terminated');
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`\n${chalk.dim('Staying present in the room until terminated. Press Ctrl+C to exit.')}`)
+          }
       }
 
+      this.logCliEvent(flags, 'presence', 'listening', 'Actively present and listening for events');
       // Keep the process running until interrupted
       await new Promise((resolve) => {
         let isCleaningUp = false
-        
+
         const cleanup = async () => {
           if (isCleaningUp) return
           isCleaningUp = true
-          
+
+          this.logCliEvent(flags, 'presence', 'cleanupInitiated', 'Cleanup initiated (Ctrl+C pressed)');
           if (!this.shouldOutputJson(flags)) {
             this.log(`\n${chalk.yellow('Leaving room and closing connection...')}`)
           }
-          
+
           // Set a force exit timeout
           const forceExitTimeout = setTimeout(() => {
+            const errorMsg = 'Force exiting after timeout during cleanup';
+            this.logCliEvent(flags, 'presence', 'forceExit', errorMsg, { roomId });
             if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({
-                success: false,
-                error: 'Force exiting after timeout',
-                roomId
-              }, flags))
+              this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId }, flags))
             } else {
               this.log(chalk.red('Force exiting after timeout...'))
             }
             process.exit(1)
           }, 5000)
-          
+
           try {
+            // Unsubscribe listeners first
+            if (this.unsubscribePresenceFn) {
+                this.logCliEvent(flags, 'presence', 'unsubscribingEvents', 'Unsubscribing from presence events');
+                try { this.unsubscribePresenceFn(); this.logCliEvent(flags, 'presence', 'unsubscribedEvents', 'Unsubscribed from presence events'); } catch (e) { /* ignore */ }
+            }
+            if (this.unsubscribeStatusFn) {
+                this.logCliEvent(flags, 'room', 'unsubscribingStatus', 'Unsubscribing from room status');
+                try { this.unsubscribeStatusFn(); this.logCliEvent(flags, 'room', 'unsubscribedStatus', 'Unsubscribed from room status'); } catch (e) { /* ignore */ }
+            }
+
             // Leave the room using presence API
             try {
+              this.logCliEvent(flags, 'presence', 'leaving', 'Attempting to leave presence');
               await room.presence.leave()
+              this.logCliEvent(flags, 'presence', 'left', 'Successfully left room presence');
               if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: true,
-                  action: 'leave',
-                  roomId
-                }, flags))
+                this.log(this.formatJsonOutput({ success: true, action: 'leave', roomId }, flags))
               } else {
                 this.log(chalk.green('Successfully left room presence.'))
               }
             } catch (error) {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: false,
-                  error: error instanceof Error ? error.message : String(error),
-                  roomId
-                }, flags))
+               const errorMsg = error instanceof Error ? error.message : String(error);
+               this.logCliEvent(flags, 'presence', 'leaveError', `Error leaving presence: ${errorMsg}`, { error: errorMsg });
+               if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId }, flags))
               } else {
-                this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+                this.log(`Note: ${errorMsg}`);
                 this.log('Continuing with cleanup.')
               }
             }
-            
+
             // Release the room
             try {
+              this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
               await chatClient.rooms.release(roomId)
+              this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
               if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: true,
-                  action: 'release',
-                  roomId
-                }, flags))
+                this.log(this.formatJsonOutput({ success: true, action: 'release', roomId }, flags))
               } else {
                 this.log(chalk.green('Successfully released room.'))
               }
             } catch (error) {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: false,
-                  error: error instanceof Error ? error.message : String(error),
-                  roomId
-                }, flags))
+               const errorMsg = error instanceof Error ? error.message : String(error);
+               this.logCliEvent(flags, 'room', 'releaseError', `Error releasing room: ${errorMsg}`, { error: errorMsg });
+               if (this.shouldOutputJson(flags)) {
+                this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId }, flags))
               } else {
-                this.log(`Note: ${error instanceof Error ? error.message : String(error)}`)
+                this.log(`Note: ${errorMsg}`);
                 this.log('Continuing with cleanup.')
               }
             }
-            
-            if (clients?.realtimeClient) {
-              clients.realtimeClient.close()
+
+            if (this.clients?.realtimeClient) {
+               this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
+               this.clients.realtimeClient.close();
+               this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
             }
-            
+
             if (!this.shouldOutputJson(flags)) {
               this.log(`${chalk.green('Successfully disconnected.')}`)
             }
@@ -290,14 +293,12 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
             resolve(null)
             process.exit(0)
           } catch (error) {
-            if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({
-                success: false,
-                error: error instanceof Error ? error.message : String(error),
-                roomId
-              }, flags))
+             const errorMsg = error instanceof Error ? error.message : String(error);
+             this.logCliEvent(flags, 'presence', 'cleanupError', `Error during cleanup: ${errorMsg}`, { error: errorMsg });
+             if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId }, flags))
             } else {
-              this.log(`Error during cleanup: ${error instanceof Error ? error.message : String(error)}`)
+              this.log(`Error during cleanup: ${errorMsg}`)
             }
             clearTimeout(forceExitTimeout)
             process.exit(1)
@@ -308,19 +309,31 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
         process.once('SIGTERM', () => void cleanup())
       })
     } catch (error) {
-      if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-          roomId: args.roomId
-        }, flags))
-      } else {
-        this.error(`Error entering room presence: ${error instanceof Error ? error.message : String(error)}`)
-      }
+       const errorMsg = error instanceof Error ? error.message : String(error);
+       this.logCliEvent(flags, 'presence', 'fatalError', `Error entering room presence: ${errorMsg}`, { error: errorMsg, roomId: args.roomId });
+       if (this.shouldOutputJson(flags)) {
+         this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId: args.roomId }, flags))
+       } else {
+         this.error(`Error entering room presence: ${errorMsg}`)
+       }
     } finally {
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
-      }
+       // Ensure client is closed even if cleanup promise didn't resolve
+       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+           this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
+           this.clients.realtimeClient.close();
+       }
     }
   }
+
+   // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.unsubscribePresenceFn) { try { this.unsubscribePresenceFn(); } catch (e) { /* ignore */ } }
+     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch (e) { /* ignore */ } }
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+       if (this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+     }
+     return super.finally(err);
+   }
 } 

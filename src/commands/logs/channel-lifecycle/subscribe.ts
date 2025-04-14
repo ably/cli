@@ -24,21 +24,29 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
     }),
   }
 
+  private client: Ably.Realtime | null = null;
+
   async run(): Promise<void> {
     const {flags} = await this.parse(LogsChannelLifecycleSubscribe)
 
-    let client: Ably.Realtime | null = null;
+    const channelName = '[meta]channel.lifecycle'
 
     try {
       // Create the Ably client
-      client = await this.createAblyClient(flags)
-      if (!client) return
+      this.client = await this.createAblyClient(flags)
+      if (!this.client) return
 
-      const channelName = '[meta]channel.lifecycle'
+      const client = this.client; // local const
       const channelOptions: Ably.ChannelOptions = {}
-      
+
+       // Add listeners for connection state changes
+       client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+         this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+       });
+
       // Configure rewind if specified
       if (flags.rewind > 0) {
+         this.logCliEvent(flags, 'logs', 'rewindEnabled', `Rewind enabled for ${channelName}`, { channel: channelName, count: flags.rewind });
         channelOptions.params = {
           ...channelOptions.params,
           rewind: flags.rewind.toString(),
@@ -47,29 +55,38 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
 
       const channel = client.channels.get(channelName, channelOptions)
 
-      this.log(`Subscribing to ${chalk.cyan(channelName)}...`)
-      this.log('Press Ctrl+C to exit')
-      this.log('')
+       // Listen to channel state changes
+       channel.on((stateChange: Ably.ChannelStateChange) => {
+           this.logCliEvent(flags, 'channel', stateChange.current, `Meta channel '${channelName}' state changed to ${stateChange.current}`, { channel: channelName, reason: stateChange.reason });
+       });
+
+       this.logCliEvent(flags, 'logs', 'subscribing', `Subscribing to ${channelName}...`);
+       if (!this.shouldOutputJson(flags)) {
+          this.log(`Subscribing to ${chalk.cyan(channelName)}...`);
+          this.log('Press Ctrl+C to exit');
+          this.log('');
+       }
 
       // Subscribe to the channel
       channel.subscribe((message) => {
         const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
         const event = message.name || 'unknown'
-        
+         const logEvent = {
+             timestamp,
+             channel: channelName,
+             event,
+             data: message.data
+         };
+         this.logCliEvent(flags, 'logs', 'logReceived', `Log received on ${channelName}`, logEvent);
+
         if (this.shouldOutputJson(flags)) {
-          const jsonOutput = {
-            timestamp,
-            channel: channelName,
-            event,
-            data: message.data
-          }
-          this.log(this.formatJsonOutput(jsonOutput, flags))
+          this.log(this.formatJsonOutput(logEvent, flags))
           return
         }
 
         // Color-code different event types
         let eventColor = chalk.blue
-        
+
         // For channel lifecycle events
         if (event.includes('attached')) {
           eventColor = chalk.green
@@ -83,7 +100,7 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
 
         // Format the log output with consistent styling
         this.log(`${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`Channel: ${channelName}`)} | ${eventColor(`Event: ${event}`)}`)
-        
+
         if (message.data) {
           if (isJsonData(message.data)) {
             this.log(chalk.blue('Data:'))
@@ -94,30 +111,55 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
         }
         this.log('') // Empty line for better readability
       })
+      this.logCliEvent(flags, 'logs', 'subscribed', `Successfully subscribed to ${channelName}`);
 
       // Set up cleanup for when the process is terminated
       const cleanup = () => {
-        if (client) {
-          client.close()
-        }
+         this.logCliEvent(flags, 'logs', 'cleanupInitiated', 'Cleanup initiated (Ctrl+C pressed)');
+         if (client) {
+           this.logCliEvent(flags, 'connection', 'closing', 'Closing Ably connection.');
+           client.close()
+           this.logCliEvent(flags, 'connection', 'closed', 'Ably connection closed.');
+         }
       }
 
       // Handle process termination
       process.on('SIGINT', () => {
-        this.log('\nSubscription ended')
-        cleanup()
-        process.exit(0)
-      })
+         if (!this.shouldOutputJson(flags)) {
+            this.log('\nSubscription ended');
+         }
+         cleanup();
+         process.exit(0);
+      });
+      process.on('SIGTERM', () => {
+          cleanup();
+          process.exit(0);
+      });
 
+      this.logCliEvent(flags, 'logs', 'listening', 'Listening for logs...');
       // Wait indefinitely
       await new Promise(() => {})
     } catch (error: unknown) {
       const err = error as Error
+       this.logCliEvent(flags, 'logs', 'fatalError', `Error during log subscription: ${err.message}`, { error: err.message, channel: channelName });
       this.error(err.message)
     } finally {
-      if (client) {
-        client.close()
-      }
+       // Ensure client is closed
+       if (this.client && this.client.connection.state !== 'closed') {
+         this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
+         this.client.close();
+       }
     }
   }
+
+   // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.client && this.client.connection.state !== 'closed') {
+       // Check state before closing to avoid errors if already closed
+       if (this.client.connection.state !== 'failed') {
+           this.client.close();
+       }
+     }
+     return super.finally(err);
+   }
 } 

@@ -58,9 +58,24 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
       // Create API and execute the command
       const api = this.createControlApi(flags)
       return await apiCall(api)
-    } catch (error) {
-      this.error(`${errorMessage}: ${error instanceof Error ? error.message : String(error)}`)
-      return null
+    } catch (error: unknown) {
+      const isJsonMode = this.shouldOutputJson(flags);
+      // Safely get the error message
+      const errorMessageText = `${errorMessage}: ${error instanceof Error ? error.message : String(error)}`;
+
+      if (isJsonMode) {
+        // Pass the error object itself as details
+        // The `outputJsonError` helper handles stringifying it
+        this.outputJsonError(errorMessageText, error);
+        // Exit explicitly in JSON mode after outputting error to stderr
+        this.exit(1);
+      } else {
+        // Use the standard oclif error for non-JSON modes
+        this.error(errorMessageText);
+      }
+      // This line is technically unreachable due to this.error or this.exit
+      // but needed for TypeScript's control flow analysis
+      return null;
     }
   }
 

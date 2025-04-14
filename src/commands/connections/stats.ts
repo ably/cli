@@ -52,12 +52,14 @@ export default class ConnectionsStats extends AblyBaseCommand {
   private pollInterval: NodeJS.Timeout | undefined = undefined
   private statsDisplay: StatsDisplay | null = null
   private isPolling = false // Track when we're already fetching stats
+  private client: Ably.Rest | null = null; // Store client for finally block
 
   async run(): Promise<void> {
     const {flags} = await this.parse(ConnectionsStats)
     
     // For live stats, enforce minute interval
     if (flags.live && flags.unit !== 'minute') {
+      this.logCliEvent(flags, 'stats', 'liveIntervalOverride', 'Live stats only support minute intervals. Using minute interval.');
       this.warn('Live stats only support minute intervals. Using minute interval.')
       flags.unit = 'minute'
     }
@@ -71,7 +73,8 @@ export default class ConnectionsStats extends AblyBaseCommand {
 
     // Create the Ably REST client
     const options: Ably.ClientOptions = this.getClientOptions(flags)
-    const client = new Ably.Rest(options)
+    this.client = new Ably.Rest(options)
+    const client = this.client; // Local const
     
     // Create stats display
     this.statsDisplay = new StatsDisplay({
@@ -92,15 +95,21 @@ export default class ConnectionsStats extends AblyBaseCommand {
 
   async runLiveStats(flags: any, client: Ably.Rest): Promise<void> {
     try {
-      this.log('Subscribing to live connection stats...')
+      this.logCliEvent(flags, 'stats', 'liveSubscribeStarting', 'Subscribing to live connection stats...');
+      if (!this.shouldOutputJson(flags)) {
+          this.log('Subscribing to live connection stats...');
+      }
       
       // Setup graceful shutdown
       const cleanup = () => {
+        this.logCliEvent(flags, 'stats', 'liveCleanupInitiated', 'Cleanup initiated for live stats');
         if (this.pollInterval) {
           clearInterval(this.pollInterval)
           this.pollInterval = undefined
         }
-        this.log('\nUnsubscribed from live stats')
+        if (!this.shouldOutputJson(flags)) {
+           this.log('\nUnsubscribed from live stats');
+        }
         process.exit(0)
       }
 
@@ -116,11 +125,13 @@ export default class ConnectionsStats extends AblyBaseCommand {
         if (!this.isPolling) {
           this.pollStats(flags, client)
         } else if (flags.debug) {
+          this.logCliEvent(flags, 'stats', 'pollSkipped', 'Skipping poll - previous request still in progress');
           // Only show this message if debug flag is enabled
           console.log(chalk.yellow('Skipping poll - previous request still in progress'))
         }
       }, (flags.interval || 6) * 1000)
       
+      this.logCliEvent(flags, 'stats', 'liveListening', 'Now listening for live stats updates');
       // Keep the process running
       await new Promise<void>(() => {
         // This promise is intentionally never resolved
@@ -128,7 +139,9 @@ export default class ConnectionsStats extends AblyBaseCommand {
       })
       
     } catch (error) {
-      this.error(`Error setting up live stats: ${error instanceof Error ? error.message : String(error)}`)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'stats', 'liveSetupError', `Error setting up live stats: ${errorMsg}`, { error: errorMsg });
+      this.error(`Error setting up live stats: ${errorMsg}`)
       if (this.pollInterval) {
         clearInterval(this.pollInterval)
       }
@@ -138,14 +151,18 @@ export default class ConnectionsStats extends AblyBaseCommand {
   private async pollStats(flags: any, client: Ably.Rest): Promise<void> {
     try {
       this.isPolling = true
+      this.logCliEvent(flags, 'stats', 'pollStarting', 'Polling for new stats...');
       if (flags.debug) {
         console.log(chalk.dim(`[${new Date().toISOString()}] Polling for new stats...`))
       }
       
       await this.fetchAndDisplayStats(flags, client)
+      this.logCliEvent(flags, 'stats', 'pollSuccess', 'Successfully polled and displayed stats');
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'stats', 'pollError', `Error during stats polling: ${errorMsg}`, { error: errorMsg });
       if (flags.debug) {
-        console.error(chalk.red(`Error during stats polling: ${error instanceof Error ? error.message : String(error)}`))
+        console.error(chalk.red(`Error during stats polling: ${errorMsg}`))
       }
     } finally {
       this.isPolling = false
@@ -176,14 +193,17 @@ export default class ConnectionsStats extends AblyBaseCommand {
         unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
         direction: 'backwards' as 'backwards' | 'forwards',
       }
+      this.logCliEvent(flags, 'stats', 'fetchRequest', 'Fetching stats with parameters', { params });
 
       // Get stats
       const statsPage = await client.stats(params)
       const stats = statsPage.items
+      this.logCliEvent(flags, 'stats', 'fetchResponse', `Received ${stats.length} stats records`, { count: stats.length, stats: stats });
       
       if (stats.length === 0) {
-        if (!flags.live) {
-          this.log('No connection stats available.')
+        this.logCliEvent(flags, 'stats', 'noStatsAvailable', 'No connection stats available for the requested period');
+        if (!flags.live && !this.shouldOutputJson(flags)) {
+           this.log('No connection stats available.');
         }
         return
       }
@@ -191,7 +211,9 @@ export default class ConnectionsStats extends AblyBaseCommand {
       // Display stats using the StatsDisplay class
       this.statsDisplay!.display(stats[0])
     } catch (error) {
-      this.error(`Failed to fetch stats: ${error}`)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'stats', 'fetchError', `Failed to fetch stats: ${errorMsg}`, { error: errorMsg });
+      this.error(`Failed to fetch stats: ${errorMsg}`)
     }
   }
 
@@ -212,23 +234,45 @@ export default class ConnectionsStats extends AblyBaseCommand {
 
     // Prepare query parameters
     const params = {
-      start: startTime.getTime(),
-      end: now.getTime(),
+      start: flags.start || startTime.getTime(), // Use flag if provided
+      end: flags.end || now.getTime(),          // Use flag if provided
       limit: flags.limit,
       unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
       direction: 'backwards' as 'backwards' | 'forwards',
     }
+    this.logCliEvent(flags, 'stats', 'oneTimeFetchRequest', 'Fetching one-time stats with parameters', { params });
 
-    // Get stats
-    const statsPage = await client.stats(params)
-    const stats = statsPage.items
-    
-    if (stats.length === 0) {
-      this.log('No connection stats available.')
-      return
+    try {
+        // Get stats
+        const statsPage = await client.stats(params)
+        const stats = statsPage.items
+        this.logCliEvent(flags, 'stats', 'oneTimeFetchResponse', `Received ${stats.length} stats records`, { count: stats.length, stats: stats });
+
+        if (stats.length === 0) {
+            this.logCliEvent(flags, 'stats', 'noStatsAvailable', 'No connection stats available for the requested period');
+            if (!this.shouldOutputJson(flags)) {
+              this.log('No connection stats available.');
+            }
+            return
+        }
+
+        // Display stats using the StatsDisplay class
+        this.statsDisplay!.display(stats[0]) // Display only the latest/first record for simplicity
+        // If you need to display all records for one-time stats, you'll need to adjust StatsDisplay or loop here.
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        this.logCliEvent(flags, 'stats', 'oneTimeFetchError', `Failed to fetch one-time stats: ${errorMsg}`, { error: errorMsg });
+        this.error(`Failed to fetch stats: ${errorMsg}`)
     }
+  }
 
-    // Display stats using the StatsDisplay class
-    this.statsDisplay!.display(stats[0])
+  // Override finally to ensure resources are cleaned up
+  async finally(err: Error | undefined): Promise<any> {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = undefined;
+    }
+    // No need to close REST client explicitly
+    return super.finally(err);
   }
 } 

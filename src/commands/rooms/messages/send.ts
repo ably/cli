@@ -43,231 +43,262 @@ export default class MessagesSend extends ChatBaseCommand {
     }),
   }
 
+  private clients: { chatClient: any, realtimeClient: any } | null = null;
+  private progressIntervalId: NodeJS.Timeout | null = null;
+
   async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesSend)
-    
-    let clients = null
-    
+
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      this.clients = await this.createChatClient(flags)
+      if (!this.clients) return
 
-      const {chatClient, realtimeClient} = clients
-      
+      const {chatClient, realtimeClient} = this.clients
+
+      // Add listeners for connection state changes
+      realtimeClient.connection.on((stateChange: any) => {
+        this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+      });
+
       // Parse metadata if provided
       let metadata = undefined
       if (flags.metadata) {
         try {
           metadata = JSON.parse(flags.metadata)
+          this.logCliEvent(flags, 'message', 'metadataParsed', 'Message metadata parsed successfully', { metadata });
         } catch (error) {
+          const errorMsg = `Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`;
+          this.logCliEvent(flags, 'message', 'metadataParseError', errorMsg, { error: errorMsg });
           if (this.shouldOutputJson(flags)) {
-            this.log(this.formatJsonOutput({
-              success: false,
-              error: `Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`
-            }, flags))
-            return
+            this.log(this.formatJsonOutput({ success: false, error: errorMsg }, flags))
+          } else {
+            this.error(errorMsg)
           }
-          this.error(`Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`)
+          return;
         }
       }
-      
+
       // Get the room with default options
+      this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${args.roomId}`);
       const room = await chatClient.rooms.get(args.roomId, {})
-      
+      this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${args.roomId}`);
+
       // Attach to the room
+      this.logCliEvent(flags, 'room', 'attaching', `Attaching to room ${args.roomId}`);
       await room.attach()
-      
+      this.logCliEvent(flags, 'room', 'attached', `Successfully attached to room ${args.roomId}`);
+
       // Validate count and delay
       const count = Math.max(1, flags.count)
       let delay = flags.delay
-      
+
       // Enforce minimum delay when sending multiple messages
       if (count > 1 && delay < 10) {
         delay = 10
-        if (!this.shouldSuppressOutput(flags)) {
-          this.log('Using minimum delay of 10ms for multiple messages')
-        }
+        this.logCliEvent(flags, 'message', 'minDelayEnforced', 'Using minimum delay of 10ms for multiple messages', { delay });
       }
-      
+
       // If sending multiple messages, show a progress indication
-      if (count > 1 && !this.shouldSuppressOutput(flags)) {
-        this.log(`Sending ${count} messages with ${delay}ms delay...`)
+      this.logCliEvent(flags, 'message', 'startingSend', `Sending ${count} messages with ${delay}ms delay...`, { count, delay });
+      if (count > 1 && !this.shouldOutputJson(flags)) {
+         this.log(`Sending ${count} messages with ${delay}ms delay...`);
       }
-      
+
       // Track send progress
       let sentCount = 0
       let errorCount = 0
       let results: any[] = []
-      
+
       // Send messages
       if (count > 1) {
-        // Sending multiple messages without awaiting each send
-        let progressInterval: NodeJS.Timeout | undefined
-        
-        if (!this.shouldSuppressOutput(flags)) {
-          progressInterval = setInterval(() => {
-            this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`)
-          }, 1000)
+        // Sending multiple messages
+        if (!this.shouldOutputJson(flags)) {
+            this.progressIntervalId = setInterval(() => {
+              this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`);
+            }, 1000);
+        } else {
+            this.progressIntervalId = setInterval(() => {
+               this.logCliEvent(flags, 'message', 'progress', 'Sending messages', {
+                  sent: sentCount,
+                  errors: errorCount,
+                  total: count
+               });
+            }, 2000);
         }
-        
+
         for (let i = 0; i < count; i++) {
           // Apply interpolation to the message
           const interpolatedText = this.interpolateMessage(args.text, i + 1)
-          
+          const messageToSend = {
+              text: interpolatedText,
+              ...(metadata ? { metadata } : {}),
+          };
+          this.logCliEvent(flags, 'message', 'sending', `Attempting to send message ${i + 1}`, { index: i + 1, message: messageToSend });
+
           // Send the message without awaiting
-          room.messages.send({
-            text: interpolatedText,
-            ...(metadata ? { metadata } : {}),
-          })
+          room.messages.send(messageToSend)
           .then(() => {
             sentCount++
-            results.push({
+            const result = {
               success: true,
               index: i + 1,
-              message: {
-                text: interpolatedText,
-                ...(metadata ? { metadata } : {})
-              },
+              message: messageToSend,
               roomId: args.roomId
-            })
-            
-            if (!this.shouldSuppressOutput(flags)) {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: true,
-                  index: i + 1,
-                  message: {
-                    text: interpolatedText,
-                    ...(metadata ? { metadata } : {})
-                  },
-                  roomId: args.roomId
-                }, flags))
-              }
+            };
+            results.push(result);
+            this.logCliEvent(flags, 'message', 'sentSuccess', `Message ${i + 1} sent successfully`, { index: i + 1 });
+
+            if (!this.shouldSuppressOutput(flags) && !this.shouldOutputJson(flags)) {
+               // Logged implicitly by progress interval
             }
           })
-          .catch(err => {
+          .catch((err: any) => {
             errorCount++
-            results.push({
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            const result = {
               success: false,
               index: i + 1,
-              error: err instanceof Error ? err.message : String(err),
+              error: errorMsg,
               roomId: args.roomId
-            })
-            
-            if (!this.shouldSuppressOutput(flags)) {
-              if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({
-                  success: false,
-                  index: i + 1,
-                  error: err instanceof Error ? err.message : String(err),
-                  roomId: args.roomId
-                }, flags))
-              } else {
-                this.log(`Error sending message ${i + 1}: ${err instanceof Error ? err.message : String(err)}`)
-              }
+            };
+            results.push(result);
+            this.logCliEvent(flags, 'message', 'sendError', `Error sending message ${i + 1}: ${errorMsg}`, { index: i + 1, error: errorMsg });
+
+            if (!this.shouldSuppressOutput(flags) && !this.shouldOutputJson(flags)) {
+               // Logged implicitly by progress interval
             }
           })
-          
+
           // Delay before sending next message if not the last one
           if (i < count - 1 && delay > 0) {
             await new Promise(resolve => setTimeout(resolve, delay))
           }
         }
-        
+
         // Wait for all sends to complete (or timeout after a reasonable period)
         const maxWaitTime = Math.max(5000, count * delay * 2) // At least 5 seconds or twice the expected duration
         const startWaitTime = Date.now()
-        
+
         await new Promise<void>(resolve => {
           const checkInterval = setInterval(() => {
             if (sentCount + errorCount >= count || (Date.now() - startWaitTime > maxWaitTime)) {
-              if (progressInterval) clearInterval(progressInterval)
+              if (this.progressIntervalId) clearInterval(this.progressIntervalId);
               clearInterval(checkInterval)
               resolve()
             }
           }, 100)
         })
-        
+
+        const finalResult = {
+            success: errorCount === 0,
+            total: count,
+            sent: sentCount,
+            errors: errorCount,
+            results
+        };
+        this.logCliEvent(flags, 'message', 'multiSendComplete', `Finished sending ${count} messages`, finalResult);
+
         if (!this.shouldSuppressOutput(flags)) {
           if (this.shouldOutputJson(flags)) {
-            this.log(this.formatJsonOutput({
-              success: errorCount === 0,
-              total: count,
-              sent: sentCount,
-              errors: errorCount,
-              results
-            }, flags))
+            this.log(this.formatJsonOutput(finalResult, flags))
           } else {
-            this.log(`${sentCount}/${count} messages sent successfully (${errorCount} errors).`)
+             // Clear the last progress line before final summary
+             process.stdout.write('\r' + ' '.repeat(process.stdout.columns) + '\r');
+             this.log(`${sentCount}/${count} messages sent successfully (${errorCount} errors).`);
           }
         }
       } else {
-        // Single message - await the send for better error handling
+        // Single message
         try {
           // Apply interpolation to the message
           const interpolatedText = this.interpolateMessage(args.text, 1)
-          
+          const messageToSend = {
+             text: interpolatedText,
+             ...(metadata ? { metadata } : {}),
+          };
+          this.logCliEvent(flags, 'message', 'sending', 'Attempting to send single message', { message: messageToSend });
+
           // Send the message
-          await room.messages.send({
-            text: interpolatedText,
-            ...(metadata ? { metadata } : {}),
-          })
-          
+          await room.messages.send(messageToSend);
+          const result = {
+              success: true,
+              message: messageToSend,
+              roomId: args.roomId
+          };
+          this.logCliEvent(flags, 'message', 'singleSendComplete', 'Message sent successfully', result);
+
           if (!this.shouldSuppressOutput(flags)) {
             if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({
-                success: true,
-                message: {
-                  text: interpolatedText,
-                  ...(metadata ? { metadata } : {})
-                },
-                roomId: args.roomId
-              }, flags))
+              this.log(this.formatJsonOutput(result, flags))
             } else {
               this.log('Message sent successfully.')
             }
           }
         } catch (error) {
-          if (this.shouldOutputJson(flags)) {
-            this.log(this.formatJsonOutput({
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-              roomId: args.roomId
-            }, flags))
-          } else {
-            this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
-          }
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            const result = {
+               success: false,
+               error: errorMsg,
+               roomId: args.roomId
+            };
+            this.logCliEvent(flags, 'message', 'singleSendError', `Failed to send message: ${errorMsg}`, { error: errorMsg });
+            if (this.shouldOutputJson(flags)) {
+              this.log(this.formatJsonOutput(result, flags))
+            } else {
+              this.error(`Failed to send message: ${errorMsg}`)
+            }
         }
       }
-      
+
       // Release the room
+      this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${args.roomId}`);
       await chatClient.rooms.release(args.roomId)
-      
+      this.logCliEvent(flags, 'room', 'released', `Room ${args.roomId} released`);
+
     } catch (error) {
-      if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error)
-        }, flags))
-      } else {
-        this.error(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`)
-      }
+       const errorMsg = error instanceof Error ? error.message : String(error);
+       this.logCliEvent(flags, 'message', 'fatalError', `Failed to send message: ${errorMsg}`, { error: errorMsg });
+       if (this.shouldOutputJson(flags)) {
+         this.log(this.formatJsonOutput({ success: false, error: errorMsg }, flags))
+       } else {
+         this.error(`Failed to send message: ${errorMsg}`)
+       }
     } finally {
       // Close the connection
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
-      }
+       if (this.clients?.realtimeClient) {
+           this.logCliEvent(flags || {}, 'connection', 'closing', 'Closing Realtime connection.');
+           this.clients.realtimeClient.close();
+           this.logCliEvent(flags || {}, 'connection', 'closed', 'Realtime connection closed.');
+       }
+       if (this.progressIntervalId) {
+          clearInterval(this.progressIntervalId);
+          this.progressIntervalId = null;
+       }
     }
   }
-  
+
   private interpolateMessage(message: string, count: number): string {
     // Replace {{.Count}} with the current count
     let result = message.replace(/\{\{\.Count\}\}/g, count.toString())
-    
+
     // Replace {{.Timestamp}} with the current timestamp
     result = result.replace(/\{\{\.Timestamp\}\}/g, Date.now().toString())
-    
+
     return result
   }
+
+   // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.progressIntervalId) {
+        clearInterval(this.progressIntervalId);
+        this.progressIntervalId = null;
+     }
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+       if (this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+     }
+     return super.finally(err);
+   }
 } 

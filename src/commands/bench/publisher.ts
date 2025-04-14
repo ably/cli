@@ -67,6 +67,11 @@ export default class BenchPublisher extends AblyBaseCommand {
     }),
   }
 
+  private realtime: Ably.Realtime | null = null;
+  private intervalId: NodeJS.Timeout | null = null;
+  private messageLogBuffer: string[] = []; // Buffer for the last 10 logs
+  private readonly MAX_LOG_LINES = 10;
+
   async run(): Promise<void> {
     const {args, flags} = await this.parse(BenchPublisher)
     
@@ -76,21 +81,33 @@ export default class BenchPublisher extends AblyBaseCommand {
     const messageSize = Math.max(flags['message-size'], 10)
     
     // Create Ably client
-    const realtime = await this.createAblyClient(flags)
+    this.realtime = await this.createAblyClient(flags)
     
-    if (!realtime) {
+    if (!this.realtime) {
       this.error('Failed to create Ably client. Please check your API key and try again.')
       return
     }
 
+    const client = this.realtime; // Use a local const for easier access
+    
+    // Add listeners for connection state changes
+    client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+    });
+
     try {
-      const channel = realtime.channels.get(args.channel, { params: { rewind: '1' } })
+      const channel = client.channels.get(args.channel, { params: { rewind: '1' } })
+      
+      // Add listeners for channel state changes
+      channel.on((stateChange: Ably.ChannelStateChange) => {
+        this.logCliEvent(flags, 'channel', stateChange.current, `Channel '${args.channel}' state changed to ${stateChange.current}`, { reason: stateChange.reason });
+      });
       
       // Create a message tracking object to measure echo latency
       const messageTracking: MessageTracking = {}
       
       // Set up message subscription for echo latency measurement
-      channel.subscribe('benchmark', (message: Ably.Message) => {
+      await channel.subscribe('benchmark', (message: Ably.Message) => {
         if (!message.data || typeof message.data !== 'object' || !('msgId' in message.data)) {
           return // Not our benchmark message
         }
@@ -103,11 +120,13 @@ export default class BenchPublisher extends AblyBaseCommand {
           const echoLatency = Date.now() - tracker.publishTime
           metrics.echoLatencies.push(echoLatency)
           metrics.messagesEchoed++
+          this.logCliEvent(flags, 'benchmark', 'messageEchoReceived', `Echo received for message ${msgId}`, { msgId, echoLatency });
           
           // Remove from tracking once processed
           delete messageTracking[msgId]
         }
       })
+      this.logCliEvent(flags, 'benchmark', 'subscribedToEcho', `Subscribed to benchmark messages on channel '${args.channel}'`);
       
       // Enter presence as a publisher with test details
       const testId = `test-${Date.now()}`
@@ -123,55 +142,73 @@ export default class BenchPublisher extends AblyBaseCommand {
         },
       }
       
+      // Add listeners for presence state changes
+      channel.presence.subscribe('enter', (member: Ably.PresenceMessage) => {
+        this.logCliEvent(flags, 'presence', 'memberEntered', `Member entered presence: ${member.clientId}`, { clientId: member.clientId, data: member.data });
+      });
+      channel.presence.subscribe('leave', (member: Ably.PresenceMessage) => {
+        this.logCliEvent(flags, 'presence', 'memberLeft', `Member left presence: ${member.clientId}`, { clientId: member.clientId });
+      });
+      channel.presence.subscribe('update', (member: Ably.PresenceMessage) => {
+        this.logCliEvent(flags, 'presence', 'memberUpdated', `Member updated presence: ${member.clientId}`, { clientId: member.clientId, data: member.data });
+      });
+
+      this.logCliEvent(flags, 'presence', 'enteringPresence', `Entering presence as publisher with test ID: ${testId}`);
       await channel.presence.enter(presenceData)
-      this.log(`Entered presence as publisher with test ID: ${testId}`)
+      this.logCliEvent(flags, 'presence', 'presenceEntered', `Entered presence as publisher with test ID: ${testId}`, { testId });
       
       // Check for subscribers if flag is set
       if (flags['wait-for-subscribers']) {
-        this.log('Checking for subscribers...')
-        
-        // Subscribe to presence
+        this.logCliEvent(flags, 'benchmark', 'waitingForSubscribers', 'Waiting for subscribers...');
+
+        // Use a promise to wait for the first subscriber
         await new Promise<void>((resolve) => {
-          channel.presence.subscribe('enter', (member: Ably.PresenceMessage) => {
+          const subscriberCheck = (member: Ably.PresenceMessage) => {
             if (member.data && typeof member.data === 'object' && 'role' in member.data && member.data.role === 'subscriber') {
-              this.log(`Subscriber detected: ${member.clientId}`)
-              resolve()
+              this.logCliEvent(flags, 'benchmark', 'subscriberDetected', `Subscriber detected: ${member.clientId}`, { clientId: member.clientId });
+              channel.presence.unsubscribe('enter', subscriberCheck); // Use unsubscribe here
+              resolve();
             }
-          })
-          
+          };
+
+          channel.presence.subscribe('enter', subscriberCheck); // Use subscribe here
+
           // Check if subscribers are already present
           channel.presence.get().then((members) => {
             const subscribers = members.filter(m => 
               m.data && typeof m.data === 'object' && 'role' in m.data && m.data.role === 'subscriber'
             )
             if (subscribers.length > 0) {
-              this.log(`Found ${subscribers.length} subscribers already present`)
-              resolve()
+              this.logCliEvent(flags, 'benchmark', 'subscribersFound', `Found ${subscribers.length} subscribers already present`);
+              channel.presence.unsubscribe('enter', subscriberCheck); // Use unsubscribe here if found
+              resolve();
             } else {
-              this.log('No subscribers found. Waiting for subscribers to join...')
+              // Message already logged by logCliEvent
             }
-          })
-        })
+          }).catch(error => {
+            this.logCliEvent(flags, 'presence', 'getPresenceError', `Error getting initial presence: ${error instanceof Error ? error.message : String(error)}`);
+            // Continue waiting even if initial check fails
+          });
+        });
       } else {
-        // Check if any subscribers are present and notify the user
+        // Check if any subscribers are present and notify the user (only in non-JSON mode)
         const members = await channel.presence.get()
         const subscribers = members.filter(m => 
           m.data && typeof m.data === 'object' && 'role' in m.data && m.data.role === 'subscriber'
         )
-        
-        if (subscribers.length === 0) {
+        this.logCliEvent(flags, 'benchmark', 'subscriberCheckComplete', `Found ${subscribers.length} subscribers present`);
+
+        if (subscribers.length === 0 && !this.shouldOutputJson(flags)) {
           const shouldContinue = await this.interactiveHelper.confirm(
             'No subscribers found. Continue anyway?'
           )
           
           if (!shouldContinue) {
-            this.log('Benchmark test cancelled.')
+            this.logCliEvent(flags, 'benchmark', 'testCancelled', 'Benchmark test cancelled by user.');
             await channel.presence.leave()
-            realtime.close()
+            client.close()
             return
           }
-        } else {
-          this.log(`Found ${subscribers.length} subscribers present`)
         }
       }
       
@@ -217,15 +254,39 @@ export default class BenchPublisher extends AblyBaseCommand {
       }
       
       // Display start message
-      this.log(`\nStarting benchmark test with ID: ${testId}`)
-      this.log(`Publishing ${messageCount} messages at ${messageRate} msg/sec using ${flags.transport} transport`)
-      this.log(`Message size: ${messageSize} bytes\n`)
+      this.logCliEvent(flags, 'benchmark', 'startingTest', `Starting benchmark test with ID: ${testId}`, { messageCount, messageRate, transport: flags.transport, messageSize });
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`\nStarting benchmark test with ID: ${testId}`)
+        this.log(`Publishing ${messageCount} messages at ${messageRate} msg/sec using ${flags.transport} transport`)
+        this.log(`Message size: ${messageSize} bytes\n`)
+      }
       
-      // Start progress display
-      let progressDisplay = this.createProgressDisplay()
-      const updateInterval = setInterval(() => {
-        this.updateProgress(metrics, progressDisplay, messageCount)
-      }, 500)
+      // Start progress display (only in non-JSON mode)
+      let progressDisplay: Table.Table | null = null;
+      if (!this.shouldOutputJson(flags)) {
+        progressDisplay = this.createProgressDisplay();
+        // Initial display before logs start coming in
+        process.stdout.write('\x1B[2J\x1B[0f'); // Clear screen
+        this.log(progressDisplay.toString()); // Show initial table
+        this.log('\n--- Logs (Last 10) ---'); // Log section header
+
+        this.intervalId = setInterval(() => {
+          if (progressDisplay) {
+            this.updateProgressAndLogs(metrics, progressDisplay, messageCount);
+          }
+        }, 500);
+      } else {
+        // Log progress periodically in JSON mode
+        this.intervalId = setInterval(() => {
+          const progressPercent = Math.min(100, Math.floor((metrics.messagesSent / messageCount) * 100));
+          this.logCliEvent(flags, 'benchmark', 'testProgress', 'Benchmark test in progress', {
+            messagesSent: metrics.messagesSent,
+            messagesEchoed: metrics.messagesEchoed,
+            errors: metrics.errors,
+            progressPercent
+          });
+        }, 2000); // Log progress every 2 seconds in JSON mode
+      }
       
       // Calculate delay between messages
       const messageDelay = 1000 / messageRate
@@ -234,6 +295,7 @@ export default class BenchPublisher extends AblyBaseCommand {
       const startTime = Date.now()
       
       if (flags.transport === 'rest') {
+        this.logCliEvent(flags, 'benchmark', 'publishingStart', 'Starting to publish messages via REST');
         // Using REST transport - non-blocking implementation
         let messagePromises: Promise<void>[] = []
         let i = 0
@@ -245,6 +307,7 @@ export default class BenchPublisher extends AblyBaseCommand {
           }
           
           const payload = createPayload(i, messageSize)
+          const msgIndex = i; // Capture index for logging
           
           // Start publish without awaiting
           const publishStart = Date.now()
@@ -256,10 +319,15 @@ export default class BenchPublisher extends AblyBaseCommand {
                 messageTracking[payload.msgId].requestCompleteTime = Date.now()
               }
               metrics.requestLatencies.push(requestLatency)
+              const logMsg = `Message ${msgIndex} published (req: ${requestLatency}ms)`;
+              this.addLogToBuffer(logMsg);
+              this.logCliEvent(flags, 'benchmark', 'messagePublished', logMsg, { msgId: payload.msgId, requestLatency });
             })
             .catch(error => {
               metrics.errors++
-              this.log(`Error publishing message ${i}: ${error instanceof Error ? error.message : String(error)}`)
+              const errorMsg = `Error publishing message ${msgIndex}: ${error instanceof Error ? error.message : String(error)}`;
+              this.addLogToBuffer(chalk.red(errorMsg)); // Add errors in red
+              this.logCliEvent(flags, 'benchmark', 'publishError', errorMsg, { msgIndex, error: error instanceof Error ? error.message : String(error) });
             })
           
           messagePromises.push(publishPromise)
@@ -272,14 +340,22 @@ export default class BenchPublisher extends AblyBaseCommand {
           const checkComplete = setInterval(() => {
             if (i >= messageCount) {
               clearInterval(checkComplete)
+              this.logCliEvent(flags, 'benchmark', 'publishLoopComplete', 'All messages scheduled for publishing');
               // Wait for any pending publish operations to complete
               Promise.all(messagePromises)
-                .then(() => resolve())
-                .catch(() => resolve()) // Resolve even if some promises failed
+                .then(() => {
+                  this.logCliEvent(flags, 'benchmark', 'allPublishesAcknowledged', 'All publish operations acknowledged');
+                  resolve();
+                })
+                .catch(() => {
+                  this.logCliEvent(flags, 'benchmark', 'publishAcknowledgeError', 'Error occurred while waiting for publish acknowledgements');
+                  resolve(); // Resolve even if some promises failed
+                })
             }
           }, 100)
         })
       } else {
+        this.logCliEvent(flags, 'benchmark', 'publishingStart', 'Starting to publish messages via Realtime');
         // Using Realtime transport - non-blocking implementation
         await new Promise<void>(resolve => {
           let i = 0
@@ -288,16 +364,24 @@ export default class BenchPublisher extends AblyBaseCommand {
           const publishInterval = setInterval(() => {
             if (i >= messageCount) {
               clearInterval(publishInterval)
+              this.logCliEvent(flags, 'benchmark', 'publishLoopComplete', 'All messages scheduled for publishing');
               
               // Wait for any pending publish operations to complete
               Promise.all(messagePromises)
-                .then(() => resolve())
-                .catch(() => resolve()) // Resolve even if some promises failed
+                .then(() => {
+                  this.logCliEvent(flags, 'benchmark', 'allPublishesAcknowledged', 'All publish operations acknowledged');
+                  resolve();
+                })
+                .catch(() => {
+                  this.logCliEvent(flags, 'benchmark', 'publishAcknowledgeError', 'Error occurred while waiting for publish acknowledgements');
+                  resolve(); // Resolve even if some promises failed
+                })
               
               return
             }
             
             const payload = createPayload(i, messageSize)
+            const msgIndex = i; // Capture index for logging
             
             // Start publish without awaiting
             const publishStart = Date.now()
@@ -309,10 +393,15 @@ export default class BenchPublisher extends AblyBaseCommand {
                   messageTracking[payload.msgId].requestCompleteTime = Date.now()
                 }
                 metrics.requestLatencies.push(requestLatency)
+                const logMsg = `Message ${msgIndex} published (req: ${requestLatency}ms)`;
+                this.addLogToBuffer(logMsg);
+                this.logCliEvent(flags, 'benchmark', 'messagePublished', logMsg, { msgId: payload.msgId, requestLatency });
               })
               .catch(error => {
                 metrics.errors++
-                this.log(`Error publishing message ${i}: ${error instanceof Error ? error.message : String(error)}`)
+                const errorMsg = `Error publishing message ${msgIndex}: ${error instanceof Error ? error.message : String(error)}`;
+                this.addLogToBuffer(chalk.red(errorMsg)); // Add errors in red
+                this.logCliEvent(flags, 'benchmark', 'publishError', errorMsg, { msgIndex, error: error instanceof Error ? error.message : String(error) });
               })
             
             messagePromises.push(publishPromise)
@@ -323,11 +412,17 @@ export default class BenchPublisher extends AblyBaseCommand {
       }
       
       // Wait a bit for remaining echoes to be received
-      this.log('\nWaiting for remaining messages to be echoed back...')
+      this.logCliEvent(flags, 'benchmark', 'waitingForEchoes', 'Waiting for remaining messages to be echoed back...');
+      if (!this.shouldOutputJson(flags)) {
+        this.log('\nWaiting for remaining messages to be echoed back...')
+      }
       await new Promise(resolve => setTimeout(resolve, 3000))
       
       // Clear update interval
-      clearInterval(updateInterval)
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+      }
       
       // Calculate final statistics
       const totalTime = (Date.now() - startTime) / 1000 // in seconds
@@ -352,70 +447,111 @@ export default class BenchPublisher extends AblyBaseCommand {
       const echoP90 = metrics.echoLatencies[Math.floor(metrics.echoLatencies.length * 0.9)] || 0
       const echoP95 = metrics.echoLatencies[Math.floor(metrics.echoLatencies.length * 0.95)] || 0
       
-      // Display final results
-      this.log('\n\n' + chalk.green('Benchmark Complete') + '\n')
+      // Log completion event
+      const summaryData = {
+        testId,
+        channel: args.channel,
+        transport: flags.transport,
+        messageCount,
+        messagesSent: metrics.messagesSent,
+        messagesEchoed: metrics.messagesEchoed,
+        errors: metrics.errors,
+        totalTimeSeconds: totalTime,
+        actualRateMsgsPerSec: avgRate,
+        requestLatencyAvgMs: avgRequestLatency,
+        requestLatencyP50Ms: reqP50,
+        requestLatencyP90Ms: reqP90,
+        requestLatencyP95Ms: reqP95,
+        echoLatencyAvgMs: avgEchoLatency,
+        echoLatencyP50Ms: echoP50,
+        echoLatencyP90Ms: echoP90,
+        echoLatencyP95Ms: echoP95,
+      };
+      this.logCliEvent(flags, 'benchmark', 'testCompleted', 'Benchmark test completed', summaryData);
 
-      // Create a summary table
-      const summaryTable = new Table({
-        head: [chalk.white('Metric'), chalk.white('Value')],
-        style: {
-          head: [], // No additional styles for the header
-          border: [] // No additional styles for the border
+      // Always output the final summary object in JSON modes
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput(summaryData, flags));
+      }
+
+      // Display final results (only in non-JSON mode)
+      if (!this.shouldOutputJson(flags)) {
+        // Clear console if progress was shown
+        if (progressDisplay) {
+          process.stdout.write('\x1B[2J\x1B[0f');
         }
-      })
+
+        this.log('\n\n' + chalk.green('Benchmark Complete') + '\n')
+
+        // Create a summary table
+        const summaryTable = new Table({
+          head: [chalk.white('Metric'), chalk.white('Value')],
+          style: {
+            head: [], // No additional styles for the header
+            border: [] // No additional styles for the border
+          }
+        })
+        
+        summaryTable.push(
+          ['Test ID', testId],
+          ['Channel', args.channel],
+          ['Transport', flags.transport],
+          ['Messages sent', `${metrics.messagesSent}/${messageCount}`],
+          ['Messages echoed', `${metrics.messagesEchoed}/${metrics.messagesSent}`],
+          ['Errors', metrics.errors.toString()],
+          ['Total time', `${totalTime.toFixed(2)} seconds`],
+          ['Actual rate', `${avgRate.toFixed(2)} msg/sec`]
+        )
+        
+        this.log(summaryTable.toString())
+        
+        // Create a latency table
+        const latencyTable = new Table({
+          head: [chalk.white('Latency Metric'), chalk.white('Value (ms)')],
+          style: {
+            head: [], // No additional styles for the header
+            border: [] // No additional styles for the border
+          }
+        })
+        
+        latencyTable.push(
+          ['Echo Average', avgEchoLatency.toFixed(2)],
+          ['Echo P50', echoP50.toFixed(2)],
+          ['Echo P90', echoP90.toFixed(2)],
+          ['Echo P95', echoP95.toFixed(2)]
+        )
+        
+        this.log('\nLatency Measurements:')
+        this.log('• Echo Latency: Round trip time (Publisher → Ably → Publisher)')
+        this.log(latencyTable.toString())
+        
+        this.log('\nTest complete. Disconnecting...')
+      }
       
-      summaryTable.push(
-        ['Test ID', testId],
-        ['Channel', args.channel],
-        ['Transport', flags.transport],
-        ['Messages sent', `${metrics.messagesSent}/${messageCount}`],
-        ['Messages echoed', `${metrics.messagesEchoed}/${metrics.messagesSent}`],
-        ['Errors', metrics.errors.toString()],
-        ['Total time', `${totalTime.toFixed(2)} seconds`],
-        ['Actual rate', `${avgRate.toFixed(2)} msg/sec`]
-      )
-      
-      this.log(summaryTable.toString())
-      
-      // Create a latency table
-      const latencyTable = new Table({
-        head: [chalk.white('Latency Metric'), chalk.white('Value (ms)')],
-        style: {
-          head: [], // No additional styles for the header
-          border: [] // No additional styles for the border
-        }
-      })
-      
-      latencyTable.push(
-        ['Request Average', avgRequestLatency.toFixed(2)],
-        ['Request P50', reqP50.toFixed(2)],
-        ['Request P90', reqP90.toFixed(2)],
-        ['Request P95', reqP95.toFixed(2)],
-        ['Echo Average', avgEchoLatency.toFixed(2)],
-        ['Echo P50', echoP50.toFixed(2)],
-        ['Echo P90', echoP90.toFixed(2)],
-        ['Echo P95', echoP95.toFixed(2)]
-      )
-      
-      this.log('\nLatency Measurements:')
-      this.log('• Request Latency: Time to complete publish API call')
-      this.log('• Echo Latency: Round trip time (Publisher → Ably → Publisher)')
-      this.log(latencyTable.toString())
-      
-      // Leave presence and close connection
+      // Leave presence
+      this.logCliEvent(flags, 'presence', 'leavingPresence', 'Leaving presence');
       await channel.presence.leave()
-      this.log('\nTest complete. Disconnecting...')
+      this.logCliEvent(flags, 'presence', 'presenceLeft', 'Left presence');
       
     } catch (error) {
+      this.logCliEvent(flags, 'benchmark', 'testError', `Benchmark failed: ${error instanceof Error ? error.message : String(error)}`, { error: error instanceof Error ? error.stack : String(error) });
       this.error(`Benchmark failed: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
-      realtime.close()
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+      }
+      if (this.realtime && this.realtime.connection.state !== 'closed') {
+        this.realtime.close()
+        this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed.');
+      }
     }
   }
   
   private createProgressDisplay(): Table.Table {
     const table = new Table({
       head: [chalk.white('Benchmark Progress'), chalk.white('Status')],
+      colWidths: [20, 40], // Adjust column widths
       style: {
         head: [], // No additional styles for the header
         border: [] // No additional styles for the border
@@ -426,69 +562,86 @@ export default class BenchPublisher extends AblyBaseCommand {
       ['Messages sent', '0'],
       ['Messages echoed', '0'],
       ['Current rate', '0 msg/sec'],
-      ['Request latency', '0 ms'],
-      ['Echo latency', '0 ms'],
+      ['Echo latency', '0 ms'], // Changed from Request latency
       ['Progress', '0%']
     )
     
     return table
   }
   
-  private updateProgress(metrics: TestMetrics, display: Table.Table, total: number): void {
-    const now = Date.now()
-    const elapsed = now - metrics.lastBatchTime
-    
+  private updateProgressAndLogs(metrics: TestMetrics, displayTable: Table.Table, total: number): void {
+    const now = Date.now();
+    const elapsed = now - metrics.lastBatchTime;
+
     // Only update if at least 100ms has passed
-    if (elapsed < 100) return
-    
+    if (elapsed < 100) return;
+
     // Calculate current rate (messages per second in this batch)
-    const currentRate = metrics.messagesSent > metrics.batchCount 
-      ? ((metrics.messagesSent - metrics.batchCount) / elapsed) * 1000 
-      : 0
-    
+    const currentRate = metrics.messagesSent > metrics.batchCount
+      ? ((metrics.messagesSent - metrics.batchCount) / elapsed) * 1000
+      : 0;
+
     // Update batch count and time
-    metrics.batchCount = metrics.messagesSent
-    metrics.lastBatchTime = now
-    
-    // Calculate average latency of recent messages
-    const recentRequestLatencies = metrics.requestLatencies.slice(-metrics.batchSize)
-    const avgRequestLatency = recentRequestLatencies.length > 0 
-      ? recentRequestLatencies.reduce((sum, lat) => sum + lat, 0) / recentRequestLatencies.length 
-      : 0
-      
-    const recentEchoLatencies = metrics.echoLatencies.slice(-metrics.batchSize)
-    const avgEchoLatency = recentEchoLatencies.length > 0 
-      ? recentEchoLatencies.reduce((sum, lat) => sum + lat, 0) / recentEchoLatencies.length 
-      : 0
-    
+    metrics.batchCount = metrics.messagesSent;
+    metrics.lastBatchTime = now;
+
+    // Calculate average latency of recent messages (only echo)
+    const recentEchoLatencies = metrics.echoLatencies.slice(-metrics.batchSize);
+    const avgEchoLatency = recentEchoLatencies.length > 0
+      ? recentEchoLatencies.reduce((sum, lat) => sum + lat, 0) / recentEchoLatencies.length
+      : 0;
+
     // Calculate progress percentage
-    const progressPercent = Math.min(100, Math.floor((metrics.messagesSent / total) * 100))
-    
-    // Create a new table with updated values
-    const newTable = new Table({
-      head: [chalk.white('Benchmark Progress'), chalk.white('Status')],
-      style: {
-        head: [], // No additional styles for the header
-        border: [] // No additional styles for the border
-      }
-    })
-    
-    // Create a progress bar
-    const progressBarWidth = 20
-    const filledChars = Math.floor((progressPercent / 100) * progressBarWidth)
-    const progressBar = `[${'='.repeat(filledChars)}${' '.repeat(progressBarWidth - filledChars)}] ${progressPercent}%`
-    
-    newTable.push(
-      ['Messages sent', `${metrics.messagesSent}/${total}`],
-      ['Messages echoed', `${metrics.messagesEchoed}/${metrics.messagesSent}`],
-      ['Current rate', `${currentRate.toFixed(1)} msg/sec`],
-      ['Request latency', `${avgRequestLatency.toFixed(1)} ms`],
-      ['Echo latency', `${avgEchoLatency.toFixed(1)} ms`],
-      ['Progress', progressBar]
-    )
-    
-    // Clear console and redraw
-    process.stdout.write('\x1B[2J\x1B[0f')
-    this.log(newTable.toString())
+    const progressPercent = Math.min(100, Math.floor((metrics.messagesSent / total) * 100));
+
+    // Create progress bar
+    const progressBarWidth = 30; // Match colWidths - 10 for label
+    const filledChars = Math.floor((progressPercent / 100) * progressBarWidth);
+    const progressBar = `[${'='.repeat(filledChars)}${' '.repeat(progressBarWidth - filledChars)}] ${progressPercent}%`;
+
+    // Clear console and redraw table and logs
+    process.stdout.write('\x1B[2J\x1B[0f'); // Clear screen and move cursor to top-left
+
+    // Recreate table with updated data
+    const updatedTable = new Table({
+        head: [chalk.white('Benchmark Progress'), chalk.white('Status')],
+        colWidths: [20, 40],
+        style: {
+            head: [], border: []
+        }
+    });
+    // Push data as arrays matching the head order
+    updatedTable.push(
+        ['Messages sent', `${metrics.messagesSent}/${total}`],
+        ['Messages echoed', `${metrics.messagesEchoed}/${metrics.messagesSent}`],
+        ['Current rate', `${currentRate.toFixed(1)} msg/sec`],
+        ['Echo latency', `${avgEchoLatency.toFixed(1)} ms`],
+        ['Progress', progressBar]
+    );
+    this.log(updatedTable.toString());
+
+    this.log('\n--- Logs (Last 10) ---');
+    this.messageLogBuffer.forEach(log => this.log(log));
+  }
+
+  // Function to add logs to the buffer, keeping only the last MAX_LOG_LINES
+  private addLogToBuffer(logMessage: string): void {
+     if (this.shouldOutputJson({})) return; // Don't buffer in JSON mode
+    this.messageLogBuffer.push(`[${new Date().toLocaleTimeString()}] ${logMessage}`);
+    if (this.messageLogBuffer.length > this.MAX_LOG_LINES) {
+      this.messageLogBuffer.shift(); // Remove the oldest log
+    }
+  }
+
+  // Override finally to ensure resources are cleaned up
+  async finally(err: Error | undefined): Promise<any> {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    if (this.realtime && this.realtime.connection.state !== 'closed') {
+      this.realtime.close();
+    }
+    return super.finally(err);
   }
 } 

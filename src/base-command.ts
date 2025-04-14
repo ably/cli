@@ -47,9 +47,17 @@ export abstract class AblyBaseCommand extends Command {
     }),
     json: Flags.boolean({
       description: 'Output in JSON format',
+      exclusive: ['pretty-json'], // Cannot use with pretty-json
     }),
     'pretty-json': Flags.boolean({
       description: 'Output in colorized JSON format',
+      exclusive: ['json'], // Cannot use with json
+    }),
+    verbose: Flags.boolean({
+      char: 'v',
+      description: 'Output verbose logs',
+      required: false,
+      default: false,
     }),
     host: Flags.string({
       description: 'Override the host endpoint for all product API calls',
@@ -71,7 +79,7 @@ export abstract class AblyBaseCommand extends Command {
     }),
     'client-id': Flags.string({
       description: 'Overrides any default client ID when using API authentication. Use "none" to explicitly set no client ID. Not applicable when using token authentication.',
-    }),
+    })
   }
 
   constructor(argv: string[], config: any) {
@@ -185,6 +193,45 @@ export abstract class AblyBaseCommand extends Command {
     
     // Regular JSON output
     return JSON.stringify(data, null, 2);
+  }
+
+  /**
+   * Logs a CLI event.
+   * If --verbose is enabled:
+   *   - If --json or --pretty-json is also enabled, outputs the event as structured JSON.
+   *   - Otherwise (normal mode), outputs the human-readable message prefixed with the component.
+   * Does nothing if --verbose is not enabled.
+   */
+  protected logCliEvent(
+    flags: any,
+    component: string,
+    event: string,
+    message: string,
+    data: Record<string, any> = {}
+  ): void {
+    // Only log if verbose mode is enabled
+    if (!flags.verbose) {
+      return;
+    }
+
+    const isJsonMode = this.shouldOutputJson(flags);
+
+    if (isJsonMode) {
+      // Output structured JSON log
+      const logEntry = {
+        logType: "cliEvent",
+        timestamp: new Date().toISOString(),
+        component,
+        event,
+        message,
+        data,
+      };
+      // Use the existing formatting method for consistency (handles pretty/plain JSON)
+      this.log(this.formatJsonOutput(logEntry, flags));
+    } else {
+      // Output human-readable log in normal (verbose) mode
+      this.log(`${chalk.dim(`[${component}]`)} ${message}`);
+    }
   }
 
   protected async ensureAppAndKey(flags: any): Promise<{appId: string, apiKey: string} | null> {
@@ -320,6 +367,7 @@ export abstract class AblyBaseCommand extends Command {
 
   protected getClientOptions(flags: any): Ably.ClientOptions {
     const options: Ably.ClientOptions = {}
+    const isJsonMode = this.shouldOutputJson(flags);
 
     // Handle authentication - try token first, then api-key, then environment variable, then config
     if (flags.token) {
@@ -387,6 +435,44 @@ export abstract class AblyBaseCommand extends Command {
       options.environment = flags.env
     }
 
+    // Always add a log handler to control SDK output formatting and destination
+    options.logHandler = (message: string, level: number) => {
+      if (isJsonMode) {
+        // JSON Mode Handling
+        if (flags.verbose && (level <= 2)) {
+          // Verbose JSON: Log ALL SDK messages via logCliEvent
+          const logData = { sdkLogLevel: level, sdkMessage: message };
+          this.logCliEvent(flags, 'AblySDK', `LogLevel-${level}`, message, logData);
+        } else if (level <= 1) {
+          // Standard JSON: Log only SDK ERRORS (level <= 1) to stderr as JSON
+          const errorData = {
+            logType: "sdkError",
+            timestamp: new Date().toISOString(),
+            level,
+            message,
+          };
+          // Log directly using console.error for SDK operational errors
+          console.error(this.formatJsonOutput(errorData, flags));
+        }
+        // If not verbose JSON and level > 1, suppress non-error SDK logs
+      } else {
+        // Non-JSON Mode Handling
+        if (flags.verbose && (level <= 2)) {
+           // Verbose Non-JSON: Log ALL SDK messages via logCliEvent (human-readable)
+           const logData = { sdkLogLevel: level, sdkMessage: message };
+           // logCliEvent handles non-JSON formatting when verbose is true
+           this.logCliEvent(flags, 'AblySDK', `LogLevel-${level}`, message, logData);
+        } else if (level <= 1) {
+          // Standard Non-JSON: Log only SDK ERRORS (level <= 1) clearly
+          // Use a format similar to logCliEvent's non-JSON output
+          this.log(`${chalk.red.bold(`[AblySDK Error]`)} ${message}`);
+        }
+        // If not verbose non-JSON and level > 1, suppress non-error SDK logs
+      }
+    };
+    // Set logLevel to highest ONLY when using custom handler to capture everything needed by it
+    options.logLevel = 4;
+
     return options
   }
   
@@ -421,33 +507,50 @@ export abstract class AblyBaseCommand extends Command {
     }
 
     const options = this.getClientOptions(flags)
-    
-    // Make sure we have some form of authentication
+    // isJsonMode is defined outside the try block for use in error handling
+    const isJsonMode = this.shouldOutputJson(flags);
+
+    // Make sure we have authentication after potentially modifying options
     if (!options.key && !options.token) {
       this.error('Authentication required. Please provide either an API key, a token, or log in first.')
       return null
     }
-    
+
     try {
-      const client = new Ably.Realtime(options)
-      
+      // Log handler is now set within getClientOptions based on JSON mode
+      const client = new Ably.Realtime(options) // Use the options object modified by getClientOptions
+
       // Wait for the connection to be established or fail
       return await new Promise((resolve, reject) => {
         client.connection.once('connected', () => {
+          // Use logCliEvent for connection success if verbose
+          this.logCliEvent(flags, 'RealtimeClient', 'connection', 'Successfully connected to Ably Realtime.');
           resolve(client)
         })
         
         client.connection.once('failed', (stateChange) => {
           // Handle authentication errors specifically
           if (stateChange.reason && stateChange.reason.code === 40100) { // Unauthorized
-            if (options.key) {
+            if (options.key) { // Check the original options object
               this.handleInvalidKey(flags)
-              reject(new Error('Invalid API key. Ensure you have a valid key configured.'))
+              const errorMsg = 'Invalid API key. Ensure you have a valid key configured.';
+              if (isJsonMode) {
+                 this.outputJsonError(errorMsg, stateChange.reason);
+              }
+              reject(new Error(errorMsg))
             } else {
-              reject(new Error('Invalid token. Please provide a valid Ably Token or JWT.'))
+              const errorMsg = 'Invalid token. Please provide a valid Ably Token or JWT.';
+               if (isJsonMode) {
+                 this.outputJsonError(errorMsg, stateChange.reason);
+               }
+              reject(new Error(errorMsg))
             }
           } else {
-            reject(stateChange.reason || new Error('Connection failed'))
+             const errorMsg = stateChange.reason?.message || 'Connection failed';
+             if (isJsonMode) {
+               this.outputJsonError(errorMsg, stateChange.reason);
+             }
+            reject(stateChange.reason || new Error(errorMsg))
           }
         })
       })
@@ -455,14 +558,29 @@ export abstract class AblyBaseCommand extends Command {
       // Handle any synchronous errors when creating the client
       const err = error as Error & { code?: number } // Type assertion
       if (err.code === 40100 || err.message?.includes('invalid key')) { // Unauthorized or invalid key format
-        if (options.key) {
+        if (options.key) { // Check the original options object
           await this.handleInvalidKey(flags)
         }
+      }
+      // Output synchronous error as JSON if needed
+      if (isJsonMode) {
+        this.outputJsonError(err.message || 'Failed to initialize Ably client', err);
       }
       throw error
     }
   }
   
+  /** Helper to output errors in JSON format */
+  protected outputJsonError(message: string, errorDetails: any = {}): void {
+    const errorOutput = {
+      error: true,
+      message: message,
+      details: errorDetails,
+    };
+    // Use console.error to send JSON errors to stderr
+    console.error(JSON.stringify(errorOutput));
+  }
+
   private async handleInvalidKey(flags: any): Promise<void> {
     const appId = flags.app || this.configManager.getCurrentAppId()
     
