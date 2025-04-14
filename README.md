@@ -4709,4 +4709,3 @@ The MCP server also provides the following resources:
 - `channels` - List of active channels on the Ably platform
 - `channel_history` - Historical messages from a specific Ably channel
 - `channel_presence` - Current presence members on a specific Ably channel
->>>>>>> adf78a9 (WIP - MCP Server)
