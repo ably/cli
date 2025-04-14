@@ -15,7 +15,9 @@
 * [CLI Usage](#cli-usage)
 * [MCP Usage](#mcp-usage)
 * [Commands](#commands)
+* [MCP Server](#mcp-server)
 <!-- tocstop -->
+
 # CLI Usage
 <!-- usage -->
 ```sh-session
@@ -34,6 +36,7 @@ USAGE
 LOGIN (recommended first step)
   $ ably login
 ```
+
 # MCP Usage
 
 > [!WARNING]  
@@ -42,6 +45,8 @@ LOGIN (recommended first step)
 1. Install the CLI following the [CLI usage](#cli-usage) steps.
 2. Follow the instructions for your tool to set up an MCP server, such as [Claude desktop](https://modelcontextprotocol.io/quickstart/user), and configure:
    1. `command` as ably mcp start-server
+
+See [MCP Server section](#mcp-server) for more details on how to use the MCP Server.
    
 > [!NOTE]  
 > If you are having trouble getting the MCP server running, use [MCP inspector](https://github.com/modelcontextprotocol/inspector)
@@ -4659,29 +4664,28 @@ EXAMPLES
 
 _See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.3.2/src/commands/spaces/members/subscribe.ts)_
 <!-- commandsstop -->
-_See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.2.3/src/commands/spaces/members/subscribe.ts)_
 
-## MCP Server
+# MCP Server
 
 The Ably CLI can also act as an MCP (Model Context Protocol) server for AI use cases, specifically focussed on IDE tools and AI desktop tools like Claude that support MCP.
 
-### Using the MCP Server
+## Using the MCP Server
 
 To start the MCP server, run:
 
-```
+```sh
 ably-mcp
 ```
 
 Or via npm/pnpm script:
 
-```
+```sh
 pnpm mcp-server
 ```
 
 The MCP server runs in file mode (stdio transport) and exposes a subset of Ably CLI commands that AI tools can use to interact with Ably channels.
 
-### Environment Variables
+## Environment Variables
 
 The MCP server supports the following environment variables for authentication and configuration:
 
@@ -4692,7 +4696,7 @@ The MCP server supports the following environment variables for authentication a
 - `ABLY_HOST` - Overrides the default data plane host
 - `ABLY_ENVIRONMENT` - Overrides the default data plane environment
 
-### Available MCP Commands
+## Available MCP Commands
 
 The MCP server exposes the following subset of Ably CLI commands:
 
@@ -4702,7 +4706,7 @@ The MCP server exposes the following subset of Ably CLI commands:
 - `get_channel_history` - Retrieve message history for a channel
 - Channel Presence - Access presence information for channels
 
-### MCP Resources
+## MCP Resources
 
 The MCP server also provides the following resources:
 
