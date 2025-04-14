@@ -1,4 +1,4 @@
-import {Command, Flags} from '@oclif/core'
+import {Command, Flags, Errors} from '@oclif/core'
 import * as Ably from 'ably'
 import {randomUUID} from 'crypto'
 import { ConfigManager } from './services/config-manager.js'
