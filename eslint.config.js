@@ -6,6 +6,8 @@ import eslintPluginN from 'eslint-plugin-n';
 import eslintPluginUnicorn from 'eslint-plugin-unicorn';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import eslint from '@eslint/js'; // Import base eslint config
+// import mochaGlobals from 'eslint-plugin-mocha/lib/configs/globals.js'; // Import mocha globals
+import eslintPluginMocha from 'eslint-plugin-mocha'; // Import the plugin
 
 export default [
   {
@@ -20,6 +22,8 @@ export default [
       sourceType: 'module',
       globals: {
         ...globals.node, // Use Node.js globals
+        // Add NodeJS global for scripts that might need it (though prefer importing types)
+        NodeJS: 'readonly', 
       },
     },
     plugins: {
@@ -33,6 +37,14 @@ export default [
       ...eslintPluginN.configs['flat/recommended-module'].rules,
       // Unicorn plugin recommended rules
       ...eslintPluginUnicorn.configs.recommended.rules,
+      // Disable noisy stylistic rules for now
+      'unicorn/no-null': 'off',
+      'unicorn/no-array-for-each': 'off',
+      'unicorn/no-for-loop': 'off',
+      'unicorn/prefer-string-raw': 'off',
+      'unicorn/no-object-as-default-parameter': 'off',
+      'unicorn/import-style': 'off',
+      'unicorn/prefer-ternary': 'off',
     },
   },
   {
@@ -44,7 +56,7 @@ export default [
     languageOptions: {
       parser: tsParser, // Use the imported parser object
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
       },
     },
     rules: {
@@ -58,6 +70,29 @@ export default [
       'unicorn/prevent-abbreviations': 'off',
       'unicorn/numeric-separators-style': 'off',
     },
+  },
+  {
+    // Configuration specific to test files
+    files: ['test/**/*.ts'],
+    plugins: {
+        mocha: eslintPluginMocha,
+    },
+    languageOptions: {
+      globals: {
+        // Manually define common Mocha globals
+        describe: 'readonly',
+        it: 'readonly',
+        before: 'readonly',
+        after: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+      }
+    },
+    rules: {
+      // Apply recommended mocha rules if desired
+      // ...eslintPluginMocha.configs.recommended.rules,
+      '@typescript-eslint/no-unused-expressions': 'off',
+    }
   },
   // Prettier config must be last
   eslintConfigPrettier,

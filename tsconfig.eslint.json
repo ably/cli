@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*", 
+    "test/**/*",
+    "scripts/**/*", // Keep scripts included for linting too
+    "*.config.js" // Include root config files if needed
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+} 
