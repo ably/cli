@@ -4081,7 +4081,10 @@ Commands for realtime cursor tracking in Ably Spaces
 
 ```
 USAGE
-  $ ably spaces cursors
+  $ ably spaces cursors --scope <value>
+
+FLAGS
+  --scope=<value>  (required) Space ID or comma-separated IDs for the scope (e.g., "my-space-1,my-space-2")
 
 DESCRIPTION
   Commands for realtime cursor tracking in Ably Spaces

@@ -221,9 +221,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
                  this.log(chalk.green('\nSuccessfully disconnected.'));
             }
 
-            resolve();
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-            process.exit(0); // Reinstated: Explicit exit after cleanup
+            resolve(undefined);
           }
 
           void releaseAndClose()

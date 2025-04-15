@@ -1,7 +1,9 @@
 // @ts-nocheck
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StdioServerTransport as StdioConnection } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
+import { ModelContextProvider } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioConnection as StdioConnectionOriginal } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import ChannelsHistory from '../commands/channels/history.js'
 import ChannelsList from '../commands/channels/list.js'
@@ -9,6 +11,7 @@ import ChannelsPresenceSubscribe from '../commands/channels/presence/subscribe.j
 import ChannelsPublish from '../commands/channels/publish.js'
 import ChannelsSubscribe from '../commands/channels/subscribe.js'
 import { ConfigManager } from '../services/config-manager.js'
+import { AblyBaseCommand } from '../base-command.js'
 
 // Maximum execution time for long-running operations (15 seconds)
 const MAX_EXECUTION_TIME = 15_000
@@ -41,7 +44,7 @@ export class AblyMcpServer {
     this.setupResources()
     
     // Create a stdio transport
-    const transport = new StdioServerTransport()
+    const transport = new StdioConnection()
     
     try {
       // Connect the server to the transport
@@ -338,7 +341,9 @@ export class AblyMcpServer {
 
   private async getAblyClient(): Promise<any> {
     try {
-      const Ably = (await import('ably')).default;
+      // Assign the imported module to a variable first
+      const AblyModule = await import('ably'); 
+      const Ably = AblyModule.default;
       
       // Get API key from config
       const apiKey = this.configManager.getApiKey() || process.env.ABLY_API_KEY;

@@ -151,7 +151,6 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
              }
 
              reject(new Error('Cleanup timed out')); // Reject promise on timeout
-             process.exit(1); // Reinstated: Force exit if cleanup hangs
           }, 5000);
 
             try {
@@ -215,6 +214,13 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
     channel.on((stateChange: Ably.ChannelStateChange) => {
       this.logCliEvent(flags, 'channel', stateChange.current, `Channel '${channelName}' state changed to ${stateChange.current}`, { reason: stateChange.reason });
     });
+
+    await channel.attach().catch(error => {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'presence', 'attachError', `Error attaching to channel: ${errorMsg}`, { channel: channelName, error: errorMsg });
+      throw new Error(`Failed to attach to channel ${channelName}: ${errorMsg}`);
+    });
+    this.logCliEvent(flags, 'presence', 'attachSuccess', 'Successfully attached to channel', { channel: channelName });
 
     return { channel, client };
   }

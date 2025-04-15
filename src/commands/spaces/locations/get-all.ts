@@ -221,20 +221,16 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
         // Leave the space after fetching locations
         await space.leave();
         this.log(chalk.green('\nSuccessfully disconnected.'));
-        process.exit(0);
       } catch (error) {
         this.log(chalk.yellow(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`));
-        process.exit(1);
       }
     } catch (error) {
       // Handle original error more carefully
       if (error === undefined || error === null) {
         this.log(chalk.red('An unknown error occurred (error object is undefined or null)'));
-        process.exit(1);
       } else {
         const errorMessage = error instanceof Error ? error.message : String(error || 'Unknown error');
         this.log(chalk.red(`Error: ${errorMessage}`));
-        process.exit(1);
       }
     } finally {
       try {

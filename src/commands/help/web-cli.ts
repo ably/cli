@@ -1,6 +1,6 @@
 import { Command } from '@oclif/core'
 
-import CustomHelp from '../help.js'
+import CustomHelp from '../../help.js'
 
 // Command for internal use in web CLI only
 export default class WebCliHelp extends Command {

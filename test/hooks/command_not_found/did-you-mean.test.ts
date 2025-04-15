@@ -1,11 +1,13 @@
 import { Args, Command, Config, Errors, Flags } from '@oclif/core';
-import { expect } from 'chai';
+import { expect, test } from '@oclif/test';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as sinon from 'sinon'; // Import url helpers
 import { dirname } from 'node:path'; // Import dirname
+import chalk from 'chalk';
+
 // Import the compiled hook function
-import didYouMeanHook from '../../../dist/src/hooks/command_not_found/did-you-mean.js';
+import hook from '../../../src/hooks/command_not_found/did-you-mean.js';
 
 // Mock command load
 class MockCmdClass {
@@ -105,7 +107,7 @@ describe('command_not_found hook: did-you-mean', function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:pubish' };
 
-    await didYouMeanHook.apply(mockContext, [hookOpts]);
+    await hook.apply(mockContext, [hookOpts]);
 
     expect(warnStub.calledOnce, 'this.warn should have been called once').to.be.true;
     const warnArg = warnStub.firstCall.args[0];
@@ -117,7 +119,7 @@ describe('command_not_found hook: did-you-mean', function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
     const hookOpts = { argv: ['my-channel', 'my-message', '--flag'], config: testConfig, context: mockContext, id: 'channels:publsh' };
 
-    await didYouMeanHook.apply(mockContext, [hookOpts]);
+    await hook.apply(mockContext, [hookOpts]);
 
     expect(warnStub.calledOnce, 'this.warn should have been called once').to.be.true;
     const warnArg = warnStub.firstCall.args[0];
@@ -132,7 +134,7 @@ describe('command_not_found hook: did-you-mean', function() {
 
     let caughtError: any = null;
     try {
-      await didYouMeanHook.apply(mockContext, [hookOpts]);
+      await hook.apply(mockContext, [hookOpts]);
     } catch (error: any) {
       caughtError = error;
     }
@@ -155,7 +157,7 @@ describe('command_not_found hook: did-you-mean', function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'hep' }; 
 
-    await didYouMeanHook.apply(mockContext, [hookOpts]);
+    await hook.apply(mockContext, [hookOpts]);
 
     // This test previously failed because warnStub wasn't called.
     // Let's focus on why this assertion fails:
@@ -171,7 +173,7 @@ describe('command_not_found hook: did-you-mean', function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'verywrongcommand' };
 
-    await didYouMeanHook.apply(mockContext, [hookOpts]);
+    await hook.apply(mockContext, [hookOpts]);
 
     expect(warnStub.called).to.be.false;
     expect(errorStub.calledOnce, 'this.error should have been called once').to.be.true;

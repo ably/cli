@@ -4,13 +4,30 @@
   "plugins": [
     "@typescript-eslint"
   ],
+  "env": {
+    "node": true,
+    "es2021": true,
+    "mocha": true
+  },
   "extends": [
     "oclif",
     "plugin:@typescript-eslint/recommended",
     "prettier"
   ],
+  "ignorePatterns": ["/dist", "/tmp", "examples/**/*", "packages/**/dist"],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["test/**/*.test.ts"],
+      "env": {
+        "mocha": true
+      },
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    }
+  ]
 }

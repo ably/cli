@@ -43,6 +43,8 @@ Below is the proposed information architecture / interface for the CLI, which ma
 
 #### The following commands are scoped to the account and depend on the control API access token for authentication
 
+*Note: The `topicSeparator` configured for oclif is not a `:` but instead a space (` `). All commands must respect this configuration*
+
 - `$ ably login` -> proxy convenience to $ ably accounts login
 - `$ ably accounts login` -> this command will take the user through the authentication process, and then persist the access token in the local config which will be used by default for all subsequent commands that depend on the control API. When logging in, if no alias is provided, the default account token is overwritten. If an alias is provided, an additional token is stored in the config indexed by that alias name.
 - `$ ably accounts list` -> list all the accounts already configured in the local config indexed by their alias name (unless `default`), which includes the the token ID, capabilities, user email, and account ID and name.
@@ -240,7 +242,7 @@ API keys are issued for apps and can only belong to one app. Apps are sandboxed 
 
 #### Structure of commands
 
-- Whenever a topic (or command with sub-commands) exists with as a plural, such as `ably accounts`, as a convenience, we should ensure anyone typing in `ably account` mistakenly will still be directed to the same command and sub-commands. So `ably account` and `ably account stats`, for example, will work without exactly the same as `ably accounts` and `ably accounts stats` with all supported arguments. The singular version however will not be visible in any commands that list topics or commands thus ensuring the CLI is not polluted with these convenience aliases, that is they are effectively hidden and not discoverable.
+- When a user enters a command that does not exist that is similar to an actual command, the CLI should ask the user if they meant the command that exists and will give the user the option to run that command.
 - oclif supports two styles of commands, either with spaces delimiting the commands such as `ably account stats` or colons delimiting the commands such as `ably account:stats`. This CLI uses spaces only and all documentation and helpers in the command files must use spaces consistently.
 - If a user issues a command to any topic (commmands with sub-commands), as a convenience the CLI should show the list of commands available with simple descriptions and simple examples where applicable. For example, calling `ably accounts` should show the list of all sub-commands.
 

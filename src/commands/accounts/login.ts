@@ -7,6 +7,31 @@ import { ControlBaseCommand } from '../../control-base-command.js'
 import { ControlApi } from '../../services/control-api.js'
 import { displayLogo } from '../../utils/logo.js'
 
+// Moved function definition outside the class
+function validateAndGetAlias(input: string, logFn: (msg: string) => void): null | string {
+  const trimmedAlias = input.trim()
+  if (!trimmedAlias) {
+    return null
+  }
+
+  // Convert to lowercase for case-insensitive comparison
+  const lowercaseAlias = trimmedAlias.toLowerCase()
+
+  // First character must be a letter
+  if (!/^[a-z]/.test(lowercaseAlias)) {
+    logFn('Error: Alias must start with a letter')
+    return null
+  }
+
+  // Only allow letters, numbers, dashes, and underscores after first character
+  if (!/^[a-z][\d_a-z-]*$/.test(lowercaseAlias)) {
+    logFn('Error: Alias can only contain letters, numbers, dashes, and underscores')
+    return null
+  }
+
+  return lowercaseAlias
+}
+
 export default class AccountsLogin extends ControlBaseCommand {
   static override args = {
     token: Args.string({
@@ -183,38 +208,18 @@ export default class AccountsLogin extends ControlBaseCommand {
       output: process.stdout,
     })
 
+    // Pass this.log as the logging function to the external validator
+    const logFn = this.log.bind(this); 
+
     return new Promise((resolve) => {
-      const validateAndGetAlias = (input: string): null | string => {
-        const trimmedAlias = input.trim()
-        if (!trimmedAlias) {
-          return null
-        }
-
-        // Convert to lowercase for case-insensitive comparison
-        const lowercaseAlias = trimmedAlias.toLowerCase()
-
-        // First character must be a letter
-        if (!/^[a-z]/.test(lowercaseAlias)) {
-          this.log('Error: Alias must start with a letter')
-          return null
-        }
-
-        // Only allow letters, numbers, dashes, and underscores after first character
-        if (!/^[a-z][\d_a-z-]*$/.test(lowercaseAlias)) {
-          this.log('Error: Alias can only contain letters, numbers, dashes, and underscores')
-          return null
-        }
-
-        return lowercaseAlias
-      }
-
       const askForAlias = () => {
         rl.question('Enter an alias for this account (e.g. "dev", "production", "personal"): ', (alias) => {
-          const validatedAlias = validateAndGetAlias(alias)
+          // Use the external validator function, passing the log function
+          const validatedAlias = validateAndGetAlias(alias, logFn)
           
           if (validatedAlias === null) {
             if (!alias.trim()) {
-              this.log('Error: Alias cannot be empty')
+              logFn('Error: Alias cannot be empty') // Use logFn here too
             }
 
             askForAlias()

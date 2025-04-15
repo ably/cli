@@ -9,11 +9,14 @@ export default class SpacesCursors extends Command {
     '$ ably spaces cursors get-all my-space',
   ]
 
-  async run(): Promise<void> {
-    this.log('Use one of the spaces cursors subcommands:')
-    this.log('')
-    this.log('  ably spaces cursors set         - Set your cursor position in a space')
-    this.log('  ably spaces cursors subscribe   - Subscribe to cursor movements in a space')
-    this.log('  ably spaces cursors get-all     - Get all current cursor positions in a space')
+  static override flags = {
+    scope: Flags.string({
+      description: 'Space ID or comma-separated IDs for the scope (e.g., "my-space-1,my-space-2")',
+      required: true,
+    }),
+  }
+
+  public async run(): Promise<void> {
+    this.log('Use `ably spaces cursors set` or `ably spaces cursors subscribe`.')
   }
 } 

@@ -250,7 +250,9 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
               this.log(chalk.red('Force exiting after timeout...'))
             }
 
-            process.exit(1)
+            clearTimeout(forceExitTimeout);
+            this.logCliEvent(flags, 'presence', 'cleanupComplete', 'Cleanup complete');
+            resolve(undefined);
           }, 5000)
 
           try {
@@ -318,7 +320,6 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
             }
 
             clearTimeout(forceExitTimeout)
-            resolve()
           } catch (error) {
              const errorMsg = error instanceof Error ? error.message : String(error);
              this.logCliEvent(flags, 'presence', 'cleanupError', `Error during cleanup: ${errorMsg}`, { error: errorMsg });

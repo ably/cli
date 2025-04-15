@@ -153,7 +153,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
 
       this.logCliEvent(flags, 'location', 'listening', 'Listening for location updates...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const cleanup = async () => {
           if (this.cleanupInProgress) return
           this.cleanupInProgress = true
@@ -171,7 +171,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
 
-            process.exit(1)
+            reject(new Error('Cleanup timed out'));
           }, 5000)
 
           try {
@@ -216,9 +216,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
             }
 
             clearTimeout(forceExitTimeout)
-            resolve()
-            // Force exit after cleanup
-            process.exit(0)
+            resolve(undefined);
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'location', 'cleanupError', errorMsg, { error: errorMsg });
@@ -227,7 +225,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
              }
 
             clearTimeout(forceExitTimeout)
-            process.exit(1)
+            reject(new Error(`Cleanup failed: ${errorMsg}`));
           }
         }
 

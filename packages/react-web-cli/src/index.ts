@@ -1,1 +1,1 @@
-export * from './AblyCliTerminal'; 
+export { AblyCliTerminal } from './AblyCliTerminal.js' 

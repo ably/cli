@@ -311,8 +311,6 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
              }
 
             resolve();
-            // Force exit after cleanup
-            process.exit(0);
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'location', 'cleanupError', errorMsg, { error: errorMsg, spaceId });
