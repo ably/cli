@@ -221,7 +221,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
                  this.log(chalk.green('\nSuccessfully disconnected.'));
             }
 
-            resolve(undefined);
+            resolve();
           }
 
           void releaseAndClose()

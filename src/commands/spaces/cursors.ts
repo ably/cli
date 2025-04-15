@@ -1,7 +1,7 @@
 import {Command, Flags} from '@oclif/core'
 
 export default class SpacesCursors extends Command {
-  static override description = 'Commands for realtime cursor tracking in Ably Spaces'
+  static override description = 'Commands for interacting with Cursors in Ably Spaces'
 
   static override examples = [
     '$ ably spaces cursors set my-space --position "{\"x\":100,\"y\":150}"',

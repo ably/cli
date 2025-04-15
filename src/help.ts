@@ -33,10 +33,10 @@ export default class CustomHelp extends Help {
   // Override the formatRoot method to return an empty string, as we're using showRootHelp instead
   formatRoot(): string {
     // Only proceed with default behavior if we're not at the root
-    // @ts-ignore oclif Help class has argv property in its options
+    // @ts-expect-error oclif Help class has argv property in its options
     if (this.opts.argv && this.opts.argv.length > 0) {
       // Hide the --web-cli-help flag from regular help output
-      // @ts-ignore oclif Help class has argv property in its options
+      // @ts-expect-error oclif Help class has argv property in its options
       const isWebCliHelpRequest = this.opts.argv.includes('--web-cli-help')
       if (isWebCliHelpRequest) {
         return ''
@@ -52,7 +52,7 @@ export default class CustomHelp extends Help {
   // Completely override the root help to implement custom welcome screen
   async showRootHelp(): Promise<void> {
     // Check if this is a web CLI help request
-    // @ts-ignore oclif Help class has argv property in its options
+    // @ts-expect-error oclif Help class has argv property in its options
     const isWebCliHelp = this.opts.argv?.includes('--web-cli-help')
 
     // Don't use the default root help output
@@ -81,7 +81,7 @@ export default class CustomHelp extends Help {
     lines.push(chalk.bold('ably.com CLI for Pub/Sub, Chat, Spaces and the Control API'), '')
 
     // 3. Show version info
-    // @ts-ignore showVersion is a valid property in opts
+    // @ts-expect-error showVersion is a valid property in opts
     if (this.opts.showVersion && config.version) {
       lines.push(`${chalk.bold('VERSION')}`, `  ${config.version}`, '')
     }

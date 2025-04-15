@@ -1291,7 +1291,8 @@ FLAGS
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --app=<value>           App ID the key belongs to (uses current app if not specified)
-      --capabilities=<value>  [default: {"*":["*"]}] JSON string of capabilities for the key, e.g. "{\"*\":[\"*\"]}"
+      --capabilities=<value>  [default: {"*":["*"]}] Capability object as a JSON string. Example:
+                              '{"channel:*":["publish"]}'
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
@@ -1310,13 +1311,19 @@ EXAMPLES
 
   $ ably auth keys create --name "My New Key" --app APP_ID
 
-  $ ably auth keys create --name "My New Key" --capabilities "{\"*\":[\"*\"]}"
+  $ ably auth keys create --name "My New Key" --capabilities "{"*":["*"]}"
 
-  $ ably auth keys create --name "My New Key" --capabilities "{\"channel1\":[\"publish\",\"subscribe\"],\"channel2\":[\"history\"]}"
+  $ ably auth keys create --name "My New Key" --capabilities "{"channel1":["publish","subscribe"],"channel2":["history"]}"
 
   $ ably auth keys create --name "My New Key" --json
 
   $ ably auth keys create --name "My New Key" --pretty-json
+
+  $ ably auth keys create --app <appId> --name "MyKey" --capabilities '{"channel:*":["publish"]}'
+
+  $ ably auth keys create --app <appId> --name "MyOtherKey" --capabilities '{"channel:chat-*":["subscribe"],"channel:updates":["publish"]}' --ttl 86400
+
+  $ ably auth keys create --name "My New Key" --capabilities '{"channel1":["publish","subscribe"],"channel2":["history"]}'
 ```
 
 _See code: [src/commands/auth/keys/create.ts](https://github.com/ably/cli/blob/v0.3.2/src/commands/auth/keys/create.ts)_
@@ -4077,7 +4084,7 @@ _See code: [src/commands/spaces/index.ts](https://github.com/ably/cli/blob/v0.3.
 
 ## `ably spaces cursors`
 
-Commands for realtime cursor tracking in Ably Spaces
+Commands for interacting with Cursors in Ably Spaces
 
 ```
 USAGE
@@ -4087,7 +4094,7 @@ FLAGS
   --scope=<value>  (required) Space ID or comma-separated IDs for the scope (e.g., "my-space-1,my-space-2")
 
 DESCRIPTION
-  Commands for realtime cursor tracking in Ably Spaces
+  Commands for interacting with Cursors in Ably Spaces
 
 EXAMPLES
   $ ably spaces cursors set my-space --position "{"x":100,"y":150}"

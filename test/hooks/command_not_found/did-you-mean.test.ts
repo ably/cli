@@ -2,9 +2,8 @@ import { Args, Command, Config, Errors, Flags } from '@oclif/core';
 import { expect, test } from '@oclif/test';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as sinon from 'sinon'; // Import url helpers
-import { dirname } from 'node:path'; // Import dirname
-import chalk from 'chalk';
+import * as sinon from 'sinon';
+import { dirname } from 'node:path';
 
 // Import the compiled hook function
 import hook from '../../../src/hooks/command_not_found/did-you-mean.js';
@@ -28,159 +27,190 @@ class MockCmdClass {
 
 // Helper to create a minimal config for testing
 async function createTestConfig(): Promise<Config> {
-  // ESM way to get __dirname
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   const root = path.resolve(__dirname, '../../../');
-  // topicSeparator is loaded from package.json via config.load()
-  const config = new Config({ root }); 
-  await config.load(); 
-  // Add command loadable
+  const config = new Config({ root });
+  await config.load();
   const loadableCmd: Command.Loadable = {
-    aliases: [], 
-    args: MockCmdClass.args, 
-    flags: MockCmdClass.flags, 
+    aliases: [],
+    args: MockCmdClass.args,
+    flags: MockCmdClass.flags,
     hidden: false,
     hiddenAliases: [],
     id: 'channels:subscribe',
-    load: async () => MockCmdClass as unknown as Command.Class, // Return mock class 
-    pluginAlias: '@ably/cli', // Example
-    pluginType: 'core',      // Example
+    load: async () => MockCmdClass as unknown as Command.Class,
+    pluginAlias: '@ably/cli',
+    pluginType: 'core',
   };
-  config.commands.push(loadableCmd, { id: 'channels:publish', load: async () => ({ async run() {} } as any) } as Command.Loadable, { id: 'help', load: async () => ({ async run() {} } as any) } as Command.Loadable);
+  config.commands.push(
+    loadableCmd,
+    { id: 'channels:publish', load: async () => ({ async run() {} } as any) } as Command.Loadable,
+    { id: 'help', load: async () => ({ async run() {} } as any) } as Command.Loadable
+  );
   config.commandIDs.push('channels:subscribe', 'channels:publish', 'help');
   config.topics.push({ description: 'Channel commands', name: 'channels' } as any);
   return config;
 }
 
 // Helper regex to strip ANSI codes for matching
+// eslint-disable-next-line no-control-regex
 const stripAnsi = (str: string) => str.replaceAll(/\u001B\[(?:\d*;)*\d*m/g, '');
 
-describe('command_not_found hook: did-you-mean', function() {
-  let testConfig: Config;
-  let logStub: sinon.SinonStub;
-  let warnStub: sinon.SinonStub;
-  let errorStub: sinon.SinonStub;
-  let exitStub: sinon.SinonStub;
-  let mockContext: any; 
+// Define custom context interface without extending base Context
+interface TestContext {
+  config: Config;
+  mockContext: any; 
+}
 
-  before(async function() {
-    testConfig = await createTestConfig();
-  });
-
-  after(function() {
-    // Nothing needed here now
-  });
-
-  beforeEach(function() {
-    // Ensure stubs are fresh for each test
-    logStub = sinon.stub(console, 'log');
-    warnStub = sinon.stub(console, 'warn'); 
-    errorStub = sinon.stub(console, 'error');
-    exitStub = sinon.stub(process, 'exit').returns(undefined as never);
-
-    // Create the mock context *with the fresh stubs*
-    mockContext = {
-      config: testConfig,
+// Setup context for tests using the custom interface
+const setupTestContext = test
+  .do(async (ctx: TestContext) => {
+    ctx.config = await createTestConfig();
+  })
+  .stub(console, 'log', () => sinon.stub())
+  .stub(console, 'warn', () => sinon.stub())
+  .stub(console, 'error', () => sinon.stub())
+  // Cast process.exit stub through unknown
+  .stub(process, 'exit', () => sinon.stub().returns(undefined as never) as unknown as sinon.SinonStub)
+  .do((ctx: TestContext) => {
+    // Create mock context for the hook
+    ctx.mockContext = {
+      config: ctx.config,
       debug: sinon.stub(),
       error(input: Error | string, options: { code?: string; exit: false | number } = { exit: 1 }) {
-        errorStub(input instanceof Error ? input.message : input);
+        // Cast console.error stub through unknown
+        (console.error as unknown as sinon.SinonStub)(input instanceof Error ? input.message : input);
         if (options.exit !== false) {
           const exitCode = typeof options.exit === 'number' ? options.exit : 1;
-          exitStub(exitCode);
+          // Cast process.exit stub through unknown
+          (process.exit as unknown as sinon.SinonStub)(exitCode);
         }
       },
-      exit: (code?: number) => exitStub(code ?? 0),
-      log: logStub, 
-      warn: warnStub,
+      // Cast process.exit stub through unknown
+      exit: (code?: number) => (process.exit as unknown as sinon.SinonStub)(code ?? 0),
+      log: console.log as sinon.SinonStub,
+      warn: console.warn as sinon.SinonStub,
     };
-  });
+  })
+  // Stub runCommand on the config within the context
+  .stub(Config.prototype, 'runCommand', () => sinon.stub().resolves());
 
-  afterEach(function() {
-    // Restore all stubs created by Sinon in this test file
-    sinon.restore(); 
-  });
 
-  // --- Tests now assume confirmation always happens ---
+// --- Tests using @oclif/test structure ---
 
-  it('should run the suggested command (using space separator)', async function() {
-    const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
-    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:pubish' };
+setupTestContext
+  .it('should run the suggested command (using space separator)', async (ctx: TestContext) => {
+    const hookOpts = { argv: [], config: ctx.config, context: ctx.mockContext, id: 'channels:pubish' };
+    await hook.apply(ctx.mockContext, [hookOpts]);
 
-    await hook.apply(mockContext, [hookOpts]);
+    const warnStub = console.warn as sinon.SinonStub;
+    // Access stubbed runCommand correctly via prototype stub
+    const runCommandStub = Config.prototype.runCommand as sinon.SinonStub;
 
-    expect(warnStub.calledOnce, 'this.warn should have been called once').to.be.true;
+    expect(warnStub.calledOnce).to.be.true;
     const warnArg = warnStub.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain('channels pubish is not an ably command'); 
+    expect(stripAnsi(warnArg)).to.contain('channels pubish is not an ably command');
+    // Assert on the prototype stub
     expect(runCommandStub.calledOnceWith('channels:publish', [])).to.be.true;
   });
 
-  it('should pass arguments to the suggested command', async function() {
-    const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
-    const hookOpts = { argv: ['my-channel', 'my-message', '--flag'], config: testConfig, context: mockContext, id: 'channels:publsh' };
+setupTestContext
+  .it('should pass arguments to the suggested command', async (ctx: TestContext) => {
+    const hookOpts = { argv: ['my-channel', 'my-message', '--flag'], config: ctx.config, context: ctx.mockContext, id: 'channels:publsh' };
+    await hook.apply(ctx.mockContext, [hookOpts]);
 
-    await hook.apply(mockContext, [hookOpts]);
+    const warnStub = console.warn as sinon.SinonStub;
+    const runCommandStub = Config.prototype.runCommand as sinon.SinonStub;
 
-    expect(warnStub.calledOnce, 'this.warn should have been called once').to.be.true;
+    expect(warnStub.calledOnce).to.be.true;
     const warnArg = warnStub.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain('channels publsh is not an ably command'); 
+    expect(stripAnsi(warnArg)).to.contain('channels publsh is not an ably command');
     expect(runCommandStub.calledOnceWith('channels:publish', ['my-channel', 'my-message', '--flag'])).to.be.true;
   });
 
-  it('should re-throw CLIError when suggested command fails missing args', async function() {
-    const missingArgsError = new Errors.CLIError('Missing 1 required arg: channel');
-    const runCommandStub = sinon.stub(testConfig, 'runCommand').rejects(missingArgsError);
-    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:subscrib' };
+// Use a separate test chain for the rejecting stub
+const setupRejectingTestContext = test
+  .do(async (ctx: TestContext) => {
+    ctx.config = await createTestConfig();
+  })
+  .stub(console, 'log', () => sinon.stub())
+  .stub(console, 'warn', () => sinon.stub())
+  .stub(console, 'error', () => sinon.stub())
+  .stub(process, 'exit', () => sinon.stub().returns(undefined as never) as unknown as sinon.SinonStub)
+  .do((ctx: TestContext) => {
+    ctx.mockContext = {
+      config: ctx.config,
+      debug: sinon.stub(),
+      error(input: Error | string, options: { code?: string; exit: false | number } = { exit: 1 }) {
+        (console.error as unknown as sinon.SinonStub)(input instanceof Error ? input.message : input);
+        if (options.exit !== false) {
+          (process.exit as unknown as sinon.SinonStub)(typeof options.exit === 'number' ? options.exit : 1);
+        }
+      },
+      exit: (code?: number) => (process.exit as unknown as sinon.SinonStub)(code ?? 0),
+      log: console.log as sinon.SinonStub,
+      warn: console.warn as sinon.SinonStub,
+    };
+  })
+  // Stub runCommand specifically for this test context to reject
+  .stub(Config.prototype, 'runCommand', () => sinon.stub().rejects(new Errors.CLIError('Missing 1 required arg: channel')));
+
+setupRejectingTestContext
+  .it('should re-throw CLIError when suggested command fails missing args', async (ctx: TestContext) => {
+    const hookOpts = { argv: [], config: ctx.config, context: ctx.mockContext, id: 'channels:subscrib' };
+    const warnStub = console.warn as sinon.SinonStub;
+    const errorStub = console.error as unknown as sinon.SinonStub;
+    const exitStub = process.exit as unknown as sinon.SinonStub;
+    // Note: runCommandStub will be the rejecting one from this context setup
+    const runCommandStub = Config.prototype.runCommand as sinon.SinonStub;
 
     let caughtError: any = null;
     try {
-      await hook.apply(mockContext, [hookOpts]);
+      await hook.apply(ctx.mockContext, [hookOpts]);
     } catch (error: any) {
       caughtError = error;
     }
 
-    // Verify initial warning and runCommand attempt still happened
-    expect(warnStub.calledOnce, 'this.warn should have been called once').to.be.true;
+    expect(warnStub.calledOnce).to.be.true;
     const warnArg = warnStub.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain('channels subscrib is not an ably command'); 
+    expect(stripAnsi(warnArg)).to.contain('channels subscrib is not an ably command');
     expect(runCommandStub.calledOnceWith('channels:subscribe', [])).to.be.true;
-    
-    // Assert that the original error was re-thrown
-    expect(caughtError, 'Hook should have re-thrown the CLIError').to.equal(missingArgsError);
-    
-    // Assert that the hook's specific error/log/exit logic was NOT called
-    expect(errorStub.called, 'console.error should NOT have been called').to.be.false;
-    expect(exitStub.called, 'process.exit should NOT have been called').to.be.false;
+    expect(caughtError).to.be.instanceOf(Errors.CLIError);
+    expect(caughtError.message).to.contain('Missing 1 required arg: channel');
+    expect(errorStub.called).to.be.false;
+    expect(exitStub.called).to.be.false;
   });
 
-  it('should correctly suggest and run help for a command', async function() {
-    const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
-    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'hep' }; 
+setupTestContext
+  .it('should correctly suggest and run help for a command', async (ctx: TestContext) => {
+    const hookOpts = { argv: [], config: ctx.config, context: ctx.mockContext, id: 'hep' };
+    await hook.apply(ctx.mockContext, [hookOpts]);
 
-    await hook.apply(mockContext, [hookOpts]);
+    const warnStub = console.warn as sinon.SinonStub;
+    const runCommandStub = Config.prototype.runCommand as sinon.SinonStub;
 
-    // This test previously failed because warnStub wasn't called.
-    // Let's focus on why this assertion fails:
-    expect(warnStub.calledOnce, 'this.warn should have been called once').to.be.true; 
-    
-    // If warn *was* called, these should pass if logic is correct:
-    // const warnArg = warnStub.firstCall.args[0];
-    // expect(stripAnsi(warnArg)).to.contain('hep is not an ably command'); 
-    // expect(runCommandStub.calledOnceWith('help', [])).to.be.true; 
+    expect(warnStub.calledOnce).to.be.true;
+    const warnArg = warnStub.firstCall.args[0];
+    expect(stripAnsi(warnArg)).to.contain('hep is not an ably command');
+    expect(runCommandStub.calledOnceWith('help', [])).to.be.true;
   });
 
-  it('should show generic help if no close command is found', async function() {
-    const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
-    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'verywrongcommand' };
+setupTestContext
+  .it('should show generic help if no close command is found', async (ctx: TestContext) => {
+    const hookOpts = { argv: [], config: ctx.config, context: ctx.mockContext, id: 'verywrongcommand' };
+    await hook.apply(ctx.mockContext, [hookOpts]);
 
-    await hook.apply(mockContext, [hookOpts]);
+    const warnStub = console.warn as sinon.SinonStub;
+    const errorStub = console.error as unknown as sinon.SinonStub;
+    const exitStub = process.exit as unknown as sinon.SinonStub;
+    const runCommandStub = Config.prototype.runCommand as sinon.SinonStub;
 
     expect(warnStub.called).to.be.false;
-    expect(errorStub.calledOnce, 'this.error should have been called once').to.be.true;
+    expect(errorStub.calledOnce).to.be.true;
     const errorArg = errorStub.firstCall.args[0];
     expect(stripAnsi(errorArg)).to.contain('Command verywrongcommand not found. Run ably help for a list of available commands.');
-    expect(exitStub.calledOnceWithExactly(127)).to.be.true; 
+    expect(exitStub.calledOnceWithExactly(127)).to.be.true;
     expect(runCommandStub.called).to.be.false;
   });
 
-}); 

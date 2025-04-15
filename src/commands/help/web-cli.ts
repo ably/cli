@@ -17,7 +17,7 @@ export default class WebCliHelp extends Command {
     const help = new CustomHelp(this.config)
     
     // Set the argv to include our flag for detection in the help class
-    // @ts-ignore - Adding a property that's expected by our help implementation
+    // @ts-expect-error - Adding a property that's expected by our help implementation
     help.opts = { argv: ['--web-cli-help'] }
     
     // Call the root help method which will display web help

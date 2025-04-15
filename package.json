@@ -80,7 +80,7 @@
     "@types/fast-levenshtein": "^0.0.4",
     "@types/inquirer": "^9.0.7",
     "@types/jsonwebtoken": "^9.0.7",
-    "@types/mocha": "^10.0.6",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.10.0",
     "@types/node-fetch": "^2.6.12",
     "@types/sinon": "^17.0.3",
@@ -100,6 +100,7 @@
     "oclif": "^4.2.10",
     "shx": "^0.4",
     "sinon": "^18.0.0",
+    "strip-ansi": "^7.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
   },

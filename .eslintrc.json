@@ -14,19 +14,50 @@
     "plugin:@typescript-eslint/recommended",
     "prettier"
   ],
-  "ignorePatterns": ["/dist", "/tmp", "examples/**/*", "packages/**/dist"],
+  "ignorePatterns": [
+    "/dist",
+    "/tmp",
+    "/node_modules",
+    "examples/**/*",
+    "packages/react-web-cli/dist/**",
+    "**/*.d.ts"
+  ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "unicorn/no-process-exit": "off",
+    "n/no-process-exit": "off",
+    "n/no-unsupported-features/node-builtins": "off"
   },
   "overrides": [
     {
       "files": ["test/**/*.test.ts"],
+      "plugins": ["mocha"],
+      "extends": ["plugin:mocha/recommended"],
       "env": {
         "mocha": true
       },
+      "globals": {
+        "describe": "readonly",
+        "it": "readonly",
+        "before": "readonly",
+        "after": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly"
+      },
       "rules": {
-        "@typescript-eslint/no-explicit-any": "off"
+        "@typescript-eslint/no-explicit-any": "off",
+        "mocha/no-exclusive-tests": "error",
+        "mocha/no-skipped-tests": "warn"
+      }
+    },
+    {
+      "files": ["packages/react-web-cli/**/*"],
+      "env": {
+        "browser": true
+      },
+      "rules": {
+        "unicorn/prefer-module": "off"
       }
     }
   ]

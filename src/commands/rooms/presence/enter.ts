@@ -252,7 +252,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
 
             clearTimeout(forceExitTimeout);
             this.logCliEvent(flags, 'presence', 'cleanupComplete', 'Cleanup complete');
-            resolve(undefined);
+            resolve();
           }, 5000)
 
           try {

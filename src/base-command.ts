@@ -1,4 +1,4 @@
-import {Command, Errors, Flags} from '@oclif/core'
+import {Command, Flags} from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 import colorJson from 'color-json'

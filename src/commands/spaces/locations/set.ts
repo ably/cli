@@ -216,7 +216,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
             }
 
             clearTimeout(forceExitTimeout)
-            resolve(undefined);
+            resolve();
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'location', 'cleanupError', errorMsg, { error: errorMsg });

@@ -8,10 +8,13 @@ export default class KeysCreateCommand extends ControlBaseCommand {
   static examples = [
     '$ ably auth keys create --name "My New Key"',
     '$ ably auth keys create --name "My New Key" --app APP_ID',
-    '$ ably auth keys create --name "My New Key" --capabilities "{\\"*\\":[\\\"*\\"]}"',
-    '$ ably auth keys create --name "My New Key" --capabilities "{\\"channel1\\":[\\\"publish\\\",\\\"subscribe\\"],\\"channel2\\":[\\\"history\\"]}"',
+    '$ ably auth keys create --name "My New Key" --capabilities "{\"*\":[\"*\"]}"',
+    '$ ably auth keys create --name "My New Key" --capabilities "{\"channel1\":[\"publish\",\"subscribe\"],\"channel2\":[\"history\"]}"',
     '$ ably auth keys create --name "My New Key" --json',
-    '$ ably auth keys create --name "My New Key" --pretty-json'
+    '$ ably auth keys create --name "My New Key" --pretty-json',
+    '$ ably auth keys create --app <appId> --name "MyKey" --capabilities \'{"channel:*":["publish"]}\'',
+    '$ ably auth keys create --app <appId> --name "MyOtherKey" --capabilities \'{"channel:chat-*":["subscribe"],"channel:updates":["publish"]}\' --ttl 86400',
+    '$ ably auth keys create --name "My New Key" --capabilities \'{"channel1":["publish","subscribe"],"channel2":["history"]}\'',
   ]
 
   static flags = {
@@ -22,7 +25,7 @@ export default class KeysCreateCommand extends ControlBaseCommand {
     }),
     'capabilities': Flags.string({
       default: '{"*":["*"]}',
-      description: 'JSON string of capabilities for the key, e.g. "{\\"*\\":[\\\"*\\"]}"',
+      description: 'Capability object as a JSON string. Example: \'{"channel:*":["publish"]}\'',
     }),
     'name': Flags.string({
       description: 'Name of the key',
