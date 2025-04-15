@@ -254,6 +254,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
 
+            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
             process.exit(1);
           }, 5000);
 
@@ -319,6 +320,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
              }
 
             clearTimeout(forceExitTimeout);
+            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
             process.exit(1);
           }
         };

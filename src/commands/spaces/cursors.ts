@@ -3,10 +3,10 @@ import {Command, Flags} from '@oclif/core'
 export default class SpacesCursors extends Command {
   static override description = 'Commands for interacting with Cursors in Ably Spaces'
 
-  static override examples = [
-    '$ ably spaces cursors set my-space --position "{\"x\":100,\"y\":150}"',
-    '$ ably spaces cursors subscribe my-space',
-    '$ ably spaces cursors get-all my-space',
+  static override examples: Command.Example[] = [
+    `$ ably spaces cursors set my-space --position '{"x": 100, "y": 200}' --data '{"color": "red"}'`,
+    `$ ably spaces cursors subscribe my-space`,
+    `$ ably spaces cursors get-all my-space`,
   ]
 
   static override flags = {

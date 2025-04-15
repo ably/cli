@@ -173,7 +173,11 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
               this.log(chalk.red('Force exiting after timeout...'));
             }
 
-            process.exit(1);
+            // SIGINT/SIGTERM received, or fatal error
+            this.log(chalk.yellow('Closing connection...'))
+            this.clients?.realtimeClient.close()
+            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+            process.exit(0)
           }, 5000);
 
           // Unsubscribe from occupancy events

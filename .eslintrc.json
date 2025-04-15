@@ -15,12 +15,15 @@
     "prettier"
   ],
   "ignorePatterns": [
-    "/dist",
-    "/tmp",
-    "/node_modules",
-    "examples/**/*",
-    "packages/react-web-cli/dist/**",
-    "**/*.d.ts"
+    "/dist/**",
+    "/tmp/**",
+    "node_modules/**",
+    "examples/**",
+    "packages/**/dist/**",
+    "**/*.d.ts",
+    "node_modules/xterm/**",
+    "packages/react-web-cli/dist/index.js",
+    "packages/react-web-cli/dist/index.mjs"
   ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn",
