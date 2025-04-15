@@ -161,8 +161,8 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
 
-            process.exit(1) // Reinstated: Force exit if cleanup hangs
-          }, 5000)
+            this.exit(1); // Use oclif's exit method instead of process.exit
+          }, 5000);
 
           try {
             if (space) {
@@ -202,10 +202,9 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
                this.log(chalk.green('Successfully disconnected.'));
             }
 
-            clearTimeout(forceExitTimeout)
-            resolve()
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-            process.exit(0) // Reinstated: Explicit exit on successful cleanup
+            clearTimeout(forceExitTimeout);
+            resolve();
+            // The command will naturally end after the promise resolves
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'lock', 'cleanupError', errorMsg, { error: errorMsg });
@@ -213,7 +212,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
                 this.log(`Error during cleanup: ${errorMsg}`);
              }
           }
-        }
+        };
 
         process.on('SIGINT', cleanup);
         process.on('SIGTERM', cleanup);

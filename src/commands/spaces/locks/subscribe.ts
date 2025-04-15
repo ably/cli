@@ -215,7 +215,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
 
-            process.exit(1); // Reinstated: Force exit if cleanup hangs
+            this.exit(1); // Use oclif's exit method instead of process.exit
           }, 5000);
 
           try {
@@ -261,25 +261,25 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
             }
 
             resolve();
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-            process.exit(0); // Reinstated: Explicit exit after cleanup
+            // The promise resolution will naturally end the command
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'lock', 'cleanupError', errorMsg, { error: errorMsg });
-             if (!this.shouldOutputJson(flags)) {
-                this.log(chalk.red(errorMsg));
+             if (this.shouldOutputJson(flags)) {
+               this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
+             } else {
+               this.log(chalk.red(errorMsg));
              }
           }
         };
 
-        process.on('SIGINT', cleanup);
-        process.on('SIGTERM', cleanup);
+        cleanup();
       });
     } catch (error) {
-      const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
-      this.logCliEvent(flags, 'error', 'unhandledError', errorMsg, { error: errorMsg });
+      const errorMsg = `Error during command execution: ${error instanceof Error ? error.message : String(error)}`;
+      this.logCliEvent(flags, 'command', 'error', errorMsg, { error: errorMsg });
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ error: errorMsg, status: 'error', success: false }, flags));
+        this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
       } else {
         this.log(chalk.red(errorMsg));
       }

@@ -236,7 +236,7 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
 
-            process.exit(1)
+            this.exit(1);
           }, 5000)
 
           try {
@@ -278,8 +278,6 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
             }
 
             resolve();
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-            process.exit(0); // Reinstated: Explicit exit on successful cleanup
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'member', 'cleanupError', errorMsg, { error: errorMsg });

@@ -240,7 +240,7 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
 
-            process.exit(1); // Reinstated: Force exit if cleanup hangs
+            this.exit(1); // Use oclif's exit method instead of process.exit
           }, 5000);
 
           try {
@@ -284,31 +284,24 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
                this.log(chalk.green('\nSuccessfully disconnected.'));
             }
 
-            resolve();
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-            process.exit(0); // Reinstated: Explicit exit on successful cleanup
+            // The command will naturally complete after the promise resolves
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'member', 'cleanupError', errorMsg, { error: errorMsg });
              if (!this.shouldOutputJson(flags)) {
-                this.log(chalk.red(`\nAn error occurred during cleanup: ${errorMsg}`));
+                this.log(chalk.red(errorMsg));
              }
-
-            reject(error);
           }
-        };
+        }
 
-        process.on('SIGINT', cleanup);
-        process.on('SIGTERM', cleanup);
+        cleanup();
       });
     } catch (error) {
-      const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
-      this.logCliEvent(flags, 'error', 'unhandledError', errorMsg, { error: errorMsg });
+      const errorMsg = `Error during execution: ${error instanceof Error ? error.message : String(error)}`;
+      this.logCliEvent(flags, 'member', 'executionError', errorMsg, { error: errorMsg });
       if (!this.shouldOutputJson(flags)) {
-         this.log(chalk.red(`\nAn unhandled error occurred: ${errorMsg}`));
+         this.log(chalk.red(errorMsg));
       }
-
-      throw error;
     }
   }
 }
