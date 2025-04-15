@@ -171,8 +171,6 @@ export default class TypingStart extends ChatBaseCommand {
             this.log(`${chalk.green('Successfully disconnected.')}`)
           }
 
-          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-          process.exit(0) // Reinstated: Explicit exit
         })
       })
     } catch (error) {

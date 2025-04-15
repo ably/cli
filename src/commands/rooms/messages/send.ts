@@ -45,7 +45,9 @@ export default class MessagesSend extends ChatBaseCommand {
   }
 
   private clients: { chatClient: any, realtimeClient: any } | null = null;
+  private isPolling = false;
   private progressIntervalId: NodeJS.Timeout | null = null;
+  private typingTimeoutId: NodeJS.Timeout | null = null;
 
   // Override finally to ensure resources are cleaned up
    async finally(err: Error | undefined): Promise<any> {

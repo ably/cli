@@ -52,8 +52,8 @@ export default class ConnectionsStats extends AblyBaseCommand {
 
   private client: Ably.Rest | null = null;
   private isPolling = false
-  private pollInterval: NodeJS.Timeout | undefined = undefined // Track when we're already fetching stats
-  private statsDisplay: StatsDisplay | null = null // Store client for finally block
+  private pollInterval: NodeJS.Timeout | undefined = undefined // Use NodeJS.Timeout
+  private statsDisplay: StatsDisplay | null = null // Track when we're already fetching stats
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {

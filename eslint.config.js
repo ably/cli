@@ -78,19 +78,10 @@ export default [
         mocha: eslintPluginMocha,
     },
     languageOptions: {
-      globals: {
-        // Manually define common Mocha globals
-        describe: 'readonly',
-        it: 'readonly',
-        before: 'readonly',
-        after: 'readonly',
-        beforeEach: 'readonly',
-        afterEach: 'readonly',
-      }
     },
     rules: {
-      // Apply recommended mocha rules if desired
-      // ...eslintPluginMocha.configs.recommended.rules,
+      // Apply recommended mocha rules which include globals
+      ...eslintPluginMocha.configs.recommended.rules,
       '@typescript-eslint/no-unused-expressions': 'off',
     }
   },

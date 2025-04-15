@@ -262,7 +262,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
             }
 
             // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-            process.exit(0); // Reinstated: Explicit exit after cleanup
+            process.exit(1);
         }, 5000);
 
         if (space) {
@@ -293,63 +293,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       process.on('SIGTERM', cleanup);
 
        // Keep the process running until interrupted
-       await new Promise<void>((resolve, reject) => {
-         const cleanup = async () => {
-           if (this.cleanupInProgress) {
-             if (this.simulationIntervalId) {
-               clearInterval(this.simulationIntervalId);
-               this.simulationIntervalId = null;
-             }
-
-             if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-               this.clients.realtimeClient.close();
-             }
-
-             this.cleanupInProgress = false;
-             this.logCliEvent(flags, 'cursor', 'cleanupInitiated', 'Cleanup initiated (Ctrl+C pressed)');
-
-             const forceExitTimeout = setTimeout(() => {
-               const errorMsg = 'Force exiting after timeout during cleanup';
-               this.logCliEvent(flags, 'cursor', 'forceExit', errorMsg, { spaceId });
-               if (!this.shouldOutputJson(flags)) {
-                 this.log(chalk.red('Force exiting after timeout...'));
-               }
-
-               // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-               process.exit(0); // Reinstated: Explicit exit after cleanup
-             }, 5000);
-
-             if (space) {
-               try {
-                 this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space...');
-                 await space.leave();
-                 this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
-               } catch (error) {
-                 const errorMsg = error instanceof Error ? error.message : String(error);
-                 this.logCliEvent(flags, 'spaces', 'leaveError', `Error leaving space: ${errorMsg}`, { error: errorMsg });
-               }
-             }
-
-             if (realtimeClient && realtimeClient.connection.state !== 'closed') {
-               this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-               realtimeClient.close();
-               this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
-             }
-
-             clearTimeout(forceExitTimeout);
-             this.logCliEvent(flags, 'cursor', 'cleanupComplete', 'Cleanup complete');
-             if (!this.shouldOutputJson(flags)) {
-               this.log(chalk.green('\nDisconnected.'));
-             }
-
-             // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
-             process.exit(0); // Reinstated: Explicit exit after cleanup
-           }
-         };
-
-         process.on('SIGINT', cleanup);
-         process.on('SIGTERM', cleanup);
-       });
+       await new Promise<void>(resolve => { /* Keep process alive */ });
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);

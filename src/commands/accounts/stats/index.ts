@@ -133,7 +133,6 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
         }
 
         this.log('\nUnsubscribed from live stats')
-        process.exit(0)
       }
 
       process.on('SIGINT', cleanup)

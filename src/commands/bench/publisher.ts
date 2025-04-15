@@ -75,6 +75,7 @@ export default class BenchPublisher extends AblyBaseCommand {
   private messageLogBuffer: string[] = [];
 
   private realtime: Ably.Realtime | null = null;
+  private presenceCount = 0;
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
@@ -492,30 +493,36 @@ export default class BenchPublisher extends AblyBaseCommand {
   }
   
   private setupProgressDisplay(flags: any, metrics: TestMetrics, messageCount: number): { intervalId: NodeJS.Timeout | null, progressDisplay: InstanceType<typeof Table> | null } {
-    let intervalId: NodeJS.Timeout | null = null;
-    let progressDisplay: InstanceType<typeof Table> | null = null;
-
-    if (this.shouldOutputJson(flags)) {
-      intervalId = setInterval(() => {
-        const progressPercent = Math.min(100, Math.floor((metrics.messagesSent / messageCount) * 100));
-        this.logCliEvent(flags, 'benchmark', 'testProgress', 'Benchmark test in progress', {
-          errors: metrics.errors,
-          messagesEchoed: metrics.messagesEchoed,
-          messagesSent: metrics.messagesSent,
-          progressPercent
-        });
-      }, 2000);
-    } else {
-      progressDisplay = this.createProgressDisplay();
-      process.stdout.write('\u001B[2J\u001B[0f');
-      this.log(progressDisplay.toString());
-      this.log('\n--- Logs (Last 10) ---');
-      intervalId = setInterval(() => {
-        if (progressDisplay) {
-          this.updateProgressAndLogs(metrics, progressDisplay, messageCount);
-        }
-      }, 500);
+    if (this.shouldOutputJson(flags) || flags.logLevel === 'debug') {
+      return { intervalId: null, progressDisplay: null };
     }
+
+    let intervalId: NodeJS.Timeout | null = null;
+    const progressDisplay = new Table({
+      colWidths: [20, 40],
+      head: [chalk.white('Benchmark Progress'), chalk.white('Status')],
+      style: {
+        border: [],
+        head: []
+      }
+    });
+    
+    progressDisplay.push(
+      ['Messages sent', '0'],
+      ['Messages echoed', '0'],
+      ['Current rate', '0 msg/sec'],
+      ['Echo latency', '0 ms'],
+      ['Progress', '0%']
+    );
+    
+    process.stdout.write('\u001B[2J\u001B[0f');
+    this.log(progressDisplay.toString());
+    this.log('\n--- Logs (Last 10) ---');
+    intervalId = setInterval(() => {
+      if (progressDisplay) {
+        this.updateProgressAndLogs(metrics, progressDisplay, messageCount);
+      }
+    }, 500);
 
     return { intervalId, progressDisplay };
   }

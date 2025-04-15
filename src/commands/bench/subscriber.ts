@@ -34,6 +34,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
     ...AblyBaseCommand.globalFlags,
   }
 
+  private receivedEchoCount = 0;
   private checkPublisherIntervalId: NodeJS.Timeout | null = null;
   private intervalId: NodeJS.Timeout | null = null;
   private readonly MAX_LOG_LINES = 10;

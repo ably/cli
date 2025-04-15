@@ -1,9 +1,8 @@
 import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
-
-import { ControlBaseCommand } from '../../../control-base-command.js'
-import { AppStats } from '../../../services/control-api.js'
 import { StatsDisplay } from '../../../services/stats-display.js'
+import { AppStats } from '../../../types/control-api.js'
+import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class AppsStatsCommand extends ControlBaseCommand {
   static args = {

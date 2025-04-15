@@ -4,6 +4,7 @@
     "src/**/*", 
     "test/**/*",
     "scripts/**/*", // Keep scripts included for linting too
+    "packages/react-web-cli/src/**/*", // Add path for react-web-cli
     "*.config.js" // Include root config files if needed
   ],
   "exclude": [
