@@ -1,5 +1,5 @@
 import Spaces, { Lock, Space } from '@ably/spaces'
-import { Args, Flags } from '@oclif/core'
+import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
@@ -197,7 +197,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
 
       this.logCliEvent(flags, 'lock', 'listening', 'Listening for lock updates...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, _reject) => {
         const cleanup = async () => {
           if (this.cleanupInProgress) return;
           this.cleanupInProgress = true;

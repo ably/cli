@@ -1,5 +1,5 @@
 import Spaces, { Space } from '@ably/spaces'
-import { Args, Flags } from '@oclif/core'
+import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 

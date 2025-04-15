@@ -1,7 +1,7 @@
 import type { SpaceMember } from '@ably/spaces'
 
 import Spaces, { Space } from '@ably/spaces'
-import { Args, Flags } from '@oclif/core'
+import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
@@ -222,7 +222,7 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
 
       this.logCliEvent(flags, 'member', 'listening', 'Listening for member updates...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((_resolve, _reject) => {
         const cleanup = async () => {
           if (this.cleanupInProgress) return
           this.cleanupInProgress = true

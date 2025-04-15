@@ -143,7 +143,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
 
       this.logCliEvent(flags, 'lock', 'holding', `Holding lock ${lockId}. Press Ctrl+C to release.`);
       // Keep the process running until interrupted
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, _reject) => {
         const cleanup = async () => {
           if (this.cleanupInProgress) return
           this.cleanupInProgress = true
