@@ -54,7 +54,7 @@ async function createTestConfig(): Promise<Config> {
 // Helper regex to strip ANSI codes for matching
 const stripAnsi = (str: string) => str.replaceAll(/\u001B\[(?:\d*;)*\d*m/g, '');
 
-describe('command_not_found hook: did-you-mean', () => {
+describe('command_not_found hook: did-you-mean', function() {
   let testConfig: Config;
   let logStub: sinon.SinonStub;
   let warnStub: sinon.SinonStub;
@@ -62,15 +62,15 @@ describe('command_not_found hook: did-you-mean', () => {
   let exitStub: sinon.SinonStub;
   let mockContext: any; 
 
-  before(async () => {
+  before(async function() {
     testConfig = await createTestConfig();
   });
 
-  after(() => {
+  after(function() {
     // Nothing needed here now
   });
 
-  beforeEach(() => {
+  beforeEach(function() {
     // Ensure stubs are fresh for each test
     logStub = sinon.stub(console, 'log');
     warnStub = sinon.stub(console, 'warn'); 
@@ -94,14 +94,14 @@ describe('command_not_found hook: did-you-mean', () => {
     };
   });
 
-  afterEach(() => {
+  afterEach(function() {
     // Restore all stubs created by Sinon in this test file
     sinon.restore(); 
   });
 
   // --- Tests now assume confirmation always happens ---
 
-  it('should run the suggested command (using space separator)', async () => {
+  it('should run the suggested command (using space separator)', async function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:pubish' };
 
@@ -113,7 +113,7 @@ describe('command_not_found hook: did-you-mean', () => {
     expect(runCommandStub.calledOnceWith('channels:publish', [])).to.be.true;
   });
 
-  it('should pass arguments to the suggested command', async () => {
+  it('should pass arguments to the suggested command', async function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
     const hookOpts = { argv: ['my-channel', 'my-message', '--flag'], config: testConfig, context: mockContext, id: 'channels:publsh' };
 
@@ -125,7 +125,7 @@ describe('command_not_found hook: did-you-mean', () => {
     expect(runCommandStub.calledOnceWith('channels:publish', ['my-channel', 'my-message', '--flag'])).to.be.true;
   });
 
-  it('should re-throw CLIError when suggested command fails missing args', async () => {
+  it('should re-throw CLIError when suggested command fails missing args', async function() {
     const missingArgsError = new Errors.CLIError('Missing 1 required arg: channel');
     const runCommandStub = sinon.stub(testConfig, 'runCommand').rejects(missingArgsError);
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:subscrib' };
@@ -151,7 +151,7 @@ describe('command_not_found hook: did-you-mean', () => {
     expect(exitStub.called, 'process.exit should NOT have been called').to.be.false;
   });
 
-  it('should correctly suggest and run help for a command', async () => {
+  it('should correctly suggest and run help for a command', async function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'hep' }; 
 
@@ -167,7 +167,7 @@ describe('command_not_found hook: did-you-mean', () => {
     // expect(runCommandStub.calledOnceWith('help', [])).to.be.true; 
   });
 
-  it('should show generic help if no close command is found', async () => {
+  it('should show generic help if no close command is found', async function() {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
     const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'verywrongcommand' };
 

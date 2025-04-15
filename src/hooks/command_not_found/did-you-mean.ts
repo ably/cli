@@ -1,6 +1,6 @@
 import { Command, Errors, Hook, toConfiguredId } from '@oclif/core';
 import { blueBright, cyan, red, reset, yellow } from 'ansis';
-import { default as levenshtein } from 'fast-levenshtein';
+import levenshtein from 'fast-levenshtein';
 
 import CustomHelp from '../../help.js'; // Import our custom help class
 

@@ -163,7 +163,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
             this.log(`${chalk.green('Successfully disconnected.')}`)
           }
 
-          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+          // eslint-disable-next-line n/no-process-exit
           process.exit(0) // Reinstated: Explicit exit
         })
       })

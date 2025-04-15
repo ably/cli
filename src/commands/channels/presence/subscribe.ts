@@ -294,7 +294,7 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
             }
 
             clearTimeout(forceExitTimeout)
-            resolve(undefined)
+            resolve()
           } catch (error) {
              const errorMsg = error instanceof Error ? error.message : String(error);
              this.logCliEvent(flags, 'presence', 'cleanupError', `Error during cleanup: ${errorMsg}`, { channel: channelName, error: errorMsg });

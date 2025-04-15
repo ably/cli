@@ -160,12 +160,12 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
          }
 
          cleanup();
-         // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+         // eslint-disable-next-line n/no-process-exit
          process.exit(0); // Reinstated: Explicit exit on signal
       });
       process.on('SIGTERM', () => {
           cleanup();
-          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+          // eslint-disable-next-line n/no-process-exit
           process.exit(0); // Reinstated: Explicit exit on signal
       });
 

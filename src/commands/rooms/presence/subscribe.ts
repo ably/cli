@@ -275,7 +275,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
             }
 
             clearTimeout(forceExitTimeout)
-            resolve(undefined)
+            resolve()
             // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
             process.exit(0)
           } catch (error) {

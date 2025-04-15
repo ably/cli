@@ -64,7 +64,7 @@ export default class HelpCommand extends Command {
         }
         
         // Skip alias and internal commands
-        // eslint-disable-next-line no-await-in-loop
+         
         const cmd = await c.load()
         // Use type checking instead of any casts
         if ((cmd && ('isAlias' in cmd && cmd.isAlias)) || 

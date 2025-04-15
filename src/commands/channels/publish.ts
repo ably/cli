@@ -229,7 +229,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       const messageIndex = i + 1;
       const message = this.prepareMessage(args.message as string, flags, messageIndex);
       try {
-        // eslint-disable-next-line no-await-in-loop
+         
         await publisher(message);
         publishedCount++;
         const result = { index: messageIndex, message, success: true };
@@ -251,7 +251,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
 
       // Delay if needed
       if (i < count - 1 && delay > 0) {
-        // eslint-disable-next-line no-await-in-loop, no-promise-executor-return
+         
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
