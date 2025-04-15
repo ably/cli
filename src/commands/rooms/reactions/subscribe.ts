@@ -1,7 +1,8 @@
-import { Args, Flags } from '@oclif/core'
-import { ChatBaseCommand } from '../../../chat-base-command.js'
 import { ChatClient, RoomStatus, Subscription } from '@ably/chat'
+import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
+
+import { ChatBaseCommand } from '../../../chat-base-command.js'
 
 interface ChatClients {
   chatClient: ChatClient;
@@ -9,6 +10,13 @@ interface ChatClients {
 }
 
 export default class RoomsReactionsSubscribe extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'Room ID to subscribe to reactions in',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to reactions in a chat room'
 
   static override examples = [
@@ -20,18 +28,22 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
   }
 
-  static override args = {
-    roomId: Args.string({
-      description: 'Room ID to subscribe to reactions in',
-      required: true,
-    }),
-  }
-
   private clients: ChatClients | null = null;
-  private unsubscribeStatusFn: (() => void) | null = null;
   private unsubscribeReactionsFn: Subscription | null = null;
+  private unsubscribeStatusFn: (() => void) | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.unsubscribeReactionsFn) { try { this.unsubscribeReactionsFn.unsubscribe(); } catch { /* ignore */ } }
+     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsReactionsSubscribe)
 
     try {
@@ -40,7 +52,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       if (!this.clients) return
 
       const { chatClient, realtimeClient } = this.clients
-      const roomId = args.roomId
+      const {roomId} = args
 
        // Add listeners for connection state changes
        realtimeClient.connection.on((stateChange: any) => {
@@ -62,26 +74,40 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
-          let reason: string | Error | undefined | null = undefined;
+          let reason: Error | null | string | undefined;
           if (statusChange.current === RoomStatus.Failed) {
               reason = room.error; // Get reason from room.error on failure
           }
+
           const reasonMsg = reason instanceof Error ? reason.message : reason;
           this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: reasonMsg });
 
-        if (statusChange.current === RoomStatus.Attached) {
+        switch (statusChange.current) {
+        case RoomStatus.Attached: {
           if (!this.shouldOutputJson(flags)) {
             this.log(chalk.green('Successfully connected to Ably'));
             this.log(`Listening for reactions in room ${chalk.cyan(roomId)}. Press Ctrl+C to exit.`);
           }
-        } else if (statusChange.current === RoomStatus.Detached) {
+        
+        break;
+        }
+
+        case RoomStatus.Detached: {
            if (!this.shouldOutputJson(flags)) {
               this.log(chalk.yellow('Disconnected from Ably'));
            }
-        } else if (statusChange.current === RoomStatus.Failed) {
+        
+        break;
+        }
+
+        case RoomStatus.Failed: {
            if (!this.shouldOutputJson(flags)) {
               this.error(`${chalk.red('Connection failed:')} ${reasonMsg || 'Unknown error'}`);
            }
+        
+        break;
+        }
+        // No default
         }
       })
       this.unsubscribeStatusFn = unsubscribeStatus;
@@ -97,11 +123,11 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       this.unsubscribeReactionsFn = room.reactions.subscribe((reaction: any) => {
         const timestamp = new Date().toISOString() // Chat SDK doesn't provide timestamp in event
         const eventData = {
-            timestamp,
-            type: reaction.type,
             clientId: reaction.clientId,
             metadata: reaction.metadata,
-            roomId
+            roomId,
+            timestamp,
+            type: reaction.type
         };
         this.logCliEvent(flags, 'reactions', 'received', 'Reaction received', eventData);
 
@@ -137,7 +163,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
             if (!this.shouldOutputJson(flags)) {
                this.log(chalk.red('Force exiting after timeout...'));
             }
-            process.exit(1)
+
           }, 5000)
 
           // Unsubscribe from reactions
@@ -172,7 +198,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
              const errorMsg = error instanceof Error ? error.message : String(error);
              this.logCliEvent(flags, 'room', 'releaseError', `Error releasing room: ${errorMsg}`, { error: errorMsg });
              if (this.shouldOutputJson(flags)) {
-               this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId }, flags));
+               this.log(this.formatJsonOutput({ error: errorMsg, roomId, success: false }, flags));
              } else {
                this.log(`Error releasing room: ${errorMsg}`);
              }
@@ -187,9 +213,11 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
           if (!this.shouldOutputJson(flags)) {
             this.log(chalk.green('Successfully disconnected.'))
           }
+
           clearTimeout(forceExitTimeout);
           resolve()
-          process.exit(0); // Force exit after cleanup
+          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+          process.exit(0); // Reinstated: Explicit exit after cleanup
         }
 
         process.on('SIGINT', () => void cleanup())
@@ -199,7 +227,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
        const errorMsg = error instanceof Error ? error.message : String(error);
        this.logCliEvent(flags, 'reactions', 'fatalError', `Error: ${errorMsg}`, { error: errorMsg, roomId: args.roomId });
        if (this.shouldOutputJson(flags)) {
-         this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId: args.roomId }, flags));
+         this.log(this.formatJsonOutput({ error: errorMsg, roomId: args.roomId, success: false }, flags));
        } else {
          this.error(`Error: ${errorMsg}`);
        }
@@ -211,16 +239,4 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
        }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.unsubscribeReactionsFn) { try { this.unsubscribeReactionsFn.unsubscribe(); } catch (e) { /* ignore */ } }
-     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch (e) { /* ignore */ } }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

@@ -19,8 +19,8 @@ export default class ChannelRulesIndexCommand extends ControlBaseCommand {
     this.log('  delete    Delete a channel rule')
     
     this.log('\nExamples:')
-    ChannelRulesIndexCommand.examples.forEach(example => {
+    for (const example of ChannelRulesIndexCommand.examples) {
       this.log(`  ${example}`)
-    })
+    }
   }
 } 

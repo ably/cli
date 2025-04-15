@@ -1,5 +1,6 @@
 import {Command, Flags} from '@oclif/core'
 import chalk from 'chalk'
+
 import CustomHelp from '../../help.js'
 
 export default class HelpCommand extends Command {
@@ -17,7 +18,7 @@ export default class HelpCommand extends Command {
   }
 
   async run(): Promise<void> {
-    const {flags} = await this.parse(HelpCommand)
+    /* const {flags} */ await this.parse(HelpCommand) // Removed unused flags
 
     this.log('Ably help commands:')
     this.log('')
@@ -44,10 +45,10 @@ export default class HelpCommand extends Command {
   
   private async displayAllCommands(): Promise<void> {
     // Create an instance of CustomHelp to access its methods
-    const help = new CustomHelp(this.config)
+    /* const help = new CustomHelp(this.config) */ // Removed unused help variable
     
     // Get all top-level commands and topics
-    const rootCommands: { id: string, description: string }[] = []
+    const rootCommands: { description: string, id: string }[] = []
     
     // Process all commands, filtering for root-level commands only
     for (const c of this.config.commands) {
@@ -63,16 +64,20 @@ export default class HelpCommand extends Command {
         }
         
         // Skip alias and internal commands
+        // eslint-disable-next-line no-await-in-loop
         const cmd = await c.load()
-        if ((cmd as any).isAlias || (cmd as any).isInternal || (cmd as any).hidden) {
+        // Use type checking instead of any casts
+        if ((cmd && ('isAlias' in cmd && cmd.isAlias)) || 
+            (cmd && ('isInternal' in cmd && cmd.isInternal)) || 
+            (cmd && ('hidden' in cmd && cmd.hidden))) {
           continue
         }
         
         rootCommands.push({
-          id: c.id,
-          description: cmd.description || ''
+          description: cmd.description || '',
+          id: c.id
         })
-      } catch (error) {
+      } catch {
         // Skip commands that can't be loaded
       }
     }
@@ -88,9 +93,9 @@ export default class HelpCommand extends Command {
     this.log(`${chalk.bold('COMMANDS')}`)
     
     // Add each command with its description to the output
-    rootCommands.forEach(entry => {
+    for (const entry of rootCommands) {
       const padding = ' '.repeat(paddingLength - entry.id.length)
       this.log(`  ${chalk.cyan(entry.id)}${padding}${entry.description}`)
-    })
+    }
   }
 } 

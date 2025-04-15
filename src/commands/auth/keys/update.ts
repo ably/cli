@@ -1,7 +1,15 @@
 import { Args, Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysUpdateCommand extends ControlBaseCommand {
+  static args = {
+    keyName: Args.string({
+      description: 'Key name (APP_ID.KEY_ID) of the key to update',
+      required: true
+    })
+  }
+
   static description = 'Update a key\'s properties'
 
   static examples = [
@@ -16,35 +24,14 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       description: 'App ID the key belongs to (uses current app if not specified)',
       env: 'ABLY_APP_ID',
     }),
-    'name': Flags.string({
-      description: 'New name for the key',
-      required: false,
-    }),
     'capabilities': Flags.string({
       description: 'New capabilities for the key (comma-separated list)',
       required: false,
     }),
-  }
-
-  static args = {
-    keyName: Args.string({
-      description: 'Key name (APP_ID.KEY_ID) of the key to update',
-      required: true
-    })
-  }
-
-  // Helper function to format capabilities
-  private formatCapability(capability: any): string {
-    if (!capability) return 'None';
-    
-    const capEntries = Object.entries(capability);
-    if (capEntries.length === 0) {
-      return 'None';
-    }
-    
-    return capEntries.map(([scope, privileges]) => 
-      `${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`
-    ).join('\n    ');
+    'name': Flags.string({
+      description: 'New name for the key',
+      required: false,
+    }),
   }
 
   async run(): Promise<void> {
@@ -79,7 +66,7 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       const originalKey = await controlApi.getKey(appId, keyId)
       
       // Prepare the update data
-      const updateData: { name?: string, capability?: any } = {}
+      const updateData: { capability?: any, name?: string } = {}
       
       if (flags.name) {
         updateData.name = flags.name
@@ -109,5 +96,19 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
     } catch (error) {
       this.error(`Error updating key: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  // Helper function to format capabilities
+  private formatCapability(capability: any): string {
+    if (!capability) return 'None';
+    
+    const capEntries = Object.entries(capability);
+    if (capEntries.length === 0) {
+      return 'None';
+    }
+    
+    return capEntries.map(([scope, privileges]) => 
+      `${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`
+    ).join('\n    ');
   }
 } 

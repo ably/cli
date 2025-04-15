@@ -1,4 +1,5 @@
 import { Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class QueuesCreateCommand extends ControlBaseCommand {
@@ -12,27 +13,27 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
+    'app': Flags.string({
+      description: 'App ID or name to create the queue in',
+      required: false,
+    }),
+    'max-length': Flags.integer({
+      default: 10_000,
+      description: 'Maximum number of messages in the queue',
+      required: false,
+    }),
     'name': Flags.string({
       description: 'Name of the queue',
       required: true,
     }),
-    'ttl': Flags.integer({
-      description: 'Time to live for messages in seconds',
-      required: false,
-      default: 60,
-    }),
-    'max-length': Flags.integer({
-      description: 'Maximum number of messages in the queue',
-      required: false,
-      default: 10000,
-    }),
     'region': Flags.string({
+      default: 'us-east-1-a',
       description: 'Region for the queue',
       required: false,
-      default: 'us-east-1-a',
     }),
-    'app': Flags.string({
-      description: 'App ID or name to create the queue in',
+    'ttl': Flags.integer({
+      default: 60,
+      description: 'Time to live for messages in seconds',
       required: false,
     }),
     
@@ -53,10 +54,10 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
       }
       
       const queueData = {
-        name: flags.name,
-        ttl: flags.ttl,
         maxLength: flags['max-length'],
+        name: flags.name,
         region: flags.region,
+        ttl: flags.ttl,
       }
       
       const createdQueue = await controlApi.createQueue(appId, queueData)

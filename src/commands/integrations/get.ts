@@ -1,8 +1,16 @@
-import { Flags, Args } from '@oclif/core'
-import { ControlBaseCommand } from '../../control-base-command.js'
+import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
 
+import { ControlBaseCommand } from '../../control-base-command.js'
+
 export default class IntegrationsGetCommand extends ControlBaseCommand {
+  static args = {
+    ruleId: Args.string({
+      description: 'The rule ID to get',
+      required: true,
+    }),
+  }
+
   static description = 'Get an integration rule by ID'
 
   static examples = [
@@ -16,13 +24,6 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
     'app': Flags.string({
       description: 'App ID or name to get the integration rule from',
       required: false,
-    }),
-  }
-
-  static args = {
-    ruleId: Args.string({
-      description: 'The rule ID to get',
-      required: true,
     }),
   }
 
@@ -56,7 +57,7 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
         this.log(`Source:`)
         this.log(`  Type: ${rule.source.type}`)
         this.log(`  Channel Filter: ${rule.source.channelFilter || '(none)'}`)
-        this.log(`Target: ${this.formatJsonOutput(rule.target, flags).replace(/\n/g, '\n  ')}`)
+        this.log(`Target: ${this.formatJsonOutput(rule.target, flags).replaceAll('\n', '\n  ')}`)
         this.log(`Version: ${rule.version}`)
         this.log(`Created: ${this.formatDate(rule.created)}`)
         this.log(`Updated: ${this.formatDate(rule.modified)}`)

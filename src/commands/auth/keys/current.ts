@@ -1,6 +1,7 @@
 import { Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../../control-base-command.js'
 import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysCurrentCommand extends ControlBaseCommand {
   static description = 'Show the current API key for the selected app'
@@ -109,10 +110,10 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
       
       try {
         const controlApi = this.createControlApi(flags)
-        const { user, account } = await controlApi.getMe()
+        const { account, user } = await controlApi.getMe()
         accountName = account.name
         accountId = account.id
-      } catch (error) {
+      } catch {
         // If we can't get account details, just use default values
       }
       

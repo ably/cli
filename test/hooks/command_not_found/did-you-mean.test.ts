@@ -1,24 +1,26 @@
+import { Args, Command, Config, Errors, Flags } from '@oclif/core';
 import { expect } from 'chai';
-import * as sinon from 'sinon';
-import { Config, Errors, Command, Flags, Args } from '@oclif/core';
-import * as path from 'path';
-import { fileURLToPath } from 'url'; // Import url helpers
-import { dirname } from 'path'; // Import dirname
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as sinon from 'sinon'; // Import url helpers
+import { dirname } from 'node:path'; // Import dirname
 // Import the compiled hook function
 import didYouMeanHook from '../../../dist/src/hooks/command_not_found/did-you-mean.js';
 
 // Mock command load
 class MockCmdClass {
-  static id = 'channels:subscribe';
-  static usage = 'channels subscribe CHANNEL_NAME';
-  static description = 'Subscribe to a channel';
   static args = {
     channel: Args.string({ description: 'Channel to subscribe to', required: true }),
   };
+
+  static description = 'Subscribe to a channel';
   static flags = {
-    'some-flag': Flags.string({ char: 'f', description: 'A flag' }),
     'hidden-flag': Flags.boolean({ hidden: true }),
+    'some-flag': Flags.string({ char: 'f', description: 'A flag' }),
   };
+
+  static id = 'channels:subscribe';
+  static usage = 'channels subscribe CHANNEL_NAME';
   async run() {}
 }
 
@@ -33,26 +35,24 @@ async function createTestConfig(): Promise<Config> {
   await config.load(); 
   // Add command loadable
   const loadableCmd: Command.Loadable = {
-    id: 'channels:subscribe', 
     aliases: [], 
-    hidden: false, 
+    args: MockCmdClass.args, 
+    flags: MockCmdClass.flags, 
+    hidden: false,
+    hiddenAliases: [],
+    id: 'channels:subscribe',
+    load: async () => MockCmdClass as unknown as Command.Class, // Return mock class 
     pluginAlias: '@ably/cli', // Example
     pluginType: 'core',      // Example
-    load: async () => MockCmdClass as unknown as Command.Class, // Return mock class
-    args: MockCmdClass.args, 
-    flags: MockCmdClass.flags,
-    hiddenAliases: [],
   };
-  config.commands.push(loadableCmd);
-  config.commands.push({ id: 'channels:publish', load: async () => ({ run: async () => {} } as any) } as Command.Loadable);
-  config.commands.push({ id: 'help', load: async () => ({ run: async () => {} } as any) } as Command.Loadable);
+  config.commands.push(loadableCmd, { id: 'channels:publish', load: async () => ({ async run() {} } as any) } as Command.Loadable, { id: 'help', load: async () => ({ async run() {} } as any) } as Command.Loadable);
   config.commandIDs.push('channels:subscribe', 'channels:publish', 'help');
-  config.topics.push({ name: 'channels', description: 'Channel commands' } as any);
+  config.topics.push({ description: 'Channel commands', name: 'channels' } as any);
   return config;
 }
 
 // Helper regex to strip ANSI codes for matching
-const stripAnsi = (str: string) => str.replace(/\u001b\[(?:\d*;)*\d*m/g, '');
+const stripAnsi = (str: string) => str.replaceAll(/\u001B\[(?:\d*;)*\d*m/g, '');
 
 describe('command_not_found hook: did-you-mean', () => {
   let testConfig: Config;
@@ -80,17 +80,17 @@ describe('command_not_found hook: did-you-mean', () => {
     // Create the mock context *with the fresh stubs*
     mockContext = {
       config: testConfig,
-      log: logStub,
-      warn: warnStub,
-      error: (input: string | Error, options: { code?: string; exit: number | false } = { exit: 1 }) => {
+      debug: sinon.stub(),
+      error(input: Error | string, options: { code?: string; exit: false | number } = { exit: 1 }) {
         errorStub(input instanceof Error ? input.message : input);
         if (options.exit !== false) {
           const exitCode = typeof options.exit === 'number' ? options.exit : 1;
           exitStub(exitCode);
         }
       },
-      exit: (code?: number) => exitStub(code ?? 0), 
-      debug: sinon.stub(),
+      exit: (code?: number) => exitStub(code ?? 0),
+      log: logStub, 
+      warn: warnStub,
     };
   });
 
@@ -103,7 +103,7 @@ describe('command_not_found hook: did-you-mean', () => {
 
   it('should run the suggested command (using space separator)', async () => {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
-    const hookOpts = { id: 'channels:pubish', config: testConfig, argv: [], context: mockContext };
+    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:pubish' };
 
     await didYouMeanHook.apply(mockContext, [hookOpts]);
 
@@ -115,7 +115,7 @@ describe('command_not_found hook: did-you-mean', () => {
 
   it('should pass arguments to the suggested command', async () => {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
-    const hookOpts = { id: 'channels:publsh', config: testConfig, argv: ['my-channel', 'my-message', '--flag'], context: mockContext };
+    const hookOpts = { argv: ['my-channel', 'my-message', '--flag'], config: testConfig, context: mockContext, id: 'channels:publsh' };
 
     await didYouMeanHook.apply(mockContext, [hookOpts]);
 
@@ -128,7 +128,7 @@ describe('command_not_found hook: did-you-mean', () => {
   it('should re-throw CLIError when suggested command fails missing args', async () => {
     const missingArgsError = new Errors.CLIError('Missing 1 required arg: channel');
     const runCommandStub = sinon.stub(testConfig, 'runCommand').rejects(missingArgsError);
-    const hookOpts = { id: 'channels:subscrib', config: testConfig, argv: [], context: mockContext };
+    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'channels:subscrib' };
 
     let caughtError: any = null;
     try {
@@ -153,7 +153,7 @@ describe('command_not_found hook: did-you-mean', () => {
 
   it('should correctly suggest and run help for a command', async () => {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves();
-    const hookOpts = { id: 'hep', config: testConfig, argv: [], context: mockContext }; 
+    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'hep' }; 
 
     await didYouMeanHook.apply(mockContext, [hookOpts]);
 
@@ -169,7 +169,7 @@ describe('command_not_found hook: did-you-mean', () => {
 
   it('should show generic help if no close command is found', async () => {
     const runCommandStub = sinon.stub(testConfig, 'runCommand').resolves(); 
-    const hookOpts = { id: 'verywrongcommand', config: testConfig, argv: [], context: mockContext };
+    const hookOpts = { argv: [], config: testConfig, context: mockContext, id: 'verywrongcommand' };
 
     await didYouMeanHook.apply(mockContext, [hookOpts]);
 

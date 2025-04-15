@@ -1,17 +1,25 @@
-import { Args, Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../../base-command.js'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
+
+import { AblyBaseCommand } from '../../../base-command.js'
 
 interface OccupancyMetrics {
   connections?: number;
-  publishers?: number;
-  subscribers?: number;
   presenceConnections?: number;
   presenceMembers?: number;
   presenceSubscribers?: number;
+  publishers?: number;
+  subscribers?: number;
 }
 
 export default class ChannelsOccupancyGet extends AblyBaseCommand {
+  static args = {
+    channel: Args.string({
+      description: 'Channel name to get occupancy for',
+      required: true,
+    }),
+  }
+
   static description = 'Get current occupancy metrics for a channel'
 
   static examples = [
@@ -23,13 +31,6 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
 
   static flags = {
     ...AblyBaseCommand.globalFlags,
-  }
-
-  static args = {
-    channel: Args.string({
-      description: 'Channel name to get occupancy for',
-      required: true,
-    }),
   }
 
   async run(): Promise<void> {
@@ -67,7 +68,7 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
           reject(new Error('Timed out waiting for occupancy metrics'))
         }, 5000) // 5 second timeout
         
-        channel.subscribe('[meta]occupancy', (message: any) => {
+        channel.subscribe('[meta]occupancy', (message: Ably.Message) => {
           clearTimeout(timeout)
           channel.unsubscribe('[meta]occupancy')
           
@@ -83,9 +84,9 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
       // Output the occupancy metrics based on format
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           channel: channelName,
-          metrics: occupancyMetrics
+          metrics: occupancyMetrics,
+          success: true
         }, flags))
       } else {
         this.log(`Occupancy metrics for channel '${channelName}':\n`)
@@ -111,9 +112,9 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          channel: args.channel,
           error: error instanceof Error ? error.message : String(error),
-          channel: args.channel
+          success: false
         }, flags))
       } else {
         this.error(`Error fetching channel occupancy: ${error instanceof Error ? error.message : String(error)}`)

@@ -1,15 +1,23 @@
+import Spaces, { Lock, Space } from '@ably/spaces'
 import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
-import Spaces, { Space, Lock } from '@ably/spaces'
 import * as Ably from 'ably'
+import chalk from 'chalk'
+
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 interface SpacesClients {
-  spacesClient: Spaces;
   realtimeClient: Ably.Realtime;
+  spacesClient: Spaces;
 }
 
 export default class SpacesLocksSubscribe extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to subscribe for locks from',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to lock changes in a space'
 
   static override examples = [
@@ -22,28 +30,35 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
     
   }
 
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to subscribe for locks from',
-      required: true,
-    }),
-  }
-
-  private clients: SpacesClients | null = null;
-  private subscription: any = null;
   private cleanupInProgress = false;
+  private clients: SpacesClients | null = null;
   private space: Space | null = null;
+  private subscription: any = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+     if (!this.cleanupInProgress && this.space) {
+         try { await this.space.leave(); } catch{/* ignore */} // Best effort
+     }
+
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesLocksSubscribe)
-    const spaceId = args.spaceId;
+    const {spaceId} = args;
 
     try {
       // Create Spaces client
       this.clients = await this.createSpacesClient(flags)
       if (!this.clients) return
 
-      const { spacesClient, realtimeClient } = this.clients
+      const { realtimeClient, spacesClient } = this.clients
 
       // Add listeners for connection state changes
       realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
@@ -54,7 +69,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
       this.logCliEvent(flags, 'connection', 'waiting', 'Waiting for connection to establish...');
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = realtimeClient.connection;
           if (state === 'connected') {
              this.logCliEvent(flags, 'connection', 'connected', 'Realtime connection established.');
             resolve();
@@ -67,6 +82,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
             setTimeout(checkConnection, 100);
           }
         };
+
         checkConnection();
       });
 
@@ -75,8 +91,9 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
       if (!this.shouldOutputJson(flags)) {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
+
       this.space = await spacesClient.get(spaceId)
-      const space = this.space;
+      const {space} = this;
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
       // Enter the space to subscribe
@@ -99,19 +116,18 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
         // Output current locks based on format
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-             success: true,
-             spaceId,
-             type: 'locks_snapshot',
              locks: locks.map(lock => ({
                   id: lock.id,
-                  status: lock.status,
-                  timestamp: lock.timestamp,
                   member: lock.member ? { clientId: lock.member.clientId, connectionId: lock.member.connectionId } : null,
                   reason: lock.reason,
-             }))
+                  status: lock.status,
+                  timestamp: lock.timestamp,
+             })),
+             spaceId,
+             success: true,
+             type: 'locks_snapshot'
           }, flags));
-        } else {
-          if (locks.length === 0) {
+        } else if (locks.length === 0) {
             this.log(chalk.yellow('No locks are currently active in this space.'))
           } else {
             this.log(`${chalk.cyan('Current locks')} (${chalk.bold(String(locks.length))}):\n`)
@@ -121,17 +137,16 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
                 this.log(`- ${chalk.blue(lock.id)}:`);
                 this.log(`  ${chalk.dim('Status:')} ${lock.status || 'unknown'}`);
                 this.log(`  ${chalk.dim('Holder:')} ${lock.member?.clientId || 'None'}`);
-              } catch (err) {
-                this.log(`- ${chalk.red('Error displaying lock item')}: ${err instanceof Error ? err.message : String(err)}`);
+              } catch (error) {
+                this.log(`- ${chalk.red('Error displaying lock item')}: ${error instanceof Error ? error.message : String(error)}`);
               }
             });
           }
-        }
       } catch (error) {
          const errorMsg = `Error fetching initial locks: ${error instanceof Error ? error.message : String(error)}`;
          this.logCliEvent(flags, 'lock', 'getInitialError', errorMsg, { error: errorMsg });
          if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+          this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
         } else {
           this.log(chalk.yellow(errorMsg));
           this.log(chalk.yellow('Continuing without initial lock list.'));
@@ -149,16 +164,16 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
         this.subscription = await space.locks.subscribe('update', (lock: Lock) => {
           const timestamp = new Date().toISOString();
           const eventData = {
-              timestamp,
               lockId: lock.id,
-              status: lock.status,
               member: lock.member ? { clientId: lock.member.clientId, connectionId: lock.member.connectionId } : null,
               reason: lock.reason,
+              status: lock.status,
+              timestamp,
           };
           this.logCliEvent(flags, 'lock', `update-${lock.status}`, `Lock ${lock.id} status changed to ${lock.status}`, { spaceId, ...eventData });
 
           if (this.shouldOutputJson(flags)) {
-            this.log(this.formatJsonOutput({ success: true, spaceId, type: 'lock_update', ...eventData }, flags));
+            this.log(this.formatJsonOutput({ spaceId, success: true, type: 'lock_update', ...eventData }, flags));
           } else {
             this.log(`${lock.status === 'locked' ? chalk.green('✓') : chalk.red('✗')} ${chalk.cyan('Lock ' + lock.status + ':')} ${chalk.blue(lock.id)}`);
             this.log(`  ${chalk.dim('Status:')} ${lock.status || 'unknown'}`);
@@ -174,7 +189,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
          const errorMsg = `Error subscribing to lock updates: ${error instanceof Error ? error.message : String(error)}`;
          this.logCliEvent(flags, 'lock', 'subscribeError', errorMsg, { error: errorMsg });
          if (this.shouldOutputJson(flags)) {
-           this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+           this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
          } else {
            this.log(chalk.red(errorMsg));
          }
@@ -182,7 +197,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
 
       this.logCliEvent(flags, 'lock', 'listening', 'Listening for lock updates...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const cleanup = async () => {
           if (this.cleanupInProgress) return;
           this.cleanupInProgress = true;
@@ -199,7 +214,8 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
              if (!this.shouldOutputJson(flags)) {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
-            process.exit(1);
+
+            process.exit(1); // Reinstated: Force exit if cleanup hangs
           }, 5000);
 
           try {
@@ -243,47 +259,30 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
             if (!this.shouldOutputJson(flags)) {
                 this.log(chalk.green('\nDisconnected.'));
             }
+
             resolve();
-            // Force exit after cleanup
-            process.exit(0);
+            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+            process.exit(0); // Reinstated: Explicit exit after cleanup
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
              this.logCliEvent(flags, 'lock', 'cleanupError', errorMsg, { error: errorMsg });
              if (!this.shouldOutputJson(flags)) {
-                this.log(`Error during cleanup: ${errorMsg}`);
+                this.log(chalk.red(errorMsg));
              }
-            clearTimeout(forceExitTimeout);
-            process.exit(1);
           }
         };
 
-        process.once('SIGINT', cleanup);
-        process.once('SIGTERM', cleanup);
+        process.on('SIGINT', cleanup);
+        process.on('SIGTERM', cleanup);
       });
     } catch (error) {
-       const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
-       this.logCliEvent(flags, 'lock', 'fatalError', errorMsg, { error: errorMsg, spaceId });
-       this.error(errorMsg);
-    } finally {
-      // Ensure client is closed even if cleanup promise didn't resolve
-       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-           this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-           this.clients.realtimeClient.close();
-       }
+      const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
+      this.logCliEvent(flags, 'error', 'unhandledError', errorMsg, { error: errorMsg });
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({ error: errorMsg, status: 'error', success: false }, flags));
+      } else {
+        this.log(chalk.red(errorMsg));
+      }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch (e) { /* ignore */ } }
-     if (!this.cleanupInProgress && this.space) {
-         try { await this.space.leave(); } catch(e) {/* ignore */} // Best effort
-     }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
-} 
+}

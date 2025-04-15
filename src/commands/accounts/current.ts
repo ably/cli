@@ -1,7 +1,8 @@
+import { Flags } from '@oclif/core'
+import chalk from 'chalk'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 import { ControlApi } from '../../services/control-api.js'
-import chalk from 'chalk'
-import { Flags } from '@oclif/core'
 
 export default class AccountsCurrent extends ControlBaseCommand {
   static override description = 'Show the current Ably account'
@@ -36,14 +37,14 @@ export default class AccountsCurrent extends ControlBaseCommand {
     
     // Verify the account by making an API call to get up-to-date information
     try {
-      const accessToken = currentAccount.accessToken
+      const {accessToken} = currentAccount
       
       const controlApi = new ControlApi({
         accessToken,
         controlHost: flags['control-host']
       })
 
-      const { user, account } = await controlApi.getMe()
+      const { account, user } = await controlApi.getMe()
       
       this.log(`${chalk.cyan('Account:')} ${chalk.cyan.bold(account.name)} ${chalk.gray(`(${account.id})`)}`)
       this.log(`${chalk.cyan('User:')} ${chalk.cyan.bold(user.email)}`)
@@ -69,7 +70,7 @@ export default class AccountsCurrent extends ControlBaseCommand {
           this.log(`${chalk.yellow('Key Label:')} ${chalk.yellow.bold(keyName)}`)
         }
       }
-    } catch (error) {
+    } catch {
       this.warn('Unable to verify account information. Your access token may have expired.')
       this.log(chalk.red(`Consider logging in again with "ably accounts login --alias ${currentAlias}".`))
       
@@ -99,7 +100,7 @@ export default class AccountsCurrent extends ControlBaseCommand {
       const controlApi = this.createControlApi(flags)
 
       // Get account details from the Control API
-      const { user, account } = await controlApi.getMe()
+      const { account, user } = await controlApi.getMe()
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({

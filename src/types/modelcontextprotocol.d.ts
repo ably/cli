@@ -1,26 +1,26 @@
 declare module '@modelcontextprotocol/sdk' {
   export interface ServerOptions {
-    resources?: Resource[];
-    tools?: Tool[];
     capabilities?: {
       markdown?: boolean;
       schemas?: boolean;
     };
+    resources?: Resource[];
+    tools?: Tool[];
   }
 
   export interface Resource {
-    name: string;
-    title: string;
     description: string;
     fetch: (params?: any) => Promise<any>;
+    name: string;
     parameters?: any[];
+    title: string;
   }
 
   export interface Tool {
-    name: string;
     description: string;
-    parameters: any;
     execute: (params: any) => Promise<any>;
+    name: string;
+    parameters: any;
   }
 
   export interface Server {
@@ -28,6 +28,6 @@ declare module '@modelcontextprotocol/sdk' {
   }
 
   export function createServer(options: ServerOptions): Server;
-  export function createResource(resource: Omit<Resource, 'parameters'> & { parameters?: any[] }): Resource;
+  export function createResource(resource: { parameters?: any[] } & Omit<Resource, 'parameters'>): Resource;
   export function createStringParam(name: string, description: string, options?: { required: boolean }): any;
 } 

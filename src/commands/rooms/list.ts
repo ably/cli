@@ -1,7 +1,8 @@
 import { Flags } from '@oclif/core'
-import { ChatBaseCommand } from '../../chat-base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import { ChatBaseCommand } from '../../chat-base-command.js'
 
 export default class RoomsList extends ChatBaseCommand {
   static override description = 'List active chat rooms'
@@ -15,13 +16,13 @@ export default class RoomsList extends ChatBaseCommand {
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
-    'prefix': Flags.string({
-      description: 'Filter rooms by prefix',
-      char: 'p',
-    }),
     'limit': Flags.integer({
-      description: 'Maximum number of rooms to return',
       default: 100,
+      description: 'Maximum number of rooms to return',
+    }),
+    'prefix': Flags.string({
+      char: 'p',
+      description: 'Filter rooms by prefix',
     }),
     
   }
@@ -62,28 +63,28 @@ export default class RoomsList extends ChatBaseCommand {
       const chatRooms = new Map<string, any>()
       
       // Filter for chat channels and deduplicate
-      allChannels.forEach(channel => {
-        const channelId = channel.channelId
+      for (const channel of allChannels) {
+        const {channelId} = channel
         
         // Check if this is a chat channel (has ::$chat suffix)
         if (channelId.includes('::$chat')) {
           // Extract the base room name (everything before the first ::$chat)
           // We need to escape the $ in the regex pattern since it's a special character
-          const roomNameMatch = channelId.match(/^(.+?)(?:::\$chat.*)$/)
+          const roomNameMatch = channelId.match(/^(.+?)::\$chat.*$/)
           if (roomNameMatch && roomNameMatch[1]) {
             const roomName = roomNameMatch[1]
             // Only add if we haven't seen this room before
             if (!chatRooms.has(roomName)) {
               // Store the original channel data but with the simple room name
-              const roomData = { ...channel, roomName, channelId: roomName }
+              const roomData = { ...channel, channelId: roomName, roomName }
               chatRooms.set(roomName, roomData)
             }
           }
         }
-      })
+      }
       
       // Convert map to array
-      const rooms = Array.from(chatRooms.values())
+      const rooms = [...chatRooms.values()]
       
       // Limit the results to the requested number
       const limitedRooms = rooms.slice(0, flags.limit)
@@ -99,12 +100,12 @@ export default class RoomsList extends ChatBaseCommand {
 
         this.log(`Found ${chalk.cyan(limitedRooms.length.toString())} active chat rooms:`)
         
-        limitedRooms.forEach(room => {
+        for (const room of limitedRooms) {
           this.log(`${chalk.green(room.roomName)}`)
           
           // Show occupancy if available
           if (room.status?.occupancy?.metrics) {
-            const metrics = room.status.occupancy.metrics
+            const {metrics} = room.status.occupancy
             this.log(`  ${chalk.dim('Connections:')} ${metrics.connections || 0}`)
             this.log(`  ${chalk.dim('Publishers:')} ${metrics.publishers || 0}`)
             this.log(`  ${chalk.dim('Subscribers:')} ${metrics.subscribers || 0}`)
@@ -119,7 +120,7 @@ export default class RoomsList extends ChatBaseCommand {
           }
           
           this.log('') // Add a line break between rooms
-        })
+        }
 
         if (rooms.length > flags.limit) {
           this.log(chalk.yellow(`Showing ${flags.limit} of ${rooms.length} rooms. Use --limit to show more.`))

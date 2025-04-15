@@ -8,8 +8,8 @@ import chalk from 'chalk'
  */
 export function displayLogo(
   log: (message: string) => void,
-  startColor = { r: 0xFF, g: 0xb0, b: 0x96 }, // #FFB096 (orange)
-  endColor = { r: 0xFF, g: 0x0D, b: 0x03 }    // #FF0D03 (red)
+  startColor = { b: 0x96, g: 0xb0, r: 0xFF }, // #FFB096 (orange)
+  endColor = { b: 0x03, g: 0x0D, r: 0xFF }    // #FF0D03 (red)
 ): void {
   // ASCII art for Ably logo
   const logo = [
@@ -34,8 +34,9 @@ export function displayLogo(
     let coloredLine = '';
     
     for (let x = 0; x < line.length; x++) {
+      const element = line[x];
       // Skip spaces - they don't need coloring
-      if (line[x] === ' ') {
+      if (element === ' ') {
         coloredLine += ' ';
         continue;
       }
@@ -60,7 +61,7 @@ export function displayLogo(
       const color = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
       
       // Add the colored character
-      coloredLine += chalk.hex(color)(line[x]);
+      coloredLine += chalk.hex(color)(element);
     }
     
     log(coloredLine);

@@ -1,8 +1,20 @@
 import {Args, Flags} from '@oclif/core'
-import {ChatBaseCommand} from '../../../chat-base-command.js'
 import chalk from 'chalk'
 
+import {ChatBaseCommand} from '../../../chat-base-command.js'
+
 export default class MessagesSend extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'The room ID to send the message to',
+      required: true,
+    }),
+    text: Args.string({
+      description: 'The message text to send',
+      required: true,
+    }),
+  }
+
   static override description = 'Send a message to an Ably Chat room'
 
   static override examples = [
@@ -17,34 +29,37 @@ export default class MessagesSend extends ChatBaseCommand {
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
-    metadata: Flags.string({
-      description: 'Additional metadata for the message (JSON format)',
-    }),
     count: Flags.integer({
       char: 'c',
-      description: 'Number of messages to send',
       default: 1,
+      description: 'Number of messages to send',
     }),
     delay: Flags.integer({
       char: 'd',
-      description: 'Delay between messages in milliseconds (min 10ms when count > 1)',
       default: 0,
+      description: 'Delay between messages in milliseconds (min 10ms when count > 1)',
     }),
-  }
-
-  static override args = {
-    roomId: Args.string({
-      description: 'The room ID to send the message to',
-      required: true,
-    }),
-    text: Args.string({
-      description: 'The message text to send',
-      required: true,
+    metadata: Flags.string({
+      description: 'Additional metadata for the message (JSON format)',
     }),
   }
 
   private clients: { chatClient: any, realtimeClient: any } | null = null;
   private progressIntervalId: NodeJS.Timeout | null = null;
+
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.progressIntervalId) {
+        clearInterval(this.progressIntervalId);
+        this.progressIntervalId = null;
+     }
+
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
 
   async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesSend)
@@ -62,7 +77,7 @@ export default class MessagesSend extends ChatBaseCommand {
       });
 
       // Parse metadata if provided
-      let metadata = undefined
+      let metadata
       if (flags.metadata) {
         try {
           metadata = JSON.parse(flags.metadata)
@@ -71,10 +86,11 @@ export default class MessagesSend extends ChatBaseCommand {
           const errorMsg = `Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`;
           this.logCliEvent(flags, 'message', 'metadataParseError', errorMsg, { error: errorMsg });
           if (this.shouldOutputJson(flags)) {
-            this.log(this.formatJsonOutput({ success: false, error: errorMsg }, flags))
+            this.log(this.formatJsonOutput({ error: errorMsg, success: false }, flags))
           } else {
             this.error(errorMsg)
           }
+
           return;
         }
       }
@@ -91,7 +107,7 @@ export default class MessagesSend extends ChatBaseCommand {
 
       // Validate count and delay
       const count = Math.max(1, flags.count)
-      let delay = flags.delay
+      let {delay} = flags
 
       // Enforce minimum delay when sending multiple messages
       if (count > 1 && delay < 10) {
@@ -108,24 +124,20 @@ export default class MessagesSend extends ChatBaseCommand {
       // Track send progress
       let sentCount = 0
       let errorCount = 0
-      let results: any[] = []
+      const results: any[] = []
 
       // Send messages
       if (count > 1) {
         // Sending multiple messages
-        if (!this.shouldOutputJson(flags)) {
-            this.progressIntervalId = setInterval(() => {
-              this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`);
-            }, 1000);
-        } else {
-            this.progressIntervalId = setInterval(() => {
+        this.progressIntervalId = this.shouldOutputJson(flags) ? setInterval(() => {
                this.logCliEvent(flags, 'message', 'progress', 'Sending messages', {
-                  sent: sentCount,
                   errors: errorCount,
+                  sent: sentCount,
                   total: count
                });
-            }, 2000);
-        }
+            }, 2000) : setInterval(() => {
+              this.log(`Progress: ${sentCount}/${count} messages sent (${errorCount} errors)`);
+            }, 1000);
 
         for (let i = 0; i < count; i++) {
           // Apply interpolation to the message
@@ -141,10 +153,10 @@ export default class MessagesSend extends ChatBaseCommand {
           .then(() => {
             sentCount++
             const result = {
-              success: true,
               index: i + 1,
               message: messageToSend,
-              roomId: args.roomId
+              roomId: args.roomId,
+              success: true
             };
             results.push(result);
             this.logCliEvent(flags, 'message', 'sentSuccess', `Message ${i + 1} sent successfully`, { index: i + 1 });
@@ -153,17 +165,17 @@ export default class MessagesSend extends ChatBaseCommand {
                // Logged implicitly by progress interval
             }
           })
-          .catch((err: any) => {
+          .catch((error: any) => {
             errorCount++
-            const errorMsg = err instanceof Error ? err.message : String(err);
+            const errorMsg = error instanceof Error ? error.message : String(error);
             const result = {
-              success: false,
-              index: i + 1,
               error: errorMsg,
-              roomId: args.roomId
+              index: i + 1,
+              roomId: args.roomId,
+              success: false
             };
             results.push(result);
-            this.logCliEvent(flags, 'message', 'sendError', `Error sending message ${i + 1}: ${errorMsg}`, { index: i + 1, error: errorMsg });
+            this.logCliEvent(flags, 'message', 'sendError', `Error sending message ${i + 1}: ${errorMsg}`, { error: errorMsg, index: i + 1 });
 
             if (!this.shouldSuppressOutput(flags) && !this.shouldOutputJson(flags)) {
                // Logged implicitly by progress interval
@@ -191,11 +203,11 @@ export default class MessagesSend extends ChatBaseCommand {
         })
 
         const finalResult = {
-            success: errorCount === 0,
-            total: count,
-            sent: sentCount,
             errors: errorCount,
-            results
+            results,
+            sent: sentCount,
+            success: errorCount === 0,
+            total: count
         };
         this.logCliEvent(flags, 'message', 'multiSendComplete', `Finished sending ${count} messages`, finalResult);
 
@@ -222,9 +234,9 @@ export default class MessagesSend extends ChatBaseCommand {
           // Send the message
           await room.messages.send(messageToSend);
           const result = {
-              success: true,
               message: messageToSend,
-              roomId: args.roomId
+              roomId: args.roomId,
+              success: true
           };
           this.logCliEvent(flags, 'message', 'singleSendComplete', 'Message sent successfully', result);
 
@@ -238,9 +250,9 @@ export default class MessagesSend extends ChatBaseCommand {
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
             const result = {
-               success: false,
                error: errorMsg,
-               roomId: args.roomId
+               roomId: args.roomId,
+               success: false
             };
             this.logCliEvent(flags, 'message', 'singleSendError', `Failed to send message: ${errorMsg}`, { error: errorMsg });
             if (this.shouldOutputJson(flags)) {
@@ -260,7 +272,7 @@ export default class MessagesSend extends ChatBaseCommand {
        const errorMsg = error instanceof Error ? error.message : String(error);
        this.logCliEvent(flags, 'message', 'fatalError', `Failed to send message: ${errorMsg}`, { error: errorMsg });
        if (this.shouldOutputJson(flags)) {
-         this.log(this.formatJsonOutput({ success: false, error: errorMsg }, flags))
+         this.log(this.formatJsonOutput({ error: errorMsg, success: false }, flags))
        } else {
          this.error(`Failed to send message: ${errorMsg}`)
        }
@@ -271,6 +283,7 @@ export default class MessagesSend extends ChatBaseCommand {
            this.clients.realtimeClient.close();
            this.logCliEvent(flags || {}, 'connection', 'closed', 'Realtime connection closed.');
        }
+
        if (this.progressIntervalId) {
           clearInterval(this.progressIntervalId);
           this.progressIntervalId = null;
@@ -278,27 +291,13 @@ export default class MessagesSend extends ChatBaseCommand {
     }
   }
 
-  private interpolateMessage(message: string, count: number): string {
+   private interpolateMessage(message: string, count: number): string {
     // Replace {{.Count}} with the current count
-    let result = message.replace(/\{\{\.Count\}\}/g, count.toString())
+    let result = message.replaceAll('{{.Count}}', count.toString())
 
     // Replace {{.Timestamp}} with the current timestamp
-    result = result.replace(/\{\{\.Timestamp\}\}/g, Date.now().toString())
+    result = result.replaceAll('{{.Timestamp}}', Date.now().toString())
 
     return result
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.progressIntervalId) {
-        clearInterval(this.progressIntervalId);
-        this.progressIntervalId = null;
-     }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

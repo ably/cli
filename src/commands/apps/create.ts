@@ -1,4 +1,5 @@
 import { Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class AppsCreateCommand extends ControlBaseCommand {
@@ -17,8 +18,8 @@ export default class AppsCreateCommand extends ControlBaseCommand {
       required: true,
     }),
     'tls-only': Flags.boolean({
-      description: 'Whether the app should accept TLS connections only',
       default: false,
+      description: 'Whether the app should accept TLS connections only',
     }),
   }
 
@@ -39,17 +40,17 @@ export default class AppsCreateCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           app: {
+            accountId: app.accountId,
+            created: new Date(app.created).toISOString(),
             id: app.id,
+            modified: new Date(app.modified).toISOString(),
             name: app.name,
             status: app.status,
-            accountId: app.accountId,
-            tlsOnly: app.tlsOnly,
-            created: new Date(app.created).toISOString(),
-            modified: new Date(app.modified).toISOString()
-          }
+            tlsOnly: app.tlsOnly
+          },
+          success: true,
+          timestamp: new Date().toISOString()
         }, flags));
       } else {
         this.log(`\nApp created successfully!`);
@@ -72,9 +73,9 @@ export default class AppsCreateCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: error instanceof Error ? error.message : String(error),
-          status: 'error'
+          status: 'error',
+          success: false
         }, flags));
       } else {
         this.error(`Error creating app: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,8 +1,16 @@
 import {Args, Flags} from '@oclif/core'
-import {ChatBaseCommand} from '../../../chat-base-command.js'
 import chalk from 'chalk'
 
+import {ChatBaseCommand} from '../../../chat-base-command.js'
+
 export default class MessagesSubscribe extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'The room ID to subscribe to messages from',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to messages in an Ably Chat room'
 
   static override examples = [
@@ -16,21 +24,23 @@ export default class MessagesSubscribe extends ChatBaseCommand {
   static override flags = {
     ...ChatBaseCommand.globalFlags,
     'show-metadata': Flags.boolean({
-      description: 'Display message metadata if available',
       default: false,
-    }),
-  }
-
-  static override args = {
-    roomId: Args.string({
-      description: 'The room ID to subscribe to messages from',
-      required: true,
+      description: 'Display message metadata if available',
     }),
   }
 
   private clients: { chatClient: any, realtimeClient: any } | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesSubscribe)
 
     try {
@@ -53,20 +63,20 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       // Setup message handler
       this.logCliEvent(flags, 'room', 'subscribingToMessages', `Subscribing to messages in room ${args.roomId}`);
       const { unsubscribe } = room.messages.subscribe((messageEvent: any) => {
-        const message = messageEvent.message
+        const {message} = messageEvent
         const messageLog = {
-            text: message.text,
             clientId: message.clientId,
+            text: message.text,
             timestamp: message.timestamp,
             ...(message.metadata ? { metadata: message.metadata } : {})
         };
-        this.logCliEvent(flags, 'message', 'received', 'Message received', { roomId: args.roomId, message: messageLog });
+        this.logCliEvent(flags, 'message', 'received', 'Message received', { message: messageLog, roomId: args.roomId });
 
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
             message: messageLog,
-            roomId: args.roomId
+            roomId: args.roomId,
+            success: true
           }, flags))
         } else {
           // Format message with timestamp, author and content
@@ -80,6 +90,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
           if (flags['show-metadata'] && message.metadata) {
             this.log(`${chalk.blue('  Metadata:')} ${chalk.yellow(this.formatJsonOutput(message.metadata, flags))}`)
           }
+
           this.log('') // Empty line for better readability
         }
       })
@@ -88,7 +99,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', `Subscribing to status changes for room ${args.roomId}`);
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange: any) => {
-         this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { roomId: args.roomId, reason: statusChange.reason });
+         this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: statusChange.reason, roomId: args.roomId });
          if (statusChange.current === 'attached') {
            if (!this.shouldSuppressOutput(flags)) {
              if (this.shouldOutputJson(flags)) {
@@ -133,19 +144,20 @@ export default class MessagesSubscribe extends ChatBaseCommand {
              this.logCliEvent(flags, 'room', 'unsubscribingMessages', 'Unsubscribing from messages');
              unsubscribe();
              this.logCliEvent(flags, 'room', 'unsubscribedMessages', 'Unsubscribed from messages');
-          } catch (err) { this.logCliEvent(flags, 'room', 'unsubscribeMessagesError', 'Error unsubscribing messages', { error: err instanceof Error ? err.message : String(err) }); }
+          } catch (error) { this.logCliEvent(flags, 'room', 'unsubscribeMessagesError', 'Error unsubscribing messages', { error: error instanceof Error ? error.message : String(error) }); }
+
           try {
              this.logCliEvent(flags, 'room', 'unsubscribingStatus', 'Unsubscribing from status changes');
              unsubscribeStatus();
              this.logCliEvent(flags, 'room', 'unsubscribedStatus', 'Unsubscribed from status changes');
-          } catch (err) { this.logCliEvent(flags, 'room', 'unsubscribeStatusError', 'Error unsubscribing status', { error: err instanceof Error ? err.message : String(err) }); }
+          } catch (error) { this.logCliEvent(flags, 'room', 'unsubscribeStatusError', 'Error unsubscribing status', { error: error instanceof Error ? error.message : String(error) }); }
 
           // Release the room and close connection
           try {
             this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${args.roomId}`);
             await chatClient.rooms.release(args.roomId);
             this.logCliEvent(flags, 'room', 'released', `Room ${args.roomId} released`);
-          } catch(err) { this.logCliEvent(flags, 'room', 'releaseError', 'Error releasing room', { error: err instanceof Error ? err.message : String(err) }); }
+          } catch(error) { this.logCliEvent(flags, 'room', 'releaseError', 'Error releasing room', { error: error instanceof Error ? error.message : String(error) }); }
 
           if (realtimeClient) {
              this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
@@ -160,7 +172,9 @@ export default class MessagesSubscribe extends ChatBaseCommand {
               this.log(`${chalk.green('Successfully disconnected.')}`);
             }
           }
-          process.exit(0)
+
+          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+          process.exit(0) // Reinstated: Explicit exit after connection closed
         })
       })
     } catch (error) {
@@ -170,21 +184,12 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       if (this.clients?.realtimeClient) {
         this.clients.realtimeClient.close()
       }
+
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId: args.roomId }, flags))
+        this.log(this.formatJsonOutput({ error: errorMsg, roomId: args.roomId, success: false }, flags))
       } else {
         this.error(`Failed to subscribe to messages: ${errorMsg}`)
       }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

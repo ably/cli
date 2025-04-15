@@ -1,7 +1,8 @@
 import { Flags } from '@oclif/core'
+import chalk from 'chalk'
+
 import { AblyBaseCommand } from './base-command.js'
 import { ControlApi } from './services/control-api.js'
-import chalk from 'chalk'
 
 export abstract class ControlBaseCommand extends AblyBaseCommand {
   // Add flags specific to control API commands
@@ -21,6 +22,7 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
       if (!account) {
         this.error(`No access token provided. Please specify --access-token or configure an account with "ably accounts login".`)
       }
+
       accessToken = account.accessToken
     }
     
@@ -34,15 +36,36 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
     })
   }
   
-  /**
-   * Helper method to show account info for control plane commands
-   * This is called by the child class when it wants to show account info
-   */
-  protected showControlPlaneInfo(flags: any): void {
-    // Use the base class method for consistent display
-    this.showAuthInfoIfNeeded(flags)
+  protected formatDate(timestamp: number): string {
+    return new Date(timestamp).toLocaleString()
   }
   
+  protected async getAppId(flags: any): Promise<string | undefined> {
+    // First try to get app ID from flags
+    if (flags.app) {
+      const apps = await this.createControlApi(flags).listApps()
+      
+      // Check if app parameter is an app ID
+      const appById = apps.find(app => app.id === flags.app)
+      if (appById) {
+        return appById.id
+      }
+      
+      // Check if app parameter is an app name
+      const appByName = apps.find(app => app.name === flags.app)
+      if (appByName) {
+        return appByName.id
+      }
+      
+      // If not found by ID or name, throw an error
+      this.error(`App "${flags.app}" not found by ID or name`)
+      return undefined
+    }
+    
+    // If no app specified in flags, use the current app from config
+    return this.configManager.getCurrentAppId()
+  }
+
   /**
    * Run the Control API command with standard error handling
    */
@@ -73,39 +96,19 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
         // Use the standard oclif error for non-JSON modes
         this.error(errorMessageText);
       }
+
       // This line is technically unreachable due to this.error or this.exit
       // but needed for TypeScript's control flow analysis
       return null;
     }
   }
 
-  protected formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleString()
-  }
-
-  protected async getAppId(flags: any): Promise<string | undefined> {
-    // First try to get app ID from flags
-    if (flags.app) {
-      const apps = await this.createControlApi(flags).listApps()
-      
-      // Check if app parameter is an app ID
-      const appById = apps.find(app => app.id === flags.app)
-      if (appById) {
-        return appById.id
-      }
-      
-      // Check if app parameter is an app name
-      const appByName = apps.find(app => app.name === flags.app)
-      if (appByName) {
-        return appByName.id
-      }
-      
-      // If not found by ID or name, throw an error
-      this.error(`App "${flags.app}" not found by ID or name`)
-      return undefined
-    }
-    
-    // If no app specified in flags, use the current app from config
-    return this.configManager.getCurrentAppId()
+  /**
+   * Helper method to show account info for control plane commands
+   * This is called by the child class when it wants to show account info
+   */
+  protected showControlPlaneInfo(flags: any): void {
+    // Use the base class method for consistent display
+    this.showAuthInfoIfNeeded(flags)
   }
 } 

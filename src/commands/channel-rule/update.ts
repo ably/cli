@@ -1,11 +1,12 @@
 import { Command } from '@oclif/core'
+
 import ChannelRulesUpdate from '../apps/channel-rules/update.js'
 
 export default class ChannelRuleUpdate extends Command {
-  static override hidden = true
+  static override args = ChannelRulesUpdate.args
   static override description = 'Alias for "ably apps channel-rules update"'
   static override flags = ChannelRulesUpdate.flags
-  static override args = ChannelRulesUpdate.args
+  static override hidden = true
   
   // Special property to identify this as an alias command
   static isAlias = true

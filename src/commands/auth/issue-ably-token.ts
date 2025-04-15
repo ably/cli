@@ -1,7 +1,8 @@
 import { Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../base-command.js'
 import * as Ably from 'ably'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
+
+import { AblyBaseCommand } from '../../base-command.js'
 
 export default class IssueAblyTokenCommand extends AblyBaseCommand {
   static description = 'Creates an Ably Token with capabilities'
@@ -25,20 +26,20 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
       env: 'ABLY_APP_ID',
     }),
     capability: Flags.string({
-      description: 'Capabilities JSON string (e.g. {"channel":["publish","subscribe"]})',
       default: '{"*":["*"]}',
+      description: 'Capabilities JSON string (e.g. {"channel":["publish","subscribe"]})',
     }),
     'client-id': Flags.string({
       description: 'Client ID to associate with the token. Use "none" to explicitly issue a token with no client ID, otherwise a default will be generated.',
     }),
-    ttl: Flags.integer({
-      description: 'Time to live in seconds',
-      default: 3600, // 1 hour
+    'token-only': Flags.boolean({
+      default: false,
+      description: 'Output only the token string without any formatting or additional information',
     }),
     
-    'token-only': Flags.boolean({
-      description: 'Output only the token string without any formatting or additional information',
-      default: false,
+    ttl: Flags.integer({
+      default: 3600, // 1 hour
+      description: 'Time to live in seconds',
     }),
   }
 
@@ -51,7 +52,7 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
       return
     }
     
-    const { appId, apiKey } = appAndKey
+    const { apiKey, appId } = appAndKey
     
     try {
       // Display auth info if not token-only output
@@ -83,7 +84,7 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
         }
       } else {
         // Generate a default client ID
-        tokenParams.clientId = `ably-cli-${randomUUID().substring(0, 8)}`
+        tokenParams.clientId = `ably-cli-${randomUUID().slice(0, 8)}`
       }
       
       // Create Ably REST client and request token

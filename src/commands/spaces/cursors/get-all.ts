@@ -1,12 +1,13 @@
-import { Args } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
 import Spaces from '@ably/spaces'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
+import chalk from 'chalk'
+
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 interface SpacesClients {
-  spacesClient: Spaces;
   realtimeClient: Ably.Realtime;
+  spacesClient: Spaces;
 }
 
 interface CursorPosition {
@@ -17,11 +18,18 @@ interface CursorPosition {
 interface CursorUpdate {
   clientId?: string;
   connectionId?: string;
-  position: CursorPosition;
   data?: Record<string, unknown>;
+  position: CursorPosition;
 }
 
 export default class SpacesCursorsGetAll extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to get cursors from',
+      required: true,
+    }),
+  }
+
   static override description = 'Get all current cursors in a space'
 
   static override examples = [
@@ -32,13 +40,6 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
-  }
-
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to get cursors from',
-      required: true,
-    }),
   }
 
   async run(): Promise<void> {
@@ -52,13 +53,13 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       clients = await this.createSpacesClient(flags)
       if (!clients) return
 
-      const { spacesClient, realtimeClient } = clients
-      const spaceId = args.spaceId
+      const { realtimeClient, spacesClient } = clients
+      const {spaceId} = args
       
       // Make sure we have a connection before proceeding
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = realtimeClient.connection;
           if (state === 'connected') {
             resolve();
           } else if (state === 'failed' || state === 'closed' || state === 'suspended') {
@@ -76,6 +77,7 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       if (!this.shouldOutputJson(flags)) {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
+
       const space = await spacesClient.get(spaceId)
       
       // Enter the space
@@ -95,14 +97,15 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
               clearTimeout(timeout);
               if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({
-                  success: true,
+                  connectionId: realtimeClient.connection.id,
                   spaceId,
                   status: 'connected',
-                  connectionId: realtimeClient.connection.id,
+                  success: true,
                 }, flags));
               } else {
                 this.log(`${chalk.green('Successfully entered space:')} ${chalk.cyan(spaceId)}`);
               }
+
               resolve();
             } else if (realtimeClient.connection.state === 'failed' || 
                       realtimeClient.connection.state === 'closed' || 
@@ -127,14 +130,14 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          spaceId,
           cursors: Array.isArray(cursors) ? cursors.map((cursor: CursorUpdate) => ({
             clientId: cursor.clientId,
             connectionId: cursor.connectionId,
-            position: cursor.position,
-            data: cursor.data
-          })) : []
+            data: cursor.data,
+            position: cursor.position
+          })) : [],
+          spaceId,
+          success: true
         }, flags));
       } else {
         if (!Array.isArray(cursors) || cursors.length === 0) {
@@ -155,10 +158,10 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          spaceId: args.spaceId,
           error: `Error getting cursors: ${error instanceof Error ? error.message : String(error)}`,
-          status: 'error'
+          spaceId: args.spaceId,
+          status: 'error',
+          success: false
         }, flags));
       } else {
         this.log(chalk.red(`Error getting cursors: ${error instanceof Error ? error.message : String(error)}`));
@@ -168,12 +171,12 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
         cleanupInProgress = true;
         try {
           if (clients) {
-            const { spacesClient, realtimeClient } = clients;
+            const { realtimeClient, spacesClient } = clients;
             const space = await spacesClient.get(args.spaceId);
             await space.leave();
             realtimeClient.close();
           }
-        } catch (error) {
+        } catch {
           // Ignore cleanup errors
         }
       }

@@ -1,12 +1,13 @@
-import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
 import Spaces from '@ably/spaces'
+import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
+import chalk from 'chalk'
+
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 interface SpacesClients {
-  spacesClient: Spaces;
   realtimeClient: Ably.Realtime;
+  spacesClient: Spaces;
 }
 
 // Define cursor types based on Ably documentation
@@ -21,11 +22,18 @@ interface CursorData {
 
 // Update interfaces to match SDK expectations
 interface CursorUpdate {
-  position: CursorPosition;
   data?: CursorData;
+  position: CursorPosition;
 }
 
 export default class SpacesCursorsSet extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to set cursor in',
+      required: true,
+    }),
+  }
+
   static override description = 'Set your cursor position in a space'
 
   static override examples = [
@@ -40,40 +48,48 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       exclusive: ['simulate'],
     }),
     simulate: Flags.boolean({
+      default: false,
       description: 'Simulate cursor movements automatically',
       exclusive: ['position'],
-      default: false,
     }),
   }
 
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to set cursor in',
-      required: true,
-    }),
-  }
-
+  private cleanupInProgress = false;
   private clients: SpacesClients | null = null;
   private simulationIntervalId: NodeJS.Timeout | null = null;
-  private cleanupInProgress = false;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.simulationIntervalId) {
+        clearInterval(this.simulationIntervalId);
+        this.simulationIntervalId = null;
+     }
+
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesCursorsSet)
-    const spaceId = args.spaceId;
+    const {spaceId} = args;
 
     try {
       // Create Spaces client
       this.clients = await this.createSpacesClient(flags)
       if (!this.clients) {
          const errorMsg = 'Failed to create Spaces client';
-         this.logCliEvent(flags, 'spaces', 'clientCreationFailed', errorMsg, { spaceId, error: errorMsg });
+         this.logCliEvent(flags, 'spaces', 'clientCreationFailed', errorMsg, { error: errorMsg, spaceId });
          if (this.shouldOutputJson(flags)) {
-             this.log(this.formatJsonOutput({ success: false, error: errorMsg, spaceId }, flags));
+             this.log(this.formatJsonOutput({ error: errorMsg, spaceId, success: false }, flags));
          } // Error already logged by createSpacesClient
+
          return;
       }
 
-      const { spacesClient, realtimeClient } = this.clients
+      const { realtimeClient, spacesClient } = this.clients
 
       // Add listeners for connection state changes
       realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
@@ -88,12 +104,13 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
            this.logCliEvent(flags, 'cursor', 'positionParsed', 'Cursor position parsed', { position: positionData });
         } catch (error) {
            const errorMsg = `Invalid position JSON: ${error instanceof Error ? error.message : String(error)}`;
-           this.logCliEvent(flags, 'cursor', 'positionParseError', errorMsg, { spaceId, error: errorMsg });
+           this.logCliEvent(flags, 'cursor', 'positionParseError', errorMsg, { error: errorMsg, spaceId });
            if (this.shouldOutputJson(flags)) {
-            this.log(this.formatJsonOutput({ success: false, error: errorMsg, spaceId }, flags));
+            this.log(this.formatJsonOutput({ error: errorMsg, spaceId, success: false }, flags));
           } else {
             this.error(errorMsg);
           }
+
           return;
         }
       } else if (flags.simulate) {
@@ -107,10 +124,11 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
          const errorMsg = 'Either --position or --simulate must be specified';
          this.logCliEvent(flags, 'cursor', 'inputError', errorMsg, { spaceId });
          if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ success: false, error: errorMsg, spaceId }, flags));
+          this.log(this.formatJsonOutput({ error: errorMsg, spaceId, success: false }, flags));
         } else {
           this.error(errorMsg);
         }
+
         return;
       }
 
@@ -125,7 +143,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       this.logCliEvent(flags, 'connection', 'waiting', 'Waiting for connection to establish...');
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = realtimeClient.connection;
           if (state === 'connected') {
              this.logCliEvent(flags, 'connection', 'connected', 'Realtime connection established.');
             resolve();
@@ -138,6 +156,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
             setTimeout(checkConnection, 100);
           }
         };
+
         checkConnection();
       });
 
@@ -146,6 +165,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       if (!this.shouldOutputJson(flags)) {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
+
       const space = await spacesClient.get(spaceId)
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
@@ -159,9 +179,9 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       const cursorUpdate: CursorUpdate = { position: positionData };
       await space.cursors.set(cursorUpdate);
       const initialSetEventData = {
+          cursor: { position: positionData },
           spaceId,
-          type: 'cursor_set_initial',
-          cursor: { position: positionData }
+          type: 'cursor_set_initial'
       };
       this.logCliEvent(flags, 'cursor', 'setInitialSuccess', 'Successfully set initial cursor position', initialSetEventData);
 
@@ -193,9 +213,9 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
 
               await space.cursors.set(updateData);
               const updateEventData = {
+                  cursor: { position: newPosition },
                   spaceId,
-                  type: 'cursor_update_simulated',
-                  cursor: { position: newPosition }
+                  type: 'cursor_update_simulated'
               };
               this.logCliEvent(flags, 'cursor', 'simulationUpdateSuccess', 'Cursor position updated (simulation)', updateEventData);
 
@@ -209,14 +229,14 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
              const errorMsg = error instanceof Error ? error.message : String(error);
              this.logCliEvent(flags, 'cursor', 'simulationUpdateError', `Error updating cursor during simulation: ${errorMsg}`, { error: errorMsg });
              if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: false, error: errorMsg, status: 'error', spaceId, type: 'simulation_error' }, flags));
+              this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false, type: 'simulation_error' }, flags));
             } else {
               this.error(`Error updating cursor: ${errorMsg}`);
             }
           }
         }, 1000);
       } else {
-          this.logCliEvent(flags, 'cursor', 'listening', 'Maintaining cursor position. Press Ctrl+C to exit.');
+          this.logCliEvent(flags, 'cursor', 'listening', 'Cursor position set. Simulating movement if enabled. Press Ctrl+C to exit.');
            if (!this.shouldOutputJson(flags)) {
                this.log('\nMaintaining cursor position. Press Ctrl+C to exit.\n');
            }
@@ -240,7 +260,9 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
             if (!this.shouldOutputJson(flags)) {
                this.log(chalk.red('Force exiting after timeout...'));
             }
-            process.exit(1);
+
+            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+            process.exit(0); // Reinstated: Explicit exit after cleanup
         }, 5000);
 
         if (space) {
@@ -265,20 +287,75 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         if (!this.shouldOutputJson(flags)) {
            this.log(chalk.green('\nDisconnected.'));
         }
-        process.exit(0);
       };
 
       process.on('SIGINT', cleanup);
       process.on('SIGTERM', cleanup);
 
-       // Keep the process running
-       await new Promise(() => {});
+       // Keep the process running until interrupted
+       await new Promise<void>((resolve, reject) => {
+         const cleanup = async () => {
+           if (this.cleanupInProgress) {
+             if (this.simulationIntervalId) {
+               clearInterval(this.simulationIntervalId);
+               this.simulationIntervalId = null;
+             }
+
+             if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+               this.clients.realtimeClient.close();
+             }
+
+             this.cleanupInProgress = false;
+             this.logCliEvent(flags, 'cursor', 'cleanupInitiated', 'Cleanup initiated (Ctrl+C pressed)');
+
+             const forceExitTimeout = setTimeout(() => {
+               const errorMsg = 'Force exiting after timeout during cleanup';
+               this.logCliEvent(flags, 'cursor', 'forceExit', errorMsg, { spaceId });
+               if (!this.shouldOutputJson(flags)) {
+                 this.log(chalk.red('Force exiting after timeout...'));
+               }
+
+               // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+               process.exit(0); // Reinstated: Explicit exit after cleanup
+             }, 5000);
+
+             if (space) {
+               try {
+                 this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space...');
+                 await space.leave();
+                 this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
+               } catch (error) {
+                 const errorMsg = error instanceof Error ? error.message : String(error);
+                 this.logCliEvent(flags, 'spaces', 'leaveError', `Error leaving space: ${errorMsg}`, { error: errorMsg });
+               }
+             }
+
+             if (realtimeClient && realtimeClient.connection.state !== 'closed') {
+               this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
+               realtimeClient.close();
+               this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
+             }
+
+             clearTimeout(forceExitTimeout);
+             this.logCliEvent(flags, 'cursor', 'cleanupComplete', 'Cleanup complete');
+             if (!this.shouldOutputJson(flags)) {
+               this.log(chalk.green('\nDisconnected.'));
+             }
+
+             // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+             process.exit(0); // Reinstated: Explicit exit after cleanup
+           }
+         };
+
+         process.on('SIGINT', cleanup);
+         process.on('SIGTERM', cleanup);
+       });
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logCliEvent(flags, 'cursor', 'fatalError', `Error setting cursor: ${errorMsg}`, { error: errorMsg, spaceId });
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ success: false, error: errorMsg, status: 'error', spaceId }, flags));
+        this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
       } else {
         this.error(`Error: ${errorMsg}`);
       }
@@ -289,18 +366,4 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.simulationIntervalId) {
-        clearInterval(this.simulationIntervalId);
-        this.simulationIntervalId = null;
-     }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

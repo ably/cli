@@ -1,9 +1,17 @@
-import {Args, Flags} from '@oclif/core'
-import {ChatBaseCommand} from '../../../chat-base-command.js'
-import chalk from 'chalk'
 import { RoomStatus, Subscription, TypingEvent } from '@ably/chat'
+import {Args, Flags} from '@oclif/core'
+import chalk from 'chalk'
+
+import {ChatBaseCommand} from '../../../chat-base-command.js'
 
 export default class TypingSubscribe extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'The room ID to subscribe to typing indicators from',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to typing indicators in an Ably Chat room'
 
   static override examples = [
@@ -17,18 +25,22 @@ export default class TypingSubscribe extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
   }
 
-  static override args = {
-    roomId: Args.string({
-      description: 'The room ID to subscribe to typing indicators from',
-      required: true,
-    }),
-  }
-
   private clients: { chatClient: any, realtimeClient: any } | null = null;
-  private unsubscribeTypingFn: Subscription | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
+  private unsubscribeTypingFn: Subscription | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.unsubscribeTypingFn) { try { this.unsubscribeTypingFn.unsubscribe(); } catch { /* ignore */ } }
+     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const {args, flags} = await this.parse(TypingSubscribe)
 
     try {
@@ -37,7 +49,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
       if (!this.clients) return
 
       const {chatClient, realtimeClient} = this.clients
-      const roomId = args.roomId;
+      const {roomId} = args;
 
       // Add listeners for connection state changes
       realtimeClient.connection.on((stateChange: any) => {
@@ -54,10 +66,11 @@ export default class TypingSubscribe extends ChatBaseCommand {
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange: any) => {
-          let reason: string | Error | undefined | null = undefined;
+          let reason: Error | null | string | undefined;
           if (statusChange.current === RoomStatus.Failed) {
               reason = room.error; // Get reason from room.error on failure
           }
+
           const reasonMsg = reason instanceof Error ? reason.message : reason;
           this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: reasonMsg });
 
@@ -66,11 +79,9 @@ export default class TypingSubscribe extends ChatBaseCommand {
                 this.log(`${chalk.green('Connected to room:')} ${chalk.bold(roomId)}`);
                 this.log(`${chalk.dim('Listening for typing indicators. Press Ctrl+C to exit.')}`);
             }
-          } else if (statusChange.current === RoomStatus.Failed) {
-             if (!this.shouldOutputJson(flags)) {
+          } else if (statusChange.current === RoomStatus.Failed && !this.shouldOutputJson(flags)) {
                 this.error(`Failed to attach to room: ${reasonMsg || 'Unknown error'}`);
              }
-          }
       });
       this.unsubscribeStatusFn = unsubscribeStatus;
       this.logCliEvent(flags, 'room', 'subscribedToStatus', 'Successfully subscribed to room status changes');
@@ -79,11 +90,11 @@ export default class TypingSubscribe extends ChatBaseCommand {
       this.logCliEvent(flags, 'typing', 'subscribing', 'Subscribing to typing indicators');
       this.unsubscribeTypingFn = room.typing.subscribe((typingEvent: TypingEvent) => {
         const timestamp = new Date().toISOString()
-        const currentlyTyping = Array.from(typingEvent.currentlyTyping || []);
+        const currentlyTyping = [...(typingEvent.currentlyTyping || [])];
         const eventData = {
-            timestamp,
             currentlyTyping,
-            roomId
+            roomId,
+            timestamp
         };
         this.logCliEvent(flags, 'typing', 'update', 'Typing status update received', eventData);
 
@@ -91,7 +102,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
           this.log(this.formatJsonOutput({ success: true, ...eventData }, flags))
         } else {
           // Clear the line and show who's typing
-          process.stdout.write('\r\x1b[K') // Clear line, move cursor to beginning
+          process.stdout.write('\r\u001B[K') // Clear line, move cursor to beginning
 
           if (currentlyTyping.length > 0) {
             const memberNames = currentlyTyping.join(', ')
@@ -124,14 +135,15 @@ export default class TypingSubscribe extends ChatBaseCommand {
                   this.logCliEvent(flags, 'typing', 'unsubscribing', 'Unsubscribing from typing indicators');
                   this.unsubscribeTypingFn.unsubscribe();
                   this.logCliEvent(flags, 'typing', 'unsubscribed', 'Unsubscribed from typing indicators');
-              } catch (err) { this.logCliEvent(flags, 'typing', 'unsubscribeError', 'Error unsubscribing typing', { error: err instanceof Error ? err.message : String(err) }); }
+              } catch (error) { this.logCliEvent(flags, 'typing', 'unsubscribeError', 'Error unsubscribing typing', { error: error instanceof Error ? error.message : String(error) }); }
           }
+
           if (this.unsubscribeStatusFn) {
               try {
                   this.logCliEvent(flags, 'room', 'unsubscribingStatus', 'Unsubscribing from room status');
                   this.unsubscribeStatusFn();
                   this.logCliEvent(flags, 'room', 'unsubscribedStatus', 'Unsubscribed from room status');
-              } catch (err) { this.logCliEvent(flags, 'room', 'unsubscribeStatusError', 'Error unsubscribing status', { error: err instanceof Error ? err.message : String(err) }); }
+              } catch (error) { this.logCliEvent(flags, 'room', 'unsubscribeStatusError', 'Error unsubscribing status', { error: error instanceof Error ? error.message : String(error) }); }
           }
 
           // Release the room and close connection
@@ -139,7 +151,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
             this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
             await chatClient.rooms.release(roomId);
             this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
-          } catch(err) { this.logCliEvent(flags, 'room', 'releaseError', 'Error releasing room', { error: err instanceof Error ? err.message : String(err) }); }
+          } catch(error) { this.logCliEvent(flags, 'room', 'releaseError', 'Error releasing room', { error: error instanceof Error ? error.message : String(error) }); }
 
           if (realtimeClient) {
              this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
@@ -150,7 +162,9 @@ export default class TypingSubscribe extends ChatBaseCommand {
           if (!this.shouldOutputJson(flags)) {
             this.log(`${chalk.green('Successfully disconnected.')}`)
           }
-          process.exit(0)
+
+          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+          process.exit(0) // Reinstated: Explicit exit
         })
       })
     } catch (error) {
@@ -162,22 +176,10 @@ export default class TypingSubscribe extends ChatBaseCommand {
       }
 
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ success: false, error: errorMsg, roomId: args.roomId }, flags))
+        this.log(this.formatJsonOutput({ error: errorMsg, roomId: args.roomId, success: false }, flags))
       } else {
         this.error(`Failed to subscribe to typing indicators: ${errorMsg}`)
       }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.unsubscribeTypingFn) { try { this.unsubscribeTypingFn.unsubscribe(); } catch (e) { /* ignore */ } }
-     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch (e) { /* ignore */ } }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 }

@@ -1,6 +1,7 @@
-import { Hook, Errors, toConfiguredId, Command } from '@oclif/core';
-import { blueBright, cyan, reset, yellow, red } from 'ansis';
+import { Command, Errors, Hook, toConfiguredId } from '@oclif/core';
+import { blueBright, cyan, red, reset, yellow } from 'ansis';
 import { default as levenshtein } from 'fast-levenshtein';
+
 import CustomHelp from '../../help.js'; // Import our custom help class
 
 // Helper function to format Arguments section (simplified)
@@ -106,7 +107,7 @@ const hook: Hook.CommandNotFound = async function (opts) {
         // Let oclif handle errors from the help command itself, or log unexpected ones
         if (error instanceof Errors.CLIError) throw error;
         this.error(`An unexpected error occurred while running help: ${error instanceof Error ? error.message : String(error)}`, { exit: 1 });
-        return; 
+         
       }
     } 
     // 5. Handle REGULAR suggestion path
@@ -121,7 +122,7 @@ const hook: Hook.CommandNotFound = async function (opts) {
         // Handle only truly unexpected non-CLI errors here.
         else {
            this.error(`An unexpected error occurred while running the suggested command: ${error instanceof Error ? error.message : String(error)}`, { exit: 1 });
-           return; 
+            
         }
       }
     }

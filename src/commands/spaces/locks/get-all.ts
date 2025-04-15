@@ -1,24 +1,32 @@
-import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
 import Spaces from '@ably/spaces'
+import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
+import chalk from 'chalk'
+
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 interface SpacesClients {
-  spacesClient: Spaces;
   realtimeClient: Ably.Realtime;
+  spacesClient: Spaces;
 }
 
 interface LockItem {
+  attributes?: Record<string, any>;
   id: string;
-  status?: string;
   member?: {
     clientId?: string;
   };
-  attributes?: Record<string, any>;
+  status?: string;
 }
 
 export default class SpacesLocksGetAll extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to get locks from',
+      required: true,
+    }),
+  }
+
   static override description = 'Get all current locks in a space'
 
   static override examples = [
@@ -31,13 +39,6 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
     
   }
 
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to get locks from',
-      required: true,
-    }),
-  }
-
   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesLocksGetAll)
     
@@ -48,13 +49,13 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
       clients = await this.createSpacesClient(flags)
       if (!clients) return
 
-      const { spacesClient, realtimeClient } = clients
-      const spaceId = args.spaceId
+      const { realtimeClient, spacesClient } = clients
+      const {spaceId} = args
       
       // Make sure we have a connection before proceeding
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = realtimeClient.connection;
           if (state === 'connected') {
             resolve();
           } else if (state === 'failed' || state === 'closed' || state === 'suspended') {
@@ -125,18 +126,17 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
         
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            spaceId,
-            timestamp: new Date().toISOString(),
             locks: validLocks.map(lock => ({
-              id: lock.id,
-              status: lock.status || 'unknown',
+              attributes: lock.attributes || {},
               holder: lock.member?.clientId || null,
-              attributes: lock.attributes || {}
-            }))
+              id: lock.id,
+              status: lock.status || 'unknown'
+            })),
+            spaceId,
+            success: true,
+            timestamp: new Date().toISOString()
           }, flags));
-        } else {
-          if (!validLocks || validLocks.length === 0) {
+        } else if (!validLocks || validLocks.length === 0) {
             this.log(chalk.yellow('No locks are currently active in this space.'));
           } else {
             const lockCount = validLocks.length;
@@ -151,19 +151,18 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
                 if (lock.attributes && Object.keys(lock.attributes).length > 0) {
                   this.log(`  ${chalk.dim('Attributes:')} ${JSON.stringify(lock.attributes, null, 2)}`);
                 }
-              } catch (err) {
-                this.log(`- ${chalk.red('Error displaying lock item')}: ${err instanceof Error ? err.message : String(err)}`);
+              } catch (error) {
+                this.log(`- ${chalk.red('Error displaying lock item')}: ${error instanceof Error ? error.message : String(error)}`);
               }
             });
           }
-        }
       } catch (error) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
-            spaceId: args.spaceId,
             error: error instanceof Error ? error.message : String(error),
-            status: 'error'
+            spaceId: args.spaceId,
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -175,39 +174,36 @@ export default class SpacesLocksGetAll extends SpacesBaseCommand {
         await space.leave();
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
             spaceId,
-            status: 'left'
+            status: 'left',
+            success: true
           }, flags));
         } else {
           this.log(chalk.green('\nSuccessfully disconnected.'));
         }
-        process.exit(0);
       } catch (error) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
-            spaceId: args.spaceId,
             error: error instanceof Error ? error.message : String(error),
-            status: 'error'
+            spaceId: args.spaceId,
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.log(chalk.yellow(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`));
         }
-        process.exit(1);
       }
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          spaceId: args.spaceId,
           error: error instanceof Error ? error.message : String(error),
-          status: 'error'
+          spaceId: args.spaceId,
+          status: 'error',
+          success: false
         }, flags));
       } else {
         this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
-      process.exit(1);
     } finally {
       try {
         if (clients?.realtimeClient) {

@@ -1,8 +1,16 @@
-import { Flags, Args } from '@oclif/core'
+import { Args, Flags } from '@oclif/core'
+import * as readline from 'node:readline'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
-import * as readline from 'readline'
 
 export default class QueuesDeleteCommand extends ControlBaseCommand {
+  static args = {
+    queueName: Args.string({
+      description: 'Name of the queue to delete',
+      required: true,
+    }),
+  }
+
   static description = 'Delete a queue'
 
   static examples = [
@@ -18,17 +26,10 @@ export default class QueuesDeleteCommand extends ControlBaseCommand {
       required: false,
     }),
     'force': Flags.boolean({
+      char: 'f',
+      default: false,
       description: 'Force deletion without confirmation',
       required: false,
-      default: false,
-      char: 'f',
-    }),
-  }
-
-  static args = {
-    queueName: Args.string({
-      description: 'Name of the queue to delete',
-      required: true,
     }),
   }
 

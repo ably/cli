@@ -1,5 +1,6 @@
 import {Command, Flags} from '@oclif/core'
 import chalk from 'chalk'
+
 import { SpacesBaseCommand } from '../../spaces-base-command.js'
 
 export default class SpacesLocations extends SpacesBaseCommand {

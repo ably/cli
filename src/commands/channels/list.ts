@@ -1,14 +1,15 @@
 import { Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
+import { AblyBaseCommand } from '../../base-command.js'
+
 interface ChannelMetrics {
   connections?: number;
-  publishers?: number;
-  subscribers?: number;
   presenceConnections?: number;
   presenceMembers?: number;
+  publishers?: number;
+  subscribers?: number;
 }
 
 interface ChannelStatus {
@@ -20,6 +21,12 @@ interface ChannelStatus {
 interface ChannelItem {
   channelId: string;
   status?: ChannelStatus;
+}
+
+// Type for channel listing request parameters
+interface ChannelListParams {
+  limit: number;
+  prefix?: string;
 }
 
 export default class ChannelsList extends AblyBaseCommand {
@@ -35,13 +42,13 @@ export default class ChannelsList extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    'prefix': Flags.string({
-      description: 'Filter channels by prefix',
-      char: 'p',
-    }),
     'limit': Flags.integer({
-      description: 'Maximum number of channels to return',
       default: 100,
+      description: 'Maximum number of channels to return',
+    }),
+    'prefix': Flags.string({
+      char: 'p',
+      description: 'Filter channels by prefix',
     }),
   }
 
@@ -57,7 +64,7 @@ export default class ChannelsList extends AblyBaseCommand {
       const rest = new Ably.Rest(this.getClientOptions(flags))
 
       // Build params for channel listing
-      const params: any = {
+      const params: ChannelListParams = {
         limit: flags.limit,
       }
 
@@ -66,7 +73,7 @@ export default class ChannelsList extends AblyBaseCommand {
       }
 
       // Fetch channels
-      const channelsResponse = await rest.request('get', '/channels', params)
+      const channelsResponse = await rest.request('get', '/channels', 2, params, null)
 
       if (channelsResponse.statusCode !== 200) {
         this.error(`Failed to list channels: ${channelsResponse.statusCode}`)
@@ -78,14 +85,14 @@ export default class ChannelsList extends AblyBaseCommand {
       // Output channels based on format
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           channels: channels.map((channel: ChannelItem) => ({
             channelId: channel.channelId,
             metrics: channel.status?.occupancy?.metrics || {}
           })),
-          total: channels.length,
-          hasMore: channels.length === flags.limit
+          hasMore: channels.length === flags.limit,
+          success: true,
+          timestamp: new Date().toISOString(),
+          total: channels.length
         }, flags))
       } else {
         if (channels.length === 0) {
@@ -95,12 +102,12 @@ export default class ChannelsList extends AblyBaseCommand {
 
         this.log(`Found ${chalk.cyan(channels.length.toString())} active channels:`)
         
-        channels.forEach((channel: ChannelItem) => {
+        for (const channel of channels as ChannelItem[]) {
           this.log(`${chalk.green(channel.channelId)}`)
           
           // Show occupancy if available
           if (channel.status?.occupancy?.metrics) {
-            const metrics = channel.status.occupancy.metrics
+            const {metrics} = channel.status.occupancy
             this.log(`  ${chalk.dim('Connections:')} ${metrics.connections || 0}`)
             this.log(`  ${chalk.dim('Publishers:')} ${metrics.publishers || 0}`)
             this.log(`  ${chalk.dim('Subscribers:')} ${metrics.subscribers || 0}`)
@@ -115,7 +122,7 @@ export default class ChannelsList extends AblyBaseCommand {
           }
           
           this.log('') // Add a line break between channels
-        })
+        }
 
         if (channels.length === flags.limit) {
           this.log(chalk.yellow(`Showing maximum of ${flags.limit} channels. Use --limit to show more.`))
@@ -124,9 +131,9 @@ export default class ChannelsList extends AblyBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: error instanceof Error ? error.message : String(error),
-          status: 'error'
+          status: 'error',
+          success: false
         }, flags))
       } else {
         this.error(`Error listing channels: ${error instanceof Error ? error.message : String(error)}`)

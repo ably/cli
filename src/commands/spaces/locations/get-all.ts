@@ -1,30 +1,38 @@
-import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
 import Spaces from '@ably/spaces'
+import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
+import chalk from 'chalk'
+
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 interface SpacesClients {
-  spacesClient: Spaces;
   realtimeClient: Ably.Realtime;
+  spacesClient: Spaces;
 }
 
 interface LocationItem {
-  memberId?: string;
+  [key: string]: any;
+  clientId?: string;
+  connectionId?: string;
+  data?: any;
+  id?: string;
+  location?: any;
   member?: {
     clientId?: string;
     isCurrentMember?: boolean;
   };
-  clientId?: string;
-  id?: string;
+  memberId?: string;
   userId?: string;
-  location?: any;
-  data?: any;
-  connectionId?: string;
-  [key: string]: any;
 }
 
 export default class SpacesLocationsGetAll extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to get locations from',
+      required: true,
+    }),
+  }
+
   static override description = 'Get all current locations in a space'
 
   static override examples = [
@@ -36,16 +44,9 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
     ...SpacesBaseCommand.globalFlags,
     format: Flags.string({
       char: 'f',
+      default: 'text',
       description: 'Output format',
       options: ['text', 'json'],
-      default: 'text',
-    }),
-  }
-
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to get locations from',
-      required: true,
     }),
   }
 
@@ -59,13 +60,13 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
       clients = await this.createSpacesClient(flags)
       if (!clients) return
 
-      const { spacesClient, realtimeClient } = clients
-      const spaceId = args.spaceId
+      const { realtimeClient, spacesClient } = clients
+      const {spaceId} = args
       
       // Make sure we have a connection before proceeding
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = realtimeClient.connection;
           if (state === 'connected') {
             resolve();
           } else if (state === 'failed' || state === 'closed' || state === 'suspended') {
@@ -133,8 +134,8 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
             locations = result;
           } else if (Object.keys(result).length > 0) {
             locations = Object.entries(result).map(([memberId, locationData]) => ({
-              memberId,
-              location: locationData
+              location: locationData,
+              memberId
             }));
           }
         }
@@ -146,12 +147,12 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
           let locationData;
           if (item.location !== undefined) {
             locationData = item.location;
-          } else if (item.data !== undefined) {
-            locationData = item.data;
-          } else {
-            const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
+          } else if (item.data === undefined) {
+            const { clientId, connectionId, id, member, memberId, userId, ...rest } = item;
             if (Object.keys(rest).length === 0) return false;
             locationData = rest;
+          } else {
+            locationData = item.data;
           }
           
           if (locationData === null || locationData === undefined) return false;
@@ -162,24 +163,23 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
         
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            spaceId,
-            timestamp: new Date().toISOString(),
             locations: validLocations.map((item: LocationItem) => {
               const memberId = item.memberId || item.member?.clientId || item.clientId || item.id || item.userId || 'Unknown';
               const locationData = item.location || item.data || (() => {
-                const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
+                const { clientId, connectionId, id, member, memberId, userId, ...rest } = item;
                 return rest;
               })();
               return {
-                memberId,
+                isCurrentMember: item.member?.isCurrentMember || false,
                 location: locationData,
-                isCurrentMember: item.member?.isCurrentMember || false
+                memberId
               };
-            })
+            }),
+            spaceId,
+            success: true,
+            timestamp: new Date().toISOString()
           }, flags));
-        } else {
-          if (!validLocations || validLocations.length === 0) {
+        } else if (!validLocations || validLocations.length === 0) {
             this.log(chalk.yellow('No locations are currently set in this space.'));
           } else {
             const locationsCount = validLocations.length;
@@ -189,7 +189,7 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
               try {
                 const memberId = locationItem.memberId || locationItem.member?.clientId || locationItem.clientId || locationItem.id || locationItem.userId || 'Unknown';
                 const locationData = locationItem.location || locationItem.data || (() => {
-                  const { clientId, id, userId, memberId, connectionId, member, ...rest } = locationItem;
+                  const { clientId, connectionId, id, member, memberId, userId, ...rest } = locationItem;
                   return rest;
                 })();
                 
@@ -199,19 +199,18 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
                 if (locationItem?.member?.isCurrentMember) {
                   this.log(`  ${chalk.green('(Current member)')}`);
                 }
-              } catch (err) {
-                this.log(`- ${chalk.red('Error displaying location item')}: ${err instanceof Error ? err.message : String(err)}`);
+              } catch (error) {
+                this.log(`- ${chalk.red('Error displaying location item')}: ${error instanceof Error ? error.message : String(error)}`);
               }
             });
           }
-        }
       } catch (error) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
-            spaceId,
             error: error instanceof Error ? error.message : String(error),
-            status: 'error'
+            spaceId,
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);

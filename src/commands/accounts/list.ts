@@ -1,5 +1,6 @@
-import { ControlBaseCommand } from '../../control-base-command.js'
 import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class AccountsList extends ControlBaseCommand {
   static override description = 'List locally configured Ably accounts'
@@ -24,39 +25,40 @@ export default class AccountsList extends ControlBaseCommand {
     if (accounts.length === 0) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          accounts: [],
           error: 'No accounts configured. Use "ably accounts login" to add an account.',
-          accounts: []
+          success: false
         }, flags))
       } else {
         this.log('No accounts configured. Use "ably accounts login" to add an account.')
       }
+
       return
     }
 
     if (this.shouldOutputJson(flags)) {
       this.log(this.formatJsonOutput({
-        success: true,
-        currentAccount: currentAlias,
-        accounts: accounts.map(({ alias, account }) => ({
+        accounts: accounts.map(({ account, alias }) => ({
           alias,
-          isCurrent: alias === currentAlias,
-          name: account.accountName || 'Unknown',
-          id: account.accountId || 'Unknown',
-          user: account.userEmail || 'Unknown',
           appsConfigured: account.apps ? Object.keys(account.apps).length : 0,
           currentApp: alias === currentAlias && account.currentAppId ? {
             id: account.currentAppId,
             name: this.configManager.getAppName(account.currentAppId) || account.currentAppId
-          } : undefined
-        }))
+          } : undefined,
+          id: account.accountId || 'Unknown',
+          isCurrent: alias === currentAlias,
+          name: account.accountName || 'Unknown',
+          user: account.userEmail || 'Unknown'
+        })),
+        currentAccount: currentAlias,
+        success: true
       }, flags))
       return
     }
 
     this.log(`Found ${accounts.length} accounts:\n`)
 
-    for (const { alias, account } of accounts) {
+    for (const { account, alias } of accounts) {
       const isCurrent = alias === currentAlias
       const prefix = isCurrent ? chalk.green('▶ ') : '  '
       const titleStyle = isCurrent ? chalk.green.bold : chalk.bold

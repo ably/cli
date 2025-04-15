@@ -1,12 +1,20 @@
 import { Args, Flags } from '@oclif/core'
+import chalk from 'chalk'
+import { execSync } from 'node:child_process'
+import * as readline from 'node:readline'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 import { ControlApi } from '../../services/control-api.js'
-import { execSync } from 'child_process'
-import * as readline from 'readline'
-import chalk from 'chalk'
 import { displayLogo } from '../../utils/logo.js'
 
 export default class AccountsLogin extends ControlBaseCommand {
+  static override args = {
+    token: Args.string({
+      description: 'Access token (if not provided, will prompt for it)',
+      required: false,
+    }),
+  }
+
   static override description = 'Log in to your Ably account'
 
   static override examples = [
@@ -23,15 +31,8 @@ export default class AccountsLogin extends ControlBaseCommand {
       description: 'Alias for this account (default account if not specified)',
     }),
     'no-browser': Flags.boolean({
-      description: 'Do not open a browser',
       default: false,
-    }),
-  }
-
-  static override args = {
-    token: Args.string({
-      description: 'Access token (if not provided, will prompt for it)',
-      required: false,
+      description: 'Do not open a browser',
     }),
   }
 
@@ -52,17 +53,16 @@ export default class AccountsLogin extends ControlBaseCommand {
         if (!this.shouldOutputJson(flags)) {
           this.log('Using control host:', flags['control-host'])
         }
-        if (flags['control-host'].includes('local')) {
-          obtainTokenPath = `http://${flags['control-host']}/users/access_tokens`
-        } else {
-          obtainTokenPath = `https://${flags['control-host']}/users/access_tokens`
-        }
+
+        obtainTokenPath = flags['control-host'].includes('local') ? `http://${flags['control-host']}/users/access_tokens` : `https://${flags['control-host']}/users/access_tokens`;
       }
+
       // Prompt the user to get a token
       if (!flags['no-browser']) {
         if (!this.shouldOutputJson(flags)) {
           this.log('Opening browser to get an access token...')
         }
+
         this.openBrowser(obtainTokenPath)
       } else if (!this.shouldOutputJson(flags)) {
         this.log(`Please visit ${obtainTokenPath} to create an access token`)
@@ -72,7 +72,7 @@ export default class AccountsLogin extends ControlBaseCommand {
     }
 
     // If no alias flag provided, prompt the user if they want to provide one
-    let alias = flags.alias
+    let {alias} = flags
     if (!alias && !this.shouldOutputJson(flags)) {
       // Check if the default account already exists
       const accounts = this.configManager.listAccounts()
@@ -119,14 +119,14 @@ export default class AccountsLogin extends ControlBaseCommand {
         controlHost: flags['control-host']
       })
 
-      const { user, account } = await controlApi.getMe()
+      const { account, user } = await controlApi.getMe()
 
       // Store the account information
       this.configManager.storeAccount(accessToken, alias, {
-        tokenId: 'unknown', // Token ID is not returned by getMe(), would need additional API if needed
-        userEmail: user.email,
         accountId: account.id,
-        accountName: account.name
+        accountName: account.name,
+        tokenId: 'unknown', // Token ID is not returned by getMe(), would need additional API if needed
+        userEmail: user.email
       })
 
       // Switch to this account
@@ -134,28 +134,29 @@ export default class AccountsLogin extends ControlBaseCommand {
 
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           account: {
+            alias,
             id: account.id,
             name: account.name,
-            alias,
             user: {
               email: user.email
             }
-          }
+          },
+          success: true
         }, flags))
       } else {
         this.log(`Successfully logged in to ${chalk.cyan(account.name)} (account ID: ${chalk.greenBright(account.id)})`)
         if (alias !== 'default') {
           this.log(`Account stored with alias: ${alias}`)
         }
+
         this.log(`Account ${chalk.cyan(alias)} is now the current account`)
       }
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          success: false
         }, flags))
       } else {
         this.error(`Failed to authenticate: ${error}`)
@@ -176,20 +177,6 @@ export default class AccountsLogin extends ControlBaseCommand {
     }
   }
 
-  private promptForToken(): Promise<string> {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    })
-
-    return new Promise((resolve) => {
-      rl.question('\nEnter your access token: ', (token) => {
-        rl.close()
-        resolve(token.trim())
-      })
-    })
-  }
-  
   private promptForAlias(): Promise<string> {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -197,7 +184,7 @@ export default class AccountsLogin extends ControlBaseCommand {
     })
 
     return new Promise((resolve) => {
-      const validateAndGetAlias = (input: string): string | null => {
+      const validateAndGetAlias = (input: string): null | string => {
         const trimmedAlias = input.trim()
         if (!trimmedAlias) {
           return null
@@ -213,7 +200,7 @@ export default class AccountsLogin extends ControlBaseCommand {
         }
 
         // Only allow letters, numbers, dashes, and underscores after first character
-        if (!/^[a-z][a-z0-9_-]*$/.test(lowercaseAlias)) {
+        if (!/^[a-z][\d_a-z-]*$/.test(lowercaseAlias)) {
           this.log('Error: Alias can only contain letters, numbers, dashes, and underscores')
           return null
         }
@@ -229,6 +216,7 @@ export default class AccountsLogin extends ControlBaseCommand {
             if (!alias.trim()) {
               this.log('Error: Alias cannot be empty')
             }
+
             askForAlias()
           } else {
             rl.close()
@@ -238,6 +226,20 @@ export default class AccountsLogin extends ControlBaseCommand {
       }
 
       askForAlias()
+    })
+  }
+  
+  private promptForToken(): Promise<string> {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    })
+
+    return new Promise((resolve) => {
+      rl.question('\nEnter your access token: ', (token) => {
+        rl.close()
+        resolve(token.trim())
+      })
     })
   }
 

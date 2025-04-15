@@ -15,9 +15,9 @@ ws.on('open', () => {
 
     // Send authentication message
     const authMessage = JSON.stringify({
-        type: 'auth',
+        accessToken: DUMMY_ACCESS_TOKEN,
         apiKey: DUMMY_API_KEY,
-        accessToken: DUMMY_ACCESS_TOKEN
+        type: 'auth'
     });
     console.log('Client: Sending auth:', authMessage);
     ws.send(authMessage);
@@ -53,13 +53,13 @@ ws.on('open', () => {
     setTimeout(() => {
         console.log('Client: Closing connection after test timeout.');
         ws.close();
-    }, 15000); // 15 seconds
+    }, 15_000); // 15 seconds
 });
 
 ws.on('message', (data) => {
     console.log('Client: Received <= Server:');
     const text = data.toString();
-    const escapedText = text.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+    const escapedText = text.replaceAll('\r', '\\r').replaceAll('\n', '\\n');
     console.log(escapedText);
     process.stdout.write(text); // Write normally too
 });

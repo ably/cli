@@ -1,6 +1,7 @@
-import { AblyBaseCommand } from './base-command.js'
-import * as Ably from 'ably'
 import { ChatClient } from '@ably/chat'
+import * as Ably from 'ably'
+
+import { AblyBaseCommand } from './base-command.js'
 
 export abstract class ChatBaseCommand extends AblyBaseCommand {
   protected async createChatClient(flags: any): Promise<{ chatClient: ChatClient, realtimeClient: Ably.Realtime } | null> {
@@ -30,6 +31,7 @@ export abstract class ChatBaseCommand extends AblyBaseCommand {
       } else {
         this.error(errorMessage);
       }
+
       return null // Unreachable, but required by TypeScript
     }
   }

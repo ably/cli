@@ -1,24 +1,14 @@
 import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 import chalk from 'chalk'
 
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
+
 interface SpacesClients {
-  spacesClient: any;
   realtimeClient: any;
+  spacesClient: any;
 }
 
 export default class SpacesLocksGet extends SpacesBaseCommand {
-  static override description = 'Get a lock in a space'
-
-  static override examples = [
-    '$ ably spaces locks get my-space my-lock',
-    '$ ably spaces locks get my-space my-lock --json',
-    '$ ably spaces locks get my-space my-lock --pretty-json']
-
-  static override flags = {
-    ...SpacesBaseCommand.globalFlags,
-  }
-
   static override args = {
     spaceId: Args.string({
       description: 'Space ID to get lock from',
@@ -28,6 +18,17 @@ export default class SpacesLocksGet extends SpacesBaseCommand {
       description: 'Lock ID to get',
       required: true,
     }),
+  }
+
+  static override description = 'Get a lock in a space'
+
+  static override examples = [
+    '$ ably spaces locks get my-space my-lock',
+    '$ ably spaces locks get my-space my-lock --json',
+    '$ ably spaces locks get my-space my-lock --pretty-json']
+
+  static override flags = {
+    ...SpacesBaseCommand.globalFlags,
   }
 
   async run(): Promise<void> {
@@ -41,8 +42,8 @@ export default class SpacesLocksGet extends SpacesBaseCommand {
       if (!clients) return
 
       const { spacesClient } = clients
-      const spaceId = args.spaceId
-      const lockId = args.lockId
+      const {spaceId} = args
+      const {lockId} = args
       
       // Get the space
       const space = await spacesClient.get(spaceId)
@@ -61,6 +62,7 @@ export default class SpacesLocksGet extends SpacesBaseCommand {
           } else {
             this.log(chalk.yellow(`Lock '${lockId}' not found in space '${spaceId}'`))
           }
+
           return
         }
         

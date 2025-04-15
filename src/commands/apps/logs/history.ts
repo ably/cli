@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class AppsLogsHistory extends AblyBaseCommand {
@@ -16,18 +17,18 @@ export default class AppsLogsHistory extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    limit: Flags.integer({
-      description: 'Maximum number of messages to retrieve',
-      default: 100,
-    }),
     direction: Flags.string({
+      default: 'backwards',
       description: 'Direction of message retrieval',
       options: ['backwards', 'forwards'],
-      default: 'backwards',
     }),
     json: Flags.boolean({
-      description: 'Output results in JSON format',
       default: false,
+      description: 'Output results in JSON format',
+    }),
+    limit: Flags.integer({
+      default: 100,
+      description: 'Maximum number of messages to retrieve',
     }),
   }
 
@@ -43,6 +44,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
           this.error('No API key provided. Please specify --api-key or set an app with "ably apps switch"')
           return
         }
+
         flags['api-key'] = appAndKey.apiKey
       }
       
@@ -58,8 +60,8 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       
       // Build history query parameters
       const historyParams: Ably.RealtimeHistoryParams = {
-        limit: flags.limit,
         direction: flags.direction as 'backwards' | 'forwards',
+        limit: flags.limit,
       }
       
       // Get history
@@ -78,7 +80,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
         this.log(`Found ${chalk.cyan(messages.length.toString())} application log messages:`)
         this.log('')
         
-        messages.forEach(message => {
+        for (const message of messages) {
           // Format timestamp
           const timestamp = new Date(message.timestamp).toISOString()
           this.log(`${chalk.gray(timestamp)} [${chalk.yellow(message.name || 'message')}]`)
@@ -95,7 +97,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
           }
           
           this.log('') // Add a blank line between messages
-        })
+        }
         
         if (messages.length === flags.limit) {
           this.log(chalk.yellow(`Showing maximum of ${flags.limit} messages. Use --limit to show more.`))

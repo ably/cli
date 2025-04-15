@@ -1,7 +1,15 @@
 import { Args, Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysRevokeCommand extends ControlBaseCommand {
+  static args = {
+    keyName: Args.string({
+      description: 'Key name (APP_ID.KEY_ID) of the key to revoke',
+      required: true
+    })
+  }
+
   static description = 'Revoke an API key (permanently disables the key)'
 
   static examples = [
@@ -19,16 +27,9 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
       env: 'ABLY_APP_ID',
     }),
     'force': Flags.boolean({
-      description: 'Skip confirmation prompt',
       default: false,
+      description: 'Skip confirmation prompt',
     }),
-  }
-
-  static args = {
-    keyName: Args.string({
-      description: 'Key name (APP_ID.KEY_ID) of the key to revoke',
-      required: true
-    })
   }
 
   async run(): Promise<void> {
@@ -52,12 +53,13 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
     if (!appId) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: 'No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".'
+          error: 'No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".',
+          success: false
         }, flags))
       } else {
         this.error('No app specified. Please provide --app flag, include APP_ID in the key name, or switch to an app with "ably apps switch".')
       }
+
       return
     }
     
@@ -83,9 +85,9 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
             this.log(`Capabilities: ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
           } else {
             this.log(`Capabilities:`)
-            capEntries.forEach(([scope, privileges]) => {
+            for (const [scope, privileges] of capEntries) {
               this.log(`  • ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
-            })
+            }
           }
         } else {
           this.log(`Capabilities: None`)
@@ -105,13 +107,14 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
       if (!confirmed) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
             error: 'Revocation cancelled by user',
-            keyName
+            keyName,
+            success: false
           }, flags))
         } else {
           this.log('Revocation cancelled.')
         }
+
         return
       }
       
@@ -119,9 +122,9 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           keyName,
-          message: 'Key has been revoked'
+          message: 'Key has been revoked',
+          success: true
         }, flags))
       } else {
         this.log(`Key ${keyName} has been revoked.`)
@@ -145,10 +148,10 @@ export default class KeysRevokeCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
           appId,
-          keyId
+          error: error instanceof Error ? error.message : String(error),
+          keyId,
+          success: false
         }, flags))
       } else {
         this.error(`Error revoking key: ${error instanceof Error ? error.message : String(error)}`)

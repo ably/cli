@@ -1,8 +1,16 @@
 import { Args, Flags } from '@oclif/core'
+import * as readline from 'node:readline'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
-import * as readline from 'readline'
 
 export default class AccountsLogout extends ControlBaseCommand {
+  static override args = {
+    alias: Args.string({
+      description: 'Alias of the account to log out from (defaults to current account)',
+      required: false,
+    }),
+  }
+
   static override description = 'Log out from an Ably account'
 
   static override examples = [
@@ -16,15 +24,8 @@ export default class AccountsLogout extends ControlBaseCommand {
     ...ControlBaseCommand.globalFlags,
     force: Flags.boolean({
       char: 'f',
-      description: 'Force logout without confirmation',
       default: false,
-    }),
-  }
-
-  static override args = {
-    alias: Args.string({
-      description: 'Alias of the account to log out from (defaults to current account)',
-      required: false,
+      description: 'Force logout without confirmation',
     }),
   }
 
@@ -38,12 +39,13 @@ export default class AccountsLogout extends ControlBaseCommand {
       const error = 'No account is currently selected and no alias provided. Use "ably accounts list" to see available accounts.'
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error
+          error,
+          success: false
         }, flags))
       } else {
         this.error(error)
       }
+
       return
     }
 
@@ -54,12 +56,13 @@ export default class AccountsLogout extends ControlBaseCommand {
       const error = `Account with alias "${targetAlias}" not found. Use "ably accounts list" to see available accounts.`
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error
+          error,
+          success: false
         }, flags))
       } else {
         this.error(error)
       }
+
       return
     }
     
@@ -81,11 +84,11 @@ export default class AccountsLogout extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           account: {
             alias: targetAlias
           },
-          remainingAccounts: remainingAccounts.map(account => account.alias)
+          remainingAccounts: remainingAccounts.map(account => account.alias),
+          success: true
         }, flags))
       } else {
         this.log(`Successfully logged out from account ${targetAlias}.`)
@@ -101,8 +104,8 @@ export default class AccountsLogout extends ControlBaseCommand {
       const error = `Failed to log out from account ${targetAlias}.`
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error
+          error,
+          success: false
         }, flags))
       } else {
         this.error(error)

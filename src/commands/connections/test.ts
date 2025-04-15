@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../base-command.js'
 
 export default class ConnectionsTest extends AblyBaseCommand {
   static override description = 'Test connection to Ably'
@@ -15,163 +16,68 @@ export default class ConnectionsTest extends AblyBaseCommand {
   static override flags = {
     ...AblyBaseCommand.globalFlags,
     transport: Flags.string({
+      default: 'all',
       description: 'Transport protocol to use (ws for WebSockets, xhr for HTTP)',
       options: ['ws', 'xhr', 'all'],
-      default: 'all',
     }),
   }
 
   private wsClient: Ably.Realtime | null = null;
   private xhrClient: Ably.Realtime | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<void> {
+     if (this.wsClient && this.wsClient.connection.state !== 'closed' && this.wsClient.connection.state !== 'failed') {
+           this.wsClient.close();
+       }
+
+     if (this.xhrClient && this.xhrClient.connection.state !== 'closed' && this.xhrClient.connection.state !== 'failed') {
+            this.xhrClient.close();
+        }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const {flags} = await this.parse(ConnectionsTest)
 
+    let wsSuccess = false
+    let xhrSuccess = false
+    let wsError: Error | null = null
+    let xhrError: Error | null = null
+    const baseOptions: Ably.ClientOptions = this.getClientOptions(flags)
+
     try {
-      // Get client options
-      const options: Ably.ClientOptions = this.getClientOptions(flags)
-
-      // Test results
-      let wsSuccess = false
-      let xhrSuccess = false
-      let wsError: Error | null = null
-      let xhrError: Error | null = null
-
-      // WebSocket connection test if specified
+      // Run tests based on flags
       if (flags.transport === 'all' || flags.transport === 'ws') {
-        this.logCliEvent(flags, 'connectionTest', 'wsTestStarting', 'Testing WebSocket connection...');
-        if (!this.shouldOutputJson(flags)) {
-            this.log('Testing WebSocket connection to Ably...');
-        }
-
-        try {
-          const wsOptions: Ably.ClientOptions = {
-            ...options,
-            transportParams: {
-              preferWebSockets: true,
-              disallowXHR: true
-            }
-          }
-          this.wsClient = new Ably.Realtime(wsOptions)
-          const client = this.wsClient; // Local const
-
-          // Add listeners for this specific test
-          client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-              this.logCliEvent(flags, 'connectionTest', `wsStateChange-${stateChange.current}`, `WS connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
-          });
-
-          await new Promise<void>((resolve, reject) => {
-            const connectionTimeout = setTimeout(() => {
-              const timeoutError = new Error('Connection timeout after 10 seconds');
-              this.logCliEvent(flags, 'connectionTest', 'wsTimeout', timeoutError.message, { error: timeoutError.message });
-              reject(timeoutError)
-            }, 10000)
-
-            client.connection.once('connected', () => {
-              clearTimeout(connectionTimeout)
-              wsSuccess = true
-              this.logCliEvent(flags, 'connectionTest', 'wsSuccess', 'WebSocket connection successful', { connectionId: client.connection.id });
-              if (!this.shouldOutputJson(flags)) {
-                this.log(`${chalk.green('✓')} WebSocket connection successful`);
-                this.log(`  Connection ID: ${chalk.cyan(client.connection.id || 'unknown')}`);
-              }
-              client.close()
-              resolve()
-            })
-
-            client.connection.once('failed', (stateChange) => {
-              clearTimeout(connectionTimeout)
-              wsError = stateChange.reason || new Error('Connection failed')
-              this.logCliEvent(flags, 'connectionTest', 'wsFailed', `WebSocket connection failed: ${wsError.message}`, { error: wsError.message, reason: stateChange.reason });
-              if (!this.shouldOutputJson(flags)) {
-                  this.log(`${chalk.red('✗')} WebSocket connection failed: ${wsError.message}`);
-              }
-              client.close() // Close even on failure
-              resolve() // Resolve to allow XHR test to run
-            })
-          })
-        } catch (error) {
-          wsError = error as Error
-          this.logCliEvent(flags, 'connectionTest', 'wsError', `WebSocket connection test caught error: ${wsError.message}`, { error: wsError.message });
-          if (!this.shouldOutputJson(flags)) {
-            this.log(`${chalk.red('✗')} WebSocket connection failed: ${wsError.message}`);
-          }
-           // Ensure client is closed if error occurred during setup
-           if (this.wsClient && this.wsClient.connection.state !== 'closed') {
-              this.wsClient.close();
-           }
-        }
+        const result = await this.testWebSocketConnection(baseOptions, flags);
+        wsSuccess = result.success;
+        wsError = result.error;
       }
 
-      // XHR connection test if specified
       if (flags.transport === 'all' || flags.transport === 'xhr') {
-         this.logCliEvent(flags, 'connectionTest', 'xhrTestStarting', 'Testing HTTP connection...');
-         if (!this.shouldOutputJson(flags)) {
-            this.log('Testing HTTP connection to Ably...');
-         }
-
-        try {
-          const xhrOptions: Ably.ClientOptions = {
-            ...options,
-            transportParams: {
-              disallowWebSockets: true
-            }
-          }
-          this.xhrClient = new Ably.Realtime(xhrOptions)
-          const client = this.xhrClient; // Local const
-
-          // Add listeners for this specific test
-          client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-              this.logCliEvent(flags, 'connectionTest', `xhrStateChange-${stateChange.current}`, `HTTP connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
-          });
-
-          await new Promise<void>((resolve, reject) => {
-            const connectionTimeout = setTimeout(() => {
-              const timeoutError = new Error('Connection timeout after 10 seconds');
-              this.logCliEvent(flags, 'connectionTest', 'xhrTimeout', timeoutError.message, { error: timeoutError.message });
-              reject(timeoutError);
-            }, 10000)
-
-            client.connection.once('connected', () => {
-              clearTimeout(connectionTimeout)
-              xhrSuccess = true
-              this.logCliEvent(flags, 'connectionTest', 'xhrSuccess', 'HTTP connection successful', { connectionId: client.connection.id });
-              if (!this.shouldOutputJson(flags)) {
-                this.log(`${chalk.green('✓')} HTTP connection successful`);
-                this.log(`  Connection ID: ${chalk.cyan(client.connection.id || 'unknown')}`);
-              }
-              client.close()
-              resolve()
-            })
-
-            client.connection.once('failed', (stateChange) => {
-              clearTimeout(connectionTimeout)
-              xhrError = stateChange.reason || new Error('Connection failed')
-              this.logCliEvent(flags, 'connectionTest', 'xhrFailed', `HTTP connection failed: ${xhrError.message}`, { error: xhrError.message, reason: stateChange.reason });
-              if (!this.shouldOutputJson(flags)) {
-                 this.log(`${chalk.red('✗')} HTTP connection failed: ${xhrError.message}`);
-              }
-              client.close() // Close even on failure
-              resolve() // Resolve to allow summary output
-            })
-          })
-        } catch (error) {
-          xhrError = error as Error
-          this.logCliEvent(flags, 'connectionTest', 'xhrError', `HTTP connection test caught error: ${xhrError.message}`, { error: xhrError.message });
-          if (!this.shouldOutputJson(flags)) {
-            this.log(`${chalk.red('✗')} HTTP connection failed: ${xhrError.message}`);
-          }
-          // Ensure client is closed if error occurred during setup
-           if (this.xhrClient && this.xhrClient.connection.state !== 'closed') {
-              this.xhrClient.close();
-           }
-        }
+        const result = await this.testXhrConnection(baseOptions, flags);
+        xhrSuccess = result.success;
+        xhrError = result.error;
       }
 
-      // Output summary
-      const summary = {
-         ws: { success: wsSuccess, error: wsError?.message || null },
-         xhr: { success: xhrSuccess, error: xhrError?.message || null }
+      this.outputSummary(flags, wsSuccess, xhrSuccess, wsError, xhrError);
+
+    } catch (error: unknown) {
+      const err = error as Error
+      this.logCliEvent(flags || {}, 'connectionTest', 'fatalError', `Connection test failed: ${err.message}`, { error: err.message });
+      this.error(err.message)
+    } finally {
+      // Ensure clients are closed (handled by the finally override)
+    }
+  }
+
+  // --- Refactored Test Methods ---
+
+  private outputSummary(flags: Record<string, unknown>, wsSuccess: boolean, xhrSuccess: boolean, wsError: Error | null, xhrError: Error | null): void {
+     const summary = {
+         ws: { error: wsError?.message || null, success: wsSuccess },
+         xhr: { error: xhrError?.message || null, success: xhrSuccess }
       };
       this.logCliEvent(flags, 'connectionTest', 'summary', 'Connection test summary', summary);
 
@@ -179,7 +85,8 @@ export default class ConnectionsTest extends AblyBaseCommand {
          this.log('');
          this.log('Connection Test Summary:');
 
-         if (flags.transport === 'all') {
+         switch (flags.transport) {
+         case 'all': {
            // If both were tested
            const allSuccess = wsSuccess && xhrSuccess
            const partialSuccess = wsSuccess || xhrSuccess
@@ -191,48 +98,169 @@ export default class ConnectionsTest extends AblyBaseCommand {
            } else {
              this.log(`${chalk.red('✗')} All connection tests failed`);
            }
-         } else if (flags.transport === 'ws') {
+         
+         break;
+         }
+
+         case 'ws': {
            if (wsSuccess) {
              this.log(`${chalk.green('✓')} WebSocket connection test passed successfully`);
            } else {
              this.log(`${chalk.red('✗')} WebSocket connection test failed`);
            }
-         } else if (flags.transport === 'xhr') {
+         
+         break;
+         }
+
+         case 'xhr': {
            if (xhrSuccess) {
              this.log(`${chalk.green('✓')} HTTP connection test passed successfully`);
            } else {
              this.log(`${chalk.red('✗')} HTTP connection test failed`);
            }
+         
+         break;
+         }
+         // No default
          }
       }
-
-    } catch (error: unknown) {
-      const err = error as Error
-      this.logCliEvent(flags || {}, 'connectionTest', 'fatalError', `Connection test failed: ${err.message}`, { error: err.message });
-      this.error(err.message)
-    } finally {
-       // Ensure clients are closed
-       if (this.wsClient && this.wsClient.connection.state !== 'closed') {
-           this.wsClient.close();
-       }
-       if (this.xhrClient && this.xhrClient.connection.state !== 'closed') {
-           this.xhrClient.close();
-       }
-    }
   }
 
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.wsClient && this.wsClient.connection.state !== 'closed') {
-       if (this.wsClient.connection.state !== 'failed') {
-           this.wsClient.close();
-       }
-     }
-     if (this.xhrClient && this.xhrClient.connection.state !== 'closed') {
-        if (this.xhrClient.connection.state !== 'failed') {
-            this.xhrClient.close();
+  private async testWebSocketConnection(baseOptions: Ably.ClientOptions, flags: Record<string, unknown>): Promise<{ error: Error | null; success: boolean }> {
+    let success = false;
+    let errorResult: Error | null = null;
+
+    this.logCliEvent(flags, 'connectionTest', 'wsTestStarting', 'Testing WebSocket connection...');
+    if (!this.shouldOutputJson(flags)) {
+        this.log('Testing WebSocket connection to Ably...');
+    }
+
+    try {
+      const wsOptions: Ably.ClientOptions = {
+        ...baseOptions,
+        transportParams: {
+          disallowXHR: true,
+          preferWebSockets: true
         }
-     }
-     return super.finally(err);
-   }
+      }
+      this.wsClient = new Ably.Realtime(wsOptions);
+      const client = this.wsClient;
+
+      client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+          this.logCliEvent(flags, 'connectionTest', `wsStateChange-${stateChange.current}`, `WS connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const connectionTimeout = setTimeout(() => {
+          const timeoutError = new Error('Connection timeout after 10 seconds');
+          this.logCliEvent(flags, 'connectionTest', 'wsTimeout', timeoutError.message, { error: timeoutError.message });
+          reject(timeoutError);
+        }, 10_000);
+
+        client.connection.once('connected', () => {
+          clearTimeout(connectionTimeout);
+          success = true;
+          this.logCliEvent(flags, 'connectionTest', 'wsSuccess', 'WebSocket connection successful', { connectionId: client.connection.id });
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`${chalk.green('✓')} WebSocket connection successful`);
+            this.log(`  Connection ID: ${chalk.cyan(client.connection.id || 'unknown')}`);
+          }
+
+          resolve();
+        });
+
+        client.connection.once('failed', (stateChange) => {
+          clearTimeout(connectionTimeout);
+          errorResult = stateChange.reason || new Error('Connection failed');
+          this.logCliEvent(flags, 'connectionTest', 'wsFailed', `WebSocket connection failed: ${errorResult.message}`, { error: errorResult.message, reason: stateChange.reason });
+          if (!this.shouldOutputJson(flags)) {
+              this.log(`${chalk.red('✗')} WebSocket connection failed: ${errorResult.message}`);
+          }
+
+          resolve(); // Resolve even on failure to allow summary
+        });
+      });
+    } catch (error) {
+      errorResult = error as Error;
+      this.logCliEvent(flags, 'connectionTest', 'wsError', `WebSocket connection test caught error: ${errorResult.message}`, { error: errorResult.message });
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`${chalk.red('✗')} WebSocket connection failed: ${errorResult.message}`);
+      }
+    } finally {
+      // Close client if it exists and isn't already closed
+      if (this.wsClient && this.wsClient.connection.state !== 'closed') {
+        this.wsClient.close();
+      }
+    }
+
+    return { error: errorResult, success };
+  }
+
+  private async testXhrConnection(baseOptions: Ably.ClientOptions, flags: Record<string, unknown>): Promise<{ error: Error | null; success: boolean }> {
+    let success = false;
+    let errorResult: Error | null = null;
+
+    this.logCliEvent(flags, 'connectionTest', 'xhrTestStarting', 'Testing HTTP connection...');
+    if (!this.shouldOutputJson(flags)) {
+        this.log('Testing HTTP connection to Ably...');
+    }
+
+    try {
+      const xhrOptions: Ably.ClientOptions = {
+        ...baseOptions,
+        transportParams: {
+          disallowWebSockets: true
+        }
+      };
+      this.xhrClient = new Ably.Realtime(xhrOptions);
+      const client = this.xhrClient;
+
+      client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+          this.logCliEvent(flags, 'connectionTest', `xhrStateChange-${stateChange.current}`, `HTTP connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        const connectionTimeout = setTimeout(() => {
+          const timeoutError = new Error('Connection timeout after 10 seconds');
+          this.logCliEvent(flags, 'connectionTest', 'xhrTimeout', timeoutError.message, { error: timeoutError.message });
+          reject(timeoutError);
+        }, 10_000);
+
+        client.connection.once('connected', () => {
+          clearTimeout(connectionTimeout);
+          success = true;
+          this.logCliEvent(flags, 'connectionTest', 'xhrSuccess', 'HTTP connection successful', { connectionId: client.connection.id });
+          if (!this.shouldOutputJson(flags)) {
+            this.log(`${chalk.green('✓')} HTTP connection successful`);
+            this.log(`  Connection ID: ${chalk.cyan(client.connection.id || 'unknown')}`);
+          }
+
+          resolve();
+        });
+
+        client.connection.once('failed', (stateChange) => {
+          clearTimeout(connectionTimeout);
+          errorResult = stateChange.reason || new Error('Connection failed');
+          this.logCliEvent(flags, 'connectionTest', 'xhrFailed', `HTTP connection failed: ${errorResult.message}`, { error: errorResult.message, reason: stateChange.reason });
+          if (!this.shouldOutputJson(flags)) {
+             this.log(`${chalk.red('✗')} HTTP connection failed: ${errorResult.message}`);
+          }
+
+          resolve(); // Resolve even on failure
+        });
+      });
+    } catch (error) {
+      errorResult = error as Error;
+      this.logCliEvent(flags, 'connectionTest', 'xhrError', `HTTP connection test caught error: ${errorResult.message}`, { error: errorResult.message });
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`${chalk.red('✗')} HTTP connection failed: ${errorResult.message}`);
+      }
+    } finally {
+      if (this.xhrClient && this.xhrClient.connection.state !== 'closed') {
+        this.xhrClient.close();
+      }
+    }
+
+    return { error: errorResult, success };
+  }
 } 

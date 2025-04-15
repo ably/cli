@@ -1,43 +1,44 @@
 import { Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../control-base-command.js'
 import chalk from 'chalk'
 
+import { ControlBaseCommand } from '../../control-base-command.js'
+
 interface QueueStats {
-  publishRate: number | null;
-  deliveryRate: number | null;
-  acknowledgementRate: number | null;
+  acknowledgementRate: null | number;
+  deliveryRate: null | number;
+  publishRate: null | number;
 }
 
 interface QueueMessages {
   ready: number;
-  unacknowledged: number;
   total: number;
+  unacknowledged: number;
 }
 
 interface QueueAmqp {
-  uri: string;
   queueName: string;
+  uri: string;
 }
 
 interface QueueStomp {
-  uri: string;
-  host: string;
   destination: string;
+  host: string;
+  uri: string;
 }
 
 interface Queue {
+  amqp: QueueAmqp;
+  deadletter?: boolean;
+  deadletterId?: string;
   id: string;
+  maxLength: number;
+  messages: QueueMessages;
   name: string;
   region: string;
   state: string;
-  amqp: QueueAmqp;
-  stomp: QueueStomp;
-  messages: QueueMessages;
   stats: QueueStats;
+  stomp: QueueStomp;
   ttl: number;
-  maxLength: number;
-  deadletter?: boolean;
-  deadletterId?: string;
 }
 
 export default class QueuesListCommand extends ControlBaseCommand {
@@ -79,23 +80,23 @@ export default class QueuesListCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           appId,
           queues: queues.map((queue: Queue) => ({
+            amqp: queue.amqp,
+            deadletter: queue.deadletter || false,
+            deadletterId: queue.deadletterId,
             id: queue.id,
+            maxLength: queue.maxLength,
+            messages: queue.messages,
             name: queue.name,
             region: queue.region,
             state: queue.state,
-            amqp: queue.amqp,
-            stomp: queue.stomp,
-            messages: queue.messages,
             stats: queue.stats,
-            ttl: queue.ttl,
-            maxLength: queue.maxLength,
-            deadletter: queue.deadletter || false,
-            deadletterId: queue.deadletterId
+            stomp: queue.stomp,
+            ttl: queue.ttl
           })),
+          success: true,
+          timestamp: new Date().toISOString(),
           total: queues.length
         }, flags));
       } else {
@@ -133,9 +134,11 @@ export default class QueuesListCommand extends ControlBaseCommand {
             if (queue.stats.publishRate !== null) {
               this.log(`    Publish Rate: ${queue.stats.publishRate} msg/s`)
             }
+
             if (queue.stats.deliveryRate !== null) {
               this.log(`    Delivery Rate: ${queue.stats.deliveryRate} msg/s`)
             }
+
             if (queue.stats.acknowledgementRate !== null) {
               this.log(`    Acknowledgement Rate: ${queue.stats.acknowledgementRate} msg/s`)
             }
@@ -153,10 +156,10 @@ export default class QueuesListCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId: appId
+          success: false
         }, flags));
       } else {
         this.error(`Error listing queues: ${error instanceof Error ? error.message : String(error)}`)

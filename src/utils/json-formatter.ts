@@ -6,7 +6,7 @@ import chalk from 'chalk'
  * @returns A colored string representation of the JSON data
  */
 export function formatJson(data: any): string {
-  if (typeof data === 'undefined') return chalk.gray('undefined')
+  if (data === undefined) return chalk.gray('undefined')
   if (data === null) return chalk.gray('null')
 
   try {
@@ -18,7 +18,7 @@ export function formatJson(data: any): string {
     // For objects and arrays, do pretty printing with color
     const jsonString = JSON.stringify(data, null, 2)
     return colorizeJson(jsonString)
-  } catch (error) {
+  } catch {
     // If JSON serialization fails, return the string representation
     return String(data)
   }
@@ -58,10 +58,17 @@ function colorValue(value: any): string {
   if (value === undefined) return chalk.gray('undefined')
   
   switch (typeof value) {
-    case 'number': return chalk.yellow(value)
-    case 'boolean': return chalk.cyan(value)
-    case 'string': return chalk.green(`"${value}"`)
-    default: return String(value)
+    case 'number': { return chalk.yellow(value)
+    }
+
+    case 'boolean': { return chalk.cyan(value)
+    }
+
+    case 'string': { return chalk.green(`"${value}"`)
+    }
+
+    default: { return String(value)
+    }
   }
 }
 
@@ -74,13 +81,13 @@ function colorizeJson(jsonString: string): string {
   // Replace with colors based on regex patterns
   return jsonString
     // Keys
-    .replace(/"([^"]+)":/g, (_, key) => `${chalk.blue(`"${key}"`)}: `)
+    .replaceAll(/"([^"]+)":/g, (_, key) => `${chalk.blue(`"${key}"`)}: `)
     // String values
-    .replace(/: "([^"]*)"/g, (_, value) => `: ${chalk.green(`"${value}"`)}`)
+    .replaceAll(/: "([^"]*)"/g, (_, value) => `: ${chalk.green(`"${value}"`)}`)
     // Numbers
-    .replace(/: (-?\d+\.?\d*)/g, (_, value) => `: ${chalk.yellow(value)}`)
+    .replaceAll(/: (-?\d+\.?\d*)/g, (_, value) => `: ${chalk.yellow(value)}`)
     // Booleans
-    .replace(/: (true|false)/g, (_, value) => `: ${chalk.cyan(value)}`)
+    .replaceAll(/: (true|false)/g, (_, value) => `: ${chalk.cyan(value)}`)
     // null
-    .replace(/: (null)/g, (_, value) => `: ${chalk.gray(value)}`)
+    .replaceAll(/: (null)/g, (_, value) => `: ${chalk.gray(value)}`)
 } 

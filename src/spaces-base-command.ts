@@ -1,11 +1,12 @@
-import { AblyBaseCommand } from './base-command.js'
-import * as Ably from 'ably'
 // Import with type assertion to handle the nested default export
 import SpacesModule from '@ably/spaces'
+import * as Ably from 'ably'
+
+import { AblyBaseCommand } from './base-command.js'
 type SpacesConstructor = new (client: Ably.Realtime) => any;
 
 export abstract class SpacesBaseCommand extends AblyBaseCommand {
-  protected async createSpacesClient(flags: any): Promise<{ spacesClient: any, realtimeClient: Ably.Realtime } | null> {
+  protected async createSpacesClient(flags: any): Promise<{ realtimeClient: Ably.Realtime, spacesClient: any } | null> {
     const isJsonMode = this.shouldOutputJson(flags);
     // Create Ably Realtime client first
     // Error handling within createAblyClient already handles JSON output
@@ -22,7 +23,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
       const Spaces = (SpacesModule as any).default as SpacesConstructor
       const spacesClient = new Spaces(realtimeClient)
       this.logCliEvent(flags, 'SpacesClient', 'init', 'Spaces client initialized successfully.');
-      return { spacesClient, realtimeClient }
+      return { realtimeClient, spacesClient }
     } catch (error: unknown) {
       // Close the Realtime connection if Spaces client creation fails
       realtimeClient.close()
@@ -34,6 +35,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
       } else {
         this.error(errorMessage);
       }
+
       return null // Unreachable, but required by TypeScript
     }
   }

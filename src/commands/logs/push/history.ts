@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class LogsPushHistory extends AblyBaseCommand {
@@ -16,14 +17,14 @@ export default class LogsPushHistory extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    limit: Flags.integer({
-      description: 'Maximum number of logs to retrieve',
-      default: 100,
-    }),
     direction: Flags.string({
+      default: 'backwards',
       description: 'Direction of log retrieval',
       options: ['backwards', 'forwards'],
-      default: 'backwards',
+    }),
+    limit: Flags.integer({
+      default: 100,
+      description: 'Maximum number of logs to retrieve',
     }),
   }
 
@@ -47,8 +48,8 @@ export default class LogsPushHistory extends AblyBaseCommand {
       
       // Get message history
       const historyOptions = {
-        limit: flags.limit,
         direction: flags.direction as 'backwards' | 'forwards',
+        limit: flags.limit,
       }
 
       const historyPage = await channel.history(historyOptions)
@@ -57,17 +58,17 @@ export default class LogsPushHistory extends AblyBaseCommand {
       // Output results based on format
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           messages: messages.map(msg => ({
-            timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString(),
             channel: channelName,
-            name: msg.name,
-            data: msg.data,
-            encoding: msg.encoding,
             clientId: msg.clientId,
             connectionId: msg.connectionId,
-            id: msg.id
-          }))
+            data: msg.data,
+            encoding: msg.encoding,
+            id: msg.id,
+            name: msg.name,
+            timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString()
+          })),
+          success: true
         }, flags))
       } else {
         if (messages.length === 0) {
@@ -78,7 +79,7 @@ export default class LogsPushHistory extends AblyBaseCommand {
         this.log(`Found ${chalk.cyan(messages.length.toString())} push log messages:`)
         this.log('')
 
-        messages.forEach((message) => {
+        for (const message of messages) {
           const timestamp = message.timestamp
             ? new Date(message.timestamp).toISOString()
             : 'Unknown timestamp'
@@ -90,14 +91,31 @@ export default class LogsPushHistory extends AblyBaseCommand {
           // For push log events - based on examples and severity
           if (message.data && typeof message.data === 'object' && 'severity' in message.data) {
             const severity = message.data.severity as string
-            if (severity === 'error') {
+            switch (severity) {
+            case 'error': {
               eventColor = chalk.red
-            } else if (severity === 'warning') {
+            
+            break;
+            }
+
+            case 'warning': {
               eventColor = chalk.yellow
-            } else if (severity === 'info') {
+            
+            break;
+            }
+
+            case 'info': {
               eventColor = chalk.green
-            } else if (severity === 'debug') {
+            
+            break;
+            }
+
+            case 'debug': {
               eventColor = chalk.blue
+            
+            break;
+            }
+            // No default
             }
           }
 
@@ -111,8 +129,9 @@ export default class LogsPushHistory extends AblyBaseCommand {
               this.log(String(message.data))
             }
           }
+
           this.log('')
-        })
+        }
 
         if (messages.length === flags.limit) {
           this.log(chalk.yellow(`Showing maximum of ${flags.limit} logs. Use --limit to show more.`))
@@ -121,8 +140,8 @@ export default class LogsPushHistory extends AblyBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          success: false
         }, flags))
       } else {
         this.error(`Error retrieving push notification logs: ${error instanceof Error ? error.message : String(error)}`)

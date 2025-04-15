@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class LogsPushSubscribe extends AblyBaseCommand {
@@ -14,19 +15,29 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
-      default: 0,
-    }),
     json: Flags.boolean({
-      description: 'Output results as JSON',
       default: false,
+      description: 'Output results as JSON',
+    }),
+    rewind: Flags.integer({
+      default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 
   private client: Ably.Realtime | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.client && this.client.connection.state !== 'closed' && // Check state before closing to avoid errors if already closed
+       this.client.connection.state !== 'failed') {
+           this.client.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const {flags} = await this.parse(LogsPushSubscribe)
 
     try {
@@ -34,7 +45,7 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
       this.client = await this.createAblyClient(flags)
       if (!this.client) return
 
-      const client = this.client; // local const
+      const {client} = this; // local const
       const channelName = '[meta]log:push'
       const channelOptions: Ably.ChannelOptions = {}
 
@@ -71,10 +82,10 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
         const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
         const event = message.name || 'unknown'
         const logEvent = {
-            timestamp,
             channel: channelName,
+            data: message.data,
             event,
-            data: message.data
+            timestamp
         };
         this.logCliEvent(flags, 'logs', 'logReceived', `Log received on ${channelName}`, logEvent);
 
@@ -89,14 +100,31 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
         // For push log events - based on examples and severity
         if (message.data && typeof message.data === 'object' && 'severity' in message.data) {
           const severity = message.data.severity as string
-          if (severity === 'error') {
+          switch (severity) {
+          case 'error': {
             eventColor = chalk.red
-          } else if (severity === 'warning') {
+          
+          break;
+          }
+
+          case 'warning': {
             eventColor = chalk.yellow
-          } else if (severity === 'info') {
+          
+          break;
+          }
+
+          case 'info': {
             eventColor = chalk.green
-          } else if (severity === 'debug') {
+          
+          break;
+          }
+
+          case 'debug': {
             eventColor = chalk.blue
+          
+          break;
+          }
+          // No default
           }
         }
 
@@ -110,6 +138,7 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
             this.log(`Data: ${message.data}`)
           }
         }
+
         this.log('')
       })
       this.logCliEvent(flags, 'logs', 'subscribed', `Successfully subscribed to ${channelName}`);
@@ -129,12 +158,15 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
          if (!this.shouldOutputJson(flags)) {
             this.log('\nSubscription ended');
          }
+
          cleanup();
-         process.exit(0);
+         // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+         process.exit(0); // Reinstated: Explicit exit on signal
       });
       process.on('SIGTERM', () => {
           cleanup();
-          process.exit(0);
+          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+          process.exit(0); // Reinstated: Explicit exit on signal
       });
 
       this.logCliEvent(flags, 'logs', 'listening', 'Listening for logs...');
@@ -152,15 +184,4 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
        }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.client && this.client.connection.state !== 'closed') {
-       // Check state before closing to avoid errors if already closed
-       if (this.client.connection.state !== 'failed') {
-           this.client.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

@@ -211,8 +211,8 @@ Show the current Ably account
 
 ```
 USAGE
-  $ ably accounts current [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably accounts current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -246,8 +246,8 @@ List locally configured Ably accounts
 
 ```
 USAGE
-  $ ably accounts list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably accounts list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -281,8 +281,8 @@ Log in to your Ably account
 
 ```
 USAGE
-  $ ably accounts login [TOKEN] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-a <value>]
+  $ ably accounts login [TOKEN] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-a <value>]
     [--no-browser]
 
 ARGUMENTS
@@ -324,8 +324,8 @@ Log out from an Ably account
 
 ```
 USAGE
-  $ ably accounts logout [ALIAS] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-f]
+  $ ably accounts logout [ALIAS] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f]
 
 ARGUMENTS
   ALIAS  Alias of the account to log out from (defaults to current account)
@@ -365,9 +365,9 @@ Get account stats with optional live updates
 
 ```
 USAGE
-  $ ably accounts stats [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end
-    <value>] [--unit minute|hour|day|month] [--limit <value>] [--live] [--interval <value>] [--debug]
+  $ ably accounts stats [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>]
+    [--interval <value>] [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -419,8 +419,8 @@ Switch to a different Ably account
 
 ```
 USAGE
-  $ ably accounts switch [ALIAS] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably accounts switch [ALIAS] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ALIAS  Alias of the account to switch to
@@ -513,11 +513,11 @@ Create a channel rule
 
 ```
 USAGE
-  $ ably apps channel-rules create --name <value> [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
-    [--persisted] [--push-enabled] [--authenticated] [--persist-last] [--expose-time-serial]
-    [--populate-channel-registry] [--batching-enabled] [--batching-interval <value>] [--conflation-enabled]
-    [--conflation-interval <value>] [--conflation-key <value>] [--tls-only] [--app <value>]
+  $ ably apps channel-rules create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app
+    <value>] [--authenticated] [--batching-enabled] [--batching-interval <value>] [--conflation-enabled]
+    [--conflation-interval <value>] [--conflation-key <value>] [--expose-time-serial] [--persist-last] [--persisted]
+    [--populate-channel-registry] [--push-enabled] [--tls-only]
 
 FLAGS
   -v, --verbose                      Output verbose logs
@@ -565,8 +565,8 @@ Delete a channel rule
 
 ```
 USAGE
-  $ ably apps channel-rules delete NAMEORID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+  $ ably apps channel-rules delete NAMEORID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
 
 ARGUMENTS
   NAMEORID  Name or ID of the channel rule to delete
@@ -632,11 +632,11 @@ Update a channel rule
 
 ```
 USAGE
-  $ ably apps channel-rules update NAMEORID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--persisted]
-    [--push-enabled] [--authenticated] [--persist-last] [--expose-time-serial] [--populate-channel-registry]
-    [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>]
-    [--conflation-key <value>] [--tls-only] [--app <value>]
+  $ ably apps channel-rules update NAMEORID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--authenticated] [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval
+    <value>] [--conflation-key <value>] [--expose-time-serial] [--persist-last] [--persisted]
+    [--populate-channel-registry] [--push-enabled] [--tls-only]
 
 ARGUMENTS
   NAMEORID  Name or ID of the channel rule to update
@@ -687,8 +687,8 @@ Create a new app
 
 ```
 USAGE
-  $ ably apps create --name <value> [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably apps create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
     [--tls-only]
 
 FLAGS
@@ -725,8 +725,8 @@ Show the currently selected app
 
 ```
 USAGE
-  $ ably apps current [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably apps current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -760,8 +760,8 @@ Delete an app
 
 ```
 USAGE
-  $ ably apps delete [ID] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-f]
+  $ ably apps delete [ID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f]
 
 ARGUMENTS
   ID  App ID to delete (uses current app if not specified)
@@ -805,8 +805,8 @@ List all apps in the current account
 
 ```
 USAGE
-  $ ably apps list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably apps list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -861,9 +861,9 @@ Alias for `ably logs app history`
 
 ```
 USAGE
-  $ ably apps logs history [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
-    backwards|forwards]
+  $ ably apps logs history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--direction backwards|forwards]
+    [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -904,8 +904,8 @@ Alias for ably logs app subscribe
 
 ```
 USAGE
-  $ ably apps logs subscribe [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably apps logs subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -938,8 +938,8 @@ Upload Apple Push Notification Service P12 certificate for an app
 
 ```
 USAGE
-  $ ably apps set-apns-p12 ID --certificate <value> [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably apps set-apns-p12 ID --certificate <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
     [--password <value>] [--use-for-sandbox]
 
 ARGUMENTS
@@ -980,9 +980,9 @@ Get app stats with optional live updates
 
 ```
 USAGE
-  $ ably apps stats [ID] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end
-    <value>] [--unit minute|hour|day|month] [--limit <value>] [--live] [--interval <value>] [--debug]
+  $ ably apps stats [ID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>]
+    [--interval <value>] [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
 
 ARGUMENTS
   ID  App ID to get stats for (uses default app if not provided)
@@ -1043,8 +1043,8 @@ Switch to a different Ably app
 
 ```
 USAGE
-  $ ably apps switch [APPID] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably apps switch [APPID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   APPID  ID of the app to switch to
@@ -1079,8 +1079,9 @@ Update an app
 
 ```
 USAGE
-  $ ably apps update ID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--name <value>] [--tls-only]
+  $ ably apps update ID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--name <value>]
+    [--tls-only]
 
 ARGUMENTS
   ID  App ID to update
@@ -1152,9 +1153,9 @@ Creates an Ably Token with capabilities
 
 ```
 USAGE
-  $ ably auth issue-ably-token [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capability
-    <value>] [--ttl <value>] [--token-only]
+  $ ably auth issue-ably-token [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capability
+    <value>] [--token-only] [--ttl <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1204,9 +1205,9 @@ Creates an Ably JWT token with capabilities
 
 ```
 USAGE
-  $ ably auth issue-jwt-token [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [--capability
-    <value>] [--ttl <value>] [--token-only]
+  $ ably auth issue-jwt-token [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capability
+    <value>] [--token-only] [--ttl <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1281,8 +1282,8 @@ Create a new API key for an app
 
 ```
 USAGE
-  $ ably auth keys create --name <value> [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app
+  $ ably auth keys create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app
     <value>] [--capabilities <value>]
 
 FLAGS
@@ -1326,8 +1327,8 @@ Show the current API key for the selected app
 
 ```
 USAGE
-  $ ably auth keys current [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably auth keys current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1364,8 +1365,8 @@ Get details for a specific key
 
 ```
 USAGE
-  $ ably auth keys get KEYNAMEORVALUE [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app
+  $ ably auth keys get KEYNAMEORVALUE [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app
     <value>]
 
 ARGUMENTS
@@ -1406,8 +1407,8 @@ List all keys in the app
 
 ```
 USAGE
-  $ ably auth keys list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably auth keys list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1444,9 +1445,8 @@ Revoke an API key (permanently disables the key)
 
 ```
 USAGE
-  $ ably auth keys revoke KEYNAME [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
-    [--force]
+  $ ably auth keys revoke KEYNAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--force]
 
 ARGUMENTS
   KEYNAME  Key name (APP_ID.KEY_ID) of the key to revoke
@@ -1489,8 +1489,8 @@ Switch to a different API key for the current app
 
 ```
 USAGE
-  $ ably auth keys switch [KEYNAMEORVALUE] [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app
+  $ ably auth keys switch [KEYNAMEORVALUE] [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app
     <value>]
 
 ARGUMENTS
@@ -1529,9 +1529,9 @@ Update a key's properties
 
 ```
 USAGE
-  $ ably auth keys update KEYNAME [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
-    [--name <value>] [--capabilities <value>]
+  $ ably auth keys update KEYNAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--capabilities <value>] [--name <value>]
 
 ARGUMENTS
   KEYNAME  Key name (APP_ID.KEY_ID) of the key to update
@@ -1571,8 +1571,8 @@ Revokes the token provided
 
 ```
 USAGE
-  $ ably auth revoke-token TOKEN [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [-c <value>] [--app <value>] [--debug]
+  $ ably auth revoke-token TOKEN [--access-token <value>] [--api-key <value>] [-c <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--debug]
 
 ARGUMENTS
   TOKEN  Token to revoke
@@ -1630,9 +1630,9 @@ Run a publisher benchmark test
 
 ```
 USAGE
-  $ ably bench publisher CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-m <value>] [-r
-    <value>] [-t rest|realtime] [--wait-for-subscribers] [--message-size <value>]
+  $ ably bench publisher CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--message-size <value>]
+    [-m <value>] [-r <value>] [-t rest|realtime] [--wait-for-subscribers]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
@@ -1675,8 +1675,8 @@ Run a subscriber benchmark test
 
 ```
 USAGE
-  $ ably bench subscriber CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably bench subscriber CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   CHANNEL  The channel name to subscribe to
@@ -1734,9 +1734,9 @@ Publish messages to multiple Ably channels with a single request
 
 ```
 USAGE
-  $ ably channels batch-publish [MESSAGE] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--channels <value> |
-    --channels-json <value> | --spec <value>] [-n <value> | ] [-e <value> | ]
+  $ ably channels batch-publish [MESSAGE] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--channels <value> |
+    --channels-json <value> | --spec <value>] [-e <value> | ] [-n <value> | ]
 
 ARGUMENTS
   MESSAGE  The message to publish (JSON format or plain text, not needed if using --spec)
@@ -1787,9 +1787,9 @@ Retrieve message history for a channel
 
 ```
 USAGE
-  $ ably channels history CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>]
-    [--direction backwards|forwards] [--start <value>] [--end <value>] [--cipher <value>]
+  $ ably channels history CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--cipher <value>]
+    [--direction backwards|forwards] [--end <value>] [--limit <value>] [--start <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to retrieve history for
@@ -1838,8 +1838,8 @@ List active channels using the channel enumeration API
 
 ```
 USAGE
-  $ ably channels list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>]
+  $ ably channels list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter channels by prefix
@@ -1879,8 +1879,8 @@ Alias for ably logs channel-lifecycle subscribe
 
 ```
 USAGE
-  $ ably channels logs [TOPIC] [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably channels logs [TOPIC] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 ARGUMENTS
   TOPIC  [default: channel-lifecycle] Log topic to subscribe to (currently only channel-lifecycle is supported)
@@ -1935,8 +1935,8 @@ Get current occupancy metrics for a channel
 
 ```
 USAGE
-  $ ably channels occupancy get CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably channels occupancy get CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   CHANNEL  Channel name to get occupancy for
@@ -1975,8 +1975,8 @@ Subscribe to real-time occupancy metrics for a channel
 
 ```
 USAGE
-  $ ably channels occupancy subscribe CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably channels occupancy subscribe CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   CHANNEL  Channel name to subscribe to occupancy for
@@ -2032,8 +2032,8 @@ Enter presence on a channel and remain present until terminated
 
 ```
 USAGE
-  $ ably channels presence enter CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>]
+  $ ably channels presence enter CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>]
     [--show-others]
 
 ARGUMENTS
@@ -2073,8 +2073,8 @@ Subscribe to presence events on a channel
 
 ```
 USAGE
-  $ ably channels presence subscribe CHANNEL [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably channels presence subscribe CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   CHANNEL  Channel name to subscribe to presence on
@@ -2111,9 +2111,9 @@ Publish a message to an Ably channel
 
 ```
 USAGE
-  $ ably channels publish CHANNEL MESSAGE [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-n
-    <value>] [-e <value>] [-c <value>] [-d <value>] [--transport rest|realtime]
+  $ ably channels publish CHANNEL MESSAGE [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-c
+    <value>] [-d <value>] [-e <value>] [-n <value>] [--transport rest|realtime]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
@@ -2173,9 +2173,10 @@ Subscribe to messages published on one or more Ably channels
 
 ```
 USAGE
-  $ ably channels subscribe CHANNELS... [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
-    [--delta] [--cipher-key <value>] [--cipher-algorithm <value>] [--cipher-key-length <value>] [--cipher-mode <value>]
+  $ ably channels subscribe CHANNELS... [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--cipher-algorithm <value>] [--cipher-key <value>] [--cipher-key-length <value>] [--cipher-mode <value>] [--delta]
+    [--rewind <value>]
 
 ARGUMENTS
   CHANNELS...  Channel name(s) to subscribe to
@@ -2230,8 +2231,8 @@ Open the Ably config file in the default text editor
 
 ```
 USAGE
-  $ ably config [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-e <value>]
+  $ ably config [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-e <value>]
 
 FLAGS
   -e, --editor=<value>        Text editor to use (defaults to $EDITOR environment variable)
@@ -2283,8 +2284,8 @@ Alias for ably logs connection-lifecycle subscribe
 
 ```
 USAGE
-  $ ably connections logs [TOPIC] [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably connections logs [TOPIC] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 ARGUMENTS
   TOPIC  [default: connections-lifecycle] Log topic to subscribe to (currently only connections-lifecycle is supported)
@@ -2320,9 +2321,9 @@ View connection statistics for an Ably app
 
 ```
 USAGE
-  $ ably connections stats [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--start <value>] [--end
-    <value>] [--unit minute|hour|day|month] [--limit <value>] [--live] [--interval <value>] [--debug]
+  $ ably connections stats [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>]
+    [--interval <value>] [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2372,8 +2373,8 @@ Test connection to Ably
 
 ```
 USAGE
-  $ ably connections test [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--transport ws|xhr|all]
+  $ ably connections test [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--transport ws|xhr|all]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2435,8 +2436,8 @@ Ask a question to the Ably AI agent for help
 
 ```
 USAGE
-  $ ably help ask QUESTION [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-h] [--continue]
+  $ ably help ask QUESTION [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--continue] [-h]
 
 ARGUMENTS
   QUESTION  The question to ask the Ably AI agent
@@ -2562,10 +2563,10 @@ Create an integration rule
 ```
 USAGE
   $ ably integrations create --rule-type http|amqp|kinesis|firehose|pulsar|kafka|azure|azure-functions|mqtt|cloudmqtt
-    --source-type channel.message|channel.presence|channel.lifecycle|presence.message [--json | --pretty-json] [-v]
-    [--host <value>] [--env <value>] [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token
-    <value>] [--client-id <value>] [--app <value>] [--channel-filter <value>] [--request-mode single|batch] [--status
-    enabled|disabled] [--target-url <value>]
+    --source-type channel.message|channel.presence|channel.lifecycle|presence.message [--access-token <value>]
+    [--api-key <value>] [--client-id <value>] [--control-host <value>] [--env <value>] [--host <value>] [--json |
+    --pretty-json] [--token <value>] [-v] [--app <value>] [--channel-filter <value>] [--request-mode single|batch]
+    [--status enabled|disabled] [--target-url <value>]
 
 FLAGS
   -v, --verbose                 Output verbose logs
@@ -2608,8 +2609,8 @@ Delete an integration rule
 
 ```
 USAGE
-  $ ably integrations delete RULEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+  $ ably integrations delete RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
 
 ARGUMENTS
   RULEID  The rule ID to delete
@@ -2648,8 +2649,8 @@ Get an integration rule by ID
 
 ```
 USAGE
-  $ ably integrations get RULEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably integrations get RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 ARGUMENTS
   RULEID  The rule ID to get
@@ -2687,8 +2688,8 @@ List all integration rules
 
 ```
 USAGE
-  $ ably integrations list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably integrations list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2723,8 +2724,8 @@ Update an integration rule
 
 ```
 USAGE
-  $ ably integrations update RULEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably integrations update RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
     [--channel-filter <value>] [--status enabled|disabled] [--target-url <value>]
 
 ARGUMENTS
@@ -2767,8 +2768,8 @@ Log in to your Ably account (alias for "ably accounts login")
 
 ```
 USAGE
-  $ ably login [TOKEN] [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-a <value>]
+  $ ably login [TOKEN] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-a <value>]
     [--no-browser]
 
 ARGUMENTS
@@ -2854,9 +2855,9 @@ Retrieve application log history
 
 ```
 USAGE
-  $ ably logs app history [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
-    backwards|forwards]
+  $ ably logs app history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction backwards|forwards]
+    [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2897,8 +2898,8 @@ Stream logs from the app-wide meta channel [meta]log
 
 ```
 USAGE
-  $ ably logs app subscribe [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably logs app subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2935,8 +2936,8 @@ Stream logs from [meta]channel.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs channel-lifecycle [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably logs channel-lifecycle [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2969,8 +2970,8 @@ Stream logs from [meta]channel.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs channel-lifecycle subscribe [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably logs channel-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3022,9 +3023,9 @@ Retrieve connection lifecycle log history
 
 ```
 USAGE
-  $ ably logs connection-lifecycle history [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
-    backwards|forwards]
+  $ ably logs connection-lifecycle history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction backwards|forwards]
+    [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3065,8 +3066,8 @@ Stream logs from [meta]connection.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs connection-lifecycle subscribe [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably logs connection-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3103,8 +3104,8 @@ Stream logs from [meta]connection meta channel
 
 ```
 USAGE
-  $ ably logs connection subscribe [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably logs connection subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3162,9 +3163,9 @@ Retrieve push notification log history
 
 ```
 USAGE
-  $ ably logs push history [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--limit <value>] [--direction
-    backwards|forwards]
+  $ ably logs push history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction backwards|forwards]
+    [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3205,8 +3206,8 @@ Stream logs from the push notifications meta channel [meta]log:push
 
 ```
 USAGE
-  $ ably logs push subscribe [--pretty-json | --json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--rewind <value>]
+  $ ably logs push subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3294,9 +3295,9 @@ Create a queue
 
 ```
 USAGE
-  $ ably queues create --name <value> [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--ttl
-    <value>] [--max-length <value>] [--region <value>] [--app <value>]
+  $ ably queues create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app
+    <value>] [--max-length <value>] [--region <value>] [--ttl <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3335,8 +3336,8 @@ Delete a queue
 
 ```
 USAGE
-  $ ably queues delete QUEUENAME [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>] [-f]
+  $ ably queues delete QUEUENAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
 
 ARGUMENTS
   QUEUENAME  Name of the queue to delete
@@ -3375,8 +3376,8 @@ List all queues
 
 ```
 USAGE
-  $ ably queues list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--app <value>]
+  $ ably queues list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3438,8 +3439,8 @@ List active chat rooms
 
 ```
 USAGE
-  $ ably rooms list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>]
+  $ ably rooms list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter rooms by prefix
@@ -3500,8 +3501,8 @@ Get historical messages from an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages get ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-l <value>]
+  $ ably rooms messages get ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-l <value>]
     [--show-metadata]
 
 ARGUMENTS
@@ -3547,9 +3548,9 @@ Send a message to an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages send ROOMID TEXT [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>]
-    [-c <value>] [-d <value>]
+  $ ably rooms messages send ROOMID TEXT [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-c
+    <value>] [-d <value>] [--metadata <value>]
 
 ARGUMENTS
   ROOMID  The room ID to send the message to
@@ -3598,8 +3599,8 @@ Subscribe to messages in an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages subscribe ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--show-metadata]
+  $ ably rooms messages subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--show-metadata]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to messages from
@@ -3660,8 +3661,8 @@ Get current occupancy metrics for a room
 
 ```
 USAGE
-  $ ably rooms occupancy get ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms occupancy get ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to get occupancy for
@@ -3700,8 +3701,8 @@ Subscribe to real-time occupancy metrics for a room
 
 ```
 USAGE
-  $ ably rooms occupancy subscribe ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms occupancy subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to occupancy for
@@ -3757,8 +3758,8 @@ Enter presence in a chat room and remain present until terminated
 
 ```
 USAGE
-  $ ably rooms presence enter ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--data <value>]
+  $ ably rooms presence enter ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>]
     [--show-others]
 
 ARGUMENTS
@@ -3802,8 +3803,8 @@ Subscribe to presence events in a chat room
 
 ```
 USAGE
-  $ ably rooms presence subscribe ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms presence subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to presence for
@@ -3859,8 +3860,9 @@ Send a reaction to a chat room
 
 ```
 USAGE
-  $ ably rooms reactions send ROOMID TYPE [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--metadata <value>]
+  $ ably rooms reactions send ROOMID TYPE [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--metadata <value>]
 
 ARGUMENTS
   ROOMID  Room ID to send the reaction to
@@ -3901,8 +3903,8 @@ Subscribe to reactions in a chat room
 
 ```
 USAGE
-  $ ably rooms reactions subscribe ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms reactions subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to reactions in
@@ -3958,8 +3960,8 @@ Start typing in an Ably Chat room (will remain typing until terminated)
 
 ```
 USAGE
-  $ ably rooms typing start ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms typing start ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  The room ID to start typing in
@@ -3998,8 +4000,8 @@ Subscribe to typing indicators in an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms typing subscribe ROOMID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably rooms typing subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to typing indicators from
@@ -4100,8 +4102,8 @@ Get all current cursors in a space
 
 ```
 USAGE
-  $ ably spaces cursors get-all SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces cursors get-all SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to get cursors from
@@ -4138,8 +4140,8 @@ Set your cursor position in a space
 
 ```
 USAGE
-  $ ably spaces cursors set SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--position <value> |
+  $ ably spaces cursors set SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--position <value> |
     --simulate]
 
 ARGUMENTS
@@ -4177,8 +4179,8 @@ Subscribe to cursor movements in a space
 
 ```
 USAGE
-  $ ably spaces cursors subscribe SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces cursors subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to cursors for
@@ -4215,8 +4217,8 @@ List active spaces
 
 ```
 USAGE
-  $ ably spaces list [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-p <value>] [--limit <value>]
+  $ ably spaces list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter spaces by prefix
@@ -4256,8 +4258,8 @@ Spaces Locations API commands (Ably Spaces client-to-client location sharing)
 
 ```
 USAGE
-  $ ably spaces locations [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host <value>]
-    [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces locations [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host <value>]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -4284,8 +4286,8 @@ Get all current locations in a space
 
 ```
 USAGE
-  $ ably spaces locations get-all SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [-f text|json]
+  $ ably spaces locations get-all SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f text|json]
 
 ARGUMENTS
   SPACEID  Space ID to get locations from
@@ -4324,8 +4326,8 @@ Set your location in a space
 
 ```
 USAGE
-  $ ably spaces locations set SPACEID --location <value> [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces locations set SPACEID --location <value> [--access-token <value>] [--api-key <value>] [--client-id
+    <value>] [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to set location in
@@ -4361,8 +4363,8 @@ Subscribe to location changes in a space
 
 ```
 USAGE
-  $ ably spaces locations subscribe SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces locations subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to locations for
@@ -4422,9 +4424,9 @@ Acquire a lock in a space
 
 ```
 USAGE
-  $ ably spaces locks acquire SPACEID LOCKID [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
-    [--data <value>]
+  $ ably spaces locks acquire SPACEID LOCKID [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data
+    <value>]
 
 ARGUMENTS
   SPACEID  Space ID to acquire lock in
@@ -4461,8 +4463,8 @@ Get a lock in a space
 
 ```
 USAGE
-  $ ably spaces locks get SPACEID LOCKID [--json | --pretty-json] [-v] [--host <value>] [--env <value>]
-    [--control-host <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces locks get SPACEID LOCKID [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to get lock from
@@ -4500,8 +4502,8 @@ Get all current locks in a space
 
 ```
 USAGE
-  $ ably spaces locks get-all SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces locks get-all SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to get locks from
@@ -4538,8 +4540,8 @@ Subscribe to lock changes in a space
 
 ```
 USAGE
-  $ ably spaces locks subscribe SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces locks subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe for locks from
@@ -4595,8 +4597,8 @@ Enter a space and remain present until terminated
 
 ```
 USAGE
-  $ ably spaces members enter SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>] [--profile <value>]
+  $ ably spaces members enter SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile <value>]
 
 ARGUMENTS
   SPACEID  Space ID to enter
@@ -4632,8 +4634,8 @@ Subscribe to member presence events in a space
 
 ```
 USAGE
-  $ ably spaces members subscribe SPACEID [--json | --pretty-json] [-v] [--host <value>] [--env <value>] [--control-host
-    <value>] [--access-token <value>] [--api-key <value>] [--token <value>] [--client-id <value>]
+  $ ably spaces members subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to members for

@@ -1,7 +1,15 @@
 import { Args, Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class AppsUpdateCommand extends ControlBaseCommand {
+  static args = {
+    id: Args.string({
+      description: 'App ID to update',
+      required: true,
+    }),
+  }
+
   static description = 'Update an app'
 
   static examples = [
@@ -21,13 +29,6 @@ export default class AppsUpdateCommand extends ControlBaseCommand {
     }),
   }
 
-  static args = {
-    id: Args.string({
-      description: 'App ID to update',
-      required: true,
-    }),
-  }
-
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppsUpdateCommand)
     
@@ -35,14 +36,15 @@ export default class AppsUpdateCommand extends ControlBaseCommand {
     if (flags.name === undefined && flags['tls-only'] === undefined) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId: args.id,
           error: 'At least one update parameter (--name or --tls-only) must be provided',
           status: 'error',
-          appId: args.id
+          success: false
         }, flags));
       } else {
         this.error('At least one update parameter (--name or --tls-only) must be provided');
       }
+
       return;
     }
     
@@ -67,18 +69,18 @@ export default class AppsUpdateCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           app: {
+            accountId: app.accountId,
+            created: new Date(app.created).toISOString(),
             id: app.id,
+            modified: new Date(app.modified).toISOString(),
             name: app.name,
             status: app.status,
-            accountId: app.accountId,
             tlsOnly: app.tlsOnly,
-            created: new Date(app.created).toISOString(),
-            modified: new Date(app.modified).toISOString(),
             ...(app.apnsUsesSandboxCert !== undefined && { apnsUsesSandboxCert: app.apnsUsesSandboxCert })
-          }
+          },
+          success: true,
+          timestamp: new Date().toISOString()
         }, flags));
       } else {
         this.log(`\nApp updated successfully!`);
@@ -96,10 +98,10 @@ export default class AppsUpdateCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId: args.id,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId: args.id
+          success: false
         }, flags));
       } else {
         this.error(`Error updating app: ${error instanceof Error ? error.message : String(error)}`);

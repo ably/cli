@@ -1,6 +1,7 @@
 import { Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../control-base-command.js'
 import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class AppsCurrent extends ControlBaseCommand {
   static override description = 'Show the currently selected app'
@@ -136,7 +137,7 @@ export default class AppsCurrent extends ControlBaseCommand {
           const { account } = await controlApi.getMe()
           accountName = account.name
           accountId = account.id
-        } catch (error) {
+        } catch {
           // If we can't get account details, just use default values
         }
         

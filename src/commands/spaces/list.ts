@@ -1,14 +1,15 @@
 import { Flags } from '@oclif/core'
-import { ChatBaseCommand } from '../../chat-base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
+import { ChatBaseCommand } from '../../chat-base-command.js'
+
 interface SpaceMetrics {
   connections?: number;
-  publishers?: number;
-  subscribers?: number;
   presenceConnections?: number;
   presenceMembers?: number;
+  publishers?: number;
+  subscribers?: number;
 }
 
 interface SpaceStatus {
@@ -34,13 +35,13 @@ export default class SpacesList extends ChatBaseCommand {
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
-    'prefix': Flags.string({
-      description: 'Filter spaces by prefix',
-      char: 'p',
-    }),
     'limit': Flags.integer({
-      description: 'Maximum number of spaces to return',
       default: 100,
+      description: 'Maximum number of spaces to return',
+    }),
+    'prefix': Flags.string({
+      char: 'p',
+      description: 'Filter spaces by prefix',
     }),
     
   }
@@ -81,43 +82,43 @@ export default class SpacesList extends ChatBaseCommand {
       const spaces = new Map<string, any>()
       
       // Filter for space channels and deduplicate
-      allChannels.forEach(channel => {
-        const channelId = channel.channelId
+      for (const channel of allChannels) {
+        const {channelId} = channel
         
         // Check if this is a space channel (has ::$space suffix)
         if (channelId.includes('::$space')) {
           // Extract the base space name (everything before the first ::$space)
           // We need to escape the $ in the regex pattern since it's a special character
-          const spaceNameMatch = channelId.match(/^(.+?)(?:::\$space.*)$/)
+          const spaceNameMatch = channelId.match(/^(.+?)::\$space.*$/)
           if (spaceNameMatch && spaceNameMatch[1]) {
             const spaceName = spaceNameMatch[1]
             // Only add if we haven't seen this space before
             if (!spaces.has(spaceName)) {
               // Store the original channel data but with the simple space name
-              const spaceData = { ...channel, spaceName, channelId: spaceName }
+              const spaceData = { ...channel, channelId: spaceName, spaceName }
               spaces.set(spaceName, spaceData)
             }
           }
         }
-      })
+      }
       
       // Convert map to array
-      const spacesList = Array.from(spaces.values())
+      const spacesList = [...spaces.values()]
       
       // Limit the results to the requested number
       const limitedSpaces = spacesList.slice(0, flags.limit)
 
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
+          hasMore: spacesList.length > flags.limit,
+          shown: limitedSpaces.length,
+          spaces: limitedSpaces.map((space: SpaceItem) => ({
+            metrics: space.status?.occupancy?.metrics || {},
+            spaceName: space.spaceName
+          })),
           success: true,
           timestamp: new Date().toISOString(),
-          spaces: limitedSpaces.map((space: SpaceItem) => ({
-            spaceName: space.spaceName,
-            metrics: space.status?.occupancy?.metrics || {}
-          })),
-          total: spacesList.length,
-          shown: limitedSpaces.length,
-          hasMore: spacesList.length > flags.limit
+          total: spacesList.length
         }, flags));
       } else {
         if (limitedSpaces.length === 0) {
@@ -132,7 +133,7 @@ export default class SpacesList extends ChatBaseCommand {
           
           // Show occupancy if available
           if (space.status?.occupancy?.metrics) {
-            const metrics = space.status.occupancy.metrics;
+            const {metrics} = space.status.occupancy;
             this.log(`  ${chalk.dim('Connections:')} ${metrics.connections || 0}`);
             this.log(`  ${chalk.dim('Publishers:')} ${metrics.publishers || 0}`);
             this.log(`  ${chalk.dim('Subscribers:')} ${metrics.subscribers || 0}`);
@@ -156,9 +157,9 @@ export default class SpacesList extends ChatBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: error instanceof Error ? error.message : String(error),
-          status: 'error'
+          status: 'error',
+          success: false
         }, flags));
       } else {
         this.error(`Error listing spaces: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,4 +1,5 @@
 import { Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysCreateCommand extends ControlBaseCommand {
@@ -15,17 +16,17 @@ export default class KeysCreateCommand extends ControlBaseCommand {
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
-    'name': Flags.string({
-      description: 'Name of the key',
-      required: true,
-    }),
     'app': Flags.string({
       description: 'App ID the key belongs to (uses current app if not specified)',
       env: 'ABLY_APP_ID',
     }),
     'capabilities': Flags.string({
-      description: 'JSON string of capabilities for the key, e.g. "{\\"*\\":[\\\"*\\"]}"',
       default: '{"*":["*"]}',
+      description: 'JSON string of capabilities for the key, e.g. "{\\"*\\":[\\\"*\\"]}"',
+    }),
+    'name': Flags.string({
+      description: 'Name of the key',
+      required: true,
     }),
   }
 
@@ -34,32 +35,34 @@ export default class KeysCreateCommand extends ControlBaseCommand {
     
     const controlApi = this.createControlApi(flags)
     
-    let appId = flags.app || this.configManager.getCurrentAppId()
+    const appId = flags.app || this.configManager.getCurrentAppId()
     
     if (!appId) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: 'No app specified. Please provide --app flag or switch to an app with "ably apps switch".'
+          error: 'No app specified. Please provide --app flag or switch to an app with "ably apps switch".',
+          success: false
         }, flags))
       } else {
         this.error('No app specified. Please provide --app flag or switch to an app with "ably apps switch".')
       }
+
       return
     }
     
     let capabilities
     try {
       capabilities = JSON.parse(flags.capabilities)
-    } catch (error) {
+    } catch {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: 'Invalid capabilities JSON format. Please provide a valid JSON string.'
+          error: 'Invalid capabilities JSON format. Please provide a valid JSON string.',
+          success: false
         }, flags))
       } else {
         this.error('Invalid capabilities JSON format. Please provide a valid JSON string.')
       }
+
       return
     }
     
@@ -69,17 +72,17 @@ export default class KeysCreateCommand extends ControlBaseCommand {
       }
       
       const key = await controlApi.createKey(appId, {
-        name: flags.name,
         capability: capabilities,
+        name: flags.name,
       })
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           key: {
             ...key,
             keyName: `${key.appId}.${key.id}`
-          }
+          },
+          success: true
         }, flags))
       } else {
         this.log(`\nKey created successfully!`)
@@ -98,9 +101,9 @@ export default class KeysCreateCommand extends ControlBaseCommand {
             this.log(`Capabilities: ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
           } else {
             this.log(`Capabilities:`)
-            capEntries.forEach(([scope, privileges]) => {
+            for (const [scope, privileges] of capEntries) {
               this.log(`  • ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
-            })
+            }
           }
         } else {
           this.log(`Capabilities: None`)
@@ -116,9 +119,9 @@ export default class KeysCreateCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
-          appId
+          success: false
         }, flags))
       } else {
         this.error(`Error creating key: ${error instanceof Error ? error.message : String(error)}`)

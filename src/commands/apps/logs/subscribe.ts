@@ -1,4 +1,5 @@
 import {Flags} from '@oclif/core'
+
 import {AblyBaseCommand} from '../../../base-command.js'
 
 export default class AppsLogsSubscribe extends AblyBaseCommand {
@@ -11,13 +12,13 @@ export default class AppsLogsSubscribe extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
-      default: 0,
-    }),
     json: Flags.boolean({
-      description: 'Output results as JSON',
       default: false,
+      description: 'Output results as JSON',
+    }),
+    rewind: Flags.integer({
+      default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 

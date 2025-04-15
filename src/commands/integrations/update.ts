@@ -1,7 +1,27 @@
-import { Flags, Args } from '@oclif/core'
+import { Args, Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 
+// Interface for rule update data structure (most fields optional)
+interface PartialRuleData {
+  requestMode?: string;
+  ruleType?: string; // Usually shouldn't be updated, but kept for structure
+  source?: {
+    channelFilter?: string;
+    type?: string; // Usually shouldn't be updated
+  };
+  status?: 'disabled' | 'enabled';
+  target?: Record<string, unknown>; // Target is highly variable
+}
+
 export default class IntegrationsUpdateCommand extends ControlBaseCommand {
+  static args = {
+    ruleId: Args.string({
+      description: 'The rule ID to update',
+      required: true,
+    }),
+  }
+
   static description = 'Update an integration rule'
 
   static examples = [
@@ -22,21 +42,14 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
     }),
     'status': Flags.string({
       description: 'Status of the rule',
-      required: false,
       options: ['enabled', 'disabled'],
+      required: false,
     }),
     'target-url': Flags.string({
       description: 'Target URL for HTTP rules',
       required: false,
     }),
     
-  }
-
-  static args = {
-    ruleId: Args.string({
-      description: 'The rule ID to update',
-      required: true,
-    }),
   }
 
   async run(): Promise<void> {
@@ -57,10 +70,11 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
       const existingRule = await controlApi.getRule(appId, args.ruleId)
       
       // Prepare update data
-      const updateData: any = {
+      const updateData: PartialRuleData = {
+        // Start with existing values for required fields, but make them optional
+        requestMode: existingRule.requestMode,
         // Use existing values for mandatory fields
         ruleType: existingRule.ruleType,
-        requestMode: existingRule.requestMode,
         source: { 
           ...existingRule.source 
         },
@@ -71,16 +85,16 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
       
       // Only update fields that are explicitly set
       if (flags.status) {
-        updateData.status = flags.status
+        updateData.status = flags.status as 'disabled' | 'enabled'
       }
       
       if (flags['channel-filter']) {
-        updateData.source.channelFilter = flags['channel-filter']
+        updateData.source!.channelFilter = flags['channel-filter']
       }
       
       // Update target if it's an HTTP rule and target-url is provided
       if (existingRule.ruleType === 'http' && flags['target-url']) {
-        updateData.target.url = flags['target-url']
+        updateData.target!.url = flags['target-url']
       }
       
       const updatedRule = await controlApi.updateRule(appId, args.ruleId, updateData)

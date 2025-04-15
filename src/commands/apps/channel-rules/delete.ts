@@ -1,9 +1,17 @@
-import { Flags, Args } from '@oclif/core'
-import { ControlBaseCommand } from '../../../control-base-command.js'
-import * as readline from 'readline'
+import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
+import * as readline from 'node:readline'
+
+import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
+  static args = {
+    nameOrId: Args.string({
+      description: 'Name or ID of the channel rule to delete',
+      required: true,
+    }),
+  }
+
   static description = 'Delete a channel rule'
 
   static examples = [
@@ -21,17 +29,10 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
       required: false,
     }),
     'force': Flags.boolean({
+      char: 'f',
+      default: false,
       description: 'Force deletion without confirmation',
       required: false,
-      default: false,
-      char: 'f',
-    }),
-  }
-
-  static args = {
-    nameOrId: Args.string({
-      description: 'Name or ID of the channel rule to delete',
-      required: true,
     }),
   }
 
@@ -48,13 +49,14 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
       if (!appId) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
             error: 'No app specified. Use --app flag or select an app with "ably apps switch"',
-            status: 'error'
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error('No app specified. Use --app flag or select an app with "ably apps switch"');
         }
+
         return;
       }
       
@@ -65,14 +67,15 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
       if (!namespace) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
+            appId,
             error: `Channel rule "${args.nameOrId}" not found`,
             status: 'error',
-            appId: appId
+            success: false
           }, flags));
         } else {
           this.error(`Channel rule "${args.nameOrId}" not found`);
         }
+
         return;
       }
       
@@ -86,30 +89,39 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
         if (namespace.authenticated !== undefined) {
           this.log(`Authenticated: ${namespace.authenticated ? chalk.green('Yes') : 'No'}`);
         }
+
         if (namespace.persistLast !== undefined) {
           this.log(`Persist Last: ${namespace.persistLast ? chalk.green('Yes') : 'No'}`);
         }
+
         if (namespace.exposeTimeSerial !== undefined) {
           this.log(`Expose Time Serial: ${namespace.exposeTimeSerial ? chalk.green('Yes') : 'No'}`);
         }
+
         if (namespace.populateChannelRegistry !== undefined) {
           this.log(`Populate Channel Registry: ${namespace.populateChannelRegistry ? chalk.green('Yes') : 'No'}`);
         }
+
         if (namespace.batchingEnabled !== undefined) {
           this.log(`Batching Enabled: ${namespace.batchingEnabled ? chalk.green('Yes') : 'No'}`);
         }
+
         if (namespace.batchingInterval !== undefined) {
           this.log(`Batching Interval: ${chalk.green(namespace.batchingInterval.toString())}`);
         }
+
         if (namespace.conflationEnabled !== undefined) {
           this.log(`Conflation Enabled: ${namespace.conflationEnabled ? chalk.green('Yes') : 'No'}`);
         }
+
         if (namespace.conflationInterval !== undefined) {
           this.log(`Conflation Interval: ${chalk.green(namespace.conflationInterval.toString())}`);
         }
+
         if (namespace.conflationKey !== undefined) {
           this.log(`Conflation Key: ${chalk.green(namespace.conflationKey)}`);
         }
+
         if (namespace.tlsOnly !== undefined) {
           this.log(`TLS Only: ${namespace.tlsOnly ? chalk.green('Yes') : 'No'}`);
         }
@@ -121,15 +133,16 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
         if (!confirmed) {
           if (this.shouldOutputJson(flags)) {
             this.log(this.formatJsonOutput({
-              success: false,
+              appId,
               error: 'Deletion cancelled by user',
+              ruleId: namespace.id,
               status: 'cancelled',
-              appId: appId,
-              ruleId: namespace.id
+              success: false
             }, flags));
           } else {
             this.log('Deletion cancelled');
           }
+
           return;
         }
       }
@@ -138,12 +151,12 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
-          appId: appId,
+          appId,
           rule: {
             id: namespace.id
-          }
+          },
+          success: true,
+          timestamp: new Date().toISOString()
         }, flags));
       } else {
         this.log(`Channel rule with ID "${namespace.id}" deleted successfully`);
@@ -151,10 +164,10 @@ export default class ChannelRulesDeleteCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId: appId
+          success: false
         }, flags));
       } else {
         this.error(`Error deleting channel rule: ${error instanceof Error ? error.message : String(error)}`);

@@ -1,13 +1,15 @@
-import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
-import Spaces, { Space } from '@ably/spaces'
-import * as Ably from 'ably'
 import type { LocationsEvents } from '@ably/spaces'
 
+import Spaces, { Space } from '@ably/spaces'
+import { Args, Flags } from '@oclif/core'
+import * as Ably from 'ably'
+import chalk from 'chalk'
+
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
+
 interface SpacesClients {
-  spacesClient: Spaces;
   realtimeClient: Ably.Realtime;
+  spacesClient: Spaces;
 }
 
 // Define interfaces for location types
@@ -19,17 +21,24 @@ interface SpaceMember {
 }
 
 interface LocationItem {
-  member: SpaceMember;
   location: any;
+  member: SpaceMember;
 }
 
 interface LocationUpdate {
   action: string;
-  member: SpaceMember;
   location: any;
+  member: SpaceMember;
 }
 
 export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to subscribe to locations for',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to location changes in a space'
 
   static override examples = [
@@ -43,28 +52,35 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
     
   }
 
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to subscribe to locations for',
-      required: true,
-    }),
-  }
-
-  private clients: SpacesClients | null = null;
-  private subscription: any = null;
   private cleanupInProgress = false;
+  private clients: SpacesClients | null = null;
   private space: Space | null = null;
+  private subscription: any = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<any> {
+     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+     if (!this.cleanupInProgress && this.space) {
+        try { await this.space.leave(); } catch{/* ignore */} // Best effort
+     }
+
+     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
+           this.clients.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesLocationsSubscribe)
-    const spaceId = args.spaceId;
+    const {spaceId} = args;
 
     try {
       // Create Spaces client
       this.clients = await this.createSpacesClient(flags)
       if (!this.clients) return
 
-      const { spacesClient, realtimeClient } = this.clients
+      const { realtimeClient, spacesClient } = this.clients
 
       // Add listeners for connection state changes
       realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
@@ -75,7 +91,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
       this.logCliEvent(flags, 'connection', 'waiting', 'Waiting for connection to establish...');
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = realtimeClient.connection;
           if (state === 'connected') {
              this.logCliEvent(flags, 'connection', 'connected', 'Realtime connection established.');
             resolve();
@@ -88,6 +104,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
             setTimeout(checkConnection, 100);
           }
         };
+
         checkConnection();
       });
 
@@ -96,8 +113,9 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
       if (!this.shouldOutputJson(flags)) {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
+
       this.space = await spacesClient.get(spaceId);
-      const space = this.space; // Local const
+      const {space} = this; // Local const
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
       // Enter the space
@@ -122,48 +140,46 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
              // Need to map Array result to LocationItem[] if structure differs
              this.logCliEvent(flags, 'location', 'initialFormatWarning', 'Received array format for initial locations, expected object');
              // Assuming array elements match expected structure for now:
-             locations = result.map((item: any) => ({ member: item.member, location: item.location })) as LocationItem[];
+             locations = result.map((item: any) => ({ location: item.location, member: item.member })) as LocationItem[];
           } else if (Object.keys(result).length > 0) {
             // Standard case: result is an object { connectionId: locationData }
             locations = Object.entries(result).map(([connectionId, locationData]) => ({
+              location: locationData,
               member: { // Construct a partial SpaceMember as SDK doesn't provide full details here
                 clientId: 'unknown', // clientId not directly available in getAll response
-                connectionId: connectionId,
+                connectionId,
                 isConnected: true, // Assume connected for initial state
                 profileData: null
-              },
-              location: locationData
+              }
             }));
           }
         }
 
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            spaceId,
-            type: 'locations_snapshot',
             locations: locations.map(item => ({
               // Map to a simpler structure for output if needed
               connectionId: item.member.connectionId,
               location: item.location
-            }))
+            })),
+            spaceId,
+            success: true,
+            type: 'locations_snapshot'
           }, flags));
-        } else {
-          if (locations.length === 0) {
+        } else if (locations.length === 0) {
             this.log(chalk.yellow('No locations are currently set in this space.'));
           } else {
             this.log(`\n${chalk.cyan('Current locations')} (${chalk.bold(locations.length.toString())}):\n`);
-            locations.forEach(item => {
+            for (const item of locations) {
               this.log(`- Connection ID: ${chalk.blue(item.member.connectionId || 'Unknown')}`); // Use connectionId as key
               this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(item.location)}`);
-            });
+            }
           }
-        }
       } catch (error) {
          const errorMsg = `Error fetching locations: ${error instanceof Error ? error.message : String(error)}`;
-         this.logCliEvent(flags, 'location', 'getInitialError', errorMsg, { spaceId, error: errorMsg });
+         this.logCliEvent(flags, 'location', 'getInitialError', errorMsg, { error: errorMsg, spaceId });
          if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+          this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
         } else {
           this.log(chalk.yellow(errorMsg));
         }
@@ -179,19 +195,19 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
           try {
             const timestamp = new Date().toISOString();
             const eventData = {
-                timestamp,
                 action: 'update',
+                location: update.currentLocation,
                 member: {
                   clientId: update.member.clientId,
                   connectionId: update.member.connectionId
                 },
-                location: update.currentLocation,
-                previousLocation: update.previousLocation
+                previousLocation: update.previousLocation,
+                timestamp
             };
             this.logCliEvent(flags, 'location', 'updateReceived', 'Location update received', { spaceId, ...eventData });
 
             if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: true, spaceId, type: 'location_update', ...eventData }, flags));
+              this.log(this.formatJsonOutput({ spaceId, success: true, type: 'location_update', ...eventData }, flags));
             } else {
               this.log(`[${timestamp}] ${chalk.blue(update.member.clientId)} ${chalk.yellow('updated')} location:`);
               this.log(`  ${chalk.dim('Current:')} ${JSON.stringify(update.currentLocation)}`);
@@ -199,9 +215,9 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
             }
           } catch (error) {
              const errorMsg = `Error processing location update: ${error instanceof Error ? error.message : String(error)}`;
-             this.logCliEvent(flags, 'location', 'updateProcessError', errorMsg, { spaceId, error: errorMsg });
+             this.logCliEvent(flags, 'location', 'updateProcessError', errorMsg, { error: errorMsg, spaceId });
              if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+              this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
             } else {
               this.log(chalk.red(errorMsg));
             }
@@ -210,9 +226,9 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
         this.logCliEvent(flags, 'location', 'subscribed', 'Successfully subscribed to location updates');
       } catch (error) {
          const errorMsg = `Error subscribing to location updates: ${error instanceof Error ? error.message : String(error)}`;
-         this.logCliEvent(flags, 'location', 'subscribeError', errorMsg, { spaceId, error: errorMsg });
+         this.logCliEvent(flags, 'location', 'subscribeError', errorMsg, { error: errorMsg, spaceId });
          if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+          this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
         } else {
           this.log(chalk.red(errorMsg));
         }
@@ -237,6 +253,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
              if (!this.shouldOutputJson(flags)) {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
+
             process.exit(1);
           }, 5000);
 
@@ -249,7 +266,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
                  this.logCliEvent(flags, 'location', 'unsubscribed', 'Successfully unsubscribed from location events');
               } catch (error) {
                    const errorMsg = `Error unsubscribing: ${error instanceof Error ? error.message : String(error)}`;
-                   this.logCliEvent(flags, 'location', 'unsubscribeError', errorMsg, { spaceId, error: errorMsg });
+                   this.logCliEvent(flags, 'location', 'unsubscribeError', errorMsg, { error: errorMsg, spaceId });
                    if (!this.shouldOutputJson(flags)) {
                       this.log(`Note: ${errorMsg}`);
                       this.log('Continuing with cleanup.');
@@ -265,7 +282,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
                  this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
                } catch (error) {
                   const errorMsg = `Error leaving space: ${error instanceof Error ? error.message : String(error)}`;
-                  this.logCliEvent(flags, 'spaces', 'leaveError', errorMsg, { spaceId, error: errorMsg });
+                  this.logCliEvent(flags, 'spaces', 'leaveError', errorMsg, { error: errorMsg, spaceId });
                   if (!this.shouldOutputJson(flags)) {
                       this.log(`Error leaving space: ${errorMsg}`);
                       this.log('Continuing with cleanup.');
@@ -280,7 +297,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
                   this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
                } catch (error) {
                    const errorMsg = `Error closing client: ${error instanceof Error ? error.message : String(error)}`;
-                   this.logCliEvent(flags, 'connection', 'closeError', errorMsg, { spaceId, error: errorMsg });
+                   this.logCliEvent(flags, 'connection', 'closeError', errorMsg, { error: errorMsg, spaceId });
                    if (!this.shouldOutputJson(flags)) {
                      this.log(errorMsg);
                    }
@@ -292,15 +309,17 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
              if (!this.shouldOutputJson(flags)) {
                  this.log(chalk.green('\nDisconnected.'));
              }
+
             resolve();
             // Force exit after cleanup
             process.exit(0);
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
-             this.logCliEvent(flags, 'location', 'cleanupError', errorMsg, { spaceId, error: errorMsg });
+             this.logCliEvent(flags, 'location', 'cleanupError', errorMsg, { error: errorMsg, spaceId });
              if (!this.shouldOutputJson(flags)) {
                this.log(`Error during cleanup: ${errorMsg}`);
              }
+
             clearTimeout(forceExitTimeout);
             process.exit(1);
           }
@@ -321,18 +340,4 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
        }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch (e) { /* ignore */ } }
-     if (!this.cleanupInProgress && this.space) {
-        try { await this.space.leave(); } catch(e) {/* ignore */} // Best effort
-     }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 }

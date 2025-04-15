@@ -1,7 +1,8 @@
-import { Args, Flags } from '@oclif/core'
-import { ChatBaseCommand } from '../../../chat-base-command.js'
 import { ChatClient } from '@ably/chat'
+import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
+
+import { ChatBaseCommand } from '../../../chat-base-command.js'
 
 interface ChatClients {
   chatClient: ChatClient;
@@ -9,6 +10,17 @@ interface ChatClients {
 }
 
 export default class RoomsReactionsSend extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'Room ID to send the reaction to',
+      required: true,
+    }),
+    type: Args.string({
+      description: 'Reaction type/emoji to send',
+      required: true,
+    }),
+  }
+
   static override description = 'Send a reaction to a chat room'
 
   static override examples = [
@@ -21,19 +33,8 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
   static override flags = {
     ...ChatBaseCommand.globalFlags,
     'metadata': Flags.string({
-      description: 'Optional metadata for the reaction (JSON string)',
       default: '{}',
-    }),
-  }
-
-  static override args = {
-    roomId: Args.string({
-      description: 'Room ID to send the reaction to',
-      required: true,
-    }),
-    type: Args.string({
-      description: 'Reaction type/emoji to send',
-      required: true,
+      description: 'Optional metadata for the reaction (JSON string)',
     }),
   }
 
@@ -48,24 +49,25 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       if (!clients) return
 
       const { chatClient } = clients
-      const roomId = args.roomId
+      const {roomId} = args
       const reactionType = args.type
       
       // Parse the metadata
       let metadata = {}
       try {
         metadata = JSON.parse(flags.metadata)
-      } catch (error) {
+      } catch {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
             error: 'Invalid JSON metadata format. Please provide a valid JSON string.',
+            reactionType,
             roomId,
-            reactionType
+            success: false
           }, flags))
         } else {
           this.error('Invalid JSON metadata format. Please provide a valid JSON string.')
         }
+
         return
       }
 
@@ -79,16 +81,16 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       
       // Send room reaction using the reactions API
       await room.reactions.send({
-        type: reactionType,
-        metadata: metadata
+        metadata,
+        type: reactionType
       })
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          roomId,
+          metadata,
           reactionType,
-          metadata
+          roomId,
+          success: true
         }, flags))
       } else {
         this.log(`${chalk.green('✓')} Reaction '${chalk.yellow(reactionType)}' sent successfully to room ${chalk.blue(roomId)}`)
@@ -96,10 +98,10 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: error instanceof Error ? error.message : String(error),
+          reactionType: args.type,
           roomId: args.roomId,
-          reactionType: args.type
+          success: false
         }, flags))
       } else {
         this.error(`Error sending reaction: ${error instanceof Error ? error.message : String(error)}`)

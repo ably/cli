@@ -1,6 +1,7 @@
-import { ControlBaseCommand } from '../../control-base-command.js'
-import chalk from 'chalk'
 import { Flags } from '@oclif/core'
+import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class AppsList extends ControlBaseCommand {
   static override description = 'List all apps in the current account'
@@ -55,7 +56,7 @@ export default class AppsList extends ControlBaseCommand {
           return (a.name || '').localeCompare(b.name || '')
         })
         
-        sortedApps.forEach(app => {
+        for (const app of sortedApps) {
           const isCurrent = app.id === currentAppId
           const prefix = isCurrent ? chalk.green('▶ ') : '  '
           const nameStyle = isCurrent ? chalk.green.bold : chalk.white
@@ -75,7 +76,7 @@ export default class AppsList extends ControlBaseCommand {
           }
           
           this.log('') // Add a blank line between apps
-        })
+        }
       },
       'Error listing apps'
     )
