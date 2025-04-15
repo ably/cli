@@ -73,12 +73,7 @@ export default class CustomHelp extends Help {
     // 1. Display the Ably logo
     const captureLog: string[] = []
     displayLogo((message) => captureLog.push(message))
-    lines.push(...captureLog)
-
-    // 2. Show the CLI description beneath the logo
-    // The description might not be accessible through config in some environments
-    // So we'll hardcode the description from package.json
-    lines.push(chalk.bold('ably.com CLI for Pub/Sub, Chat, Spaces and the Control API'), '')
+    lines.push(...captureLog, chalk.bold('ably.com CLI for Pub/Sub, Chat, Spaces and the Control API'), '')
 
     // 3. Show version info
     // @ts-expect-error showVersion is a valid property in opts
@@ -86,11 +81,8 @@ export default class CustomHelp extends Help {
       lines.push(`${chalk.bold('VERSION')}`, `  ${config.version}`, '')
     }
 
-    // 4. Show usage info
-    lines.push(`${chalk.bold('USAGE')}`, `  $ ${config.bin} [COMMAND]`, '')
-
-    // 5. Show a unified list of commands
-    lines.push(`${chalk.bold('COMMANDS')}`)
+    // 4. Show usage info and list of commands
+    lines.push(`${chalk.bold('USAGE')}`, `  $ ${config.bin} [COMMAND]`, '', chalk.bold('COMMANDS'))
     
     // Get all top-level commands and topics
     const rootCommands: { description: string, id: string }[] = []
@@ -141,9 +133,7 @@ export default class CustomHelp extends Help {
     const apiKey = process.env.ABLY_API_KEY
     
     if (!accessToken && !apiKey) {
-      lines.push('')
-      lines.push(chalk.yellow('You are not logged in. Run the following command to log in:'))
-      lines.push(chalk.cyan('  $ ably login'))
+      lines.push('', chalk.yellow('You are not logged in. Run the following command to log in:'), chalk.cyan('  $ ably login'))
     }
 
     return lines.join('\n')
@@ -156,25 +146,24 @@ export default class CustomHelp extends Help {
     // 1. Display the Ably logo
     const captureLog: string[] = []
     displayLogo((message) => captureLog.push(message))
-    lines.push(...captureLog)
-
-    // 2. Show the CLI description with web-specific wording
-    lines.push(chalk.bold('ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API'), '')
+    lines.push(...captureLog, chalk.bold('ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API'), '')
 
     // 3. Show the web CLI specific instructions
-    lines.push(`${chalk.bold('COMMON COMMANDS')}`)
-    lines.push(`  ${chalk.cyan('View Ably commands:')} ably --help`)
-    lines.push(`  ${chalk.cyan('Publish a message:')} ably channels publish [channel] [message]`)
-    lines.push(`  ${chalk.cyan('View live channel lifecycle events:')} ably channels logs`, '')
+    const webCliCommands = [
+      `${chalk.bold('COMMON COMMANDS')}`, 
+      `  ${chalk.cyan('View Ably commands:')} ably --help`,
+      `  ${chalk.cyan('Publish a message:')} ably channels publish [channel] [message]`,
+      `  ${chalk.cyan('View live channel lifecycle events:')} ably channels logs`, 
+      ''
+    ];
+    lines.push(...webCliCommands)
 
     // 4. Check if login recommendation is needed
     const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken()
     const apiKey = process.env.ABLY_API_KEY
     
     if (!accessToken && !apiKey) {
-      lines.push('')
-      lines.push(chalk.yellow('You are not logged in. Run the following command to log in:'))
-      lines.push(chalk.cyan('  $ ably login'))
+      lines.push('', chalk.yellow('You are not logged in. Run the following command to log in:'), chalk.cyan('  $ ably login'))
     }
 
     return lines.join('\n')
