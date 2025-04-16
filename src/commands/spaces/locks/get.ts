@@ -88,10 +88,10 @@ export default class SpacesLocksGet extends SpacesBaseCommand {
         
         if (this.shouldOutputJson(flags)) {
           // Use structuredClone or similar for formatJsonOutput
-          this.log(this.formatJsonOutput(JSON.parse(JSON.stringify(lock)), flags))
+          this.log(this.formatJsonOutput(structuredClone(lock), flags))
         } else {
           // Use structuredClone or similar for formatJsonOutput
-          this.log(`${chalk.dim('Lock details:')} ${this.formatJsonOutput(JSON.parse(JSON.stringify(lock)), flags)}`)
+          this.log(`${chalk.dim('Lock details:')} ${this.formatJsonOutput(structuredClone(lock), flags)}`)
         }
       } catch (error) {
         this.error(`Failed to get lock: ${error instanceof Error ? error.message : String(error)}`)

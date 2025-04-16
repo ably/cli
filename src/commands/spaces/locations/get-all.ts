@@ -137,7 +137,15 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
           if (item.location !== undefined) {
             locationData = item.location;
           } else if (item.data === undefined) {
-            const { clientId, connectionId, id, member, memberId, userId, ...rest } = item;
+            const {
+              clientId: _clientId,
+              connectionId: _connectionId,
+              id: _id,
+              member: _member,
+              memberId: _memberId,
+              userId: _userId,
+              ...rest
+            } = item;
             if (Object.keys(rest).length === 0) return false;
             locationData = rest;
           } else {
@@ -155,7 +163,15 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
             locations: validLocations.map((item: LocationItem) => {
               const memberId = item.memberId || item.member?.clientId || item.clientId || item.id || item.userId || 'Unknown';
               const locationData = item.location || item.data || (() => {
-                const { clientId, connectionId, id, member, memberId, userId, ...rest } = item;
+                const {
+                  clientId: _clientId,
+                  connectionId: _connectionId,
+                  id: _id,
+                  member: _member,
+                  memberId: _memberId,
+                  userId: _userId,
+                  ...rest
+                } = item;
                 return rest;
               })();
               return {
@@ -180,7 +196,15 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
               this.log(`Member ID: ${chalk.cyan(member.memberId || member.clientId)}`);
               try {
                 const locationData = location.location || location.data || (() => {
-                  const { clientId, connectionId, id, member, memberId, userId, ...rest } = location;
+                  const {
+                    clientId: _clientId,
+                    connectionId: _connectionId,
+                    id: _id,
+                    member: _member,
+                    memberId: _memberId,
+                    userId: _userId,
+                    ...rest
+                  } = location;
                   return rest;
                 })();
                 

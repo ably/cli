@@ -63,7 +63,7 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
       const createdQueue = await controlApi.createQueue(appId, queueData)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(JSON.parse(JSON.stringify(createdQueue)), flags))
+        this.log(this.formatJsonOutput(structuredClone(createdQueue) as unknown as Record<string, unknown>, flags))
       } else {
         this.log('Queue created successfully:')
         this.log(`Queue ID: ${createdQueue.id}`)

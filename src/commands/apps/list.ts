@@ -1,4 +1,4 @@
-import { Command } from "@oclif/core"
+import { Flags } from '@oclif/core'
 import chalk from 'chalk'
 
 import { ControlBaseCommand } from '../../control-base-command.js'

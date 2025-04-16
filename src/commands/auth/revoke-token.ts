@@ -65,7 +65,7 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
       this.ablyClient = client
       
       // Create Ably REST client with client options
-      const rest = new Ably.Rest(this.getClientOptions(flags))
+      const _rest = new Ably.Rest(this.getClientOptions(flags))
       
       const clientId = flags['client-id'] || token
       

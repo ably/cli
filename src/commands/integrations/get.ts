@@ -47,7 +47,7 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
       const rule = await controlApi.getRule(appId, args.ruleId)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(JSON.parse(JSON.stringify(rule)), flags))
+        this.log(this.formatJsonOutput(structuredClone(rule) as unknown as Record<string, unknown>, flags))
       } else {
         this.log(chalk.bold(`Rule ID: ${rule.id}`))
         this.log(`App ID: ${rule.appId}`)
@@ -57,7 +57,7 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
         this.log(`Source:`)
         this.log(`  Type: ${rule.source.type}`)
         this.log(`  Channel Filter: ${rule.source.channelFilter || '(none)'}`)
-        this.log(`Target: ${this.formatJsonOutput(JSON.parse(JSON.stringify(rule.target)), flags).replaceAll('\n', '\n  ')}`)
+        this.log(`Target: ${this.formatJsonOutput(structuredClone(rule.target) as unknown as Record<string, unknown>, flags).replaceAll('\n', '\n  ')}`)
         this.log(`Version: ${rule.version}`)
         this.log(`Created: ${this.formatDate(rule.created)}`)
         this.log(`Updated: ${this.formatDate(rule.modified)}`)

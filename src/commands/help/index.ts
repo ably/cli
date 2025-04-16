@@ -1,6 +1,11 @@
-import { Args, Command, Flags, Help, Interfaces } from "@oclif/core";
-import { Topic } from "@oclif/core/interfaces";
-import chalk from 'chalk'
+import { Command, Interfaces, Flags, Config } from "@oclif/core";
+import chalk from "chalk";
+import stripAnsi from 'strip-ansi';
+
+import { displayLogo } from "../../utils/logo.js";
+import { ErrorDetails } from "../../types/cli.js";
+import { WEB_CLI_RESTRICTED_COMMANDS } from "../../base-command.js";
+import { ConfigManager } from "../../services/config-manager.js";
 
 export default class HelpCommand extends Command {
   static description = 'Get help from Ably'
@@ -16,9 +21,19 @@ export default class HelpCommand extends Command {
     help: Flags.help({char: 'h'}),
   }
 
-  async run(): Promise<void> {
-    /* const {flags} */ await this.parse(HelpCommand) // Removed unused flags
+  protected webCliMode: boolean;
+  protected configManager: ConfigManager;
+  protected isShowingRootHelp: boolean = false;
 
+  constructor(argv: string[], config: Config) {
+    super(argv, config);
+    this.webCliMode = process.env.ABLY_WEB_CLI_MODE === 'true';
+    this.configManager = new ConfigManager();
+  }
+  
+  async run(): Promise<void> {
+    await this.parse(HelpCommand)
+    
     this.log('Ably help commands:')
     this.log('')
     this.log('  ably help ask       - Ask a question to the Ably AI agent for help')
@@ -28,70 +43,51 @@ export default class HelpCommand extends Command {
     this.log('')
     this.log('Run `ably help COMMAND --help` for more information on a command.')
     
-    // Add suggestion for ably --help
     this.log('')
     this.log(chalk.yellow('Did you mean ably --help? Here\'s a list of all commands available for ably:'))
     this.log('')
     
-    // Show usage similar to the welcome message
     this.log(`${chalk.bold('USAGE')}`)
     this.log(`  $ ably [COMMAND]`)
     this.log('')
     
-    // Show commands list
     this.displayAllCommands()
   }
-  
+
+  formatHelpOutput(output: string): string {
+    if (process.env.GENERATING_README === 'true') {
+      return stripAnsi(output);
+    }
+    return output;
+  }
+
+  private removeTrailingWhitespace(text: string): string {
+    return text.replace(/\n+$/, '');
+  }
+
   private async displayAllCommands(): Promise<void> {
-    // Create an instance of CustomHelp to access its methods
-    /* const help = new CustomHelp(this.config) */ // Removed unused help variable
-    
-    // Get all top-level commands and topics
     const rootCommands: { description: string, id: string }[] = []
-    
-    // Process all commands, filtering for root-level commands only
     for (const c of this.config.commands) {
       try {
-        // Skip commands with dashes in name
-        if (c.id.startsWith('--')) {
-          continue;
-        }
-        
-        // Only process commands with no spaces or colons (top-level commands)
-        if (c.id.includes(' ') || c.id.includes(':')) {
+        if (c.id.startsWith('--') || c.id.includes(' ') || c.id.includes(':')) {
           continue
         }
-        
-        // Skip alias and internal commands
-         
         const cmd = await c.load()
-        // Use type checking instead of any casts
         if ((cmd && ('isAlias' in cmd && cmd.isAlias)) || 
             (cmd && ('isInternal' in cmd && cmd.isInternal)) || 
             (cmd && ('hidden' in cmd && cmd.hidden))) {
           continue
         }
-        
         rootCommands.push({
           description: cmd.description || '',
           id: c.id
         })
-      } catch {
-        // Skip commands that can't be loaded
-      }
+      } catch { /* Skip commands that can't be loaded */ }
     }
-    
-    // Sort commands alphabetically
     rootCommands.sort((a, b) => a.id.localeCompare(b.id))
-    
-    // Calculate padding - find the longest command ID
     const maxLength = Math.max(...rootCommands.map(cmd => cmd.id.length))
-    const paddingLength = maxLength + 4 // Add 4 spaces of padding
-    
-    // Show commands heading
+    const paddingLength = maxLength + 4
     this.log(`${chalk.bold('COMMANDS')}`)
-    
-    // Add each command with its description to the output
     for (const entry of rootCommands) {
       const padding = ' '.repeat(paddingLength - entry.id.length)
       this.log(`  ${chalk.cyan(entry.id)}${padding}${entry.description}`)

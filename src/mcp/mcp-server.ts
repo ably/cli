@@ -2,8 +2,6 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport as StdioConnection } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { ModelContextProvider } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StdioConnection as StdioConnectionOriginal } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import ChannelsHistory from '../commands/channels/history.js'
 import ChannelsList from '../commands/channels/list.js'
@@ -262,7 +260,7 @@ export class AblyMcpServer {
       });
       
       // Create a promise for subscription
-      const subscribePromise = new Promise<any[]>((resolve) => {
+      const _subscribePromise = new Promise<any[]>((_resolve) => {
         // Handle rewind if specified
         if (rewind > 0) {
           channel.history({ limit: rewind })

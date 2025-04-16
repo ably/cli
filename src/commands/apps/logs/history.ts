@@ -1,9 +1,8 @@
-import {Flags} from '@oclif/core'
+import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
-import {AblyBaseCommand} from '../../../base-command.js'
-import { BaseFlags } from '../../../types/cli.js'
+import { AblyBaseCommand } from '../../../base-command.js'
 
 export default class AppsLogsHistory extends AblyBaseCommand {
   static override description = 'Alias for `ably logs app history`'
@@ -17,16 +16,16 @@ export default class AppsLogsHistory extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    direction: Flags.string({
+    direction: _Flags.string({
       default: 'backwards',
       description: 'Direction of message retrieval',
       options: ['backwards', 'forwards'],
     }),
-    json: Flags.boolean({
+    json: _Flags.boolean({
       default: false,
       description: 'Output results in JSON format',
     }),
-    limit: Flags.integer({
+    limit: _Flags.integer({
       default: 100,
       description: 'Maximum number of messages to retrieve',
     }),

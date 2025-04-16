@@ -1,6 +1,5 @@
 import {Args, Flags} from '@oclif/core'
-import * as Ably from 'ably'; // Import Ably
-import { ChatClient } from '@ably/chat'; // Import ChatClient
+import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
@@ -37,7 +36,7 @@ export default class MessagesGet extends ChatBaseCommand {
     }),
   }
 
-  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+  private ablyClient: Ably.Realtime | null = null;
 
   async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesGet)

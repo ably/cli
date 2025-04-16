@@ -1,7 +1,5 @@
 import {Args, Flags} from '@oclif/core'
-import { randomUUID } from "node:crypto";
 import * as Ably from 'ably'; // Import Ably
-import { ChatClient } from '@ably/chat'; // Import ChatClient
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
 

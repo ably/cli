@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/prefer-top-level-await */
 import { Args, Command, Config, Errors, Flags } from '@oclif/core';
 import { expect, test } from '@oclif/test';
 import * as path from 'node:path';

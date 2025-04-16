@@ -1,4 +1,4 @@
-import { Flags } from "@oclif/core";
+import { Config, Command } from '@oclif/core'
 import * as Ably from 'ably'
 
 /**
@@ -37,7 +37,9 @@ export type ErrorDetails = Ably.ErrorInfo | {
 /**
  * Command configuration type - using any for now to avoid type conflicts
  */
-export type CommandConfig = any;
+export interface CommandConfig extends Config {
+  // ... existing code ...
+}
 
 /**
  * Arguments type for CLI commands

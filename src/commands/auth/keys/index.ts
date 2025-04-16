@@ -13,8 +13,7 @@ export default class AuthKeys extends AblyBaseCommand {
   ]
 
   async run(): Promise<void> {
-    const { flags } = await this.parse(AuthKeys)
-    const _args = await this.parse(AuthKeys)
+    const { args } = await this.parse(AuthKeys)
     
     this.log('Key management commands:')
     this.log('')
@@ -30,5 +29,8 @@ export default class AuthKeys extends AblyBaseCommand {
     this.log('  switch   Switch to a key for all client requests')
     this.log('')
     this.log('Run $ ably auth keys [COMMAND] --help for more information on a command.')
+
+    // Display authentication information
+    this.showAuthInfoIfNeeded({ app: args.appId })
   }
 } 

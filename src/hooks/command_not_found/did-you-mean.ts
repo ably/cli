@@ -1,4 +1,4 @@
-import { Hook, Command as OclifCommand, Errors } from "@oclif/core";
+import { Config, Errors, Hook } from '@oclif/core';
 import chalk from "chalk";
 import { confirm } from "@inquirer/prompts";
 import { setTimeout } from "node:timers/promises";

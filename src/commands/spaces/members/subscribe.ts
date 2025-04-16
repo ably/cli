@@ -224,6 +224,7 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
       this.logCliEvent(flags, 'member', 'listening', 'Listening for member updates...');
       // Keep the process running until interrupted
       await new Promise<void>((_resolve, _reject) => {
+        // eslint-disable-next-line unicorn/consistent-function-scoping
         const cleanup = async () => {
           if (this.cleanupInProgress) return
           this.cleanupInProgress = true

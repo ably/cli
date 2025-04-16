@@ -1,5 +1,5 @@
-import { ChatClient, OccupancyEvent, RoomStatus, Subscription, StatusSubscription } from '@ably/chat'
-import { Args } from '@oclif/core'
+import { OccupancyEvent, RoomStatus, Subscription } from '@ably/chat'
+import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
