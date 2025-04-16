@@ -2,7 +2,6 @@ import { Flags } from '@oclif/core'
 import chalk from 'chalk'
 
 import { ControlBaseCommand } from '../../../control-base-command.js'
-import { AccountStats } from '../../../services/control-api.js'
 import { StatsDisplay } from '../../../services/stats-display.js'
 
 export default class AccountsStatsCommand extends ControlBaseCommand {

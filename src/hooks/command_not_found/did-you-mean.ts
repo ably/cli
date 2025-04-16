@@ -1,41 +1,46 @@
-import { Command, Errors, Hook, toConfiguredId } from '@oclif/core';
-import { blueBright, cyan, red, reset, yellow } from 'ansis';
-import levenshtein from 'fast-levenshtein';
+import { Hook, Command as OclifCommand, Errors } from "@oclif/core";
+import chalk from "chalk";
+import { confirm } from "@inquirer/prompts";
+import { setTimeout } from "node:timers/promises";
+// Correctly import from CommonJS module in ESM project
+import pkg from "fast-levenshtein";
+const { get: levenshteinDistance } = pkg;
 
-import CustomHelp from '../../help.js'; // Import our custom help class
+// Re-introduce getConfirmation based on oclif example
+const getConfirmation = async (suggestion: string): Promise<boolean> => {
+  // Skip confirmation in test mode
+  if (process.env.NODE_ENV === 'test' || process.env.SKIP_CONFIRMATION === 'true') {
+    return true; // Auto-confirm in test mode
+  }
 
-// Helper function to format Arguments section (simplified)
-function formatArgumentsSection(args: any): string {
-  // Handle both array and object input for args
-  const argsArray = Array.isArray(args) ? args : (args ? Object.values(args) : []);
-  if (!argsArray || argsArray.length === 0) return '';
+  const ac = new AbortController();
+  const { signal } = ac;
 
-  const body = argsArray.map(arg => {
-    const name = arg.name.toUpperCase();
-    const description = arg.description ? ` ${arg.description}` : '';
-    return `  ${name}${description}`;
-  }).join('\n');
+  const confirmation = confirm({
+    default: true,
+    message: `Did you mean ${chalk.blueBright(suggestion)}?`, // Use chalk for styling
+    theme: {
+      prefix: '', // Keep theme simple or customize as needed
+      style: {
+        message: (text: string) => text, // Keep default styling
+      },
+    },
+  });
 
-  return `ARGUMENTS\n${body}`;
-}
+  // Timeout logic from example
+  setTimeout(10_000, 'timeout', { signal })
+    .catch(() => false) // Treat timeout as rejection
+    .then(() => confirmation.cancel());
 
-// Helper function to format Flags section (simplified)
-function formatFlagsSection(flags: any): string {
-  // Handle flags as an object
-  const flagsObject = flags || {}; 
-  // Ensure flag is treated as having expected properties, add type assertion if necessary
-  const flagEntries = Object.entries(flagsObject).filter(([, flag]: [string, any]) => !flag?.hidden);
-  if (flagEntries.length === 0) return '';
-
-  const body = flagEntries.map(([name, flag]: [string, any]) => {
-    const flagName = flag?.char ? `-${flag.char}, --${name}` : `    --${name}`;
-    const description = flag?.description ? ` ${flag.description}` : '';
-    // Basic formatting, could be enhanced for wrapping, types, defaults etc.
-    return `  ${flagName}${description}`;
-  }).join('\n');
-
-  return `FLAGS\n${body}`;
-}
+  // Return the confirmation result or false on timeout/error
+  return confirmation.then((value) => {
+    ac.abort(); // Clean up abort controller
+    return value;
+  }).catch(() => {
+    ac.abort(); // Ensure abort on error too
+    return false;
+  });
+};
 
 /**
  * Finds the closest command ID to the target command ID from a list of possibilities
@@ -45,7 +50,7 @@ const findClosestCommand = (target: string, possibilities: string[]): string => 
   if (possibilities.length === 0) return '';
   
   const distances = possibilities
-    .map((id) => ({ distance: levenshtein.get(target, id, { useCollator: true }), id }));
+    .map((id) => ({ distance: levenshteinDistance(target, id, { useCollator: true }), id }));
     
   distances.sort((a, b) => a.distance - b.distance);
   
@@ -65,7 +70,7 @@ const findClosestCommand = (target: string, possibilities: string[]): string => 
 /**
  * Custom command_not_found hook implementation.
  */
-const hook: Hook.CommandNotFound = async function (opts) {
+const hook: Hook<"command_not_found"> = async function (opts) {
   const hiddenCommandIds = new Set(opts.config.commands.filter((c) => c.hidden).map((c) => c.id));
   const commandIDs = [...opts.config.commandIDs, ...opts.config.commands.flatMap((c) => c.aliases)]
     .filter((c) => !hiddenCommandIds.has(c));
@@ -74,26 +79,25 @@ const hook: Hook.CommandNotFound = async function (opts) {
 
   const suggestion = findClosestCommand(opts.id, commandIDs);
   
-  // DEBUGGING: Log suggestion found
-  console.log('[DEBUG] Input ID:', opts.id, 'Suggestion:', suggestion);
+  // Define these variables outside the conditional blocks
+  const originalCmd = opts.id;
+  const binHelp = `${opts.config.bin} help`;
 
-  // 1. Handle no suggestion FIRST
+  // 1. Handle no suggestion
   if (!suggestion) {
-    const originalCmd = toConfiguredId(opts.id, this.config);
-    const binHelp = `${opts.config.bin} help`;
-    this.error(`Command ${yellow(originalCmd)} not found. Run ${cyan.bold(binHelp)} for a list of available commands.`, { exit: 127 });
+    this.error(`Command ${chalk.yellow(originalCmd)} not found. Run ${chalk.cyan.bold(binHelp)} for a list of available commands.`, { exit: 127 });
     return; 
   }
 
-  // Suggestion exists - declare readable versions here
-  const readableSuggestion = toConfiguredId(suggestion, this.config);
-  const originalCmd = toConfiguredId(opts.id, this.config);
-
+  // Suggestion exists
   // 2. Warn about the typo
-  this.warn(`${yellow(originalCmd)} is not an ${opts.config.bin} command.`);
+  this.warn(`${chalk.yellow(originalCmd)} is not an ${opts.config.bin} command.`);
 
-  // 3. Assume user confirmed "yes" (prompt is removed)
-  const userConfirmed = true;
+  // 3. Get confirmation from the user
+  const userConfirmed = await getConfirmation(suggestion);
+
+  // Add a blank line for spacing after the prompt interaction
+  console.log(''); 
 
   if (userConfirmed) {
     let argv = opts.argv?.length ? opts.argv : opts.id.split(':').slice(suggestion.split(':').length);
@@ -115,9 +119,9 @@ const hook: Hook.CommandNotFound = async function (opts) {
       try {
         return await this.config.runCommand(suggestion, argv);
       } catch (error: unknown) {
-        // If it's a CLIError (including missing args), re-throw for default handling
+        // If it's a CLIError (including missing args), let the command context handle it
         if (error instanceof Errors.CLIError) {
-           throw error; 
+           this.error(error); // Use this.error to show formatted error + help
         } 
         // Handle only truly unexpected non-CLI errors here.
         else {
@@ -126,8 +130,11 @@ const hook: Hook.CommandNotFound = async function (opts) {
         }
       }
     }
-  } 
-  // No 'else' needed as prompt is removed
+  } else {
+    // User rejected the suggestion or timed out
+    // Blank line already added above
+    this.error(`Run ${chalk.cyan.bold(binHelp)} for a list of available commands.`, { exit: 127 });
+  }
 };
 
 export default hook; 

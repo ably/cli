@@ -1,6 +1,7 @@
 import { ChatClient } from '@ably/chat'
 import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
+import * as Ably from 'ably'
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
 
@@ -38,18 +39,40 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
     }),
   }
 
+  private ablyClient: Ably.Realtime | null = null
+
+  async finally(err: Error | undefined): Promise<any> {
+    if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+      this.ablyClient.close()
+    }
+
+    return super.finally(err)
+  }
+
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsReactionsSend)
 
-    let clients: ChatClients | null = null
-
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = await this.createAblyClient(flags)
 
-      const { chatClient } = clients
-      const {roomId} = args
+      if (!chatClient) {
+        this.error('Failed to create Chat client')
+        return
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client') // Should not happen if chatClient created
+        return
+      }
+
+      // Add listeners for connection state changes
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+        this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason })
+      })
+
+      const { roomId } = args
       const reactionType = args.type
       
       // Parse the metadata
@@ -95,6 +118,11 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       } else {
         this.log(`${chalk.green('✓')} Reaction '${chalk.yellow(reactionType)}' sent successfully to room ${chalk.blue(roomId)}`)
       }
+
+      // Release the room
+      this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`)
+      await chatClient.rooms.release(roomId)
+      this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`)
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
@@ -107,8 +135,8 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         this.error(`Error sending reaction: ${error instanceof Error ? error.message : String(error)}`)
       }
     } finally {
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+      if (this.ablyClient) {
+        this.ablyClient.close()
       }
     }
   }

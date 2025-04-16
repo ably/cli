@@ -1,37 +1,10 @@
-import {Args, Flags} from '@oclif/core'
-import * as Ably from 'ably'
+import {
+  Args,
+  Flags,
+} from "@oclif/core";
+import * as Ably from "ably";
 
-import {AblyBaseCommand} from '../../base-command.js'
-
-// --- Types for Ably Batch Publish/Response ---
-interface BatchSpec {
-  channels: string | string[];
-  messages: Ably.Message | Ably.Message[];
-}
-
-interface AblyError {
-  code: number;
-  href?: string;
-  message: string;
-  statusCode: number;
-}
-
-interface BatchResponseItem {
-  channel: string;
-  error?: AblyError;
-  messageId?: string;
-}
-
-interface BatchErrorResponse {
-  batchResponse?: BatchResponseItem[];
-  error: AblyError;
-}
-
-interface BatchSuccessResponse {
-  batchResponse: BatchResponseItem[]; // Assuming success means all items might have messageId
-  success: boolean;
-}
-// --- End Types ---
+import { AblyBaseCommand } from "../../base-command.js";
 
 export default class ChannelsBatchPublish extends AblyBaseCommand {
   static override args = {
@@ -227,7 +200,7 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
             }, flags))
           } else {
             this.log('Batch publish successful!')
-            this.log(`Response: ${this.formatJsonOutput(responseItems, flags)}`)
+            this.log(`Response: ${this.formatJsonOutput({ responses: responseItems }, flags)}`)
           }
         }
       } else if (response.statusCode === 400) {

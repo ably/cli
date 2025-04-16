@@ -228,7 +228,7 @@ export class StatsDisplay {
   }
 
   private displayConnectionCumulativeStats(): void {
-    const avgRates = this.calculateAverageRates()
+    const _avgRates = this.calculateAverageRates();
     
     // Connections stats - simplified
     console.log(chalk.yellow('Connections:'), 

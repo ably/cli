@@ -70,10 +70,11 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
    }
 
    async run(): Promise<void> {
-    const {args, argv, flags} = await this.parse(ChannelsSubscribe)
+    const { flags } = await this.parse(ChannelsSubscribe);
+    const _args = await this.parse(ChannelsSubscribe)
 
     // Get all channel names from argv
-    const channelNames = argv as string[]
+    const channelNames = _args.argv as string[]
 
     try {
       // Create the Ably client

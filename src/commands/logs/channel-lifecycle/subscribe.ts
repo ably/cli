@@ -142,12 +142,12 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
          }
 
          cleanup();
-         // eslint-disable-next-line n/no-process-exit
+          
          process.exit(0); // Reinstated: Explicit exit on signal
       });
       process.on('SIGTERM', () => {
           cleanup();
-          // eslint-disable-next-line n/no-process-exit
+           
           process.exit(0); // Reinstated: Explicit exit on signal
       });
 

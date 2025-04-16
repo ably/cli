@@ -1311,9 +1311,9 @@ EXAMPLES
 
   $ ably auth keys create --name "My New Key" --app APP_ID
 
-  $ ably auth keys create --name "My New Key" --capabilities "{"*":["*"]}"
+  $ ably auth keys create --name "My New Key" --capabilities '{"*":["*"]}'
 
-  $ ably auth keys create --name "My New Key" --capabilities "{"channel1":["publish","subscribe"],"channel2":["history"]}"
+  $ ably auth keys create --name "My New Key" --capabilities '{"channel1":["publish","subscribe"],"channel2":["history"]}'
 
   $ ably auth keys create --name "My New Key" --json
 
@@ -3767,7 +3767,7 @@ Enter presence in a chat room and remain present until terminated
 USAGE
   $ ably rooms presence enter ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
     <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>]
-    [--show-others]
+    [--show-others] [--profile-data <value>]
 
 ARGUMENTS
   ROOMID  Room ID to enter presence on
@@ -3784,6 +3784,7 @@ FLAGS
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
+      --profile-data=<value>  Profile data to publish (JSON string)
       --show-others           Show other presence events while present
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -4097,7 +4098,7 @@ DESCRIPTION
   Commands for interacting with Cursors in Ably Spaces
 
 EXAMPLES
-  $ ably spaces cursors set my-space --position "{"x":100,"y":150}"
+  $ ably spaces cursors set my-space --position '{"x": 100, "y": 200}' --data '{"color": "red"}'
 
   $ ably spaces cursors subscribe my-space
 

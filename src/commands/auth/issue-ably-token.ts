@@ -52,7 +52,7 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
       return
     }
     
-    const { apiKey, appId } = appAndKey
+    const { apiKey } = appAndKey
     
     try {
       // Display auth info if not token-only output
@@ -101,7 +101,7 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
       }
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(tokenDetails.capability, flags))
+        this.log(this.formatJsonOutput({ capability: tokenDetails.capability }, flags))
       } else {
         this.log('Generated Ably Token:')
         this.log(`Token: ${tokenDetails.token}`)
@@ -110,7 +110,7 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
         this.log(`Expires: ${new Date(tokenDetails.expires).toISOString()}`)
         this.log(`TTL: ${flags.ttl} seconds`)
         this.log(`Client ID: ${tokenDetails.clientId || 'None'}`)
-        this.log(`Capability: ${this.formatJsonOutput(tokenDetails.capability, flags)}`)
+        this.log(`Capability: ${this.formatJsonOutput({ capability: tokenDetails.capability }, flags)}`)
       }
     } catch (error) {
       this.error(`Error issuing Ably token: ${error instanceof Error ? error.message : String(error)}`)

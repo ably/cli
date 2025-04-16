@@ -13,7 +13,8 @@ export default class AuthKeys extends AblyBaseCommand {
   ]
 
   async run(): Promise<void> {
-    const { args } = await this.parse(AuthKeys)
+    const { flags } = await this.parse(AuthKeys)
+    const _args = await this.parse(AuthKeys)
     
     this.log('Key management commands:')
     this.log('')

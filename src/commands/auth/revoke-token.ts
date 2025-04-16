@@ -50,8 +50,8 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
       return
     }
     
-    const { apiKey, appId } = appAndKey
-    const {token} = args
+    const { apiKey } = appAndKey
+    const { token } = args
     
     try {
       if (flags.debug) {

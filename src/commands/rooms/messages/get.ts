@@ -1,4 +1,6 @@
 import {Args, Flags} from '@oclif/core'
+import * as Ably from 'ably'; // Import Ably
+import { ChatClient } from '@ably/chat'; // Import ChatClient
 import chalk from 'chalk'
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
@@ -35,17 +37,21 @@ export default class MessagesGet extends ChatBaseCommand {
     }),
   }
 
+  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+
   async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesGet)
     
-    let clients = null
-    
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const {chatClient, realtimeClient} = clients
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
       
       // Get the room
       const room = await chatClient.rooms.get(args.roomId, {})
@@ -121,9 +127,9 @@ export default class MessagesGet extends ChatBaseCommand {
         this.error(`Failed to get messages: ${error instanceof Error ? error.message : String(error)}`)
       }
     } finally {
-      // Close the connection
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+      // Close the underlying Ably connection
+      if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
+        this.ablyClient.close()
       }
     }
   }

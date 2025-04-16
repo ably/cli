@@ -65,12 +65,9 @@ export default class QueuesListCommand extends ControlBaseCommand {
     this.showAuthInfoIfNeeded(flags)
     
     const controlApi = this.createControlApi(flags)
-    let appId: string | undefined;
+    const appId = await this.resolveAppId(flags)
     
     try {
-      // Get app ID from flags or config
-      appId = await this.getAppId(flags)
-      
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
         return

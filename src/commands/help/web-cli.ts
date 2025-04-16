@@ -21,6 +21,6 @@ export default class WebCliHelp extends Command {
     help.opts = { argv: ['--web-cli-help'] }
     
     // Call the root help method which will display web help
-    await help.showRootHelp()
+    await help.showHelp([])
   }
 } 

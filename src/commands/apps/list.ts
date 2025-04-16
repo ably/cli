@@ -1,4 +1,4 @@
-import { Flags } from '@oclif/core'
+import { Command } from "@oclif/core"
 import chalk from 'chalk'
 
 import { ControlBaseCommand } from '../../control-base-command.js'
@@ -35,7 +35,7 @@ export default class AppsList extends ControlBaseCommand {
             isCurrent: app.id === currentAppId
           }))
           
-          this.log(this.formatJsonOutput(appsWithCurrentFlag, flags))
+          this.log(this.formatJsonOutput({ apps: appsWithCurrentFlag }, flags))
           return
         }
         

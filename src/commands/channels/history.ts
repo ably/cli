@@ -99,9 +99,9 @@ export default class ChannelsHistory extends AblyBaseCommand {
       const history = await channel.history(historyParams)
       const messages = history.items
       
-      // Output results based on format
+      // Display results based on format
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(messages, flags))
+        this.log(this.formatJsonOutput({ messages }, flags))
       } else {
         if (messages.length === 0) {
           this.log('No messages found in the channel history.')

@@ -1,5 +1,7 @@
 import {Args, Flags} from '@oclif/core'
-import chalk from 'chalk'
+import { randomUUID } from "node:crypto";
+import * as Ably from 'ably'; // Import Ably
+import { ChatClient } from '@ably/chat'; // Import ChatClient
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
 
@@ -44,7 +46,7 @@ export default class MessagesSend extends ChatBaseCommand {
     }),
   }
 
-  private clients: { chatClient: any, realtimeClient: any } | null = null;
+  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
   private isPolling = false;
   private progressIntervalId: NodeJS.Timeout | null = null;
   private typingTimeoutId: NodeJS.Timeout | null = null;
@@ -56,8 +58,8 @@ export default class MessagesSend extends ChatBaseCommand {
         this.progressIntervalId = null;
      }
 
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+           this.ablyClient.close();
        }
 
      return super.finally(err);
@@ -68,13 +70,21 @@ export default class MessagesSend extends ChatBaseCommand {
 
     try {
       // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const {chatClient, realtimeClient} = this.clients
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client'); // Should not happen if chatClient created
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -279,10 +289,10 @@ export default class MessagesSend extends ChatBaseCommand {
          this.error(`Failed to send message: ${errorMsg}`)
        }
     } finally {
-      // Close the connection
-       if (this.clients?.realtimeClient) {
+      // Close the underlying Ably connection
+       if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
            this.logCliEvent(flags || {}, 'connection', 'closing', 'Closing Realtime connection.');
-           this.clients.realtimeClient.close();
+           this.ablyClient.close();
            this.logCliEvent(flags || {}, 'connection', 'closed', 'Realtime connection closed.');
        }
 

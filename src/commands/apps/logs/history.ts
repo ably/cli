@@ -3,7 +3,7 @@ import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import {AblyBaseCommand} from '../../../base-command.js'
-import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
+import { BaseFlags } from '../../../types/cli.js'
 
 export default class AppsLogsHistory extends AblyBaseCommand {
   static override description = 'Alias for `ably logs app history`'
@@ -70,7 +70,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       
       // Display results based on format
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(messages, flags))
+        this.log(this.formatJsonOutput({ messages }, flags))
       } else {
         if (messages.length === 0) {
           this.log('No application log messages found.')

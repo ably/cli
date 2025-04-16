@@ -1,14 +1,9 @@
-import { ChatClient, OccupancyEvent, RoomStatus, Subscription } from '@ably/chat'
-import { Args, Flags } from '@oclif/core'
+import { ChatClient, OccupancyEvent, RoomStatus, Subscription, StatusSubscription } from '@ably/chat'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: Ably.Realtime;
-}
 
 interface OccupancyMetrics {
   connections?: number;
@@ -36,7 +31,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
   }
 
   private cleanupInProgress = false;
-  private clients: ChatClients | null = null;
+  private ablyClient: Ably.Realtime | null = null;
   private unsubscribeOccupancyFn: Subscription | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
 
@@ -44,8 +39,8 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
    async finally(err: Error | undefined): Promise<any> {
      if (this.unsubscribeOccupancyFn) { try { this.unsubscribeOccupancyFn.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+           this.ablyClient.close();
        }
 
      return super.finally(err);
@@ -62,13 +57,21 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
        }
 
       // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const { chatClient, realtimeClient } = this.clients
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client'); // Should not happen if chatClient created
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -154,7 +157,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
       this.logCliEvent(flags, 'occupancy', 'subscribed', 'Successfully subscribed to occupancy updates');
 
       // Keep the process running until interrupted
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, _reject) => {
         const cleanup = () => {
           if (this.cleanupInProgress) {
             return;
@@ -175,8 +178,8 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
 
             // SIGINT/SIGTERM received, or fatal error
             this.log(chalk.yellow('Closing connection...'))
-            this.clients?.realtimeClient.close()
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+            this.ablyClient?.close()
+             
             process.exit(0)
           }, 5000);
 
@@ -213,9 +216,9 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
               }
             }
 
-            if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+            if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
                this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-               this.clients.realtimeClient.close();
+               this.ablyClient.close();
                this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
             }
 
@@ -244,9 +247,9 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
       }
     } finally {
        // Ensure client is closed even if cleanup promise didn't resolve
-       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+       if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
            this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-           this.clients.realtimeClient.close();
+           this.ablyClient.close();
        }
     }
   }

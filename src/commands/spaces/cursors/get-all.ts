@@ -1,14 +1,10 @@
 import Spaces from '@ably/spaces'
+import { type Space } from '@ably/spaces'
 import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-
-interface SpacesClients {
-  realtimeClient: Ably.Realtime;
-  spacesClient: Spaces;
-}
 
 interface CursorPosition {
   x: number;
@@ -42,24 +38,32 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
     ...SpacesBaseCommand.globalFlags,
   }
 
+  // Declare class properties for clients and space
+  private realtimeClient: Ably.Realtime | null = null;
+  private spacesClient: Spaces | null = null;
+  private space: Space | null = null;
+
   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesCursorsGetAll)
     
-    let clients: SpacesClients | null = null
     let cleanupInProgress = false
+    const {spaceId} = args
     
     try {
-      // Create Spaces client
-      clients = await this.createSpacesClient(flags)
-      if (!clients) return
+      // Create Spaces client using setupSpacesClient
+      const setupResult = await this.setupSpacesClient(flags, spaceId);
+      this.realtimeClient = setupResult.realtimeClient;
+      this.spacesClient = setupResult.spacesClient;
+      this.space = setupResult.space;
+      if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.error('Failed to initialize clients or space');
+        return;
+      }
 
-      const { realtimeClient, spacesClient } = clients
-      const {spaceId} = args
-      
       // Make sure we have a connection before proceeding
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const {state} = realtimeClient.connection;
+          const {state} = this.realtimeClient!.connection;
           if (state === 'connected') {
             resolve();
           } else if (state === 'failed' || state === 'closed' || state === 'suspended') {
@@ -78,10 +82,8 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
 
-      const space = await spacesClient.get(spaceId)
-      
       // Enter the space
-      await space.enter()
+      await this.space.enter()
       
       // Wait for space to be properly entered before fetching cursors
       await new Promise<void>((resolve, reject) => {
@@ -93,11 +95,11 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
         const checkSpaceStatus = () => {
           try {
             // Check realtime client state
-            if (realtimeClient.connection.state === 'connected') {
+            if (this.realtimeClient!.connection.state === 'connected') {
               clearTimeout(timeout);
               if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({
-                  connectionId: realtimeClient.connection.id,
+                  connectionId: this.realtimeClient!.connection.id,
                   spaceId,
                   status: 'connected',
                   success: true,
@@ -107,11 +109,11 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
               }
 
               resolve();
-            } else if (realtimeClient.connection.state === 'failed' || 
-                      realtimeClient.connection.state === 'closed' || 
-                      realtimeClient.connection.state === 'suspended') {
+            } else if (this.realtimeClient!.connection.state === 'failed' || 
+                      this.realtimeClient!.connection.state === 'closed' || 
+                      this.realtimeClient!.connection.state === 'suspended') {
               clearTimeout(timeout);
-              reject(new Error(`Space connection failed with state: ${realtimeClient.connection.state}`));
+              reject(new Error(`Space connection failed with state: ${this.realtimeClient!.connection.state}`));
             } else {
               // Still connecting, check again shortly
               setTimeout(checkSpaceStatus, 100);
@@ -126,7 +128,7 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       });
       
       // Get all cursors
-      const cursors = await space.cursors.getAll()
+      const cursors = await this.space.cursors.getAll()
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
@@ -170,11 +172,9 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       if (!cleanupInProgress) {
         cleanupInProgress = true;
         try {
-          if (clients) {
-            const { realtimeClient, spacesClient } = clients;
-            const space = await spacesClient.get(args.spaceId);
-            await space.leave();
-            realtimeClient.close();
+          if (this.space && this.realtimeClient) {
+            await this.space.leave();
+            this.realtimeClient.close();
           }
         } catch {
           // Ignore cleanup errors

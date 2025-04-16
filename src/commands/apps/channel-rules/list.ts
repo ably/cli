@@ -38,7 +38,7 @@ export default class ChannelRulesListCommand extends ControlBaseCommand {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(ChannelRulesListCommand)
-    const appId = await this.getAppId(flags)
+    const appId = await this.resolveAppId(flags)
     
     if (!appId) {
       if (this.shouldOutputJson(flags)) {

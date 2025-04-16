@@ -110,7 +110,7 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
       
       try {
         const controlApi = this.createControlApi(flags)
-        const { account, user } = await controlApi.getMe()
+        const { account } = await controlApi.getMe()
         accountName = account.name
         accountId = account.id
       } catch {

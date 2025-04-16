@@ -1,14 +1,9 @@
-import Spaces, { Space } from '@ably/spaces'
+import Spaces, { type Space } from '@ably/spaces'
 import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-
-interface SpacesClients {
-  realtimeClient: Ably.Realtime;
-  spacesClient: Spaces;
-}
 
 export default class SpacesLocksAcquire extends SpacesBaseCommand {
   static override args = {
@@ -40,7 +35,8 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
   }
 
   private cleanupInProgress = false;
-  private clients: SpacesClients | null = null;
+  private realtimeClient: Ably.Realtime | null = null;
+  private spacesClient: Spaces | null = null;
   private lockId: null | string = null;
   private space: Space | null = null;
 
@@ -59,8 +55,8 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
            } catch (error) { this.logCliEvent({}, 'spaces', 'finalLeaveError', 'Error in final space leave', { error: error instanceof Error ? error.message : String(error) });}
        }
 
-       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-             this.clients.realtimeClient.close();
+       if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed' && this.realtimeClient.connection.state !== 'failed') {
+             this.realtimeClient.close();
          }
 
        return super.finally(err);
@@ -73,14 +69,18 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
     const {lockId} = this;
 
     try {
-      // Create Spaces client
-      this.clients = await this.createSpacesClient(flags)
-      if (!this.clients) return
-
-      const { realtimeClient, spacesClient } = this.clients
+      // Create Spaces client using setupSpacesClient
+      const setupResult = await this.setupSpacesClient(flags, spaceId);
+      this.realtimeClient = setupResult.realtimeClient;
+      this.spacesClient = setupResult.spacesClient;
+      this.space = setupResult.space;
+      if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.error('Failed to initialize clients or space');
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -100,19 +100,17 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
 
       // Get the space
       this.logCliEvent(flags, 'spaces', 'gettingSpace', `Getting space: ${spaceId}...`);
-      this.space = await spacesClient.get(spaceId)
-      const {space} = this; // Local const
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
       // Enter the space first
       this.logCliEvent(flags, 'spaces', 'entering', 'Entering space...');
-      await space.enter()
-      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: realtimeClient.auth.clientId });
+      await this.space.enter()
+      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: this.realtimeClient!.auth.clientId });
 
       // Try to acquire the lock
       try {
         this.logCliEvent(flags, 'lock', 'acquiring', `Attempting to acquire lock: ${lockId}`, { data: lockData, lockId });
-        const lock = await space.locks.acquire(lockId, lockData)
+        const lock = await this.space.locks.acquire(lockId, lockData)
         const lockDetails = {
             lockId: lock.id,
             member: lock.member ? { clientId: lock.member.clientId, connectionId: lock.member.connectionId } : null,
@@ -165,11 +163,11 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
           }, 5000);
 
           try {
-            if (space) {
+            if (this.space) {
                 try {
                   // Release the lock
                   this.logCliEvent(flags, 'lock', 'releasing', `Releasing lock ${lockId}`);
-                  await space.locks.release(lockId)
+                  await this.space.locks.release(lockId!)
                   this.logCliEvent(flags, 'lock', 'released', `Successfully released lock ${lockId}`);
                   if (!this.shouldOutputJson(flags)) {
                      this.log(chalk.green('Successfully released lock.'));
@@ -177,7 +175,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
 
                   // Leave the space
                   this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space...');
-                  await space.leave();
+                  await this.space.leave();
                   this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
                   if (!this.shouldOutputJson(flags)) {
                       this.log(chalk.green('Successfully left the space.'));
@@ -191,9 +189,9 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
                 }
             }
 
-            if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+            if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed') {
                this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-               this.clients.realtimeClient.close();
+               this.realtimeClient.close();
                this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
             }
 

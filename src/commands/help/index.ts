@@ -1,7 +1,6 @@
-import {Command, Flags} from '@oclif/core'
+import { Args, Command, Flags, Help, Interfaces } from "@oclif/core";
+import { Topic } from "@oclif/core/interfaces";
 import chalk from 'chalk'
-
-import CustomHelp from '../../help.js'
 
 export default class HelpCommand extends Command {
   static description = 'Get help from Ably'

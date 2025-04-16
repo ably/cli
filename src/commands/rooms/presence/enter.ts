@@ -1,14 +1,9 @@
-import { ChatClient, RoomStatus, RoomStatusChange } from '@ably/chat'
+import { ChatClient, PresenceMember, RoomStatus, RoomStatusChange } from '@ably/chat'
 import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
 
 export default class RoomsPresenceEnter extends ChatBaseCommand {
   static override args = {
@@ -38,59 +33,72 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
       default: true,
       description: 'Show other presence events while present',
     }),
+    'profile-data': Flags.string({
+      description: 'Profile data to publish (JSON string)',
+    }),
   }
 
-  private clients: ChatClients | null = null;
-  private unsubscribePresenceFn: (() => void) | null = null;
+  private ablyClient: Ably.Realtime | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
+  private unsubscribePresenceFn: (() => void) | null = null;
+  private chatClient: ChatClient | null = null;
+  private profileData: Record<string, unknown> | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.unsubscribePresenceFn) { try { this.unsubscribePresenceFn(); } catch { /* ignore */ } }
-     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
+  async finally(err: Error | undefined): Promise<any> {
+    if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
+    if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+        this.ablyClient.close();
+    }
 
-     return super.finally(err);
-   }
+    return super.finally(err);
+  }
 
-   async run(): Promise<void> {
+  async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsPresenceEnter)
+    const {roomId} = args;
 
     try {
-      // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      // Parse profile data if provided
+      if (flags['profile-data']) {
+        try {
+          this.profileData = JSON.parse(flags['profile-data']);
+          this.logCliEvent(flags, 'presence', 'profileDataParsed', 'Profile data parsed successfully', { profileData: this.profileData });
+        } catch (error) {
+          const errorMsg = `Invalid profile-data JSON: ${error instanceof Error ? error.message : String(error)}`;
+          this.logCliEvent(flags, 'presence', 'profileDataParseError', errorMsg, { error: errorMsg, roomId });
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({ error: errorMsg, roomId, success: false }, flags));
+          } else {
+            this.error(errorMsg);
+          }
 
-      const { chatClient, realtimeClient } = this.clients
-      const {roomId} = args
+          return;
+        }
+      }
+
+      // Create Chat client
+      this.chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = await this.createAblyClient(flags);
+
+      if (!this.chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client'); // Should not happen if chatClient created
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
-      // Parse the data
-      let presenceData = {}
-      try {
-        presenceData = JSON.parse(flags.data)
-        this.logCliEvent(flags, 'presence', 'dataParsed', 'Presence data parsed successfully', { data: presenceData });
-      } catch (error) {
-        const errorMsg = 'Invalid JSON data format. Please provide a valid JSON string.';
-        this.logCliEvent(flags, 'presence', 'dataParseError', errorMsg, { error: error instanceof Error ? error.message : String(error) });
-        if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ error: errorMsg, roomId, success: false }, flags))
-        } else {
-          this.error(errorMsg)
-        }
-
-        return
-      }
-
       // Get the room
       this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${roomId}`);
-      const room = await chatClient.rooms.get(roomId, {
+      const room = await this.chatClient.rooms.get(roomId, {
         presence: {}
       })
       this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${roomId}`);
@@ -117,7 +125,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
         this.logCliEvent(flags, 'presence', 'subscribingToEvents', 'Subscribing to presence events');
         const { unsubscribe: unsubscribePresence } = room.presence.subscribe((member: any) => {
           // Only show other members, not ourselves
-          if (member.clientId !== chatClient.clientId) {
+          if (member.clientId !== this.chatClient?.clientId) {
             const timestamp = new Date().toISOString()
             const eventData = {
                 action: member.action,
@@ -149,7 +157,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
 
                 case 'update': {
                     this.log(`${chalk.yellow('⟲')} ${chalk.blue(member.clientId || 'Unknown')} updated presence data:`);
-                    this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`);
+                    this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data as Record<string, unknown>, flags)}`);
                 
                 break;
                 }
@@ -167,29 +175,29 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
       await room.attach()
       // Successful attach logged by onStatusChange handler
 
-      this.logCliEvent(flags, 'presence', 'entering', 'Attempting to enter presence', { data: presenceData });
-      await room.presence.enter(presenceData)
+      this.logCliEvent(flags, 'presence', 'entering', 'Attempting to enter presence', { data: this.profileData || {} });
+      await room.presence.enter(this.profileData || {});
       const enterEventData = {
           action: 'enter',
           member: {
-              clientId: chatClient.clientId,
-              data: presenceData
+              clientId: this.chatClient?.clientId,
+              data: this.profileData || {}
           },
           roomId
       };
-      this.logCliEvent(flags, 'presence', 'entered', 'Successfully entered presence', enterEventData);
+      this.logCliEvent(flags, 'presence', 'entered', 'Successfully entered presence', { profileData: this.profileData });
 
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({ success: true, ...enterEventData }, flags))
       } else {
-        this.log(`${chalk.green('✓')} Entered room ${chalk.cyan(roomId)} as ${chalk.blue(chatClient.clientId || 'Unknown')}`)
+        this.log(`${chalk.green('✓')} Entered room ${chalk.cyan(roomId)} as ${chalk.blue(this.chatClient?.clientId || 'Unknown')}`)
       }
 
       if (flags['show-others']) {
         // Get and display current presence members
         this.logCliEvent(flags, 'presence', 'gettingInitialMembers', 'Fetching initial presence members');
         const members = await room.presence.get()
-        const initialMembers = members.filter(member => member.clientId !== chatClient.clientId).map(member => ({
+        const initialMembers = members.filter(member => member.clientId !== this.chatClient?.clientId).map(member => ({
             clientId: member.clientId,
             data: member.data
         }));
@@ -206,10 +214,10 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
             this.log(`\n${chalk.cyan('Current users in room')} (${chalk.bold(members.length.toString())}):\n`)
 
             for (const member of members) {
-              if (member.clientId !== chatClient.clientId) {
+              if (member.clientId !== this.chatClient?.clientId) {
                 this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`)
                 if (member.data && Object.keys(member.data).length > 0) {
-                  this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`)
+                  this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data as Record<string, unknown>, flags)}`)
                 }
               }
             }
@@ -291,7 +299,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
             // Release the room
             try {
               this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
-              await chatClient.rooms.release(roomId)
+              await this.chatClient?.rooms.release(roomId)
               this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
               if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({ action: 'release', roomId, success: true }, flags))
@@ -309,9 +317,9 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
               }
             }
 
-            if (this.clients?.realtimeClient) {
+            if (this.ablyClient) {
                this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-               this.clients.realtimeClient.close();
+               this.ablyClient.close();
                this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
             }
 
@@ -347,9 +355,9 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
        }
     } finally {
        // Ensure client is closed even if cleanup promise didn't resolve
-       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+       if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
            this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-           this.clients.realtimeClient.close();
+           this.ablyClient.close();
        }
     }
   }

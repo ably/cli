@@ -11,7 +11,7 @@ import ChannelsPresenceSubscribe from '../commands/channels/presence/subscribe.j
 import ChannelsPublish from '../commands/channels/publish.js'
 import ChannelsSubscribe from '../commands/channels/subscribe.js'
 import { ConfigManager } from '../services/config-manager.js'
-import { AblyBaseCommand } from '../base-command.js'
+import { AblyBaseCommand, BaseFlags } from '../base-command.js'
 
 // Maximum execution time for long-running operations (15 seconds)
 const MAX_EXECUTION_TIME = 15_000
@@ -904,7 +904,7 @@ export class AblyMcpServer {
     }
     
     // Exit process
-    // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+     
     process.exit(0)
   }
 } 

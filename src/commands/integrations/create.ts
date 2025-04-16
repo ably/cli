@@ -68,7 +68,7 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
@@ -128,7 +128,7 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
       const createdRule = await controlApi.createRule(appId, ruleData)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(createdRule, flags))
+        this.log(this.formatJsonOutput({ rule: createdRule }, flags))
       } else {
         this.log('Integration rule created successfully:')
         this.log(`Rule ID: ${createdRule.id}`)

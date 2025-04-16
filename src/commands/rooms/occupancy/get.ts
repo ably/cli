@@ -1,17 +1,9 @@
 import { ChatClient } from '@ably/chat'
-import { Args, Flags } from '@oclif/core'
+import { Args } from '@oclif/core'
+import * as Ably from 'ably'; // Import Ably
+import { type Room } from "@ably/chat"
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
-
-interface OccupancyMetrics {
-  connections?: number;
-  presenceMembers?: number;
-}
 
 export default class RoomsOccupancyGet extends ChatBaseCommand {
   static args = {
@@ -35,17 +27,22 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
     
   }
 
+  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsOccupancyGet)
     
-    let clients: ChatClients | null = null
-    
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const { chatClient } = clients
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+
       const {roomId} = args
       
       // Get the room with occupancy enabled
@@ -89,8 +86,8 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
         this.error(`Error fetching room occupancy: ${error instanceof Error ? error.message : String(error)}`)
       }
     } finally {
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+      if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
+        this.ablyClient.close()
       }
     }
   }

@@ -31,7 +31,7 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      appId = await this.getAppId(flags)
+      appId = await this.resolveAppId(flags)
       
       if (!appId) {
         if (this.shouldOutputJson(flags)) {

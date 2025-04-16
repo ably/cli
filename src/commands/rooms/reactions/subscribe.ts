@@ -1,13 +1,14 @@
 import { ChatClient, RoomStatus, Subscription } from '@ably/chat'
-import { Args, Flags } from '@oclif/core'
+import { Args } from '@oclif/core'
+import * as Ably from 'ably' // Import Ably
 import chalk from 'chalk'
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
 
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
+// interface ChatClients { // Remove ChatClients interface
+//   chatClient: ChatClient;
+//   realtimeClient: any;
+// }
 
 export default class RoomsReactionsSubscribe extends ChatBaseCommand {
   static override args = {
@@ -28,7 +29,9 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
   }
 
-  private clients: ChatClients | null = null;
+  // private clients: ChatClients | null = null; // Replace with chatClient and ablyClient
+  private chatClient: ChatClient | null = null;
+  private ablyClient: Ably.Realtime | null = null;
   private unsubscribeReactionsFn: Subscription | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
 
@@ -36,8 +39,10 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
    async finally(err: Error | undefined): Promise<any> {
      if (this.unsubscribeReactionsFn) { try { this.unsubscribeReactionsFn.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     // if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') { // Use ablyClient
+     if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+           // this.clients.realtimeClient.close(); // Use ablyClient
+           this.ablyClient.close();
        }
 
      return super.finally(err);
@@ -48,14 +53,21 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
     try {
       // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      // this.clients = await this.createChatClient(flags) // Assign to chatClient
+      this.chatClient = await this.createChatClient(flags)
+      this.ablyClient = await this.createAblyClient(flags) // Also create Ably client
+      // if (!this.clients) return // Check both clients
+      if (!this.chatClient || !this.ablyClient) {
+        this.error('Failed to initialize clients')
+        return
+      }
 
-      const { chatClient, realtimeClient } = this.clients
+      // const { chatClient, realtimeClient } = this.clients // Remove deconstruction
       const {roomId} = args
 
        // Add listeners for connection state changes
-       realtimeClient.connection.on((stateChange: any) => {
+       // realtimeClient.connection.on((stateChange: any) => { // Use ablyClient
+       this.ablyClient.connection.on((stateChange: any) => {
          this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
        });
 
@@ -66,7 +78,8 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
       // Get the room
       this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${roomId}`);
-      const room = await chatClient.rooms.get(roomId, {
+      // const room = await chatClient.rooms.get(roomId, { // Use this.chatClient
+      const room = await this.chatClient.rooms.get(roomId, {
         reactions: {}
       })
       this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${roomId}`);
@@ -192,8 +205,13 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
           try {
             this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
-            await chatClient.rooms.release(roomId);
-            this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
+            // await chatClient.rooms.release(roomId); // Use this.chatClient
+            if (this.chatClient) {
+              await this.chatClient.rooms.release(roomId);
+              this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
+            } else {
+              this.logCliEvent(flags, 'room', 'releaseError', 'Chat client was null during cleanup', { error: 'Chat client null' });
+            }
           } catch (error) {
              const errorMsg = error instanceof Error ? error.message : String(error);
              this.logCliEvent(flags, 'room', 'releaseError', `Error releasing room: ${errorMsg}`, { error: errorMsg });
@@ -204,9 +222,11 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
              }
           }
 
-          if (this.clients?.realtimeClient) {
+          // if (this.clients?.realtimeClient) { // Use this.ablyClient
+          if (this.ablyClient) {
              this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-             this.clients.realtimeClient.close();
+             // this.clients.realtimeClient.close(); // Use this.ablyClient
+             this.ablyClient.close();
              this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
           }
 
@@ -216,7 +236,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
           clearTimeout(forceExitTimeout);
           resolve()
-          // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+           
           process.exit(0); // Reinstated: Explicit exit after cleanup
         }
 
@@ -233,9 +253,11 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
        }
     } finally {
       // Ensure client is closed even if cleanup promise didn't resolve
-       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+       // if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') { // Use this.ablyClient
+       if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
            this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-           this.clients.realtimeClient.close();
+           // this.clients.realtimeClient.close(); // Use this.ablyClient
+           this.ablyClient.close();
        }
     }
   }

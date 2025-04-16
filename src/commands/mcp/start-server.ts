@@ -1,4 +1,4 @@
-import { Flags } from '@oclif/core'
+import { Command } from "@oclif/core"
 
 import { AblyBaseCommand } from '../../base-command.js'
 import { AblyMcpServer } from '../../mcp/index.js'

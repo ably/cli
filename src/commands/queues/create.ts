@@ -46,7 +46,7 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
@@ -63,7 +63,7 @@ export default class QueuesCreateCommand extends ControlBaseCommand {
       const createdQueue = await controlApi.createQueue(appId, queueData)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(createdQueue, flags))
+        this.log(this.formatJsonOutput(JSON.parse(JSON.stringify(createdQueue)), flags))
       } else {
         this.log('Queue created successfully:')
         this.log(`Queue ID: ${createdQueue.id}`)

@@ -91,7 +91,8 @@ export default class RoomsList extends ChatBaseCommand {
 
       // Output rooms based on format
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(limitedRooms, flags))
+        // Wrap the array in an object for formatJsonOutput
+        this.log(this.formatJsonOutput({ items: limitedRooms }, flags))
       } else {
         if (limitedRooms.length === 0) {
           this.log('No active chat rooms found.')

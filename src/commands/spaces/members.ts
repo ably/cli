@@ -1,4 +1,4 @@
-import {Command, Flags} from '@oclif/core'
+import { Command } from "@oclif/core"
 
 export default class SpacesMembers extends Command {
   static override description = 'Commands for managing members in Ably Spaces'

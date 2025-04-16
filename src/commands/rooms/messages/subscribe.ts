@@ -1,4 +1,6 @@
 import {Args, Flags} from '@oclif/core'
+import * as Ably from 'ably'; // Import Ably
+import { ChatClient, Message, RoomStatus, Subscription, StatusSubscription } from '@ably/chat'; // Import ChatClient and StatusSubscription
 import chalk from 'chalk'
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
@@ -29,12 +31,16 @@ export default class MessagesSubscribe extends ChatBaseCommand {
     }),
   }
 
-  private clients: { chatClient: any, realtimeClient: any } | null = null;
+  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+  private messageSubscription: Subscription | null = null
+  private unsubscribeStatusFn: StatusSubscription | null = null
 
   // Override finally to ensure resources are cleaned up
    async finally(err: Error | undefined): Promise<any> {
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     if (this.messageSubscription) { try { this.messageSubscription.unsubscribe(); } catch { /* ignore */ } }
+     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn.off(); } catch { /* ignore */ } }
+     if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+           this.ablyClient.close();
        }
 
      return super.finally(err);
@@ -42,27 +48,36 @@ export default class MessagesSubscribe extends ChatBaseCommand {
 
    async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesSubscribe)
+    const {roomId} = args
 
     try {
       // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const {chatClient, realtimeClient} = this.clients
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client'); // Should not happen if chatClient created
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
       // Get the room
-      this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${args.roomId}`);
-      const room = await chatClient.rooms.get(args.roomId, {})
-      this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${args.roomId}`);
+      this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${roomId}`);
+      const room = await chatClient.rooms.get(roomId, {})
+      this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${roomId}`);
 
       // Setup message handler
-      this.logCliEvent(flags, 'room', 'subscribingToMessages', `Subscribing to messages in room ${args.roomId}`);
-      const { unsubscribe } = room.messages.subscribe((messageEvent: any) => {
+      this.logCliEvent(flags, 'room', 'subscribingToMessages', `Subscribing to messages in room ${roomId}`);
+      this.messageSubscription = room.messages.subscribe((messageEvent: any) => {
         const {message} = messageEvent
         const messageLog = {
             clientId: message.clientId,
@@ -70,12 +85,12 @@ export default class MessagesSubscribe extends ChatBaseCommand {
             timestamp: message.timestamp,
             ...(message.metadata ? { metadata: message.metadata } : {})
         };
-        this.logCliEvent(flags, 'message', 'received', 'Message received', { message: messageLog, roomId: args.roomId });
+        this.logCliEvent(flags, 'message', 'received', 'Message received', { message: messageLog, roomId: roomId });
 
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
             message: messageLog,
-            roomId: args.roomId,
+            roomId: roomId,
             success: true
           }, flags))
         } else {
@@ -94,18 +109,18 @@ export default class MessagesSubscribe extends ChatBaseCommand {
           this.log('') // Empty line for better readability
         }
       })
-      this.logCliEvent(flags, 'room', 'subscribedToMessages', `Successfully subscribed to messages in room ${args.roomId}`);
+      this.logCliEvent(flags, 'room', 'subscribedToMessages', `Successfully subscribed to messages in room ${roomId}`);
 
       // Subscribe to room status changes
-      this.logCliEvent(flags, 'room', 'subscribingToStatus', `Subscribing to status changes for room ${args.roomId}`);
-      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: any) => {
-         this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: statusChange.reason, roomId: args.roomId });
+      this.logCliEvent(flags, 'room', 'subscribingToStatus', `Subscribing to status changes for room ${roomId}`);
+      this.unsubscribeStatusFn = room.onStatusChange((statusChange: any) => {
+         this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: statusChange.reason, roomId: roomId });
          if (statusChange.current === 'attached') {
            if (!this.shouldSuppressOutput(flags)) {
              if (this.shouldOutputJson(flags)) {
                // Already logged via logCliEvent
              } else {
-               this.log(`${chalk.green('Connected to room:')} ${chalk.bold(args.roomId)}`);
+               this.log(`${chalk.green('Connected to room:')} ${chalk.bold(roomId)}`);
                this.log(`${chalk.dim('Listening for messages. Press Ctrl+C to exit.')}`);
              }
            }
@@ -118,77 +133,93 @@ export default class MessagesSubscribe extends ChatBaseCommand {
             }
          }
       })
-      this.logCliEvent(flags, 'room', 'subscribedToStatus', `Successfully subscribed to status changes for room ${args.roomId}`);
+      this.logCliEvent(flags, 'room', 'subscribedToStatus', `Successfully subscribed to status changes for room ${roomId}`);
 
       // Attach to the room
-      this.logCliEvent(flags, 'room', 'attaching', `Attaching to room ${args.roomId}`);
+      this.logCliEvent(flags, 'room', 'attaching', `Attaching to room ${roomId}`);
       await room.attach()
       // Note: successful attach logged by onStatusChange handler
 
       this.logCliEvent(flags, 'subscribe', 'listening', 'Now listening for messages and status changes');
       // Keep the process running until Ctrl+C
-      await new Promise(() => {
-        // This promise intentionally never resolves
-        process.on('SIGINT', async () => {
-          this.logCliEvent(flags, 'subscribe', 'cleanupInitiated', 'Cleanup initiated (Ctrl+C pressed)');
-          if (!this.shouldSuppressOutput(flags)) {
-            if (this.shouldOutputJson(flags)) {
-              // Logged via logCliEvent
-            } else {
-              this.log(`\n${chalk.yellow('Disconnecting from room...')}`)
+      await new Promise<void>((resolve) => {
+        const cleanup = async () => {
+          // Set a force exit timeout
+          const forceExitTimeout = setTimeout(() => {
+            const errorMsg = 'Force exiting after timeout during cleanup';
+            this.logCliEvent(flags, 'subscribe', 'forceExit', errorMsg, { roomId });
+            if (!this.shouldOutputJson(flags)) {
+               this.log(chalk.red('Force exiting after timeout...'));
+            }
+
+            process.exit(1);
+          }, 5000);
+
+          if (this.messageSubscription) {
+            try {
+              this.logCliEvent(flags, 'room', 'unsubscribingMessages', 'Unsubscribing from messages');
+              this.messageSubscription.unsubscribe();
+              this.logCliEvent(flags, 'room', 'unsubscribedMessages', 'Unsubscribed from messages');
+            } catch (error) {
+              this.logCliEvent(flags, 'room', 'unsubscribeMessagesError', 'Error unsubscribing messages', { error: error instanceof Error ? error.message : String(error) });
             }
           }
 
-          // Clean up subscriptions
-          try {
-             this.logCliEvent(flags, 'room', 'unsubscribingMessages', 'Unsubscribing from messages');
-             unsubscribe();
-             this.logCliEvent(flags, 'room', 'unsubscribedMessages', 'Unsubscribed from messages');
-          } catch (error) { this.logCliEvent(flags, 'room', 'unsubscribeMessagesError', 'Error unsubscribing messages', { error: error instanceof Error ? error.message : String(error) }); }
-
-          try {
-             this.logCliEvent(flags, 'room', 'unsubscribingStatus', 'Unsubscribing from status changes');
-             unsubscribeStatus();
-             this.logCliEvent(flags, 'room', 'unsubscribedStatus', 'Unsubscribed from status changes');
-          } catch (error) { this.logCliEvent(flags, 'room', 'unsubscribeStatusError', 'Error unsubscribing status', { error: error instanceof Error ? error.message : String(error) }); }
+          if (this.unsubscribeStatusFn) {
+            try {
+              this.logCliEvent(flags, 'room', 'unsubscribingStatus', 'Unsubscribing from status changes');
+              this.unsubscribeStatusFn.off();
+              this.logCliEvent(flags, 'room', 'unsubscribedStatus', 'Unsubscribed from status changes');
+            } catch (error) {
+              this.logCliEvent(flags, 'room', 'unsubscribeStatusError', 'Error unsubscribing status', { error: error instanceof Error ? error.message : String(error) });
+            }
+          }
 
           // Release the room and close connection
           try {
-            this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${args.roomId}`);
-            await chatClient.rooms.release(args.roomId);
-            this.logCliEvent(flags, 'room', 'released', `Room ${args.roomId} released`);
-          } catch(error) { this.logCliEvent(flags, 'room', 'releaseError', 'Error releasing room', { error: error instanceof Error ? error.message : String(error) }); }
+            this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
+            await chatClient.rooms.release(roomId);
+            this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
+          } catch (error) {
+            this.logCliEvent(flags, 'room', 'releaseError', `Error releasing room: ${error instanceof Error ? error.message : String(error)}`, { error: error instanceof Error ? error.message : String(error) });
+          }
 
-          if (realtimeClient) {
+          if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
              this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-             realtimeClient.close();
+             this.ablyClient.close();
              this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
           }
 
-          if (!this.shouldSuppressOutput(flags)) {
-            if (this.shouldOutputJson(flags)) {
-              // Logged via logCliEvent
-            } else {
-              this.log(`${chalk.green('Successfully disconnected.')}`);
-            }
+          clearTimeout(forceExitTimeout);
+          this.logCliEvent(flags, 'subscribe', 'cleanupComplete', 'Cleanup complete');
+          if (!this.shouldOutputJson(flags)) {
+            this.log(chalk.green('Successfully disconnected.'))
           }
 
-          // eslint-disable-next-line n/no-process-exit
-          process.exit(0) // Reinstated: Explicit exit after connection closed
-        })
+          resolve();
+        }
+
+        process.on('SIGINT', () => void cleanup())
+        process.on('SIGTERM', () => void cleanup())
       })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logCliEvent(flags, 'subscribe', 'fatalError', `Failed to subscribe to messages: ${errorMsg}`, { error: errorMsg, roomId: args.roomId });
+      this.logCliEvent(flags, 'subscribe', 'fatalError', `Failed to subscribe to messages: ${errorMsg}`, { error: errorMsg, roomId: roomId });
       // Close the connection in case of error
-      if (this.clients?.realtimeClient) {
-        this.clients.realtimeClient.close()
+      if (this.ablyClient) {
+        this.ablyClient.close()
       }
 
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ error: errorMsg, roomId: args.roomId, success: false }, flags))
+        this.log(this.formatJsonOutput({ error: errorMsg, roomId: roomId, success: false }, flags))
       } else {
         this.error(`Failed to subscribe to messages: ${errorMsg}`)
+      }
+    } finally {
+      // Ensure client is closed even if cleanup promise didn't resolve
+      if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
+        this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
+        this.ablyClient.close();
       }
     }
   }

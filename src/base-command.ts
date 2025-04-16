@@ -7,9 +7,10 @@ import {randomUUID} from 'node:crypto'
 import { ConfigManager } from './services/config-manager.js'
 import { ControlApi } from './services/control-api.js'
 import { InteractiveHelper } from './services/interactive-helper.js'
+import { BaseFlags, CommandConfig, ErrorDetails } from './types/cli.js'
 
-// List of commands not allowed in web CLI mode
-const WEB_CLI_RESTRICTED_COMMANDS = [
+// List of commands not allowed in web CLI mode - EXPORTED
+export const WEB_CLI_RESTRICTED_COMMANDS = [
   'accounts:login',
   'accounts:list',
   'accounts:logout',
@@ -84,7 +85,7 @@ export abstract class AblyBaseCommand extends Command {
 
   protected isWebCliMode: boolean
 
-  constructor(argv: string[], config: any) {
+  constructor(argv: string[], config: CommandConfig) {
     super(argv, config)
     this.configManager = new ConfigManager()
     this.interactiveHelper = new InteractiveHelper(this.configManager)
@@ -126,7 +127,7 @@ export abstract class AblyBaseCommand extends Command {
     }
   }
 
-  protected async createAblyClient(flags: any): Promise<Ably.Realtime | null> {
+  protected async createAblyClient(flags: BaseFlags): Promise<Ably.Realtime | null> {
     // If token is provided or API key is in environment, we can skip the ensureAppAndKey step
     if (!flags.token && !flags['api-key'] && !process.env.ABLY_API_KEY) {
       const appAndKey = await this.ensureAppAndKey(flags)
@@ -172,23 +173,23 @@ export abstract class AblyBaseCommand extends Command {
               this.handleInvalidKey(flags)
               const errorMsg = 'Invalid API key. Ensure you have a valid key configured.';
               if (isJsonMode) {
-                 this.outputJsonError(errorMsg, stateChange.reason);
+                this.outputJsonError(errorMsg, stateChange.reason as ErrorDetails);
               }
 
               reject(new Error(errorMsg))
             } else {
               const errorMsg = 'Invalid token. Please provide a valid Ably Token or JWT.';
-               if (isJsonMode) {
-                 this.outputJsonError(errorMsg, stateChange.reason);
-               }
+              if (isJsonMode) {
+                this.outputJsonError(errorMsg, stateChange.reason as ErrorDetails);
+              }
 
               reject(new Error(errorMsg))
             }
           } else {
-             const errorMsg = stateChange.reason?.message || 'Connection failed';
-             if (isJsonMode) {
-               this.outputJsonError(errorMsg, stateChange.reason);
-             }
+            const errorMsg = stateChange.reason?.message || 'Connection failed';
+            if (isJsonMode) {
+              this.outputJsonError(errorMsg, stateChange.reason as ErrorDetails);
+            }
 
             reject(stateChange.reason || new Error(errorMsg))
           }
@@ -198,15 +199,12 @@ export abstract class AblyBaseCommand extends Command {
       // Handle any synchronous errors when creating the client
       const err = error as { code?: number } & Error // Type assertion
       if ((err.code === 40_100 || err.message?.includes('invalid key')) && // Unauthorized or invalid key format
-        options.key) { // Check the original options object
-          await this.handleInvalidKey(flags)
-        }
-
-      // Output synchronous error as JSON if needed
-      if (isJsonMode) {
-        this.outputJsonError(err.message || 'Failed to initialize Ably client', err);
+        flags['api-key']) {
+        // Provided key is invalid - reset it
+        await this.handleInvalidKey(flags)
       }
-
+      
+      // Re-throw the error
       throw error
     }
   }
@@ -218,7 +216,7 @@ export abstract class AblyBaseCommand extends Command {
    * @param flags Command flags that may contain auth overrides
    * @param showAppInfo Whether to show app info (for data plane commands)
    */
-  protected displayAuthInfo(flags: any, showAppInfo: boolean = true): void {
+  protected displayAuthInfo(flags: BaseFlags, showAppInfo: boolean = true): void {
     // Get account info
     const currentAccount = this.configManager.getCurrentAccount()
     const accountName = currentAccount?.accountName || this.configManager.getCurrentAccountAlias() || 'Unknown Account'
@@ -268,7 +266,7 @@ export abstract class AblyBaseCommand extends Command {
    * Display information for control plane commands
    * Shows only account information
    */
-  protected displayControlPlaneInfo(flags: any): void {
+  protected displayControlPlaneInfo(flags: BaseFlags): void {
     if (!flags.quiet && !this.shouldOutputJson(flags) && !this.shouldSuppressOutput(flags)) {
       this.displayAuthInfo(flags, false);
     }
@@ -278,13 +276,13 @@ export abstract class AblyBaseCommand extends Command {
    * Display information for data plane (product API) commands
    * Shows account, app, and authentication information
    */
-  protected displayDataPlaneInfo(flags: any): void {
+  protected displayDataPlaneInfo(flags: BaseFlags): void {
     if (!flags.quiet && !this.shouldOutputJson(flags) && !this.shouldSuppressOutput(flags)) {
       this.displayAuthInfo(flags, true);
     }
   }
 
-  protected async ensureAppAndKey(flags: any): Promise<{apiKey: string, appId: string} | null> {
+  protected async ensureAppAndKey(flags: BaseFlags): Promise<{apiKey: string, appId: string} | null> {
     // If in web CLI mode, use environment variables directly
     if (this.isWebCliMode) {
       // Extract app ID from ABLY_API_KEY environment variable
@@ -394,7 +392,7 @@ export abstract class AblyBaseCommand extends Command {
     await super.finally(err);
   }
 
-  protected formatJsonOutput(data: any, flags: any): string {
+  protected formatJsonOutput(data: Record<string, unknown>, flags: BaseFlags): string {
     if (this.isPrettyJsonOutput(flags)) {
       try {
         return colorJson(data);
@@ -409,7 +407,7 @@ export abstract class AblyBaseCommand extends Command {
     return JSON.stringify(data, null, 2);
   }
 
-  protected getClientOptions(flags: any): Ably.ClientOptions {
+  protected getClientOptions(flags: BaseFlags): Ably.ClientOptions {
     const options: Ably.ClientOptions = {}
     const isJsonMode = this.shouldOutputJson(flags);
 
@@ -572,7 +570,7 @@ export abstract class AblyBaseCommand extends Command {
     return true
   }
 
-  protected isPrettyJsonOutput(flags: any): boolean {
+  protected isPrettyJsonOutput(flags: BaseFlags): boolean {
     return flags['pretty-json'] === true;
   }
   
@@ -584,11 +582,11 @@ export abstract class AblyBaseCommand extends Command {
    * Does nothing if --verbose is not enabled.
    */
   protected logCliEvent(
-    flags: any,
+    flags: BaseFlags,
     component: string,
     event: string,
     message: string,
-    data: Record<string, any> = {}
+    data: Record<string, unknown> = {}
   ): void {
     // Only log if verbose mode is enabled
     if (!flags.verbose) {
@@ -616,7 +614,7 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   /** Helper to output errors in JSON format */
-  protected outputJsonError(message: string, errorDetails: any = {}): void {
+  protected outputJsonError(message: string, errorDetails: ErrorDetails = {}): void {
     const errorOutput = {
       details: errorDetails,
       error: true,
@@ -658,7 +656,7 @@ export abstract class AblyBaseCommand extends Command {
     return { appId, keyId, keySecret };
   }
 
-  protected shouldOutputJson(flags: any): boolean {
+  protected shouldOutputJson(flags: BaseFlags): boolean {
     return flags.json === true || flags['pretty-json'] === true || flags.format === 'json';
   }
   
@@ -697,7 +695,7 @@ export abstract class AblyBaseCommand extends Command {
   }
   
   // Add this method to check if we should suppress output
-  protected shouldSuppressOutput(flags: any): boolean {
+  protected shouldSuppressOutput(flags: BaseFlags): boolean {
     return flags['token-only'] === true;
   }
   
@@ -705,7 +703,7 @@ export abstract class AblyBaseCommand extends Command {
    * Display auth info at the beginning of command execution
    * This should be called at the start of run() in command implementations 
    */
-  protected showAuthInfoIfNeeded(flags: any = {}): void {
+  protected showAuthInfoIfNeeded(flags: BaseFlags = {}): void {
     // Skip auth info if specified in the exceptions list
     if (!this.shouldShowAuthInfo()) {
       this.debug(`Skipping auth info display for command: ${this.id}`);
@@ -738,7 +736,7 @@ export abstract class AblyBaseCommand extends Command {
     }
   }
   
-  private async handleInvalidKey(flags: any): Promise<void> {
+  private async handleInvalidKey(flags: BaseFlags): Promise<void> {
     const appId = flags.app || this.configManager.getCurrentAppId()
     
     if (appId) {
@@ -755,7 +753,7 @@ export abstract class AblyBaseCommand extends Command {
     }
   }
   
-  private setClientId(options: Ably.ClientOptions, flags: any): void {
+  private setClientId(options: Ably.ClientOptions, flags: BaseFlags): void {
     if (flags['client-id']) {
       // Special case: "none" means explicitly no client ID
       if (flags['client-id'].toLowerCase() === 'none') {

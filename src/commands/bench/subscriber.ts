@@ -268,7 +268,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
     this.logCliEvent(flags, 'presence', 'presenceEntered', `Entered presence as subscriber on channel: ${channel.name}`);
 
     let testInProgress = false; // Track if a test is currently active
-    let display: InstanceType<typeof Table> | null = null; // Type for display table
+    let _display: InstanceType<typeof Table> | null = null; // Type for display table
 
     // --- Presence Enter Handler ---
     channel.presence.subscribe('enter', (member: Ably.PresenceMessage) => {
@@ -314,7 +314,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
         if (this.shouldOutputJson(flags)) {
           this.logCliEvent(flags, 'benchmark', 'waitingForTest', 'Waiting for a new benchmark test to start...')
         } else {
-          display = this.createStatusDisplay(null) // Reset display
+          _display = this.createStatusDisplay(null) // Reset display
           this.log('\nWaiting for a new benchmark test to start...')
         }
       }
@@ -411,7 +411,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
 
   private subscribeToMessages(channel: Ably.RealtimeChannel, metrics: TestMetrics, flags: Record<string, unknown>): void {
     let testInProgress = false; // Local state for message handler
-    let display: InstanceType<typeof Table> | null = null;
+    let _display: InstanceType<typeof Table> | null = null;
 
     channel.subscribe('benchmark', (message: Ably.Message) => {
       if (!message.data || typeof message.data !== 'object' || !('timestamp' in message.data) || !('testId' in message.data) || !('index' in message.data)) {
@@ -429,12 +429,12 @@ export default class BenchSubscriber extends AblyBaseCommand {
 
         this.startNewTest(metrics, testId, now, flags);
         testInProgress = true;
-        display = this.shouldOutputJson(flags) ? null : this.createStatusDisplay(testId);
-        if (display && !this.shouldOutputJson(flags)) {
-          this.resetDisplay(display);
+        _display = this.shouldOutputJson(flags) ? null : this.createStatusDisplay(testId);
+        if (_display && !this.shouldOutputJson(flags)) {
+          this.resetDisplay(_display);
         }
 
-        this.startPublisherCheckInterval(metrics, flags, () => { testInProgress = false; display = null; }); // Pass callback to update state
+        this.startPublisherCheckInterval(metrics, flags, () => { testInProgress = false; _display = null; }); // Pass callback to update state
       }
 
       // --- Update Metrics for Received Message --- 

@@ -1,16 +1,11 @@
 import type { SpaceMember } from '@ably/spaces'
 
-import Spaces, { Space } from '@ably/spaces'
+import Spaces, { type Space } from '@ably/spaces'
 import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-
-interface SpacesClients {
-  realtimeClient: Ably.Realtime;
-  spacesClient: Spaces;
-}
 
 export default class SpacesMembersSubscribe extends SpacesBaseCommand {
   static override args = {
@@ -32,7 +27,8 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
   }
 
   private cleanupInProgress = false;
-  private clients: SpacesClients | null = null;
+  private realtimeClient: Ably.Realtime | null = null;
+  private spacesClient: Spaces | null = null;
   private space: Space | null = null;
   private subscription: any = null;
 
@@ -43,8 +39,8 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
          try { await this.space.leave(); } catch{/* ignore */} // Best effort
      }
 
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed' && this.realtimeClient.connection.state !== 'failed') {
+           this.realtimeClient.close();
        }
 
      return super.finally(err);
@@ -58,31 +54,35 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
     const lastSeenEvents = new Map<string, {action: string, timestamp: number}>()
 
     try {
-      // Create Spaces client
-      this.clients = await this.createSpacesClient(flags)
-      if (!this.clients) return
-
-      const { realtimeClient, spacesClient } = this.clients
+      // Create Spaces client using setupSpacesClient
+      const setupResult = await this.setupSpacesClient(flags, spaceId);
+      this.realtimeClient = setupResult.realtimeClient;
+      this.spacesClient = setupResult.spacesClient;
+      this.space = setupResult.space;
+      if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.error('Failed to initialize clients or space');
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.realtimeClient!.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
       // Get the space
       this.logCliEvent(flags, 'spaces', 'gettingSpace', `Getting space: ${spaceId}...`);
-      this.space = await spacesClient.get(spaceId)
-      const {space} = this; // Local const
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
       // Enter the space to subscribe
       this.logCliEvent(flags, 'spaces', 'entering', 'Entering space...');
-      await space.enter()
-      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: realtimeClient.auth.clientId });
+      if (!this.space) { this.error('Space object is null before entering'); return; }
+      await this.space.enter()
+      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: this.realtimeClient!.auth.clientId });
 
       // Get current members
       this.logCliEvent(flags, 'member', 'gettingInitial', 'Fetching initial members');
-      const members = await space.members.getAll()
+      if (!this.space) { this.error('Space object is null before getting members'); return; }
+      const members = await this.space.members.getAll()
       const initialMembers = members.map(member => ({
           clientId: member.clientId,
           connectionId: member.connectionId,
@@ -129,7 +129,8 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
 
       // Subscribe to member presence events
       this.logCliEvent(flags, 'member', 'subscribing', 'Subscribing to member updates');
-      this.subscription = await space.members.subscribe('update', (member: SpaceMember) => {
+      if (!this.space) { this.error('Space object is null before subscribing to members'); return; }
+      this.subscription = await this.space.members.subscribe('update', (member: SpaceMember) => {
         const timestamp = new Date().toISOString()
         const now = Date.now()
 
@@ -139,7 +140,7 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
         const connectionId = member.connectionId || 'Unknown'
 
         // Skip self events - check connection ID
-        const selfConnectionId = this.clients?.realtimeClient.connection.id
+        const selfConnectionId = this.realtimeClient!.connection.id
         if (member.connectionId === selfConnectionId) {
           return
         }
@@ -256,10 +257,10 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
               }
             }
 
-            if (space) {
+            if (this.space) {
                try {
                  this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space...');
-                 await space.leave();
+                 await this.space.leave();
                  this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
                } catch (error) {
                   const errorMsg = `Error leaving space: ${error instanceof Error ? error.message : String(error)}`;
@@ -267,10 +268,10 @@ export default class SpacesMembersSubscribe extends SpacesBaseCommand {
                }
             }
 
-            if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+            if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed') {
                try {
                   this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-                  this.clients.realtimeClient.close();
+                  this.realtimeClient.close();
                   this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
                } catch (error) {
                   const errorMsg = `Error closing client: ${error instanceof Error ? error.message : String(error)}`;

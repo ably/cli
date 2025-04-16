@@ -1,14 +1,10 @@
 import Spaces from '@ably/spaces'
+import { type Space } from '@ably/spaces'
 import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-
-interface SpacesClients {
-  realtimeClient: Ably.Realtime;
-  spacesClient: Spaces;
-}
 
 // Define cursor types based on Ably documentation
 interface CursorPosition {
@@ -55,7 +51,9 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
   }
 
   private cleanupInProgress = false;
-  private clients: SpacesClients | null = null;
+  private realtimeClient: Ably.Realtime | null = null;
+  private spacesClient: Spaces | null = null;
+  private space: Space | null = null;
   private simulationIntervalId: NodeJS.Timeout | null = null;
 
   // Override finally to ensure resources are cleaned up
@@ -65,8 +63,8 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         this.simulationIntervalId = null;
      }
 
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed' && this.realtimeClient.connection.state !== 'failed') {
+           this.realtimeClient.close();
        }
 
      return super.finally(err);
@@ -77,9 +75,12 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
     const {spaceId} = args;
 
     try {
-      // Create Spaces client
-      this.clients = await this.createSpacesClient(flags)
-      if (!this.clients) {
+      // Create Spaces client using setupSpacesClient
+      const setupResult = await this.setupSpacesClient(flags, spaceId);
+      this.realtimeClient = setupResult.realtimeClient;
+      this.spacesClient = setupResult.spacesClient;
+      this.space = setupResult.space;
+      if (!this.realtimeClient || !this.spacesClient || !this.space) {
          const errorMsg = 'Failed to create Spaces client';
          this.logCliEvent(flags, 'spaces', 'clientCreationFailed', errorMsg, { error: errorMsg, spaceId });
          if (this.shouldOutputJson(flags)) {
@@ -89,10 +90,8 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
          return;
       }
 
-      const { realtimeClient, spacesClient } = this.clients
-
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -143,7 +142,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       this.logCliEvent(flags, 'connection', 'waiting', 'Waiting for connection to establish...');
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const {state} = realtimeClient.connection;
+          const {state} = this.realtimeClient!.connection;
           if (state === 'connected') {
              this.logCliEvent(flags, 'connection', 'connected', 'Realtime connection established.');
             resolve();
@@ -166,18 +165,17 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
 
-      const space = await spacesClient.get(spaceId)
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
       // Enter the space first
       this.logCliEvent(flags, 'spaces', 'entering', 'Entering space...');
-      await space.enter()
-      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: realtimeClient.auth.clientId });
+      await this.space.enter()
+      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: this.realtimeClient!.auth.clientId });
 
       // Set the initial cursor position
       this.logCliEvent(flags, 'cursor', 'settingInitial', 'Setting initial cursor position', { position: positionData });
       const cursorUpdate: CursorUpdate = { position: positionData };
-      await space.cursors.set(cursorUpdate);
+      await this.space.cursors.set(cursorUpdate);
       const initialSetEventData = {
           cursor: { position: positionData },
           spaceId,
@@ -211,7 +209,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
               const updateData: CursorUpdate = { position: newPosition };
               this.logCliEvent(flags, 'cursor', 'simulationUpdateAttempt', 'Simulating cursor move', { position: newPosition });
 
-              await space.cursors.set(updateData);
+              await this.space!.cursors.set(updateData);
               const updateEventData = {
                   cursor: { position: newPosition },
                   spaceId,
@@ -255,45 +253,53 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         }
 
         const forceExitTimeout = setTimeout(() => {
-            const errorMsg = 'Force exiting after timeout during cleanup';
-            this.logCliEvent(flags, 'cursor', 'forceExit', errorMsg, { spaceId });
+            this.logCliEvent(flags, 'cursor', 'forceExit', 'Force exiting after timeout during cleanup', { spaceId });
             if (!this.shouldOutputJson(flags)) {
                this.log(chalk.red('Force exiting after timeout...'));
             }
 
-            // eslint-disable-next-line n/no-process-exit, unicorn/no-process-exit
+            // Clean up interval and connection forcefully if needed
+            if (this.simulationIntervalId) clearInterval(this.simulationIntervalId);
+            if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed') this.realtimeClient.close();
+             
             process.exit(1);
         }, 5000);
 
-        if (space) {
-          try {
-            this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space...');
-            await space.leave();
+        // Leave the space
+        try {
+          if (this.space) {
+            this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space');
+            await this.space.leave()
             this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
-            this.logCliEvent(flags, 'spaces', 'leaveError', `Error leaving space: ${errorMsg}`, { error: errorMsg });
           }
+        } catch (error) {
+           const errorMsg = error instanceof Error ? error.message : String(error);
+           this.logCliEvent(flags, 'spaces', 'leaveError', `Error leaving space: ${errorMsg}`, { error: errorMsg });
+           // Don't prevent closing connection
         }
 
-        if (realtimeClient && realtimeClient.connection.state !== 'closed') {
-          this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-          realtimeClient.close();
-          this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
+        // Close connection
+        try {
+          if (this.realtimeClient) {
+            this.logCliEvent(flags, 'connection', 'closing', 'Closing connection');
+            this.realtimeClient.close();
+            this.logCliEvent(flags, 'connection', 'closed', 'Connection closed');
+          }
+        } catch (error) {
+           const errorMsg = error instanceof Error ? error.message : String(error);
+           this.logCliEvent(flags, 'connection', 'closeError', `Error closing connection: ${errorMsg}`, { error: errorMsg });
         }
 
         clearTimeout(forceExitTimeout);
-        this.logCliEvent(flags, 'cursor', 'cleanupComplete', 'Cleanup complete');
-        if (!this.shouldOutputJson(flags)) {
-           this.log(chalk.green('\nDisconnected.'));
-        }
+         
+        process.exit(0);
       };
 
-      process.on('SIGINT', cleanup);
-      process.on('SIGTERM', cleanup);
+      process.on('SIGINT', () => void cleanup())
+      process.on('SIGTERM', () => void cleanup())
 
        // Keep the process running until interrupted
-       await new Promise<void>(resolve => { /* Keep process alive */ });
+       await new Promise<void>(_resolve => { /* Keep process alive */ });
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -305,8 +311,8 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       }
 
       // Clean up on error
-      if (this.clients?.realtimeClient) {
-        this.clients.realtimeClient.close();
+      if (this.realtimeClient) {
+        this.realtimeClient.close();
       }
     }
   }

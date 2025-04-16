@@ -59,7 +59,7 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
@@ -100,7 +100,7 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
       const updatedRule = await controlApi.updateRule(appId, args.ruleId, updateData)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(updatedRule, flags))
+        this.log(this.formatJsonOutput({ rule: updatedRule }, flags))
       } else {
         this.log('Integration rule updated successfully:')
         this.log(`Rule ID: ${updatedRule.id}`)

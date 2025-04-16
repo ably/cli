@@ -81,8 +81,10 @@ export default class ChannelRulesCreateCommand extends ControlBaseCommand {
     let appId: string | undefined;
     
     try {
-      // Get app ID from flags or config
-      appId = await this.getAppId(flags)
+      let appId = flags.app
+      if (!appId) {
+        appId = await this.resolveAppId(flags)
+      }
       
       if (!appId) {
         if (this.shouldOutputJson(flags)) {

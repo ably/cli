@@ -1,5 +1,6 @@
-import { RoomStatus, Subscription, TypingEvent } from '@ably/chat'
-import {Args, Flags} from '@oclif/core'
+import { ChatClient, RoomStatus, Subscription, TypingEvent } from '@ably/chat'
+import {Args} from '@oclif/core'
+import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
@@ -25,7 +26,8 @@ export default class TypingSubscribe extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
   }
 
-  private clients: { chatClient: any, realtimeClient: any } | null = null;
+  private chatClient: ChatClient | null = null;
+  private ablyClient: Ably.Realtime | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
   private unsubscribeTypingFn: Subscription | null = null;
 
@@ -33,8 +35,8 @@ export default class TypingSubscribe extends ChatBaseCommand {
    async finally(err: Error | undefined): Promise<any> {
      if (this.unsubscribeTypingFn) { try { this.unsubscribeTypingFn.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
+     if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+           this.ablyClient.close();
        }
 
      return super.finally(err);
@@ -45,20 +47,23 @@ export default class TypingSubscribe extends ChatBaseCommand {
 
     try {
       // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      this.chatClient = await this.createChatClient(flags)
+      this.ablyClient = await this.createAblyClient(flags)
+      if (!this.chatClient || !this.ablyClient) {
+        this.error('Failed to initialize clients')
+        return
+      }
 
-      const {chatClient, realtimeClient} = this.clients
       const {roomId} = args;
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: any) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
       // Get the room with typing enabled
       this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${roomId}`);
-      const room = await chatClient.rooms.get(roomId, {
+      const room = await this.chatClient.rooms.get(roomId, {
         typing: { timeoutMs: 5000 }, // Default timeout
       })
       this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${roomId}`);
@@ -149,13 +154,13 @@ export default class TypingSubscribe extends ChatBaseCommand {
           // Release the room and close connection
           try {
             this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
-            await chatClient.rooms.release(roomId);
+            await this.chatClient?.rooms.release(roomId);
             this.logCliEvent(flags, 'room', 'released', `Room ${roomId} released`);
           } catch(error) { this.logCliEvent(flags, 'room', 'releaseError', 'Error releasing room', { error: error instanceof Error ? error.message : String(error) }); }
 
-          if (realtimeClient) {
+          if (this.ablyClient) {
              this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-             realtimeClient.close();
+             this.ablyClient.close();
              this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
           }
 
@@ -163,7 +168,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
             this.log(`${chalk.green('Successfully disconnected.')}`)
           }
 
-          // eslint-disable-next-line n/no-process-exit
+           
           process.exit(0) // Reinstated: Explicit exit
         })
       })
@@ -171,8 +176,8 @@ export default class TypingSubscribe extends ChatBaseCommand {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logCliEvent(flags, 'typing', 'fatalError', `Failed to subscribe to typing indicators: ${errorMsg}`, { error: errorMsg, roomId: args.roomId });
       // Close the connection in case of error
-      if (this.clients?.realtimeClient) {
-        this.clients.realtimeClient.close()
+      if (this.ablyClient) {
+        this.ablyClient.close()
       }
 
       if (this.shouldOutputJson(flags)) {
