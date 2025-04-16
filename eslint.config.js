@@ -12,7 +12,21 @@ import eslintPluginMocha from 'eslint-plugin-mocha'; // Import the plugin
 export default [
   {
     // Globally ignores files
-    ignores: ['dist/*', 'node_modules/*', 'coverage/*', '*.config.js', 'oclif.manifest.json', 'tmp/*'], // Added tmp/*
+    ignores: [
+      '**/dist/**', 
+      '**/lib/**',
+      '**/node_modules/**', 
+      '**/coverage/**', 
+      '*.config.js',  
+      'oclif.manifest.json', 
+      '**/tmp/**',
+      '**/.nyc_output/**',
+      '**/tsconfig.tsbuildinfo',
+      '**/*.d.ts',
+      'node_modules/xterm/**',
+      'packages/react-web-cli/dist/index.js',
+      'packages/react-web-cli/dist/index.mjs'
+    ], // Updated to match all ignorePatterns from .eslintrc.json
   },
   {
     // Base configuration for all JS/TS files
@@ -45,6 +59,10 @@ export default [
       'unicorn/no-object-as-default-parameter': 'off',
       'unicorn/import-style': 'off',
       'unicorn/prefer-ternary': 'off',
+      // Rules from .eslintrc.json
+      'unicorn/no-process-exit': 'off',
+      'n/no-process-exit': 'off',
+      'n/no-unsupported-features/node-builtins': 'off'
     },
   },
   {
@@ -72,17 +90,41 @@ export default [
     },
   },
   {
+    // Configuration for React Web CLI package
+    files: ['packages/react-web-cli/**/*'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
+    },
+    rules: {
+      'unicorn/prefer-module': 'off',
+    },
+  },
+  {
     // Configuration specific to test files
-    files: ['test/**/*.ts'],
+    files: ['test/**/*.test.ts'],
     plugins: {
-        mocha: eslintPluginMocha,
+      mocha: eslintPluginMocha,
     },
     languageOptions: {
+      globals: {
+        ...globals.mocha,
+        describe: 'readonly',
+        it: 'readonly',
+        before: 'readonly',
+        after: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+      },
     },
     rules: {
       // Apply recommended mocha rules which include globals
       ...eslintPluginMocha.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-expressions': 'off',
+      'mocha/no-exclusive-tests': 'error',
+      'mocha/no-skipped-tests': 'warn'
     }
   },
   // Prettier config must be last
