@@ -81,7 +81,7 @@ export class AblyMcpServer {
       // Get history
       const historyPage = await channel.history({ direction, limit });
       
-      return historyPage.items.map(msg => ({
+      return historyPage.items.map((msg: any) => ({
         clientId: msg.clientId,
         connectionId: msg.connectionId,
         data: msg.data,
@@ -89,7 +89,7 @@ export class AblyMcpServer {
         name: msg.name,
         timestamp: msg.timestamp
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting channel history:', error);
       throw new Error(`Failed to get channel history: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -121,7 +121,7 @@ export class AblyMcpServer {
         occupancy: channel.status?.occupancy,
         status: channel.status
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error listing channels:', error);
       throw new Error(`Failed to list channels: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -144,7 +144,7 @@ export class AblyMcpServer {
       // Get presence
       const presencePage = await channel.presence.get();
       
-      return presencePage.items.map(member => ({
+      return presencePage.items.map((member: any) => ({
         action: member.action,
         clientId: member.clientId,
         connectionId: member.connectionId,
@@ -152,13 +152,13 @@ export class AblyMcpServer {
         id: member.id,
         timestamp: member.timestamp
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting channel presence:', error);
       throw new Error(`Failed to get presence: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async executeChannelsPublishCommand(args: string[]): Promise<any> {
+  private async executeChannelsPublishCommand(args: any): Promise<any> {
     try {
       // Check if we're dealing with an array of arguments or an object
       let channelName: string;
@@ -226,7 +226,7 @@ export class AblyMcpServer {
           return { data: message, name: 'message' };
         
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error publishing to channel:', error);
       throw new Error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -283,14 +283,14 @@ export class AblyMcpServer {
         }
         
         // Subscribe to new messages
-        const subscription = channel.subscribe((message) => {
+        const subscription = channel.subscribe((msg: any) => {
           messages.push({
-            clientId: message.clientId,
-            connectionId: message.connectionId,
-            data: message.data,
-            id: message.id,
-            name: message.name,
-            timestamp: message.timestamp
+            clientId: msg.clientId,
+            connectionId: msg.connectionId,
+            data: msg.data,
+            id: msg.id,
+            name: msg.name,
+            timestamp: msg.timestamp
           });
         });
       });
@@ -302,7 +302,7 @@ export class AblyMcpServer {
       await channel.unsubscribe();
       
       return messages;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error subscribing to channel:', error);
       throw new Error(`Failed to subscribe: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -390,7 +390,7 @@ export class AblyMcpServer {
         accessToken,
         controlHost: this.controlHost || process.env.ABLY_CONTROL_HOST
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating Control API client:', error)
       throw new Error(`Failed to create Control API client: ${error instanceof Error ? error.message : String(error)}`)
     }

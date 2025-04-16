@@ -9,6 +9,9 @@ import { ControlApi } from './services/control-api.js'
 import { InteractiveHelper } from './services/interactive-helper.js'
 import { BaseFlags, CommandConfig, ErrorDetails } from './types/cli.js'
 
+// Export BaseFlags for potential use in other modules like MCP
+
+
 // List of commands not allowed in web CLI mode - EXPORTED
 export const WEB_CLI_RESTRICTED_COMMANDS = [
   'accounts:login',
@@ -767,3 +770,4 @@ export abstract class AblyBaseCommand extends Command {
     }
   }
 } 
+export {BaseFlags} from './types/cli.js'

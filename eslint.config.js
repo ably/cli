@@ -18,6 +18,7 @@ export default [
       '**/node_modules/**', 
       '**/coverage/**', 
       '*.config.js',  
+      'examples/web-cli/vite.config.ts',
       'oclif.manifest.json', 
       '**/tmp/**',
       '**/.nyc_output/**',

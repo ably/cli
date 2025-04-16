@@ -107,10 +107,10 @@
     "node": ">=18.0.0"
   },
   "files": [
-    "/bin",
-    "/dist",
-    "/example/web-cli",
-    "/oclif.manifest.json"
+    "bin",
+    "dist",
+    "example/web-cli",
+    "oclif.manifest.json"
   ],
   "repository": {
     "type": "git",
