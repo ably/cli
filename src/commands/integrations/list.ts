@@ -62,7 +62,6 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
               channelFilter: rule.source.channelFilter || null,
               type: rule.source.type
             },
-            status: rule.status,
             target: rule.target,
             type: rule.ruleType,
             version: rule.version
@@ -79,16 +78,23 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
         
         this.log(`Found ${rules.length} integration rules:\n`);
         
+        const tableData = rules.map(rule => ({
+          id: rule.id,
+          type: rule.ruleType,
+          requestMode: rule.requestMode,
+          sourceType: rule.source.type,
+          channelFilter: rule.source.channelFilter || '(none)',
+          targetType: typeof rule.target === 'object' && rule.target !== null ? (rule.target as any).type : 'unknown'
+        }))
+        
         for (const rule of rules) {
           this.log(chalk.bold(`Rule ID: ${rule.id}`));
           this.log(`  App ID: ${rule.appId}`);
           this.log(`  Type: ${rule.ruleType}`);
           this.log(`  Request Mode: ${rule.requestMode}`);
-          this.log(`  Status: ${rule.status}`);
-          this.log(`  Source:`);
-          this.log(`    Type: ${rule.source.type}`);
-          this.log(`    Channel Filter: ${rule.source.channelFilter || '(none)'}`);
-          this.log(`  Target: ${this.formatJsonOutput(rule.target, flags).replaceAll('\n', '\n    ')}`);
+          this.log(`  Source Type: ${rule.source.type}`);
+          this.log(`  Channel Filter: ${rule.source.channelFilter || '(none)'}`);
+          this.log(`  Target: ${this.formatJsonOutput(rule.target as Record<string, unknown>, flags).replaceAll('\n', '\n    ')}`);
           this.log(`  Version: ${rule.version}`);
           this.log(`  Created: ${this.formatDate(rule.created)}`);
           this.log(`  Updated: ${this.formatDate(rule.modified)}`);

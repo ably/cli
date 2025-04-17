@@ -13,9 +13,8 @@ export interface StatsDisplayOptions {
 export interface StatsDisplayData {
   accountId?: string
   appId?: string
-  entries?: {
-    [key: string]: any
-  }
+  // Entries keyed by stat name, values are numeric counts
+  entries?: Record<string, number>
   inProgress?: string
   intervalId?: string
   schema?: string

@@ -1,5 +1,6 @@
 import { Args, Flags } from '@oclif/core'
 import * as readline from 'node:readline'
+import chalk from 'chalk'
 
 import { ControlBaseCommand } from '../../control-base-command.js'
 
@@ -56,7 +57,6 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
         this.log(`Rule ID: ${rule.id}`)
         this.log(`Type: ${rule.ruleType}`)
         this.log(`Request Mode: ${rule.requestMode}`)
-        this.log(`Status: ${rule.status}`)
         this.log(`Source Type: ${rule.source.type}`)
         this.log(`Channel Filter: ${rule.source.channelFilter || '(none)'}`)
         
@@ -70,7 +70,11 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
       
       await controlApi.deleteRule(appId, args.ruleId)
       
-      this.log(`Integration rule "${args.ruleId}" deleted successfully`)
+      this.log(chalk.green('Integration Rule Deleted Successfully:'))
+      this.log(`ID: ${rule.id}`)
+      this.log(`App ID: ${rule.appId}`)
+      this.log(`Rule Type: ${rule.ruleType}`)
+      this.log(`Source Type: ${rule.source.type}`)
     } catch (error) {
       this.error(`Error deleting integration rule: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -82,11 +86,11 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
       output: process.stdout,
     })
 
-    return new Promise<boolean>((resolve) => {
-      rl.question(message + ' ', (answer) => {
+    return new Promise((resolve) => {
+      rl.question(message, (answer) => {
         rl.close()
-        resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes')
+        resolve(answer.toLowerCase() === 'y')
       })
     })
   }
-} 
+}

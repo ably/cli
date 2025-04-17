@@ -1,4 +1,5 @@
 import { Flags } from '@oclif/core'
+import chalk from 'chalk'
 
 import { ControlBaseCommand } from '../../control-base-command.js'
 
@@ -130,14 +131,14 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({ rule: createdRule }, flags))
       } else {
-        this.log('Integration rule created successfully:')
-        this.log(`Rule ID: ${createdRule.id}`)
-        this.log(`Type: ${createdRule.ruleType}`)
+        this.log(chalk.green('Integration Rule Created Successfully:'))
+        this.log(`ID: ${createdRule.id}`)
+        this.log(`App ID: ${createdRule.appId}`)
+        this.log(`Rule Type: ${createdRule.ruleType}`)
         this.log(`Request Mode: ${createdRule.requestMode}`)
-        this.log(`Status: ${createdRule.status}`)
+        this.log(`Source Channel Filter: ${createdRule.source.channelFilter}`)
         this.log(`Source Type: ${createdRule.source.type}`)
-        this.log(`Channel Filter: ${createdRule.source.channelFilter || '(none)'}`)
-        this.log(`Created: ${this.formatDate(createdRule.created)}`)
+        this.log(`Target: ${this.formatJsonOutput(createdRule.target as Record<string, unknown>, flags)}`)
       }
     } catch (error) {
       this.error(`Error creating integration rule: ${error instanceof Error ? error.message : String(error)}`)

@@ -4,6 +4,7 @@ import chalk from 'chalk'
 
 import {AblyBaseCommand} from '../../base-command.js'
 import { StatsDisplay } from '../../services/stats-display.js'
+import { StatsDisplayData } from '../../services/stats-display.js'
 
 export default class ConnectionsStats extends AblyBaseCommand {
   static override description = 'View connection statistics for an Ably app'
@@ -211,7 +212,7 @@ export default class ConnectionsStats extends AblyBaseCommand {
         }
 
         // Display stats using the StatsDisplay class
-        this.statsDisplay!.display(stats[0]) // Display only the latest/first record for simplicity
+        this.statsDisplay!.display(stats[0] as StatsDisplayData) // Display only the latest/first record for simplicity
         // If you need to display all records for one-time stats, you'll need to adjust StatsDisplay or loop here.
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -275,7 +276,12 @@ export default class ConnectionsStats extends AblyBaseCommand {
       }
 
       // Display stats using the StatsDisplay class
-      this.statsDisplay!.display(stats[0])
+      this.statsDisplay!.display(stats[0] as StatsDisplayData)
+
+      // Display each stat interval
+      for (const stat of stats) {
+        this.statsDisplay!.display(stat as StatsDisplayData)
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logCliEvent(flags, 'stats', 'fetchError', `Failed to fetch stats: ${errorMsg}`, { error: errorMsg });

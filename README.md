@@ -2733,7 +2733,8 @@ Update an integration rule
 USAGE
   $ ably integrations update RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
     <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
-    [--channel-filter <value>] [--status enabled|disabled] [--target-url <value>]
+    [--channel-filter <value>] [--status enabled|disabled] [--target-url <value>] [--request-mode <value>] [--source
+    <value>] [--target <value>]
 
 ARGUMENTS
   RULEID  The rule ID to update
@@ -2751,8 +2752,11 @@ FLAGS
       --host=<value>            Override the host endpoint for all product API calls
       --json                    Output in JSON format
       --pretty-json             Output in colorized JSON format
+      --request-mode=<value>    Request mode of the rule
+      --source=<value>          Source of the rule
       --status=<option>         Status of the rule
                                 <options: enabled|disabled>
+      --target=<value>          Target of the rule
       --target-url=<value>      Target URL for HTTP rules
       --token=<value>           Authenticate using an Ably Token or JWT Token instead of an API key
 

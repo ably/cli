@@ -1,5 +1,5 @@
 import inquirer from 'inquirer'
-import type { ConfigManager } from './config-manager.js'
+import type { ConfigManager, AccountConfig } from './config-manager.js'
 import type { App, ControlApi, Key } from './control-api.js'
 
 export class InteractiveHelper {
@@ -28,7 +28,7 @@ export class InteractiveHelper {
   /**
    * Interactively select an account from the list of configured accounts
    */
-  async selectAccount(): Promise<{account: any, alias: string} | null> {
+  async selectAccount(): Promise<{ account: AccountConfig; alias: string } | null> {
     try {
       const accounts = this.configManager.listAccounts()
       const currentAlias = this.configManager.getCurrentAccountAlias()

@@ -135,7 +135,7 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
    * Run the Control API command with standard error handling
    */
   protected async runControlCommand<T>(
-    flags: any,
+    flags: BaseFlags,
     apiCall: (api: ControlApi) => Promise<T>,
     errorMessage = 'Error executing command'
   ): Promise<T | null> {
@@ -172,7 +172,7 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
    * Helper method to show account info for control plane commands
    * This is called by the child class when it wants to show account info
    */
-  protected showControlPlaneInfo(flags: any): void {
+  protected showControlPlaneInfo(flags: BaseFlags): void {
     // Use the base class method for consistent display
     this.showAuthInfoIfNeeded(flags)
   }

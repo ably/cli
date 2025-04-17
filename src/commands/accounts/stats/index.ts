@@ -3,6 +3,8 @@ import chalk from 'chalk'
 
 import { ControlBaseCommand } from '../../../control-base-command.js'
 import { StatsDisplay } from '../../../services/stats-display.js'
+import type { BaseFlags } from '../../../types/cli.js'
+import type { ControlApi } from '../../../services/control-api.js'
 
 export default class AccountsStatsCommand extends ControlBaseCommand {
   static description = 'Get account stats with optional live updates'
@@ -70,7 +72,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     
     // Create stats display
     this.statsDisplay = new StatsDisplay({
-      intervalSeconds: flags.interval,
+      intervalSeconds: flags.interval as number,
       isAccountStats: true,
       json: this.shouldOutputJson(flags),
       live: flags.live,
@@ -81,7 +83,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     await (flags.live ? this.runLiveStats(flags, controlApi) : this.runOneTimeStats(flags, controlApi));
   }
 
-  private async fetchAndDisplayStats(flags: any, controlApi: any): Promise<void> {
+  private async fetchAndDisplayStats(flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
       const now = new Date()
       const start = new Date(now.getTime() - (24 * 60 * 60 * 1000)) // Last 24 hours
@@ -90,7 +92,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
         end: now.getTime(),
         limit: 1, // Only get the most recent stats for live updates
         start: start.getTime(),
-        unit: flags.unit,
+        unit: flags.unit as string,
       })
       
       if (stats.length > 0) {
@@ -101,7 +103,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     }
   }
 
-  private async pollStats(flags: any, controlApi: any): Promise<void> {
+  private async pollStats(flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
       this.isPolling = true
       if (flags.debug) {
@@ -118,7 +120,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     }
   }
 
-  private async runLiveStats(flags: any, controlApi: any): Promise<void> {
+  private async runLiveStats(flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
       // Get account info to display the name
       const { account } = await controlApi.getMe()
@@ -149,7 +151,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
           // Only show this message if debug flag is enabled
           console.log(chalk.yellow('Skipping poll - previous request still in progress'))
         }
-      }, flags.interval * 1000)
+      }, (flags.interval as number) * 1000)
       
       // Keep the process running
       await new Promise<void>(() => {
@@ -165,7 +167,7 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
     }
   }
 
-  private async runOneTimeStats(flags: any, controlApi: any): Promise<void> {
+  private async runOneTimeStats(flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
       // If no start/end time provided, use the last 24 hours
       if (!flags.start && !flags.end) {
@@ -175,10 +177,10 @@ export default class AccountsStatsCommand extends ControlBaseCommand {
       }
       
       const stats = await controlApi.getAccountStats({
-        end: flags.end,
-        limit: flags.limit,
-        start: flags.start,
-        unit: flags.unit,
+        end: flags.end as number,
+        limit: flags.limit as number,
+        start: flags.start as number,
+        unit: flags.unit as string,
       })
       
       if (stats.length === 0) {

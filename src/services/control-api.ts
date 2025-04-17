@@ -31,7 +31,7 @@ export type AccountStats = AppStats;
 
 export interface Key {
   appId: string
-  capability: any;
+  capability: unknown;
   created: number;
   id: string
   key: string
@@ -74,8 +74,7 @@ export interface Rule {
     channelFilter: string;
     type: string;
   };
-  status: string;
-  target: any;
+  target: unknown;
   version: string;
 }
 
@@ -127,6 +126,12 @@ export interface Conversation {
     content: string;
     role: 'assistant' | 'user';
   }[];
+}
+
+// Response type for Control API /me endpoint
+export interface MeResponse {
+  account: { id: string; name: string };
+  user: { email: string };
 }
 
 export class ControlApi {
@@ -302,8 +307,8 @@ export class ControlApi {
   }
 
   // Get user and account info
-  async getMe(): Promise<{ account: any, user: any }> {
-    return this.request<{ account: any, user: any }>('/me')
+  async getMe(): Promise<MeResponse> {
+    return this.request<MeResponse>('/me')
   }
 
   async getNamespace(appId: string, namespaceId: string): Promise<Namespace> {
@@ -403,7 +408,7 @@ export class ControlApi {
     return this.request<{ id: string }>(`/apps/${appId}/push/certificate`, 'POST', data)
   }
 
-  private async request<T>(path: string, method = 'GET', body?: any): Promise<T> {
+  private async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     const url = this.controlHost.includes('local') ? `http://${this.controlHost}/api/v1${path}` : `https://${this.controlHost}/v1${path}`
     
     const options: any = {
