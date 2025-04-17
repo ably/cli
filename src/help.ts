@@ -1,4 +1,4 @@
-import { Command, Help, Interfaces, Config, Flags } from '@oclif/core'
+import { Command, Help, Interfaces, Config } from '@oclif/core'
 import chalk from 'chalk'
 import stripAnsi from 'strip-ansi'
 

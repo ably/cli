@@ -1,7 +1,6 @@
 import inquirer from 'inquirer'
-
-import { ConfigManager } from './config-manager.js'
-import { App, ControlApi, Key } from './control-api.js'
+import type { ConfigManager } from './config-manager.js'
+import type { App, ControlApi, Key } from './control-api.js'
 
 export class InteractiveHelper {
   private configManager: ConfigManager

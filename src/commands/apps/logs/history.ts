@@ -1,4 +1,4 @@
-import { Args, Flags as _Flags } from '@oclif/core'
+import { Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
