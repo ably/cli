@@ -22,6 +22,7 @@ interface Message {
   name: string;
   timestamp: number;
   isRewind?: boolean;
+  [key: string]: unknown;
 }
 
 interface PresenceMember {
@@ -31,12 +32,54 @@ interface PresenceMember {
   data: unknown;
   id: string;
   timestamp: number;
+  [key: string]: unknown;
 }
 
 interface ChannelInfo {
   name: string;
   occupancy: Record<string, unknown>;
   status: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// Define interfaces for Ably SDK responses
+interface HistoryPage {
+  items: Message[];
+  hasNext: () => boolean;
+  next: () => Promise<HistoryPage>;
+}
+
+// ResourceURI interface using any type to avoid conflicts
+interface ResourceURI {
+  url: any;
+  build: (...args: any[]) => any;
+  href: string;
+  [key: string]: any;
+}
+
+// Simplified interfaces to avoid type compatibility issues
+interface AblyChannel {
+  presence: {
+    get: () => Promise<any>;
+  };
+  history: (options: any) => Promise<any>;
+  subscribe: (callback: any) => any;
+  unsubscribe: () => Promise<void>;
+  publish: (name: string, data: any) => Promise<void>;
+}
+
+interface AblyClient {
+  channels: {
+    get: (channelName: string) => AblyChannel;
+  };
+  request: (method: string, path: string, params: Record<string, unknown>) => Promise<any>;
+  connection?: any; // Add optional connection property
+}
+
+interface ControlApiClient {
+  listApps: () => Promise<any[]>;
+  getAppStats: (appId: string, options: any) => Promise<unknown>;
+  listKeys: (appId: string) => Promise<any[]>;
 }
 
 // Define interfaces for parameters
@@ -66,6 +109,31 @@ interface Key {
   id: string;
   [key: string]: unknown;
 }
+
+interface AppStatsParams {
+  app?: string;
+  end?: number;
+  limit?: number;
+  start?: number;
+  unit?: 'minute' | 'hour' | 'day' | 'month';
+}
+
+interface PublishParams {
+  channel: string;
+  message: unknown;
+  name?: string;
+  [key: string]: unknown;
+}
+
+// Add types for command classes
+type CommandClass = typeof ChannelsList | 
+                   typeof ChannelsHistory | 
+                   typeof ChannelsPublish | 
+                   typeof ChannelsSubscribe | 
+                   typeof ChannelsPresenceSubscribe;
+
+// Define the return type for executeCommand
+type CommandResult = Message[] | ChannelInfo[] | PresenceMember[] | {data: unknown, name: string};
 
 export class AblyMcpServer {
   private activeOperations: Set<AbortController> = new Set()
@@ -209,11 +277,11 @@ export class AblyMcpServer {
     }
   }
 
-  private async executeChannelsPublishCommand(args: any): Promise<any> {
+  private async executeChannelsPublishCommand(args: string[] | PublishParams): Promise<{data: unknown, name: string}> {
     try {
       // Check if we're dealing with an array of arguments or an object
       let channelName: string;
-      let message: any;
+      let message: unknown;
       let name: string | undefined;
 
       if (Array.isArray(args)) {
@@ -226,15 +294,17 @@ export class AblyMcpServer {
         // Get message argument (next non-flag after channel name)
         const channelIndex = args.indexOf(channelName);
         message = args[channelIndex + 1];
-        if (!message || message.startsWith('-')) {
+        if (!message || (typeof message === 'string' && message.startsWith('-'))) {
           throw new Error('Message is required');
         }
         
         // Try to parse as JSON if possible
-        try {
-          message = JSON.parse(message);
-        } catch {
-          // Keep as string if not valid JSON
+        if (typeof message === 'string') {
+          try {
+            message = JSON.parse(message);
+          } catch {
+            // Keep as string if not valid JSON
+          }
         }
         
         name = this.getArgValue(args, '--name');
@@ -268,8 +338,9 @@ export class AblyMcpServer {
  
         // If message is already an object with name/data, use that
         if (typeof message === 'object' && message !== null && 'name' in message && 'data' in message) {
-          await channel.publish(message.name, message.data);
-          return message;
+          const msgName = String(message.name);
+          await channel.publish(msgName, message.data);
+          return { data: message.data, name: msgName };
         }
  
           // Default event name
@@ -277,7 +348,7 @@ export class AblyMcpServer {
           return { data: message, name: 'message' };
         
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error publishing to channel:', error);
       throw new Error(`Failed to publish message: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -317,7 +388,7 @@ export class AblyMcpServer {
         // Handle rewind if specified
         if (rewind > 0) {
           channel.history({ limit: rewind })
-            .then((page: any) => {
+            .then((page: HistoryPage) => {
               for (const msg of page.items.reverse()) {
                 messages.push({
                   clientId: msg.clientId,
@@ -353,21 +424,21 @@ export class AblyMcpServer {
       await channel.unsubscribe();
       
       return messages;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error subscribing to channel:', error);
       throw new Error(`Failed to subscribe: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async executeCommand(CommandClass: any, args: string[], signal?: AbortSignal): Promise<any> {
+  private async executeCommand(CommandClass: CommandClass, args: string[] | PublishParams, signal?: AbortSignal): Promise<CommandResult> {
     try {
       // Create direct execution functions for each command type
       if (CommandClass === ChannelsList) {
-        return this.executeChannelsListCommand(args);
+        return this.executeChannelsListCommand(Array.isArray(args) ? args : ['--json', args.channel]);
       }
 
  if (CommandClass === ChannelsHistory) {
-        return this.executeChannelsHistoryCommand(args);
+        return this.executeChannelsHistoryCommand(Array.isArray(args) ? args : ['--json', args.channel]);
       }
 
  if (CommandClass === ChannelsPublish) {
@@ -375,11 +446,11 @@ export class AblyMcpServer {
       }
 
  if (CommandClass === ChannelsSubscribe) {
-        return this.executeChannelsSubscribeCommand(args, signal);
+        return this.executeChannelsSubscribeCommand(Array.isArray(args) ? args : ['--json', args.channel], signal);
       }
 
  if (CommandClass === ChannelsPresenceSubscribe) {
-        return this.executeChannelsPresenceCommand(args);
+        return this.executeChannelsPresenceCommand(Array.isArray(args) ? args : ['--json', args.channel]);
       }
  
         throw new Error(`Unsupported command class: ${CommandClass.name}`);
@@ -390,7 +461,7 @@ export class AblyMcpServer {
     }
   }
 
-  private async getAblyClient(): Promise<any> {
+  private async getAblyClient(): Promise<AblyClient> {
     try {
       // Assign the imported module to a variable first
       const AblyModule = await import('ably'); 
@@ -411,7 +482,8 @@ export class AblyMcpServer {
       // Create Ably REST client (not Realtime, to avoid connections)
       const client = new Ably.Rest(clientOptions);
       
-      return client;
+      // Type assertion to ensure compatibility with our interface
+      return client as unknown as AblyClient;
     } catch (error) {
       console.error('Error creating Ably client:', error);
       throw new Error(`Failed to create Ably client: ${error instanceof Error ? error.message : String(error)}`);
@@ -428,7 +500,7 @@ export class AblyMcpServer {
   }
 
   // Helper method to get a Control API instance
-  private async getControlApi(): Promise<any> {
+  private async getControlApi(): Promise<ControlApiClient> {
     try {
       const { ControlApi } = await import('../services/control-api.js')
       const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken()
@@ -441,7 +513,7 @@ export class AblyMcpServer {
         accessToken,
         controlHost: this.controlHost || process.env.ABLY_CONTROL_HOST
       })
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating Control API client:', error)
       throw new Error(`Failed to create Control API client: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -456,8 +528,12 @@ export class AblyMcpServer {
   }
 
   private setupResources(): void {
+    // Use type assertion for the MCP server's resource method
+    // to work around type incompatibilities with ResourceURI
+    const resourceMethod = this.server.resource as any;
+
     // Channels resource
-    this.server.resource(
+    resourceMethod(
       'channels',
       new ResourceTemplate('ably://channels/{prefix?}', { 
         list: async (params: ResourceParams) => {
@@ -465,13 +541,13 @@ export class AblyMcpServer {
             const args = ['--json']
             if (params.prefix) args.push('--prefix', params.prefix as string)
             
-            const channels = await this.executeChannelsListCommand(args)
+            const channels = await this.executeCommand(ChannelsList, args)
             
             return {
-              resources: channels.map((channel) => ({
-                name: channel.name,
+              resources: Array.isArray(channels) ? channels.map((channel) => ({
+                name: String(channel.name),
                 uri: `ably://channels/${channel.name}`
-              }))
+              })) : []
             }
           } catch (error) {
             console.error('Error listing channels:', error)
@@ -479,19 +555,19 @@ export class AblyMcpServer {
           }
         } 
       }),
-      async (uri: any, params: ResourceParams) => {
+      async (uri: ResourceURI, params: ResourceParams) => {
         try {
           const args = ['--json']
           if (params.prefix) args.push('--prefix', params.prefix as string)
           
-          const channels = await this.executeChannelsListCommand(args)
+          const channels = await this.executeCommand(ChannelsList, args)
           
           return {
-            contents: channels.map((channel) => ({
+            contents: Array.isArray(channels) ? channels.map((channel: any) => ({
               text: JSON.stringify(channel, null, 2),
               title: channel.name,
               uri: `ably://channels/${channel.name}`
-            }))
+            })) : []
           }
         } catch (error) {
           console.error('Error fetching channels resource:', error)
@@ -501,14 +577,15 @@ export class AblyMcpServer {
     )
 
     // Channel History Resource
-    this.server.resource(
+    resourceMethod(
       'channel_history',
       new ResourceTemplate('ably://channel_history/{channel}', { list: undefined }),
-      async (uri: any, params: ChannelParams) => {
+      async (uri: ResourceURI, params: ChannelParams) => {
         try {
-          const args = ['--json', params.channel]
+          const args = ['--json']
+          if (params.channel) args.push(params.channel)
           
-          const history = await this.executeChannelsHistoryCommand(args as string[])
+          const history = await this.executeCommand(ChannelsHistory, args)
           
           return {
             contents: [{
@@ -525,14 +602,15 @@ export class AblyMcpServer {
     )
 
     // Channel Presence Resource
-    this.server.resource(
+    resourceMethod(
       'channel_presence',
       new ResourceTemplate('ably://channel_presence/{channel}', { list: undefined }),
-      async (uri: any, params: ChannelParams) => {
+      async (uri: ResourceURI, params: ChannelParams) => {
         try {
-          const args = ['--json', params.channel]
+          const args = ['--json']
+          if (params.channel) args.push(params.channel)
           
-          const presence = await this.executeChannelsPresenceCommand(args as string[])
+          const presence = await this.executeCommand(ChannelsPresenceSubscribe, args)
           
           return {
             contents: [{
@@ -549,7 +627,7 @@ export class AblyMcpServer {
     )
 
     // Apps Resource
-    this.server.resource(
+    resourceMethod(
       'apps',
       new ResourceTemplate('ably://apps', { 
         list: async () => {
@@ -573,7 +651,7 @@ export class AblyMcpServer {
           }
         }
       }),
-      async (uri: any) => {
+      async (uri: ResourceURI) => {
         try {
           const controlApi = await this.getControlApi()
           const apps = await controlApi.listApps()
@@ -600,10 +678,10 @@ export class AblyMcpServer {
     )
 
     // App Stats Resource 
-    this.server.resource(
+    resourceMethod(
       'app_stats',
       new ResourceTemplate('ably://apps/{appId}/stats', { list: undefined }),
-      async (uri: any, params: AppParams) => {
+      async (uri: ResourceURI, params: AppParams) => {
         try {
           // Use the app ID from the URI or fall back to default
           const appId = params.appId || this.configManager.getCurrentAppId()
@@ -641,10 +719,10 @@ export class AblyMcpServer {
     )
 
     // App Keys Resource
-    this.server.resource(
+    resourceMethod(
       'app_keys',
       new ResourceTemplate('ably://apps/{appId}/keys', { list: undefined }),
-      async (uri: any, params: AppParams) => {
+      async (uri: ResourceURI, params: AppParams) => {
         try {
           // Use the app ID from the URI or fall back to default
           const appId = params.appId || this.configManager.getCurrentAppId()
@@ -695,12 +773,12 @@ export class AblyMcpServer {
         limit: z.number().optional().describe("Maximum number of channels to return"),
         prefix: z.string().optional().describe("Filter channels by prefix")
       },
-      async (params) => {
+      async (_params: { limit?: number; prefix?: string }) => {
         try {
-          const result = await this.executeChannelsListCommand([
+          const result = await this.executeCommand(ChannelsList, [
             '--json', 
-            ...(params.prefix ? ['--prefix', params.prefix] : []),
-            ...(params.limit ? ['--limit', params.limit.toString()] : [])
+            ...(_params.prefix ? ['--prefix', _params.prefix] : []),
+            ...(_params.limit ? ['--limit', _params.limit.toString()] : [])
           ])
           
           return {
@@ -725,13 +803,13 @@ export class AblyMcpServer {
         direction: z.enum(["forwards", "backwards"]).optional().describe("Direction of message history"),
         limit: z.number().optional().describe("Maximum number of messages to retrieve")
       },
-      async (params) => {
+      async (_params: { channel: string; direction?: string; limit?: number }) => {
         try {
-          const args = ['--json', params.channel]
-          if (params.limit) args.push('--limit', params.limit.toString())
-          if (params.direction) args.push('--direction', params.direction)
+          const args = ['--json', _params.channel]
+          if (_params.limit) args.push('--limit', _params.limit.toString())
+          if (_params.direction) args.push('--direction', _params.direction)
           
-          const result = await this.executeChannelsHistoryCommand(args)
+          const result = await this.executeCommand(ChannelsHistory, args)
           return {
             content: [{ 
               text: JSON.stringify(result, null, 2),
@@ -754,10 +832,10 @@ export class AblyMcpServer {
         message: z.string().describe("Message content to publish (can be string or JSON)"),
         name: z.string().optional().describe("Event name (optional, defaults to 'message')")
       },
-      async (params) => {
+      async (_params: { channel: string; message: string; name?: string }) => {
         try {
           // Try to parse message as JSON if it's a string
-          let messageContent = params.message;
+          let messageContent = _params.message;
           if (typeof messageContent === 'string') {
             try {
               messageContent = JSON.parse(messageContent);
@@ -768,11 +846,12 @@ export class AblyMcpServer {
           
           // Create parameters object with parsed message
           const paramsWithParsedMessage = {
-            ...params,
+            ..._params,
             message: messageContent
           };
           
-          const result = await this.executeChannelsPublishCommand(paramsWithParsedMessage)
+          // Pass parameters in the format expected by executeChannelsPublishCommand
+          const result = await this.executeChannelsPublishCommand(paramsWithParsedMessage as any)
           return {
             content: [{ 
               text: JSON.stringify(result, null, 2),
@@ -793,11 +872,11 @@ export class AblyMcpServer {
       {
         channel: z.string().describe("Name of the channel to get presence for")
       },
-      async (params) => {
+      async (_params: { channel: string }) => {
         try {
-          const args = ['--json', params.channel]
+          const args = ['--json', _params.channel]
           
-          const result = await this.executeChannelsPresenceCommand(args)
+          const result = await this.executeCommand(ChannelsPresenceSubscribe, args)
           return {
             content: [{ 
               text: JSON.stringify(result, null, 2),
@@ -818,7 +897,7 @@ export class AblyMcpServer {
       {
         format: z.enum(["json", "pretty"]).optional().default("json").describe("Output format (json or pretty)")
       },
-      async (params: { format?: string }) => {
+      async (_params: { format?: string }) => {
         try {
           // Create a Control API instance
           const controlApi = await this.getControlApi()
@@ -857,10 +936,10 @@ export class AblyMcpServer {
         start: z.number().optional().describe("Start time in milliseconds since epoch"),
         unit: z.enum(["minute", "hour", "day", "month"]).optional().default("minute").describe("Time unit for stats")
       },
-      async (params) => {
+      async (_params: AppStatsParams) => {
         try {
           // Use provided app ID or fall back to default app ID
-          const appId = params.app || this.configManager.getCurrentAppId()
+          const appId = _params.app || this.configManager.getCurrentAppId()
           
           if (!appId) {
             throw new Error('No app ID provided and no default app selected')
@@ -871,15 +950,15 @@ export class AblyMcpServer {
           
           // If no start/end time provided, use the last 24 hours
           const now = new Date()
-          const start = params.start || now.getTime() - (24 * 60 * 60 * 1000) // 24 hours ago
-          const end = params.end || now.getTime()
+          const start = _params.start || now.getTime() - (24 * 60 * 60 * 1000) // 24 hours ago
+          const end = _params.end || now.getTime()
           
           // Get the stats
           const stats = await controlApi.getAppStats(appId, {
             end,
-            limit: params.limit,
+            limit: _params.limit,
             start,
-            unit: params.unit
+            unit: _params.unit
           })
           
           return {
@@ -946,7 +1025,7 @@ export class AblyMcpServer {
     )
   }
 
-  private executeRequestCommand(_params: any): void {
+  private executeRequestCommand(_params: unknown): void {
     // Function implementation
   }
 
