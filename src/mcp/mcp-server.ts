@@ -11,7 +11,9 @@ import ChannelsPublish from '../commands/channels/publish.js'
 import ChannelsSubscribe from '../commands/channels/subscribe.js'
 import { ConfigManager } from '../services/config-manager.js'
 import Ably, { Connection } from 'ably'
-import { ControlApi, App as ControlApp, Key as ControlKey } from '../services/control-api.js'
+// Comment to explain why we're not using these directly but still need to import
+// We need these types from control-api but using them through a different interface
+import { ControlApi as _ImportedControlApi, App as ControlApp, Key as ControlKey } from '../services/control-api.js'
 
 // Maximum execution time for long-running operations (15 seconds)
 const MAX_EXECUTION_TIME = 15_000
@@ -45,11 +47,6 @@ interface ChannelInfo {
 }
 
 // Define interfaces for Ably SDK responses
-interface HistoryPage {
-  items: Message[];
-  hasNext: () => boolean;
-  next: () => Promise<HistoryPage>;
-}
 
 // Aliasing types directly from Ably namespace
 type RealtimePresenceMessage = Ably.PresenceMessage;
@@ -57,7 +54,7 @@ type RealtimeMessage = Ably.Message;
 type RealtimeHistoryParams = Ably.RealtimeHistoryParams;
 type PaginatedResult<T> = Ably.PaginatedResult<T>;
 
-// ResourceURI interface using any type to avoid conflicts
+// ResourceURI interface using any type to match SDK requirements
 interface ResourceURI {
   url: any;
   build: (...args: any[]) => any;
@@ -73,7 +70,7 @@ interface AblyChannel {
   history: (options?: RealtimeHistoryParams) => Promise<PaginatedResult<RealtimeMessage>>;
   subscribe: (callback: (message: RealtimeMessage) => void) => Promise<void>;
   unsubscribe: () => Promise<void>;
-  publish: (name: string, data: any) => Promise<void>;
+  publish: (name: string, data: unknown) => Promise<void>;
 }
 
 interface AblyClient {
@@ -115,10 +112,6 @@ interface GetStatsParams {
     end?: number; // epoch ms
 }
 
-// Modify Key interface to match the ControlKey structure from control-api.ts
-interface Key extends ControlKey {
-  capabilities: Record<string, string[]>;
-}
 
 interface AppStatsParams {
   app?: string;
