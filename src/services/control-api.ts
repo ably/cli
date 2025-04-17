@@ -14,6 +14,7 @@ export interface App {
   name: string
   status: string
   tlsOnly: boolean
+  [key: string]: unknown;
 }
 
 export interface AppStats {
@@ -165,7 +166,7 @@ export class ControlApi {
 
   // Create a new key for an app
   async createKey(appId: string, keyData: {
-    capability?: any
+    capability?: Record<string, string[]>
     name: string,
   }): Promise<Key> {
     return this.request<Key>(`/apps/${appId}/keys`, 'POST', keyData)
@@ -198,6 +199,7 @@ export class ControlApi {
     return this.request<Queue>(`/apps/${appId}/queues`, 'POST', queueData)
   }
 
+  // ruleData can vary significantly based on ruleType (source, target)
   async createRule(appId: string, ruleData: any): Promise<Rule> {
     return this.request<Rule>(`/apps/${appId}/rules`, 'POST', ruleData)
   }
@@ -360,9 +362,9 @@ export class ControlApi {
     return this.request<App>(`/apps/${appId}`, 'PATCH', appData)
   }
 
-  // Update a key
+  // Update an existing key
   async updateKey(appId: string, keyId: string, keyData: { 
-    capability?: any
+    capability?: Record<string, string[]>
     name?: string, 
   }): Promise<Key> {
     return this.request<Key>(`/apps/${appId}/keys/${keyId}`, 'PATCH', keyData)
@@ -385,6 +387,7 @@ export class ControlApi {
     return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`, 'PATCH', namespaceData)
   }
 
+  // ruleData can vary significantly based on ruleType (source, target)
   async updateRule(appId: string, ruleId: string, ruleData: any): Promise<Rule> {
     return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`, 'PATCH', ruleData)
   }
@@ -427,8 +430,31 @@ export class ControlApi {
     const response = await fetch(url, options)
     
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Control API request failed: ${response.status} ${response.statusText} - ${errorText}`)
+      const responseBody = await response.text()
+      // Attempt to parse JSON, otherwise use raw text
+      let responseData: unknown = responseBody;
+      try {
+        responseData = JSON.parse(responseBody);
+      } catch { /* Ignore parsing errors, keep as string */ }
+      
+      const errorDetails = {
+        message: `API request failed with status ${response.status}: ${response.statusText}`,
+        response: responseData, // Assign unknown type
+        statusCode: response.status,
+      };
+
+      // Log the detailed error
+      console.error('Control API Request Error:', JSON.stringify(errorDetails, null, 2));
+
+      // Throw a more user-friendly error, including the message from the response if available
+      let errorMessage = `API request failed (${response.status} ${response.statusText})`;
+      if (typeof responseData === 'object' && responseData !== null && 'message' in responseData && typeof responseData.message === 'string') {
+          errorMessage += `: ${responseData.message}`;
+      } else if (typeof responseData === 'string' && responseData.length < 100) {
+          // Include short string responses directly
+          errorMessage += `: ${responseData}`;
+      }
+      throw new Error(errorMessage);
     }
 
     if (response.status === 204) {

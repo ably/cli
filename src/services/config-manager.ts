@@ -443,7 +443,8 @@ export class ConfigManager {
         }
         
         // Migrate old config format if needed - move app from current to account.currentAppId
-        const oldConfig = this.config as any // Use any to allow access to potentially non-existent properties
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const oldConfig = this.config as any // Use 'any' to safely access potential pre-migration properties
         if (oldConfig.current?.app) {
           const currentAccountAlias = this.config.current?.account
           if (currentAccountAlias && this.config.accounts[currentAccountAlias]) {

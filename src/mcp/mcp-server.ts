@@ -10,6 +10,8 @@ import ChannelsPresenceSubscribe from '../commands/channels/presence/subscribe.j
 import ChannelsPublish from '../commands/channels/publish.js'
 import ChannelsSubscribe from '../commands/channels/subscribe.js'
 import { ConfigManager } from '../services/config-manager.js'
+import Ably, { Connection } from 'ably'
+import { ControlApi, App as ControlApp, Key as ControlKey } from '../services/control-api.js'
 
 // Maximum execution time for long-running operations (15 seconds)
 const MAX_EXECUTION_TIME = 15_000
@@ -49,6 +51,12 @@ interface HistoryPage {
   next: () => Promise<HistoryPage>;
 }
 
+// Aliasing types directly from Ably namespace
+type RealtimePresenceMessage = Ably.PresenceMessage;
+type RealtimeMessage = Ably.Message;
+type RealtimeHistoryParams = Ably.RealtimeHistoryParams;
+type PaginatedResult<T> = Ably.PaginatedResult<T>;
+
 // ResourceURI interface using any type to avoid conflicts
 interface ResourceURI {
   url: any;
@@ -60,10 +68,10 @@ interface ResourceURI {
 // Simplified interfaces to avoid type compatibility issues
 interface AblyChannel {
   presence: {
-    get: () => Promise<any>;
+    get: () => Promise<RealtimePresenceMessage[]>;
   };
-  history: (options: any) => Promise<any>;
-  subscribe: (callback: any) => any;
+  history: (options?: RealtimeHistoryParams) => Promise<PaginatedResult<RealtimeMessage>>;
+  subscribe: (callback: (message: RealtimeMessage) => void) => Promise<void>;
   unsubscribe: () => Promise<void>;
   publish: (name: string, data: any) => Promise<void>;
 }
@@ -72,14 +80,14 @@ interface AblyClient {
   channels: {
     get: (channelName: string) => AblyChannel;
   };
-  request: (method: string, path: string, params: Record<string, unknown>) => Promise<any>;
-  connection?: any; // Add optional connection property
+  request: (method: string, path: string, params?: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  connection: Connection;
 }
 
 interface ControlApiClient {
-  listApps: () => Promise<any[]>;
-  getAppStats: (appId: string, options: any) => Promise<unknown>;
-  listKeys: (appId: string) => Promise<any[]>;
+  listApps: () => Promise<ControlApp[]>;
+  getAppStats: (appId: string, options?: GetStatsParams) => Promise<unknown>;
+  listKeys: (appId: string) => Promise<ControlKey[]>;
 }
 
 // Define interfaces for parameters
@@ -98,16 +106,18 @@ interface AppParams {
   [key: string]: unknown;
 }
 
-interface App {
-  id: string;
-  name: string;
-  [key: string]: unknown;
+// Define GetStatsParams based on Control API structure
+interface GetStatsParams {
+    unit?: 'minute' | 'hour' | 'day' | 'month';
+    direction?: 'forwards' | 'backwards';
+    limit?: number;
+    start?: number; // epoch ms
+    end?: number; // epoch ms
 }
 
-interface Key {
-  appId: string;
-  id: string;
-  [key: string]: unknown;
+// Modify Key interface to match the ControlKey structure from control-api.ts
+interface Key extends ControlKey {
+  capabilities: Record<string, string[]>;
 }
 
 interface AppStatsParams {
@@ -198,15 +208,18 @@ export class AblyMcpServer {
       const channel = ably.channels.get(channelName);
       
       // Get history
-      const historyPage = await channel.history({ direction, limit });
+      const historyPage: PaginatedResult<RealtimeMessage> = await channel.history({ 
+          direction: direction as RealtimeHistoryParams['direction'],
+          limit 
+      });
       
-      return historyPage.items.map((msg: Record<string, unknown>) => ({
-        clientId: msg.clientId as string | undefined,
-        connectionId: msg.connectionId as string,
+      return historyPage.items.map((msg: RealtimeMessage) => ({
+        clientId: msg.clientId,
+        connectionId: msg.connectionId,
         data: msg.data,
-        id: msg.id as string,
-        name: msg.name as string,
-        timestamp: msg.timestamp as number
+        id: msg.id ?? `no-id-${Date.now()}`,
+        name: msg.name ?? 'no-name',
+        timestamp: msg.timestamp ?? Date.now(),
       }));
     } catch (error: unknown) {
       console.error('Error getting channel history:', error);
@@ -234,10 +247,13 @@ export class AblyMcpServer {
         throw new Error(`Failed to list channels: ${response.statusCode}`);
       }
       
+      // Ensure response.items is an array before mapping
+      const items = Array.isArray(response.items) ? response.items : [];
+      
       // Map response to simplified format
-      return (response.items || []).map((channel: Record<string, unknown>) => ({
+      return items.map((channel: Record<string, unknown>) => ({
         name: channel.channelId as string,
-        occupancy: ((channel.status as Record<string, unknown> || {})?.occupancy as Record<string, unknown>) || {},
+        occupancy: channel.occupancy as Record<string, unknown>,
         status: channel.status as Record<string, unknown> || {}
       }));
     } catch (error: unknown) {
@@ -260,16 +276,16 @@ export class AblyMcpServer {
       // Get channel
       const channel = ably.channels.get(channelName);
       
-      // Get presence
-      const presencePage = await channel.presence.get();
+      // Get presence members
+      const presenceMembers = await channel.presence.get();
       
-      return presencePage.items.map((member: Record<string, unknown>) => ({
-        action: member.action as number,
-        clientId: member.clientId as string | undefined,
-        connectionId: member.connectionId as string,
+      return presenceMembers.map((member: RealtimePresenceMessage) => ({
+        action: member.action === 'present' || member.action === 'enter' ? 1 : 0,
+        clientId: member.clientId,
+        connectionId: member.connectionId,
         data: member.data,
-        id: member.id as string,
-        timestamp: member.timestamp as number
+        id: member.id,
+        timestamp: member.timestamp
       }));
     } catch (error: unknown) {
       console.error('Error getting channel presence:', error);
@@ -387,25 +403,35 @@ export class AblyMcpServer {
       const _subscribePromise = new Promise<Message[]>((_resolve) => {
         // Handle rewind if specified
         if (rewind > 0) {
-          channel.history({ limit: rewind })
-            .then((page: HistoryPage) => {
-              for (const msg of page.items.reverse()) {
-                messages.push({
-                  clientId: msg.clientId,
-                  connectionId: msg.connectionId,
-                  data: msg.data,
-                  id: msg.id,
-                  isRewind: true,
-                  name: msg.name,
-                  timestamp: msg.timestamp
+          void (async () => {
+            try {
+              let currentPage: PaginatedResult<RealtimeMessage> | null = await channel.history({ direction: 'backwards', limit: rewind });
+              while (currentPage) {
+                currentPage.items.forEach((msg: RealtimeMessage) => {
+                  messages.push({
+                    clientId: msg.clientId,
+                    connectionId: msg.connectionId,
+                    data: msg.data,
+                    id: msg.id ?? `no-id-${Date.now()}`,
+                    name: msg.name ?? 'no-name',
+                    timestamp: msg.timestamp ?? Date.now(),
+                  });
                 });
+
+                if (!currentPage.hasNext()) {
+                  break;
+                }
+
+                currentPage = await currentPage.next();
               }
-            })
-            .catch((error: unknown) => console.error('Error rewinding messages:', error));
+            } catch (historyError) {
+              console.error('Error fetching history during rewind:', historyError);
+            }
+          })();
         }
         
         // Subscribe to new messages
-        const _subscription = channel.subscribe((msg: Record<string, unknown>) => {
+        const _subscription = channel.subscribe((msg: RealtimeMessage) => {
           messages.push({
             clientId: msg.clientId as string | undefined,
             connectionId: msg.connectionId as string,
@@ -639,7 +665,7 @@ export class AblyMcpServer {
             const currentAppId = this.configManager.getCurrentAppId()
             
             return {
-              resources: apps.map((app: App) => ({
+              resources: apps.map((app: ControlApp) => ({
                 current: app.id === currentAppId,
                 name: app.name,
                 uri: `ably://apps/${app.id}`
@@ -658,7 +684,7 @@ export class AblyMcpServer {
           
           // Add the current app indicator
           const currentAppId = this.configManager.getCurrentAppId()
-          const appsWithCurrent = apps.map((app: App) => ({
+          const appsWithCurrent = apps.map((app: ControlApp) => ({
             ...app,
             current: app.id === currentAppId
           }))
@@ -740,12 +766,13 @@ export class AblyMcpServer {
             ? currentKeyId 
             : currentKeyId ? `${appId}.${currentKeyId}` : undefined
             
-          const keysWithCurrent = keys.map((key: Key) => {
+          const keysWithCurrent = keys.map((key: ControlKey) => {
             const keyName = `${key.appId}.${key.id}`
             return {
               ...key,
               current: keyName === currentKeyName,
-              keyName
+              keyName,
+              capabilities: {} // Add missing capabilities property
             }
           })
           
@@ -907,7 +934,7 @@ export class AblyMcpServer {
           
           // Add the current app indicator
           const currentAppId = this.configManager.getCurrentAppId()
-          const appsWithCurrent = apps.map((app: App) => ({
+          const appsWithCurrent = apps.map((app: ControlApp) => ({
             ...app,
             current: app.id === currentAppId
           }))
@@ -1002,12 +1029,13 @@ export class AblyMcpServer {
             ? currentKeyId 
             : currentKeyId ? `${appId}.${currentKeyId}` : undefined
             
-          const keysWithCurrent = keys.map((key: Key) => {
+          const keysWithCurrent = keys.map((key: ControlKey) => {
             const keyName = `${key.appId}.${key.id}`
             return {
               ...key,
               current: keyName === currentKeyName,
-              keyName // Add the full key name
+              keyName, // Add the full key name
+              capabilities: {} // Add missing capabilities property
             }
           })
           
