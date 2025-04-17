@@ -26,7 +26,8 @@ export default [
       '**/*.d.ts',
       'node_modules/xterm/**',
       'packages/react-web-cli/dist/index.js',
-      'packages/react-web-cli/dist/index.mjs'
+      'packages/react-web-cli/dist/index.mjs',
+      'bin/' // Added from .eslintrc.cjs
     ], // Updated to match all ignorePatterns from .eslintrc.json
   },
   {

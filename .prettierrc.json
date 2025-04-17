@@ -1,1 +1,4 @@
-"@oclif/prettier-config"
+{
+  "extends": "@oclif/prettier-config",
+  "tabWidth": 2
+}
