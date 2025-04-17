@@ -1,8 +1,6 @@
-import { Args, Flags } from '@oclif/core'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-
-import chalk from 'chalk'
 
 export default class RoomsOccupancyGet extends ChatBaseCommand {
   static args = {

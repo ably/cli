@@ -1,10 +1,10 @@
-import { Command, Help, Interfaces, Config } from '@oclif/core'
+import { Command, Help, Config, Interfaces } from '@oclif/core'
 import chalk from 'chalk'
 import stripAnsi from 'strip-ansi'
 
 import { ConfigManager } from './services/config-manager.js'
 import { displayLogo } from './utils/logo.js'
-import { ErrorDetails } from './types/cli.js'
+
 import { WEB_CLI_RESTRICTED_COMMANDS } from './base-command.js' // Import the single source of truth
 
 export default class CustomHelp extends Help {
@@ -240,7 +240,6 @@ export default class CustomHelp extends Help {
 
     if (visibleCommands.length === 0) return ''; // Return empty if no commands should be shown
 
-    const helpWidth = this.opts?.maxWidth ? this.opts.maxWidth - 2 : 78;
     return this.section(chalk.bold('COMMANDS'), this.renderList(
       visibleCommands
         .map(c => {
@@ -278,41 +277,5 @@ export default class CustomHelp extends Help {
       .map(([left, right]) => this.renderList([[left, right]], { indentation: 2 }))
       .join('\n')
     );
-  }
-
-  /**
-   * Format command title for display
-   * Override just to add styling using chalk
-   */
-  protected commandTitle(command: {id: string; description?: string}): string {
-    const description = command.description && this.render(command.description.split('\n')[0]);
-    if (description) {
-      return `${chalk.bold(command.id)} - ${chalk.dim(description)}`;
-    }
-    return chalk.bold(command.id);
-  }
-
-  /**
-   * Format error for command
-   */
-  formatError(error: ErrorDetails, command: string): string {
-    return this.section(`${chalk.bold('ERROR:')} ${chalk.red(error.message)}`, 
-      command ? 
-        `Run ${chalk.bold(`ably help ${command}`)} for more information.` :
-        `Run ${chalk.bold('ably help')} for a list of available commands.`
-    );
-  }
-
-  /**
-   * Helper for formatting args in usage
-   * This helps us format required arguments in bold
-   */
-  protected arg(arg: {name: string; required: boolean; hidden: boolean}): string {
-    if (arg.hidden) return '';
-    const name = arg.name.toUpperCase();
-    if (arg.required) { 
-      return chalk.bold(name);
-    }
-    return `[${name}]`;
   }
 }

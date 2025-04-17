@@ -1,4 +1,3 @@
-import { Flags } from '@oclif/core'
 import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../spaces-base-command.js'

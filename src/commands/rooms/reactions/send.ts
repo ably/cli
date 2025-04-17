@@ -1,14 +1,8 @@
-import { ChatClient } from '@ably/chat'
 import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
 import * as Ably from 'ably'
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
 
 export default class RoomsReactionsSend extends ChatBaseCommand {
   static override args = {
@@ -140,4 +134,4 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       }
     }
   }
-} 
+}

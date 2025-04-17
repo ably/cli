@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as sinon from 'sinon';
 import { dirname } from 'node:path';
-import * as inquirerPrompts from '@inquirer/prompts';
 
 // Set environment variable to skip confirmation in tests
 process.env.SKIP_CONFIRMATION = 'true';
@@ -95,7 +94,7 @@ const setupTestContext = test
     ctx.mockContext = {
       config: ctx.config,
       debug: sinon.stub(),
-      error(input: Error | string, options: { code?: string; exit: false | number } = { exit: 1 }) {
+      error(input: Error | string, _options: { code?: string; exit: false | number } = { exit: 1 }) {
         // Use the stub directly from context, then throw for test purposes
         ctx.stubs.error(input instanceof Error ? input.message : input);
         
@@ -164,7 +163,7 @@ const setupRejectingTestContext = test
     ctx.mockContext = {
       config: ctx.config,
       debug: sinon.stub(),
-      error(input: Error | string, options: { code?: string; exit: false | number } = { exit: 1 }) {
+      error(input: Error | string, _options: { code?: string; exit: false | number } = { exit: 1 }) {
         ctx.stubs.error(input instanceof Error ? input.message : input);
         
         // For test purposes, throw the error so it can be caught

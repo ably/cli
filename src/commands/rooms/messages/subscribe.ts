@@ -1,6 +1,6 @@
 import {Args, Flags} from '@oclif/core'
 import * as Ably from 'ably'
-import { ChatClient, Message, RoomStatus, Subscription, StatusSubscription } from '@ably/chat'; // Import ChatClient and StatusSubscription
+import { Subscription, StatusSubscription } from '@ably/chat'; // Import ChatClient and StatusSubscription
 import chalk from 'chalk'
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'

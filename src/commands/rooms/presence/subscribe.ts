@@ -1,5 +1,5 @@
 import { PresenceMember, RoomStatus, Subscription, PresenceEvents } from '@ably/chat'
-import { Args, Flags } from '@oclif/core'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
@@ -197,7 +197,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
 
       this.logCliEvent(flags, 'presence', 'listening', 'Listening for presence events...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve, _reject) => {
         let cleanupInProgress = false
         
         const cleanup = async () => {
@@ -289,7 +289,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
             }
 
             clearTimeout(forceExitTimeout)
-            reject(new Error(errorMsg))
+            resolve()
           }
         }
 

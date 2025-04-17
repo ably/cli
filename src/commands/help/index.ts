@@ -1,10 +1,7 @@
-import { Command, Interfaces, Flags, Config } from "@oclif/core";
+import { Command, Flags, Config } from "@oclif/core";
 import chalk from "chalk";
 import stripAnsi from 'strip-ansi';
 
-import { displayLogo } from "../../utils/logo.js";
-import { ErrorDetails } from "../../types/cli.js";
-import { WEB_CLI_RESTRICTED_COMMANDS } from "../../base-command.js";
 import { ConfigManager } from "../../services/config-manager.js";
 
 export default class HelpCommand extends Command {
@@ -59,10 +56,6 @@ export default class HelpCommand extends Command {
       return stripAnsi(output);
     }
     return output;
-  }
-
-  private removeTrailingWhitespace(text: string): string {
-    return text.replace(/\n+$/, '');
   }
 
   private async displayAllCommands(): Promise<void> {

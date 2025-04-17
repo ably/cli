@@ -1,11 +1,11 @@
 import { OccupancyEvent, RoomStatus, Subscription } from '@ably/chat'
-import { Args, Flags } from '@oclif/core'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
 import { ChatBaseCommand } from '../../../chat-base-command.js'
 
-interface OccupancyMetrics {
+export interface OccupancyMetrics {
   connections?: number;
   presenceMembers?: number;
 }

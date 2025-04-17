@@ -1,4 +1,3 @@
-import { Flags } from '@oclif/core'
 import chalk from 'chalk'
 
 import { AblyBaseCommand } from './base-command.js'
@@ -166,14 +165,5 @@ export abstract class ControlBaseCommand extends AblyBaseCommand {
       // but needed for TypeScript's control flow analysis
       return null;
     }
-  }
-
-  /**
-   * Helper method to show account info for control plane commands
-   * This is called by the child class when it wants to show account info
-   */
-  protected showControlPlaneInfo(flags: BaseFlags): void {
-    // Use the base class method for consistent display
-    this.showAuthInfoIfNeeded(flags)
   }
 } 

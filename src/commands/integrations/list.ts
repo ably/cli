@@ -78,15 +78,6 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
         
         this.log(`Found ${rules.length} integration rules:\n`);
         
-        const tableData = rules.map(rule => ({
-          id: rule.id,
-          type: rule.ruleType,
-          requestMode: rule.requestMode,
-          sourceType: rule.source.type,
-          channelFilter: rule.source.channelFilter || '(none)',
-          targetType: typeof rule.target === 'object' && rule.target !== null ? (rule.target as any).type : 'unknown'
-        }))
-        
         for (const rule of rules) {
           this.log(chalk.bold(`Rule ID: ${rule.id}`));
           this.log(`  App ID: ${rule.appId}`);

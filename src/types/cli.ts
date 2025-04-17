@@ -1,4 +1,4 @@
-import { Command, Config, Flags, Interfaces } from '@oclif/core'
+import { Config } from '@oclif/core'
 import * as Ably from 'ably'
 
 /**
