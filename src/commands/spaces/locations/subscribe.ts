@@ -15,9 +15,18 @@ interface SpaceMember {
   profileData: Record<string, unknown> | null;
 }
 
+interface LocationData {
+  [key: string]: unknown;
+}
+
 interface LocationItem {
-  location: any;
+  location: LocationData;
   member: SpaceMember;
+}
+
+// Define type for subscription
+interface LocationSubscription {
+  unsubscribe: () => void;
 }
 
 export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
@@ -45,11 +54,12 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
   private realtimeClient: Ably.Realtime | null = null;
   private spacesClient: Spaces | null = null;
   private space: Space | null = null;
-  private subscription: any = null;
+  private subscription: LocationSubscription | null = null;
+  private locationHandler: ((update: LocationsEvents.UpdateEvent) => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+   async finally(err: Error | undefined): Promise<void> {
+     this.unsubscribeFromLocation();
      if (!this.cleanupInProgress && this.space) {
         try { await this.space.leave(); } catch{/* ignore */} // Best effort
      }
@@ -59,6 +69,26 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
        }
 
      return super.finally(err);
+   }
+
+   private unsubscribeFromLocation(): void {
+     if (this.locationHandler && this.space) {
+       try {
+         this.space.locations.unsubscribe('update', this.locationHandler);
+         this.locationHandler = null;
+       } catch {
+         // Ignore unsubscribe errors during cleanup
+       }
+     }
+     
+     if (this.subscription) {
+       try {
+         this.subscription.unsubscribe();
+         this.subscription = null;
+       } catch {
+         // Ignore unsubscribe errors during cleanup  
+       }
+     }
    }
 
    async run(): Promise<void> {
@@ -132,11 +162,14 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
              // Need to map Array result to LocationItem[] if structure differs
              this.logCliEvent(flags, 'location', 'initialFormatWarning', 'Received array format for initial locations, expected object');
              // Assuming array elements match expected structure for now:
-             locations = result.map((item: any) => ({ location: item.location, member: item.member })) as LocationItem[];
+             locations = result.map((item: { location: LocationData; member: SpaceMember }) => ({ 
+               location: item.location, 
+               member: item.member 
+             }));
           } else if (Object.keys(result).length > 0) {
             // Standard case: result is an object { connectionId: locationData }
             locations = Object.entries(result).map(([connectionId, locationData]) => ({
-              location: locationData,
+              location: locationData as LocationData,
               member: { // Construct a partial SpaceMember as SDK doesn't provide full details here
                 clientId: 'unknown', // clientId not directly available in getAll response
                 connectionId,
@@ -183,7 +216,8 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
       }
 
       try {
-        this.subscription = await this.space!.locations.subscribe('update', (update: LocationsEvents.UpdateEvent) => {
+        // Define the location update handler
+        this.locationHandler = (update: LocationsEvents.UpdateEvent) => {
           try {
             const timestamp = new Date().toISOString();
             const eventData = {
@@ -214,7 +248,21 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
               this.log(chalk.red(errorMsg));
             }
           }
-        });
+        };
+        
+        // Subscribe to location updates
+        this.space.locations.subscribe('update', this.locationHandler);
+        
+        // Create our subscription object for cleanup
+        this.subscription = {
+          unsubscribe: () => {
+            if (this.locationHandler && this.space) {
+              this.space.locations.unsubscribe('update', this.locationHandler);
+              this.locationHandler = null;
+            }
+          }
+        };
+        
         this.logCliEvent(flags, 'location', 'subscribed', 'Successfully subscribed to location updates');
       } catch (error) {
          const errorMsg = `Error subscribing to location updates: ${error instanceof Error ? error.message : String(error)}`;
@@ -252,20 +300,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
 
           try {
             // Unsubscribe from location events
-            if (this.subscription) {
-              try {
-                 this.logCliEvent(flags, 'location', 'unsubscribing', 'Unsubscribing from location events');
-                 this.subscription.unsubscribe();
-                 this.logCliEvent(flags, 'location', 'unsubscribed', 'Successfully unsubscribed from location events');
-              } catch (error) {
-                   const errorMsg = `Error unsubscribing: ${error instanceof Error ? error.message : String(error)}`;
-                   this.logCliEvent(flags, 'location', 'unsubscribeError', errorMsg, { error: errorMsg, spaceId });
-                   if (!this.shouldOutputJson(flags)) {
-                      this.log(`Note: ${errorMsg}`);
-                      this.log('Continuing with cleanup.');
-                   }
-              }
-            }
+            this.unsubscribeFromLocation();
 
             if (this.space) {
                try {

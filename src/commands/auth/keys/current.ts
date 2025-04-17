@@ -78,7 +78,7 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
   /**
    * Handle the command in web CLI mode by extracting API key from environment variables
    */
-  private async handleWebCliMode(flags: any): Promise<void> {
+  private async handleWebCliMode(flags: Record<string, unknown>): Promise<void> {
     // Extract API key from environment variable
     const apiKey = process.env.ABLY_API_KEY
     if (!apiKey) {

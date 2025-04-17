@@ -1,6 +1,7 @@
 import { Args, Flags } from '@oclif/core'
 
 import { ControlBaseCommand } from '../../../control-base-command.js'
+import { ControlApi } from '../../../services/control-api.js'
 
 export default class KeysSwitchCommand extends ControlBaseCommand {
   static args = {
@@ -99,7 +100,7 @@ export default class KeysSwitchCommand extends ControlBaseCommand {
     }
   }
   
-  private async switchToKey(appId: string, keyIdOrValue: string, controlApi: any, existingAppName?: string): Promise<void> {
+  private async switchToKey(appId: string, keyIdOrValue: string, controlApi: ControlApi, existingAppName?: string): Promise<void> {
     try {
       // Verify the key exists and get full details
       const key = await controlApi.getKey(appId, keyIdOrValue)

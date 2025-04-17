@@ -154,7 +154,7 @@ See [MCP Server section](#mcp-server) for more details on how to use the MCP Ser
 * [`ably rooms presence enter ROOMID`](#ably-rooms-presence-enter-roomid)
 * [`ably rooms presence subscribe ROOMID`](#ably-rooms-presence-subscribe-roomid)
 * [`ably rooms reactions`](#ably-rooms-reactions)
-* [`ably rooms reactions send ROOMID TYPE`](#ably-rooms-reactions-send-roomid-type)
+* [`ably rooms reactions send ROOMID MESSAGEID EMOJI`](#ably-rooms-reactions-send-roomid-messageid-emoji)
 * [`ably rooms reactions subscribe ROOMID`](#ably-rooms-reactions-subscribe-roomid)
 * [`ably rooms typing`](#ably-rooms-typing)
 * [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
@@ -3866,19 +3866,20 @@ EXAMPLES
 
 _See code: [src/commands/rooms/reactions/index.ts](https://github.com/ably/cli/blob/v0.3.2/src/commands/rooms/reactions/index.ts)_
 
-## `ably rooms reactions send ROOMID TYPE`
+## `ably rooms reactions send ROOMID MESSAGEID EMOJI`
 
-Send a reaction to a chat room
+Send a reaction to a message in a chat room
 
 ```
 USAGE
-  $ ably rooms reactions send ROOMID TYPE [--access-token <value>] [--api-key <value>] [--client-id <value>]
+  $ ably rooms reactions send ROOMID MESSAGEID EMOJI [--access-token <value>] [--api-key <value>] [--client-id <value>]
     [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
     [--metadata <value>]
 
 ARGUMENTS
-  ROOMID  Room ID to send the reaction to
-  TYPE    Reaction type/emoji to send
+  ROOMID     The room ID to send the reaction to
+  MESSAGEID  The message ID to react to
+  EMOJI      The emoji reaction to send (e.g. 👍, ❤️, 😂)
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3890,21 +3891,21 @@ FLAGS
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
-      --metadata=<value>      [default: {}] Optional metadata for the reaction (JSON string)
+      --metadata=<value>      Additional metadata to send with the reaction (as JSON string)
       --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Send a reaction to a chat room
+  Send a reaction to a message in a chat room
 
 EXAMPLES
-  $ ably rooms reactions send my-room thumbs_up
+  $ ably rooms reactions send my-room abc123 👍
 
-  $ ably rooms reactions send my-room heart --metadata '{"effect":"fireworks"}'
+  $ ably rooms reactions send --api-key "YOUR_API_KEY" my-room abc123 🎉
 
-  $ ably rooms reactions send my-room thumbs_up --json
+  $ ably rooms reactions send my-room abc123 ❤️ --json
 
-  $ ably rooms reactions send my-room heart --metadata '{"effect":"fireworks"}' --pretty-json
+  $ ably rooms reactions send my-room abc123 😂 --pretty-json
 ```
 
 _See code: [src/commands/rooms/reactions/send.ts](https://github.com/ably/cli/blob/v0.3.2/src/commands/rooms/reactions/send.ts)_
@@ -4151,16 +4152,15 @@ _See code: [src/commands/spaces/cursors/get-all.ts](https://github.com/ably/cli/
 
 ## `ably spaces cursors set SPACEID`
 
-Set your cursor position in a space
+Set a cursor with position data in a space
 
 ```
 USAGE
-  $ ably spaces cursors set SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--position <value> |
-    --simulate]
+  $ ably spaces cursors set SPACEID --data <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
+    [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
-  SPACEID  Space ID to set cursor in
+  SPACEID  The space ID to set cursor in
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -4169,21 +4169,26 @@ FLAGS
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --data=<value>          (required) The cursor data to set (as JSON string)
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
-      --position=<value>      Cursor position data to set (JSON format)
       --pretty-json           Output in colorized JSON format
-      --simulate              Simulate cursor movements automatically
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Set your cursor position in a space
+  Set a cursor with position data in a space
 
 EXAMPLES
-  $ ably spaces cursors set my-space --position '{"x":100,"y":150}'
+  $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}'
 
-  $ ably spaces cursors set my-space --simulate
+  $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}, "data": {"name": "John", "color": "#ff0000"}}'
+
+  $ ably spaces cursors set --api-key "YOUR_API_KEY" my-space --data '{"position": {"x": 100, "y": 200}}'
+
+  $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}' --json
+
+  $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}' --pretty-json
 ```
 
 _See code: [src/commands/spaces/cursors/set.ts](https://github.com/ably/cli/blob/v0.3.2/src/commands/spaces/cursors/set.ts)_

@@ -3,6 +3,31 @@ import * as Ably from 'ably'; // Import Ably
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
 
+// Define interfaces for the message send command
+interface MessageToSend {
+  text: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface MessageResult {
+  index?: number;
+  message?: MessageToSend;
+  roomId: string;
+  success: boolean;
+  error?: string;
+  [key: string]: unknown;
+}
+
+interface FinalResult {
+  errors: number;
+  results: MessageResult[];
+  sent: number;
+  success: boolean;
+  total: number;
+  [key: string]: unknown;
+}
+
 export default class MessagesSend extends ChatBaseCommand {
   static override args = {
     roomId: Args.string({
@@ -50,7 +75,7 @@ export default class MessagesSend extends ChatBaseCommand {
   private typingTimeoutId: NodeJS.Timeout | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
      if (this.progressIntervalId) {
         clearInterval(this.progressIntervalId);
         this.progressIntervalId = null;
@@ -134,7 +159,7 @@ export default class MessagesSend extends ChatBaseCommand {
       // Track send progress
       let sentCount = 0
       let errorCount = 0
-      const results: any[] = []
+      const results: MessageResult[] = []
 
       // Send messages
       if (count > 1) {
@@ -152,7 +177,7 @@ export default class MessagesSend extends ChatBaseCommand {
         for (let i = 0; i < count; i++) {
           // Apply interpolation to the message
           const interpolatedText = this.interpolateMessage(args.text, i + 1)
-          const messageToSend = {
+          const messageToSend: MessageToSend = {
               text: interpolatedText,
               ...(metadata ? { metadata } : {}),
           };
@@ -162,7 +187,7 @@ export default class MessagesSend extends ChatBaseCommand {
           room.messages.send(messageToSend)
           .then(() => {
             sentCount++
-            const result = {
+            const result: MessageResult = {
               index: i + 1,
               message: messageToSend,
               roomId: args.roomId,
@@ -175,10 +200,10 @@ export default class MessagesSend extends ChatBaseCommand {
                // Logged implicitly by progress interval
             }
           })
-          .catch((error: any) => {
+          .catch((error: unknown) => {
             errorCount++
             const errorMsg = error instanceof Error ? error.message : String(error);
-            const result = {
+            const result: MessageResult = {
               error: errorMsg,
               index: i + 1,
               roomId: args.roomId,
@@ -212,7 +237,7 @@ export default class MessagesSend extends ChatBaseCommand {
           }, 100)
         })
 
-        const finalResult = {
+        const finalResult: FinalResult = {
             errors: errorCount,
             results,
             sent: sentCount,
@@ -235,7 +260,7 @@ export default class MessagesSend extends ChatBaseCommand {
         try {
           // Apply interpolation to the message
           const interpolatedText = this.interpolateMessage(args.text, 1)
-          const messageToSend = {
+          const messageToSend: MessageToSend = {
              text: interpolatedText,
              ...(metadata ? { metadata } : {}),
           };
@@ -243,7 +268,7 @@ export default class MessagesSend extends ChatBaseCommand {
 
           // Send the message
           await room.messages.send(messageToSend);
-          const result = {
+          const result: MessageResult = {
               message: messageToSend,
               roomId: args.roomId,
               success: true
@@ -259,7 +284,7 @@ export default class MessagesSend extends ChatBaseCommand {
           }
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            const result = {
+            const result: MessageResult = {
                error: errorMsg,
                roomId: args.roomId,
                success: false

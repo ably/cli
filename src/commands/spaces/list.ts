@@ -21,6 +21,8 @@ interface SpaceStatus {
 interface SpaceItem {
   spaceName: string;
   status?: SpaceStatus;
+  channelId?: string;
+  [key: string]: unknown;
 }
 
 export default class SpacesList extends ChatBaseCommand {
@@ -59,7 +61,12 @@ export default class SpacesList extends ChatBaseCommand {
 
       // Build params for channel listing
       // We request more channels than the limit to account for filtering
-      const params: any = {
+      interface ChannelParams {
+        limit: number;
+        prefix?: string;
+      }
+      
+      const params: ChannelParams = {
         limit: flags.limit * 5, // Request more to allow for filtering
       }
 
@@ -68,7 +75,7 @@ export default class SpacesList extends ChatBaseCommand {
       }
 
       // Fetch channels
-      const channelsResponse = await rest.request('get', '/channels', params)
+      const channelsResponse = await rest.request('get', '/channels', 2, params)
 
       if (channelsResponse.statusCode !== 200) {
         this.error(`Failed to list spaces: ${channelsResponse.statusCode}`)
@@ -79,7 +86,7 @@ export default class SpacesList extends ChatBaseCommand {
       const allChannels = channelsResponse.items || []
       
       // Map to store deduplicated spaces
-      const spaces = new Map<string, any>()
+      const spaces = new Map<string, SpaceItem>()
       
       // Filter for space channels and deduplicate
       for (const channel of allChannels) {
@@ -95,7 +102,7 @@ export default class SpacesList extends ChatBaseCommand {
             // Only add if we haven't seen this space before
             if (!spaces.has(spaceName)) {
               // Store the original channel data but with the simple space name
-              const spaceData = { ...channel, channelId: spaceName, spaceName }
+              const spaceData: SpaceItem = { ...channel, channelId: spaceName, spaceName }
               spaces.set(spaceName, spaceData)
             }
           }

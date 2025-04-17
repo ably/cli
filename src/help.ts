@@ -15,7 +15,7 @@ export default class CustomHelp extends Help {
   // Flag to track if we're already showing root help to prevent duplication
   protected isShowingRootHelp: boolean = false;
 
-  constructor(config: Config, opts?: any) {
+  constructor(config: Config, opts?: Record<string, unknown>) {
     super(config, opts);
     this.webCliMode = process.env.ABLY_WEB_CLI_MODE === 'true';
     this.configManager = new ConfigManager();

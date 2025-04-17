@@ -4,6 +4,33 @@ import chalk from 'chalk'
 
 import { ChatBaseCommand } from '../../chat-base-command.js'
 
+// Add interface definitions at the beginning of the file
+interface RoomMetrics {
+  connections?: number;
+  presenceConnections?: number;
+  presenceMembers?: number;
+  publishers?: number;
+  subscribers?: number;
+}
+
+interface RoomStatus {
+  occupancy?: {
+    metrics?: RoomMetrics;
+  };
+}
+
+interface RoomItem {
+  channelId: string;
+  roomName: string;
+  status?: RoomStatus;
+  [key: string]: unknown;
+}
+
+interface RoomListParams {
+  limit: number;
+  prefix?: string;
+}
+
 export default class RoomsList extends ChatBaseCommand {
   static override description = 'List active chat rooms'
 
@@ -40,7 +67,7 @@ export default class RoomsList extends ChatBaseCommand {
 
       // Build params for channel listing
       // We request more channels than the limit to account for filtering
-      const params: any = {
+      const params: RoomListParams = {
         limit: flags.limit * 5, // Request more to allow for filtering
       }
 
@@ -49,7 +76,7 @@ export default class RoomsList extends ChatBaseCommand {
       }
 
       // Fetch channels
-      const channelsResponse = await rest.request('get', '/channels', params)
+      const channelsResponse = await rest.request('get', '/channels', 2, params, null)
 
       if (channelsResponse.statusCode !== 200) {
         this.error(`Failed to list rooms: ${channelsResponse.statusCode}`)
@@ -60,7 +87,7 @@ export default class RoomsList extends ChatBaseCommand {
       const allChannels = channelsResponse.items || []
       
       // Map to store deduplicated rooms
-      const chatRooms = new Map<string, any>()
+      const chatRooms = new Map<string, RoomItem>()
       
       // Filter for chat channels and deduplicate
       for (const channel of allChannels) {

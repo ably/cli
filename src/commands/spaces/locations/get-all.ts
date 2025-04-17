@@ -6,17 +6,33 @@ import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
+interface LocationData {
+  [key: string]: unknown;
+}
+
+interface Member {
+  clientId?: string;
+  memberId?: string;
+  isCurrentMember?: boolean;
+}
+
+interface LocationWithCurrent {
+  current: {
+    member: Member;
+  };
+  location?: LocationData;
+  data?: LocationData;
+  [key: string]: unknown;
+}
+
 interface LocationItem {
-  [key: string]: any;
+  [key: string]: unknown;
   clientId?: string;
   connectionId?: string;
-  data?: any;
+  data?: LocationData;
   id?: string;
-  location?: any;
-  member?: {
-    clientId?: string;
-    isCurrentMember?: boolean;
-  };
+  location?: LocationData;
+  member?: Member;
   memberId?: string;
   userId?: string;
 }
@@ -115,25 +131,25 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
         this.log(`Fetching locations for space ${chalk.cyan(spaceId)}...`);
       }
       
-      let locations: any = [];
+      let locations: LocationItem[] = [];
       try {
         const { items: locationsFromSpace } = await this.space.locations.getAll();
         
         if (locationsFromSpace && typeof locationsFromSpace === 'object') {
           if (Array.isArray(locationsFromSpace)) {
-            locations = locationsFromSpace;
+            locations = locationsFromSpace as LocationItem[];
           } else if (Object.keys(locationsFromSpace).length > 0) {
             locations = Object.entries(locationsFromSpace).map(([memberId, locationData]) => ({
               location: locationData,
               memberId
-            }));
+            })) as LocationItem[];
           }
         }
 
-        const validLocations = locations.filter((item: any) => {
+        const validLocations = locations.filter((item: LocationItem) => {
           if (item === null || item === undefined) return false;
           
-          let locationData;
+          let locationData: unknown;
           if (item.location !== undefined) {
             locationData = item.location;
           } else if (item.data === undefined) {
@@ -153,7 +169,7 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
           }
           
           if (locationData === null || locationData === undefined) return false;
-          if (typeof locationData === 'object' && Object.keys(locationData).length === 0) return false;
+          if (typeof locationData === 'object' && Object.keys(locationData as object).length === 0) return false;
           
           return true;
         });
@@ -191,31 +207,41 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
             this.log(`\n${chalk.cyan('Current locations')} (${chalk.bold(String(locationsCount))}):\n`);
             
             for (const location of validLocations) {
-              const { current } = location;
-              const { member } = current;
-              this.log(`Member ID: ${chalk.cyan(member.memberId || member.clientId)}`);
-              try {
-                const locationData = location.location || location.data || (() => {
-                  const {
-                    clientId: _clientId,
-                    connectionId: _connectionId,
-                    id: _id,
-                    member: _member,
-                    memberId: _memberId,
-                    userId: _userId,
-                    ...rest
-                  } = location;
-                  return rest;
-                })();
-                
-                this.log(`- ${chalk.blue(member.memberId || member.clientId)}:`);
-                this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
-                
-                if (member.isCurrentMember) {
-                  this.log(`  ${chalk.green('(Current member)')}`);
+              // Check if location has 'current' property with expected structure
+              if ('current' in location && 
+                  typeof location.current === 'object' && 
+                  location.current !== null && 
+                  'member' in location.current) {
+                const locationWithCurrent = location as LocationWithCurrent;
+                const { member } = locationWithCurrent.current;
+                this.log(`Member ID: ${chalk.cyan(member.memberId || member.clientId)}`);
+                try {
+                  const locationData = location.location || location.data || (() => {
+                    const {
+                      clientId: _clientId,
+                      connectionId: _connectionId,
+                      id: _id,
+                      member: _member,
+                      memberId: _memberId,
+                      userId: _userId,
+                      ...rest
+                    } = location;
+                    return rest;
+                  })();
+                  
+                  this.log(`- ${chalk.blue(member.memberId || member.clientId)}:`);
+                  this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
+                  
+                  if (member.isCurrentMember) {
+                    this.log(`  ${chalk.green('(Current member)')}`);
+                  }
+                } catch (error) {
+                  this.log(`- ${chalk.red('Error displaying location item')}: ${error instanceof Error ? error.message : String(error)}`);
                 }
-              } catch (error) {
-                this.log(`- ${chalk.red('Error displaying location item')}: ${error instanceof Error ? error.message : String(error)}`);
+              } else {
+                // Simpler display if location doesn't have expected structure
+                this.log(`- ${chalk.blue('Member')}:`);
+                this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(location, null, 2)}`);
               }
             }
           }

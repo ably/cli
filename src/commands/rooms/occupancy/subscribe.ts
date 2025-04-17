@@ -36,7 +36,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
   private unsubscribeStatusFn: (() => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
      if (this.unsubscribeOccupancyFn) { try { this.unsubscribeOccupancyFn.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
      if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
@@ -254,7 +254,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
     }
   }
 
-   private displayOccupancyMetrics(occupancyMetrics: OccupancyMetrics, roomId: string, flags: any, isInitial = false): void {
+   private displayOccupancyMetrics(occupancyMetrics: OccupancyMetrics, roomId: string, flags: Record<string, unknown>, isInitial = false): void {
     const timestamp = new Date().toISOString()
     const logData = {
         metrics: occupancyMetrics,

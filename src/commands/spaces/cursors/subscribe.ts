@@ -1,4 +1,4 @@
-import Spaces, { type Space } from '@ably/spaces'
+import Spaces, { type CursorUpdate, type Space } from '@ably/spaces'
 import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
@@ -29,11 +29,11 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
   private realtimeClient: Ably.Realtime | null = null;
   private spacesClient: Spaces | null = null;
   private space: Space | null = null;
-  private subscription: any = null;
+  private listener: ((update: CursorUpdate) => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+   async finally(err: Error | undefined): Promise<void> {
+     if (this.listener && this.space) { try { await this.space.cursors.unsubscribe(this.listener); } catch { /* ignore */ } }
      // No need to explicitly leave space here as cleanup handles it
      if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed' && this.realtimeClient.connection.state !== 'failed') {
            this.realtimeClient.close();
@@ -103,7 +103,8 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
       }
 
       try {
-        this.subscription = await this.space.cursors.subscribe('update', (cursorUpdate: any) => {
+        // Define the listener function
+        this.listener = (cursorUpdate: CursorUpdate) => {
           try {
             const timestamp = new Date().toISOString();
             const eventData = {
@@ -132,7 +133,11 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
               this.log(chalk.red(errorMsg));
             }
           }
-        });
+        };
+
+        // Subscribe using the listener
+        await this.space.cursors.subscribe('update', this.listener);
+
         this.logCliEvent(flags, 'cursor', 'subscribed', 'Successfully subscribed to cursor updates');
       } catch (error) {
          const errorMsg = `Error subscribing to cursor updates: ${error instanceof Error ? error.message : String(error)}`;
@@ -170,10 +175,10 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
 
           try {
             // Unsubscribe from cursor events
-            if (this.subscription) {
+            if (this.listener && this.space) {
               try {
                  this.logCliEvent(flags, 'cursor', 'unsubscribing', 'Unsubscribing from cursor events');
-                 this.subscription.unsubscribe();
+                 await this.space.cursors.unsubscribe(this.listener);
                  this.logCliEvent(flags, 'cursor', 'unsubscribed', 'Successfully unsubscribed from cursor events');
               } catch (error) {
                   const errorMsg = `Error unsubscribing: ${error instanceof Error ? error.message : String(error)}`;

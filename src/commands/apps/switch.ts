@@ -1,6 +1,7 @@
 import { Args } from '@oclif/core'
 
 import { ControlBaseCommand } from '../../control-base-command.js'
+import { ControlApi } from '../../services/control-api.js'
 
 export default class AppsSwitch extends ControlBaseCommand {
   static override args = {
@@ -46,7 +47,7 @@ export default class AppsSwitch extends ControlBaseCommand {
     }
   }
   
-  private async switchToApp(appId: string, controlApi: any): Promise<void> {
+  private async switchToApp(appId: string, controlApi: ControlApi): Promise<void> {
     try {
       // Verify the app exists
       const app = await controlApi.getApp(appId)

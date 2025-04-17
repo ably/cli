@@ -34,11 +34,11 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
   private realtimeClient: Ably.Realtime | null = null;
   private spacesClient: Spaces | null = null;
   private space: Space | null = null;
-  private subscription: any = null;
+  private listener: ((member: SpaceMember) => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+   async finally(err: Error | undefined): Promise<void> {
+     if (this.listener && this.space) { try { await this.space.members.unsubscribe(this.listener); } catch { /* ignore */ } }
      if (!this.cleanupInProgress && this.space) {
          try { await this.space.leave(); } catch{/* ignore */} // Best effort
      }
@@ -122,7 +122,8 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
         this.log(`\n${chalk.dim('Watching for other members. Press Ctrl+C to exit.')}\n`)
       }
 
-      this.subscription = await this.space.members.subscribe('update', (member: SpaceMember) => {
+      // Define the listener function
+      this.listener = (member: SpaceMember) => {
         const timestamp = new Date().toISOString()
         const now = Date.now()
 
@@ -211,7 +212,11 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
             this.log(`  ${chalk.dim('Status:')} Not connected`)
           }
         }
-      })
+      };
+
+      // Subscribe using the stored listener
+      await this.space.members.subscribe('update', this.listener);
+
       this.logCliEvent(flags, 'member', 'subscribed', 'Successfully subscribed to member updates');
 
       this.logCliEvent(flags, 'member', 'listening', 'Listening for member updates...');
@@ -238,11 +243,11 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
           }, 5000)
 
           try {
-            // Unsubscribe from member events
-            if (this.subscription) {
+            // Unsubscribe from member events using the stored listener
+            if (this.listener && this.space) {
                try {
                   this.logCliEvent(flags, 'member', 'unsubscribing', 'Unsubscribing from member updates');
-                  this.subscription.unsubscribe();
+                  await this.space.members.unsubscribe(this.listener);
                   this.logCliEvent(flags, 'member', 'unsubscribed', 'Successfully unsubscribed from member updates');
                } catch(error) { this.logCliEvent(flags, 'member', 'unsubscribeError', 'Error unsubscribing', { error: error instanceof Error ? error.message : String(error) }); }
             }

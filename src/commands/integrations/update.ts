@@ -87,8 +87,8 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
         ...(flags.source && { source: JSON.parse(flags.source) }),
         ...(flags.target && {
           target: {
-            // Cast target to any to allow spreading unknown
-            ...(existingRule.target as any),
+            // Properly type the existing target
+            ...(existingRule.target as Record<string, unknown>),
             ...JSON.parse(flags.target)
           }
         })
@@ -120,7 +120,7 @@ export default class IntegrationsUpdateCommand extends ControlBaseCommand {
         this.log(`Source Channel Filter: ${updatedRule.source.channelFilter}`)
         this.log(`Source Type: ${updatedRule.source.type}`)
         if (typeof updatedRule.target === 'object' && updatedRule.target !== null && 'url' in updatedRule.target) {
-          this.log(`Target URL: ${(updatedRule.target as any).url}`)
+          this.log(`Target URL: ${(updatedRule.target as Record<string, unknown>).url}`)
         }
         // Cast target for formatJsonOutput
         this.log(`Target: ${this.formatJsonOutput(updatedRule.target as Record<string, unknown>, flags)}`)

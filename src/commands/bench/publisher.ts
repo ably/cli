@@ -24,6 +24,30 @@ interface MessageTracking {
   }
 }
 
+// Define interfaces for the publisher command's flags and args
+interface PublisherFlags {
+  'message-size': number
+  messages: number
+  rate: number
+  transport: string  // Changed from 'rest' | 'realtime' to string to match actual type
+  'wait-for-subscribers': boolean
+  [key: string]: unknown // For other global flags
+}
+
+interface PublisherArgs {
+  channel: string
+}
+
+// Interface for message payload
+interface BenchmarkPayload {
+  index: number
+  msgId: string
+  testId: string
+  timestamp: number
+  padding?: string
+  [key: string]: unknown
+}
+
 export default class BenchPublisher extends AblyBaseCommand {
   static override args = {
     channel: Args.string({
@@ -201,7 +225,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     }
   }
 
-  private async checkAndWaitForSubscribers(channel: Ably.RealtimeChannel, flags: any): Promise<boolean> {
+  private async checkAndWaitForSubscribers(channel: Ably.RealtimeChannel, flags: PublisherFlags): Promise<boolean> {
     if (flags['wait-for-subscribers']) {
       this.logCliEvent(flags, 'benchmark', 'waitingForSubscribers', 'Waiting for subscribers...');
       await new Promise<void>((resolve) => {
@@ -245,7 +269,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     return true; // Indicate test should continue
   }
 
-  private createPayload(index: number, size: number, testId: string, messageTracking: MessageTracking): any {
+  private createPayload(index: number, size: number, testId: string, messageTracking: MessageTracking): BenchmarkPayload {
     const timestamp = Date.now()
     const msgId = `${testId}-${index}`
     
@@ -280,7 +304,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     return table
   }
 
-  private displaySummary(metrics: TestMetrics, flags: any, startTime: number, messageCount: number, args: any, testId: string, progressDisplay: InstanceType<typeof Table> | null): void {
+  private displaySummary(metrics: TestMetrics, flags: PublisherFlags, startTime: number, messageCount: number, args: PublisherArgs, testId: string, progressDisplay: InstanceType<typeof Table> | null): void {
     const totalTime = (Date.now() - startTime) / 1000
       const avgRate = metrics.messagesSent / totalTime
       
@@ -358,7 +382,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     }
   }
 
-  private async enterPresence(channel: Ably.RealtimeChannel, testId: string, messageCount: number, messageRate: number, messageSize: number, flags: any): Promise<void> {
+  private async enterPresence(channel: Ably.RealtimeChannel, testId: string, messageCount: number, messageRate: number, messageSize: number, flags: PublisherFlags): Promise<void> {
     const presenceData = {
       role: 'publisher',
       testDetails: {
@@ -386,7 +410,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     this.logCliEvent(flags, 'presence', 'presenceEntered', `Entered presence as publisher with test ID: ${testId}`, { testId });
   }
 
-  private async publishMessagesRealtime(channel: Ably.RealtimeChannel, metrics: TestMetrics, messageTracking: MessageTracking, messageCount: number, messageRate: number, messageSize: number, testId: string, flags: any): Promise<void> {
+  private async publishMessagesRealtime(channel: Ably.RealtimeChannel, metrics: TestMetrics, messageTracking: MessageTracking, messageCount: number, messageRate: number, messageSize: number, testId: string, flags: PublisherFlags): Promise<void> {
     this.logCliEvent(flags, 'benchmark', 'publishingStart', 'Starting to publish messages via Realtime');
     const messagePromises: Promise<void>[] = []
     let i = 0
@@ -439,7 +463,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     })
   }
 
-  private async publishMessagesRest(channel: Ably.RealtimeChannel, metrics: TestMetrics, messageTracking: MessageTracking, messageCount: number, messageRate: number, messageSize: number, testId: string, flags: any): Promise<void> {
+  private async publishMessagesRest(channel: Ably.RealtimeChannel, metrics: TestMetrics, messageTracking: MessageTracking, messageCount: number, messageRate: number, messageSize: number, testId: string, flags: PublisherFlags): Promise<void> {
     this.logCliEvent(flags, 'benchmark', 'publishingStart', 'Starting to publish messages via REST');
     const messagePromises: Promise<void>[] = []
     let i = 0
@@ -492,7 +516,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     })
   }
   
-  private setupProgressDisplay(flags: any, metrics: TestMetrics, messageCount: number): { intervalId: NodeJS.Timeout | null, progressDisplay: InstanceType<typeof Table> | null } {
+  private setupProgressDisplay(flags: PublisherFlags, metrics: TestMetrics, messageCount: number): { intervalId: NodeJS.Timeout | null, progressDisplay: InstanceType<typeof Table> | null } {
     if (this.shouldOutputJson(flags) || flags.logLevel === 'debug') {
       return { intervalId: null, progressDisplay: null };
     }
@@ -527,7 +551,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     return { intervalId, progressDisplay };
   }
 
-  private async subscribeToEcho(channel: Ably.RealtimeChannel, metrics: TestMetrics, messageTracking: MessageTracking, flags: any, channelName: string): Promise<void> {
+  private async subscribeToEcho(channel: Ably.RealtimeChannel, metrics: TestMetrics, messageTracking: MessageTracking, flags: PublisherFlags, channelName: string): Promise<void> {
     await channel.subscribe('benchmark', (message: Ably.Message) => {
       if (!message.data || typeof message.data !== 'object' || !('msgId' in message.data)) {
         return // Not our benchmark message

@@ -7,6 +7,11 @@ import chalk from 'chalk'
 
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
+// Define the type for location subscription
+interface LocationSubscription {
+  unsubscribe: () => void;
+}
+
 export default class SpacesLocationsSet extends SpacesBaseCommand {
   static override args = {
     spaceId: Args.string({
@@ -35,11 +40,13 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
   private realtimeClient: Ably.Realtime | null = null;
   private spacesClient: Spaces | null = null;
   private space: Space | null = null;
-  private subscription: any = null;
+  private subscription: LocationSubscription | null = null;
+  private locationHandler: ((locationUpdate: LocationsEvents.UpdateEvent) => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+   async finally(err: Error | undefined): Promise<void> {
+     this.unsubscribeFromLocation();
+     
      // Attempt to clear location and leave space if not already done and space exists
      if (!this.cleanupInProgress && this.space) {
         try { await this.space.locations.set(null); } catch{/* ignore */} // Best effort
@@ -51,6 +58,17 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
        }
 
      return super.finally(err);
+   }
+
+   private unsubscribeFromLocation(): void {
+     if (this.locationHandler && this.space) {
+       try {
+         this.space.locations.unsubscribe('update', this.locationHandler);
+         this.locationHandler = null;
+       } catch {
+         // Ignore unsubscribe errors during cleanup
+       }
+     }
    }
 
    async run(): Promise<void> {
@@ -74,7 +92,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
       });
 
       // Parse location data
-      let location: Record<string, any> | null = null;
+      let location: Record<string, unknown> | null = null;
       try {
         location = JSON.parse(flags.location)
         this.logCliEvent(flags, 'location', 'dataParsed', 'Location data parsed successfully', { location });
@@ -113,7 +131,8 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
           this.log(`\n${chalk.dim('Watching for other location changes. Press Ctrl+C to exit.')}\n`);
       }
 
-      this.subscription = await this.space.locations.subscribe('update', (locationUpdate: LocationsEvents.UpdateEvent) => {
+      // Store subscription handlers
+      this.locationHandler = (locationUpdate: LocationsEvents.UpdateEvent) => {
         const timestamp = new Date().toISOString()
         const {member} = locationUpdate
         const {currentLocation} = locationUpdate // Use current location
@@ -146,7 +165,19 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
           this.log(`[${timestamp}] ${chalk.blue(member.clientId || 'Unknown')} ${actionColor(action)}d location:`)
           this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(currentLocation, null, 2)}`)
         }
-      })
+      };
+
+      // Subscribe to updates
+      this.space.locations.subscribe('update', this.locationHandler);
+      this.subscription = { 
+        unsubscribe: () => {
+          if (this.locationHandler && this.space) {
+            this.space.locations.unsubscribe('update', this.locationHandler);
+            this.locationHandler = null;
+          }
+        }
+      };
+      
       this.logCliEvent(flags, 'location', 'subscribed', 'Successfully subscribed to location updates');
 
       this.logCliEvent(flags, 'location', 'listening', 'Listening for location updates...');

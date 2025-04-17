@@ -28,7 +28,7 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
   private client: Ably.Realtime | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+  async finally(err: Error | undefined): Promise<void> {
      if (this.client && this.client.connection.state !== 'closed' && // Check state before closing to avoid errors if already closed
        this.client.connection.state !== 'failed') {
            this.client.close();

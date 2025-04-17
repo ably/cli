@@ -45,7 +45,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
   private profileData: Record<string, unknown> | null = null;
 
   // Override finally to ensure resources are cleaned up
-  async finally(err: Error | undefined): Promise<any> {
+  async finally(err: Error | undefined): Promise<void> {
     if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
     if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
         this.ablyClient.close();
@@ -123,41 +123,41 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
 
         // Subscribe to presence events using a general listener
         this.logCliEvent(flags, 'presence', 'subscribingToEvents', 'Subscribing to presence events');
-        const { unsubscribe: unsubscribePresence } = room.presence.subscribe((member: any) => {
+        const { unsubscribe: unsubscribePresence } = room.presence.subscribe((event) => {
           // Only show other members, not ourselves
-          if (member.clientId !== this.chatClient?.clientId) {
+          if (event.clientId !== this.chatClient?.clientId) {
             const timestamp = new Date().toISOString()
             const eventData = {
-                action: member.action,
+                action: event.action,
                 member: {
-                    clientId: member.clientId,
-                    data: member.data
+                    clientId: event.clientId,
+                    data: event.data
                 },
                 roomId,
                 timestamp
             };
-            this.logCliEvent(flags, 'presence', member.action, `Presence event '${member.action}' received`, eventData);
+            this.logCliEvent(flags, 'presence', event.action, `Presence event '${event.action}' received`, eventData);
 
             if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({ success: true, ...eventData }, flags))
             } else {
                 // Check what kind of presence event it is based on action property
-                switch (member.action) {
+                switch (event.action) {
                 case 'enter': {
-                    this.log(`${chalk.green('✓')} ${chalk.blue(member.clientId || 'Unknown')} entered room`)
+                    this.log(`${chalk.green('✓')} ${chalk.blue(event.clientId || 'Unknown')} entered room`)
                 
                 break;
                 }
 
                 case 'leave': {
-                    this.log(`${chalk.red('✗')} ${chalk.blue(member.clientId || 'Unknown')} left room`)
+                    this.log(`${chalk.red('✗')} ${chalk.blue(event.clientId || 'Unknown')} left room`)
                 
                 break;
                 }
 
                 case 'update': {
-                    this.log(`${chalk.yellow('⟲')} ${chalk.blue(member.clientId || 'Unknown')} updated presence data:`);
-                    this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data as Record<string, unknown>, flags)}`);
+                    this.log(`${chalk.yellow('⟲')} ${chalk.blue(event.clientId || 'Unknown')} updated presence data:`);
+                    this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(event.data as Record<string, unknown>, flags)}`);
                 
                 break;
                 }

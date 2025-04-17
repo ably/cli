@@ -6,6 +6,46 @@ import * as Ably from "ably";
 
 import { AblyBaseCommand } from "../../base-command.js";
 
+// Define interfaces for the batch-publish command
+interface BatchMessage {
+  name?: string;
+  data?: unknown;
+  encoding?: string;
+  [key: string]: unknown;
+}
+
+interface BatchContent {
+  channels: string | string[];
+  messages: BatchMessage;
+  [key: string]: unknown;
+}
+
+interface BatchResponseItem {
+  channel: string;
+  messageId?: string;
+  error?: {
+    message: string;
+    code: number;
+  };
+  [key: string]: unknown;
+}
+
+interface ErrorInfo {
+  error?: {
+    message: string;
+    code: number;
+    [key: string]: unknown;
+  };
+  batchResponse?: BatchResponseItem[];
+  [key: string]: unknown;
+}
+
+interface MessageData {
+  name?: string;
+  data?: unknown;
+  [key: string]: unknown;
+}
+
 export default class ChannelsBatchPublish extends AblyBaseCommand {
   static override args = {
     message: Args.string({
@@ -64,7 +104,7 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
       const rest = new Ably.Rest(options)
       
       // Prepare the batch request content
-      let batchContent: any
+      let batchContent: unknown
       
       if (flags.spec) {
         // Use the provided spec directly
@@ -139,7 +179,7 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
         }
 
         // Parse the message
-        let messageData: any
+        let messageData: MessageData
         try {
           messageData = JSON.parse(args.message)
         } catch {
@@ -148,7 +188,7 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
         }
 
         // Prepare the message
-        const message: any = {}
+        const message: BatchMessage = {}
         
         // If name is provided in flags, use it. Otherwise, check if it's in the message data
         if (flags.name) {
@@ -176,7 +216,7 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
         batchContent = {
           channels,
           messages: message
-        }
+        } as BatchContent
       }
       
       if (!this.shouldSuppressOutput(flags)) {
@@ -185,6 +225,8 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
 
       // Make the batch publish request using the REST client's request method
       const response = await rest.request('post', '/messages', 2, null, batchContent)
+      // Convert batchContent to a known type for easier handling
+      const batchContentObj = batchContent as Record<string, unknown>
   
       if (response.statusCode >= 200 && response.statusCode < 300) {
         // Success response
@@ -193,8 +235,8 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
         if (!this.shouldSuppressOutput(flags)) {
           if (this.shouldOutputJson(flags)) {
             this.log(this.formatJsonOutput({
-              channels: Array.isArray(batchContent.channels) ? batchContent.channels : [batchContent.channels],
-              message: batchContent.messages,
+              channels: Array.isArray(batchContentObj.channels) ? batchContentObj.channels : [batchContentObj.channels],
+              message: batchContentObj.messages,
               response: responseItems,
               success: true
             }, flags))
@@ -208,17 +250,17 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
         const responseData = response.items
         
         // Handle the error response which could contain a batchResponse field
-        if (responseData && typeof responseData === 'object') {
-          const errorInfo = responseData as any
+        if (responseData && typeof responseData === 'object' && !Array.isArray(responseData)) {
+          const errorInfo = responseData as ErrorInfo
           
           if (errorInfo.error && errorInfo.error.code === 40_020 && errorInfo.batchResponse) {
             // This is a partial success with batchResponse field
             if (!this.shouldSuppressOutput(flags)) {
               if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({
-                  channels: Array.isArray(batchContent.channels) ? batchContent.channels : [batchContent.channels],
+                  channels: Array.isArray(batchContentObj.channels) ? batchContentObj.channels : [batchContentObj.channels],
                   error: errorInfo.error,
-                  message: batchContent.messages,
+                  message: batchContentObj.messages,
                   partial: true,
                   response: errorInfo.batchResponse,
                   success: false
@@ -226,8 +268,8 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
               } else {
                 this.log('Batch publish partially successful (some messages failed).')
                 // Format batch response in a friendly way
-                const batchResponses = errorInfo.batchResponse as any[]
-                batchResponses.forEach((item: any) => {
+                const batchResponses = errorInfo.batchResponse
+                batchResponses.forEach((item: BatchResponseItem) => {
                   if (item.error) {
                     this.log(`Failed to publish to channel '${item.channel}': ${item.error.message} (${item.error.code})`)
                   } else {
@@ -269,8 +311,8 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
         let errorMessage = 'Unknown error'
         let errorCode = response.statusCode
         
-        if (responseData && typeof responseData === 'object') {
-          const errorInfo = responseData as any
+        if (responseData && typeof responseData === 'object' && !Array.isArray(responseData)) {
+          const errorInfo = responseData as ErrorInfo
           if (errorInfo.error) {
             errorMessage = errorInfo.error.message || errorMessage
             errorCode = errorInfo.error.code || errorCode

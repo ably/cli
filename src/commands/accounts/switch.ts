@@ -75,7 +75,11 @@ export default class AccountsSwitch extends ControlBaseCommand {
     }
   }
   
-  private async switchToAccount(alias: string, accounts: Array<{account: any, alias: string}>, flags: any): Promise<void> {
+  private async switchToAccount(
+    alias: string, 
+    accounts: Array<{account: {accountId?: string, accountName?: string}, alias: string}>, 
+    flags: Record<string, unknown>
+  ): Promise<void> {
     // Check if account exists
     const accountExists = accounts.some(account => account.alias === alias)
 
@@ -120,7 +124,7 @@ export default class AccountsSwitch extends ControlBaseCommand {
 
       const controlApi = new ControlApi({
         accessToken,
-        controlHost: flags['control-host']
+        controlHost: flags['control-host'] as string | undefined
       })
 
       const { account, user } = await controlApi.getMe()

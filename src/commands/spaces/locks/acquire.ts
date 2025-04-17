@@ -1,4 +1,4 @@
-import Spaces, { type Space } from '@ably/spaces'
+import Spaces, { type Space, type LockOptions } from '@ably/spaces'
 import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
@@ -41,7 +41,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
   private space: Space | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
        // Attempt to release lock and leave space if not already done
        if (!this.cleanupInProgress && this.space && this.lockId) { // Check if space and lockId are available
            try {
@@ -85,7 +85,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
       });
 
       // Parse lock data if provided
-      let lockData: any
+      let lockData: unknown;
       if (flags.data) {
         try {
           lockData = JSON.parse(flags.data)
@@ -110,7 +110,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
       // Try to acquire the lock
       try {
         this.logCliEvent(flags, 'lock', 'acquiring', `Attempting to acquire lock: ${lockId}`, { data: lockData, lockId });
-        const lock = await this.space.locks.acquire(lockId, lockData)
+        const lock = await this.space.locks.acquire(lockId, lockData as LockOptions)
         const lockDetails = {
             lockId: lock.id,
             member: lock.member ? { clientId: lock.member.clientId, connectionId: lock.member.connectionId } : null,

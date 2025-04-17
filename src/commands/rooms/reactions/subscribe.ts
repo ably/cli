@@ -36,12 +36,10 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
   private unsubscribeStatusFn: (() => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
      if (this.unsubscribeReactionsFn) { try { this.unsubscribeReactionsFn.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
-     // if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed' && this.clients.realtimeClient.connection.state !== 'failed') { // Use ablyClient
      if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
-           // this.clients.realtimeClient.close(); // Use ablyClient
            this.ablyClient.close();
        }
 
@@ -67,7 +65,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
        // Add listeners for connection state changes
        // realtimeClient.connection.on((stateChange: any) => { // Use ablyClient
-       this.ablyClient.connection.on((stateChange: any) => {
+       this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
          this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
        });
 
@@ -133,7 +131,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
 
       // Subscribe to room reactions
       this.logCliEvent(flags, 'reactions', 'subscribing', 'Subscribing to reactions');
-      this.unsubscribeReactionsFn = room.reactions.subscribe((reaction: any) => {
+      this.unsubscribeReactionsFn = room.reactions.subscribe((reaction) => {
         const timestamp = new Date().toISOString() // Chat SDK doesn't provide timestamp in event
         const eventData = {
             clientId: reaction.clientId,
@@ -253,10 +251,8 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
        }
     } finally {
       // Ensure client is closed even if cleanup promise didn't resolve
-       // if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') { // Use this.ablyClient
-       if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
+       if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
            this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-           // this.clients.realtimeClient.close(); // Use this.ablyClient
            this.ablyClient.close();
        }
     }

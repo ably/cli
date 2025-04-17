@@ -1,9 +1,29 @@
 import {Args, Flags} from '@oclif/core'
 import * as Ably from 'ably'
-import { Subscription, StatusSubscription } from '@ably/chat'; // Import ChatClient and StatusSubscription
+import { Subscription, StatusSubscription, MessageEvent } from '@ably/chat'; // Import ChatClient and StatusSubscription
 import chalk from 'chalk'
 
 import {ChatBaseCommand} from '../../../chat-base-command.js'
+
+// Define message interface
+interface ChatMessage {
+  clientId: string;
+  text: string;
+  timestamp: number | Date; // Support both timestamp types
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// Define status change interface
+interface StatusChange {
+  current: string;
+  reason?: {
+    message?: string;
+    code?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
 
 export default class MessagesSubscribe extends ChatBaseCommand {
   static override args = {
@@ -36,7 +56,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
   private unsubscribeStatusFn: StatusSubscription | null = null
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
      if (this.messageSubscription) { try { this.messageSubscription.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn.off(); } catch { /* ignore */ } }
      if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
@@ -77,9 +97,9 @@ export default class MessagesSubscribe extends ChatBaseCommand {
 
       // Setup message handler
       this.logCliEvent(flags, 'room', 'subscribingToMessages', `Subscribing to messages in room ${roomId}`);
-      this.messageSubscription = room.messages.subscribe((messageEvent: any) => {
+      this.messageSubscription = room.messages.subscribe((messageEvent: MessageEvent) => {
         const {message} = messageEvent
-        const messageLog = {
+        const messageLog: ChatMessage = {
             clientId: message.clientId,
             text: message.text,
             timestamp: message.timestamp,
@@ -113,9 +133,11 @@ export default class MessagesSubscribe extends ChatBaseCommand {
 
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', `Subscribing to status changes for room ${roomId}`);
-      this.unsubscribeStatusFn = room.onStatusChange((statusChange: any) => {
-         this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: statusChange.reason, roomId: roomId });
-         if (statusChange.current === 'attached') {
+      this.unsubscribeStatusFn = room.onStatusChange((statusChange: unknown) => {
+         // Type assertion after we receive it
+         const change = statusChange as StatusChange;
+         this.logCliEvent(flags, 'room', `status-${change.current}`, `Room status changed to ${change.current}`, { reason: change.reason, roomId: roomId });
+         if (change.current === 'attached') {
            if (!this.shouldSuppressOutput(flags)) {
              if (this.shouldOutputJson(flags)) {
                // Already logged via logCliEvent
@@ -124,7 +146,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
                this.log(`${chalk.dim('Listening for messages. Press Ctrl+C to exit.')}`);
              }
            }
-         } else if (statusChange.current === 'failed') {
+         } else if (change.current === 'failed') {
             const errorMsg = room.error?.message || 'Unknown error';
             if (this.shouldOutputJson(flags)) {
               // Logged via logCliEvent

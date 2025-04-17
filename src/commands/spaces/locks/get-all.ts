@@ -7,7 +7,7 @@ import chalk from 'chalk'
 import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 interface LockItem {
-  attributes?: Record<string, any>;
+  attributes?: Record<string, unknown>;
   id: string;
   member?: {
     clientId?: string;

@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import fetch, { type RequestInit } from 'node-fetch'
 
 export interface ControlApiOptions {
   accessToken: string
@@ -77,6 +77,30 @@ export interface Rule {
   };
   target: unknown;
   version: string;
+}
+
+// Define RuleData interface for rule creation and updates
+export interface RuleData {
+  requestMode: string;
+  ruleType: string;
+  source: {
+    channelFilter: string;
+    type: string;
+  };
+  status?: 'disabled' | 'enabled';
+  target: Record<string, unknown>; // Target is highly variable
+}
+
+// Type for updating a rule, allowing partial source/target
+export interface RuleUpdateData {
+  requestMode?: string;
+  ruleType?: string;
+  source?: Partial<{ // Allow partial source
+    channelFilter: string;
+    type: string;
+  }>;
+  status?: 'disabled' | 'enabled';
+  target?: Partial<Record<string, unknown>>; // Allow partial target
 }
 
 export interface Queue {
@@ -199,8 +223,8 @@ export class ControlApi {
     return this.request<Queue>(`/apps/${appId}/queues`, 'POST', queueData)
   }
 
-  // ruleData can vary significantly based on ruleType (source, target)
-  async createRule(appId: string, ruleData: any): Promise<Rule> {
+  // Create a new rule with typed RuleData interface
+  async createRule(appId: string, ruleData: RuleData): Promise<Rule> {
     return this.request<Rule>(`/apps/${appId}/rules`, 'POST', ruleData)
   }
 
@@ -387,8 +411,8 @@ export class ControlApi {
     return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`, 'PATCH', namespaceData)
   }
 
-  // ruleData can vary significantly based on ruleType (source, target)
-  async updateRule(appId: string, ruleId: string, ruleData: any): Promise<Rule> {
+  // Update a rule with typed RuleData interface
+  async updateRule(appId: string, ruleId: string, ruleData: RuleUpdateData): Promise<Rule> {
     return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`, 'PATCH', ruleData)
   }
 
@@ -414,7 +438,7 @@ export class ControlApi {
   private async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
     const url = this.controlHost.includes('local') ? `http://${this.controlHost}/api/v1${path}` : `https://${this.controlHost}/v1${path}`
     
-    const options: any = {
+    const options: RequestInit = {
       headers: {
         'Accept': 'application/json',
         'Authorization': `Bearer ${this.accessToken}`,

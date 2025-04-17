@@ -29,11 +29,9 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
   private realtimeClient: Ably.Realtime | null = null;
   private spacesClient: Spaces | null = null;
   private space: Space | null = null;
-  private subscription: any = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch { /* ignore */ } }
+   async finally(err: Error | undefined): Promise<void> {
      if (!this.cleanupInProgress && this.space) {
          try { await this.space.leave(); } catch{/* ignore */} // Best effort
      }
@@ -159,7 +157,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
 
       // Handle lock acquired/released events
       try {
-        this.subscription = await this.space.locks.subscribe('update', (lock: Lock) => {
+        await this.space.locks.subscribe('update', (lock: Lock) => {
           const timestamp = new Date().toISOString();
           const eventData = {
               lockId: lock.id,
@@ -217,18 +215,6 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
           }, 5000);
 
           try {
-            // Unsubscribe from lock events
-            if (this.subscription) {
-              try {
-                 this.logCliEvent(flags, 'lock', 'unsubscribing', 'Unsubscribing from lock events');
-                 this.subscription.unsubscribe();
-                 this.logCliEvent(flags, 'lock', 'unsubscribed', 'Successfully unsubscribed from lock events');
-              } catch (error) {
-                  const errorMsg = `Error unsubscribing from locks: ${error instanceof Error ? error.message : String(error)}`;
-                  this.logCliEvent(flags, 'lock', 'unsubscribeError', errorMsg, { error: errorMsg });
-              }
-            }
-
             if (this.space) {
                try {
                  // Leave the space

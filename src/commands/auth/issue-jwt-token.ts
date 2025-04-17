@@ -9,7 +9,7 @@ interface JwtPayload {
   iat: number
   jti: string
   'x-ably-appId': string
-  'x-ably-capability': any
+  'x-ably-capability': Record<string, string[]>
   'x-ably-clientId'?: string
 }
 

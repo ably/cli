@@ -66,15 +66,25 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       const originalKey = await controlApi.getKey(appId, keyId)
       
       // Prepare the update data
-      const updateData: { capability?: any, name?: string } = {}
+      const updateData: { capability?: Record<string, string[]>; name?: string } = {};
       
       if (flags.name) {
         updateData.name = flags.name
       }
       
       if (flags.capabilities) {
-        // Parse the capabilities - this depends on how the Control API expects the format
-        updateData.capability = flags.capabilities
+        // Parse the capabilities string into the expected format
+        // The expected format is a Record<string, string[]> (channel => permissions)
+        try {
+          // Split by commas to get individual capabilities
+          const capabilityArray = flags.capabilities.split(',').map(cap => cap.trim());
+          // Create capability object with "*" channel and array of capabilities
+          updateData.capability = {
+            "*": capabilityArray
+          };
+        } catch (error) {
+          this.error(`Invalid capabilities format: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       
       // Update the key
@@ -89,8 +99,8 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       
       if (flags.capabilities) {
         this.log(`Capabilities:`)
-        this.log(`  Before: ${this.formatCapability(originalKey.capability)}`)
-        this.log(`  After:  ${this.formatCapability(updatedKey.capability)}`)
+        this.log(`  Before: ${this.formatCapability(originalKey.capability as Record<string, string[]>)}`)
+        this.log(`  After:  ${this.formatCapability(updatedKey.capability as Record<string, string[]>)}`)
       }
       
     } catch (error) {
@@ -99,7 +109,7 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
   }
 
   // Helper function to format capabilities
-  private formatCapability(capability: any): string {
+  private formatCapability(capability: Record<string, string[] | string> | undefined): string {
     if (!capability) return 'None';
     
     const capEntries = Object.entries(capability);

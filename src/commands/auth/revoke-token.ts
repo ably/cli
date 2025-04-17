@@ -156,7 +156,12 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
   }
   
   // Helper method to make a direct HTTP request to the Ably REST API
-  private makeHttpRequest(keyName: string, secret: string, requestBody: any, debug: boolean): Promise<any> {
+  private makeHttpRequest(
+    keyName: string, 
+    secret: string, 
+    requestBody: Record<string, unknown>, 
+    debug: boolean
+  ): Promise<Record<string, unknown> | string | null> {
     return new Promise((resolve, reject) => {
       const encodedAuth = Buffer.from(`${keyName}:${secret}`).toString('base64')
       

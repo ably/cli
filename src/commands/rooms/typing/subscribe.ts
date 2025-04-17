@@ -1,4 +1,4 @@
-import { ChatClient, RoomStatus, Subscription, TypingEvent } from '@ably/chat'
+import { ChatClient, RoomStatus, Subscription, TypingEvent, RoomStatusChange } from '@ably/chat'
 import {Args} from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
@@ -32,7 +32,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
   private unsubscribeTypingFn: Subscription | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
      if (this.unsubscribeTypingFn) { try { this.unsubscribeTypingFn.unsubscribe(); } catch { /* ignore */ } }
      if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
      if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
@@ -57,7 +57,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
       const {roomId} = args;
 
       // Add listeners for connection state changes
-      this.ablyClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -70,7 +70,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
 
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
-      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: any) => {
+      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: RoomStatusChange) => {
           let reason: Error | null | string | undefined;
           if (statusChange.current === RoomStatus.Failed) {
               reason = room.error; // Get reason from room.error on failure

@@ -97,7 +97,7 @@ export default class AppsCurrent extends ControlBaseCommand {
    * Handle the command in web CLI mode by extracting app info from environment variables
    * and using the Control API to get additional details
    */
-  private async handleWebCliMode(flags: any): Promise<void> {
+  private async handleWebCliMode(flags: Record<string, unknown>): Promise<void> {
     // Extract app ID from the ABLY_API_KEY environment variable
     const apiKey = process.env.ABLY_API_KEY
     if (!apiKey) {

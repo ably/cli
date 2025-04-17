@@ -176,11 +176,11 @@ export default class ChannelsPublish extends AblyBaseCommand {
        }
 
        // Prepare the message
-       const message: any = {}
+       const message: Partial<Ably.Message> = {}
 
        // If name is provided in flags, use it. Otherwise, check if it's in the message data
        if (flags.name) {
-         message.name = flags.name
+         message.name = flags.name as string
        } else if (messageData.name) {
          message.name = messageData.name
          // Remove the name from the data to avoid duplication
@@ -197,7 +197,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
 
        // Add encoding if provided
        if (flags.encoding) {
-         message.encoding = flags.encoding
+         message.encoding = flags.encoding as string
        }
 
        return message as Ably.Message;

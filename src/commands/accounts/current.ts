@@ -88,7 +88,7 @@ export default class AccountsCurrent extends ControlBaseCommand {
    * Handle the command in web CLI mode by getting account info from environment
    * and using the Control API to get additional details
    */
-  private async handleWebCliMode(flags: any): Promise<void> {
+  private async handleWebCliMode(flags: Record<string, unknown>): Promise<void> {
     const accessToken = process.env.ABLY_ACCESS_TOKEN
     if (!accessToken) {
       this.error('ABLY_ACCESS_TOKEN environment variable is not set')

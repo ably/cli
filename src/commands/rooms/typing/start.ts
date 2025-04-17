@@ -1,4 +1,4 @@
-import { RoomStatus, ChatClient } from '@ably/chat'
+import { RoomStatus, ChatClient, RoomStatusChange } from '@ably/chat'
 import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
@@ -32,7 +32,7 @@ export default class TypingStart extends ChatBaseCommand {
   private unsubscribeStatusFn: (() => void) | null = null;
 
   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
+   async finally(err: Error | undefined): Promise<void> {
      if (this.typingIntervalId) {
         clearInterval(this.typingIntervalId);
         this.typingIntervalId = null;
@@ -61,7 +61,7 @@ export default class TypingStart extends ChatBaseCommand {
       const {roomId} = args;
 
       // Add listeners for connection state changes
-      this.ablyClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -74,7 +74,7 @@ export default class TypingStart extends ChatBaseCommand {
 
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
-      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: any) => {
+      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: RoomStatusChange) => {
           let reason: Error | null | string | undefined;
           if (statusChange.current === RoomStatus.Failed) {
               reason = room.error; // Get reason from room.error on failure
@@ -101,13 +101,13 @@ export default class TypingStart extends ChatBaseCommand {
                     // Keep typing active by calling start() periodically
                     if (this.typingIntervalId) clearInterval(this.typingIntervalId);
                     this.typingIntervalId = setInterval(() => {
-                       room.typing.start().catch((error: any) => {
+                       room.typing.start().catch((error: Error) => {
                             this.logCliEvent(flags, 'typing', 'startErrorPeriodic', `Error refreshing typing state: ${error.message}`, { error: error.message });
                        }); // Refresh typing state
                        this.logCliEvent(flags, 'typing', 'refreshing', 'Refreshed typing state');
                     }, 4000); // Interval < timeoutMs
                 })
-                .catch((error: any) => {
+                .catch((error: Error) => {
                     this.logCliEvent(flags, 'typing', 'startErrorInitial', `Failed to start typing initially: ${error.message}`, { error: error.message });
                      if (!this.shouldOutputJson(flags)) {
                         this.error(`Failed to start typing: ${error.message}`);
