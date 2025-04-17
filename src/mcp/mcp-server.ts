@@ -1,5 +1,6 @@
-// @ts-nocheck
+// eslint-disable-next-line n/no-missing-import
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
+// eslint-disable-next-line n/no-missing-import
 import { StdioServerTransport as StdioConnection } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
@@ -9,10 +10,62 @@ import ChannelsPresenceSubscribe from '../commands/channels/presence/subscribe.j
 import ChannelsPublish from '../commands/channels/publish.js'
 import ChannelsSubscribe from '../commands/channels/subscribe.js'
 import { ConfigManager } from '../services/config-manager.js'
-import { AblyBaseCommand, BaseFlags } from '../base-command.js'
 
 // Maximum execution time for long-running operations (15 seconds)
 const MAX_EXECUTION_TIME = 15_000
+
+interface Message {
+  clientId?: string;
+  connectionId?: string;
+  data: unknown;
+  id: string;
+  name: string;
+  timestamp: number;
+  isRewind?: boolean;
+}
+
+interface PresenceMember {
+  action: number;
+  clientId?: string;
+  connectionId: string;
+  data: unknown;
+  id: string;
+  timestamp: number;
+}
+
+interface ChannelInfo {
+  name: string;
+  occupancy: Record<string, unknown>;
+  status: Record<string, unknown>;
+}
+
+// Define interfaces for parameters
+interface ResourceParams {
+  prefix?: string;
+  [key: string]: unknown;
+}
+
+interface ChannelParams {
+  channel?: string;
+  [key: string]: unknown;
+}
+
+interface AppParams {
+  appId?: string;
+  [key: string]: unknown;
+}
+
+interface App {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+interface Key {
+  appId: string;
+  id: string;
+  [key: string]: unknown;
+}
 
 export class AblyMcpServer {
   private activeOperations: Set<AbortController> = new Set()
@@ -59,7 +112,7 @@ export class AblyMcpServer {
     }
   }
 
-  private async executeChannelsHistoryCommand(args: string[]): Promise<any[]> {
+  private async executeChannelsHistoryCommand(args: string[]): Promise<Message[]> {
     try {
       // Parse arguments
       const channelName = args.find(arg => !arg.startsWith('-')) || '';
@@ -79,21 +132,21 @@ export class AblyMcpServer {
       // Get history
       const historyPage = await channel.history({ direction, limit });
       
-      return historyPage.items.map((msg: any) => ({
-        clientId: msg.clientId,
-        connectionId: msg.connectionId,
+      return historyPage.items.map((msg: Record<string, unknown>) => ({
+        clientId: msg.clientId as string | undefined,
+        connectionId: msg.connectionId as string,
         data: msg.data,
-        id: msg.id,
-        name: msg.name,
-        timestamp: msg.timestamp
+        id: msg.id as string,
+        name: msg.name as string,
+        timestamp: msg.timestamp as number
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error getting channel history:', error);
       throw new Error(`Failed to get channel history: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async executeChannelsListCommand(args: string[]): Promise<any[]> {
+  private async executeChannelsListCommand(args: string[]): Promise<ChannelInfo[]> {
     try {
       // Parse arguments
       const prefix = this.getArgValue(args, '--prefix');
@@ -103,7 +156,7 @@ export class AblyMcpServer {
       const ably = await this.getAblyClient();
       
       // Build params
-      const params: any = { limit };
+      const params: Record<string, unknown> = { limit };
       if (prefix) params.prefix = prefix;
       
       // Make the API request
@@ -114,18 +167,18 @@ export class AblyMcpServer {
       }
       
       // Map response to simplified format
-      return (response.items || []).map((channel: any) => ({
-        name: channel.channelId,
-        occupancy: channel.status?.occupancy,
-        status: channel.status
+      return (response.items || []).map((channel: Record<string, unknown>) => ({
+        name: channel.channelId as string,
+        occupancy: ((channel.status as Record<string, unknown> || {})?.occupancy as Record<string, unknown>) || {},
+        status: channel.status as Record<string, unknown> || {}
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error listing channels:', error);
       throw new Error(`Failed to list channels: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async executeChannelsPresenceCommand(args: string[]): Promise<any[]> {
+  private async executeChannelsPresenceCommand(args: string[]): Promise<PresenceMember[]> {
     try {
       // Parse arguments
       const channelName = args.find(arg => !arg.startsWith('-') && arg !== '--json') || '';
@@ -142,15 +195,15 @@ export class AblyMcpServer {
       // Get presence
       const presencePage = await channel.presence.get();
       
-      return presencePage.items.map((member: any) => ({
-        action: member.action,
-        clientId: member.clientId,
-        connectionId: member.connectionId,
+      return presencePage.items.map((member: Record<string, unknown>) => ({
+        action: member.action as number,
+        clientId: member.clientId as string | undefined,
+        connectionId: member.connectionId as string,
         data: member.data,
-        id: member.id,
-        timestamp: member.timestamp
+        id: member.id as string,
+        timestamp: member.timestamp as number
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error getting channel presence:', error);
       throw new Error(`Failed to get presence: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -230,7 +283,7 @@ export class AblyMcpServer {
     }
   }
 
-  private async executeChannelsSubscribeCommand(args: string[], signal?: AbortSignal): Promise<any[]> {
+  private async executeChannelsSubscribeCommand(args: string[], signal?: AbortSignal): Promise<Message[]> {
     try {
       // Parse arguments
       const channelName = args.find(arg => !arg.startsWith('-') && arg !== '--json') || '';
@@ -247,7 +300,7 @@ export class AblyMcpServer {
       const channel = ably.channels.get(channelName);
       
       // Subscribe for messages
-      const messages: any[] = [];
+      const messages: Message[] = [];
       
       // Create a promise that resolves when signal is aborted or timeout
       const abortPromise = new Promise<void>((resolve) => {
@@ -260,11 +313,11 @@ export class AblyMcpServer {
       });
       
       // Create a promise for subscription
-      const _subscribePromise = new Promise<any[]>((_resolve) => {
+      const _subscribePromise = new Promise<Message[]>((_resolve) => {
         // Handle rewind if specified
         if (rewind > 0) {
           channel.history({ limit: rewind })
-            .then(page => {
+            .then((page: any) => {
               for (const msg of page.items.reverse()) {
                 messages.push({
                   clientId: msg.clientId,
@@ -277,18 +330,18 @@ export class AblyMcpServer {
                 });
               }
             })
-            .catch(error => console.error('Error rewinding messages:', error));
+            .catch((error: unknown) => console.error('Error rewinding messages:', error));
         }
         
         // Subscribe to new messages
-        const subscription = channel.subscribe((msg: any) => {
+        const _subscription = channel.subscribe((msg: Record<string, unknown>) => {
           messages.push({
-            clientId: msg.clientId,
-            connectionId: msg.connectionId,
+            clientId: msg.clientId as string | undefined,
+            connectionId: msg.connectionId as string,
             data: msg.data,
-            id: msg.id,
-            name: msg.name,
-            timestamp: msg.timestamp
+            id: msg.id as string,
+            name: msg.name as string,
+            timestamp: msg.timestamp as number
           });
         });
       });
@@ -407,10 +460,10 @@ export class AblyMcpServer {
     this.server.resource(
       'channels',
       new ResourceTemplate('ably://channels/{prefix?}', { 
-        list: async (params) => {
+        list: async (params: ResourceParams) => {
           try {
             const args = ['--json']
-            if (params.prefix) args.push('--prefix', params.prefix)
+            if (params.prefix) args.push('--prefix', params.prefix as string)
             
             const channels = await this.executeChannelsListCommand(args)
             
@@ -426,10 +479,10 @@ export class AblyMcpServer {
           }
         } 
       }),
-      async (uri, params) => {
+      async (uri: any, params: ResourceParams) => {
         try {
           const args = ['--json']
-          if (params.prefix) args.push('--prefix', params.prefix)
+          if (params.prefix) args.push('--prefix', params.prefix as string)
           
           const channels = await this.executeChannelsListCommand(args)
           
@@ -451,11 +504,11 @@ export class AblyMcpServer {
     this.server.resource(
       'channel_history',
       new ResourceTemplate('ably://channel_history/{channel}', { list: undefined }),
-      async (uri, params) => {
+      async (uri: any, params: ChannelParams) => {
         try {
           const args = ['--json', params.channel]
           
-          const history = await this.executeChannelsHistoryCommand(args)
+          const history = await this.executeChannelsHistoryCommand(args as string[])
           
           return {
             contents: [{
@@ -475,11 +528,11 @@ export class AblyMcpServer {
     this.server.resource(
       'channel_presence',
       new ResourceTemplate('ably://channel_presence/{channel}', { list: undefined }),
-      async (uri, params) => {
+      async (uri: any, params: ChannelParams) => {
         try {
           const args = ['--json', params.channel]
           
-          const presence = await this.executeChannelsPresenceCommand(args)
+          const presence = await this.executeChannelsPresenceCommand(args as string[])
           
           return {
             contents: [{
@@ -508,7 +561,7 @@ export class AblyMcpServer {
             const currentAppId = this.configManager.getCurrentAppId()
             
             return {
-              resources: apps.map((app) => ({
+              resources: apps.map((app: App) => ({
                 current: app.id === currentAppId,
                 name: app.name,
                 uri: `ably://apps/${app.id}`
@@ -520,14 +573,14 @@ export class AblyMcpServer {
           }
         }
       }),
-      async (uri) => {
+      async (uri: any) => {
         try {
           const controlApi = await this.getControlApi()
           const apps = await controlApi.listApps()
           
           // Add the current app indicator
           const currentAppId = this.configManager.getCurrentAppId()
-          const appsWithCurrent = apps.map(app => ({
+          const appsWithCurrent = apps.map((app: App) => ({
             ...app,
             current: app.id === currentAppId
           }))
@@ -550,7 +603,7 @@ export class AblyMcpServer {
     this.server.resource(
       'app_stats',
       new ResourceTemplate('ably://apps/{appId}/stats', { list: undefined }),
-      async (uri, params) => {
+      async (uri: any, params: AppParams) => {
         try {
           // Use the app ID from the URI or fall back to default
           const appId = params.appId || this.configManager.getCurrentAppId()
@@ -566,7 +619,7 @@ export class AblyMcpServer {
           const start = now.getTime() - (24 * 60 * 60 * 1000) // 24 hours ago
           const end = now.getTime()
           
-          const stats = await controlApi.getAppStats(appId, {
+          const stats = await controlApi.getAppStats(appId as string, {
             end,
             limit: 10,
             start,
@@ -591,7 +644,7 @@ export class AblyMcpServer {
     this.server.resource(
       'app_keys',
       new ResourceTemplate('ably://apps/{appId}/keys', { list: undefined }),
-      async (uri, params) => {
+      async (uri: any, params: AppParams) => {
         try {
           // Use the app ID from the URI or fall back to default
           const appId = params.appId || this.configManager.getCurrentAppId()
@@ -601,15 +654,15 @@ export class AblyMcpServer {
           }
           
           const controlApi = await this.getControlApi()
-          const keys = await controlApi.listKeys(appId)
+          const keys = await controlApi.listKeys(appId as string)
           
           // Add the current key indicator
-          const currentKeyId = this.configManager.getKeyId(appId)
+          const currentKeyId = this.configManager.getKeyId(appId as string)
           const currentKeyName = currentKeyId && currentKeyId.includes('.') 
             ? currentKeyId 
             : currentKeyId ? `${appId}.${currentKeyId}` : undefined
             
-          const keysWithCurrent = keys.map(key => {
+          const keysWithCurrent = keys.map((key: Key) => {
             const keyName = `${key.appId}.${key.id}`
             return {
               ...key,
@@ -765,7 +818,7 @@ export class AblyMcpServer {
       {
         format: z.enum(["json", "pretty"]).optional().default("json").describe("Output format (json or pretty)")
       },
-      async (params) => {
+      async (params: { format?: string }) => {
         try {
           // Create a Control API instance
           const controlApi = await this.getControlApi()
@@ -775,7 +828,7 @@ export class AblyMcpServer {
           
           // Add the current app indicator
           const currentAppId = this.configManager.getCurrentAppId()
-          const appsWithCurrent = apps.map(app => ({
+          const appsWithCurrent = apps.map((app: App) => ({
             ...app,
             current: app.id === currentAppId
           }))
@@ -849,10 +902,10 @@ export class AblyMcpServer {
       {
         app: z.string().optional().describe("App ID to list keys for (uses current app if not provided)")
       },
-      async (params) => {
+      async (_params: { app?: string }) => {
         try {
           // Get app ID from parameter or current config
-          const appId = params.app || this.configManager.getCurrentAppId()
+          const appId = _params.app || this.configManager.getCurrentAppId()
           
           if (!appId) {
             throw new Error('No app specified')
@@ -862,15 +915,15 @@ export class AblyMcpServer {
           const controlApi = await this.getControlApi()
           
           // Get the keys
-          const keys = await controlApi.listKeys(appId)
+          const keys = await controlApi.listKeys(appId as string)
           
           // Add the current key indicator
-          const currentKeyId = this.configManager.getKeyId(appId)
+          const currentKeyId = this.configManager.getKeyId(appId as string)
           const currentKeyName = currentKeyId && currentKeyId.includes('.') 
             ? currentKeyId 
             : currentKeyId ? `${appId}.${currentKeyId}` : undefined
             
-          const keysWithCurrent = keys.map(key => {
+          const keysWithCurrent = keys.map((key: Key) => {
             const keyName = `${key.appId}.${key.id}`
             return {
               ...key,
@@ -891,6 +944,10 @@ export class AblyMcpServer {
         }
       }
     )
+  }
+
+  private executeRequestCommand(_params: any): void {
+    // Function implementation
   }
 
   private shutdown(): void {
