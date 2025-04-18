@@ -769,5 +769,45 @@ export abstract class AblyBaseCommand extends Command {
       options.clientId = `ably-cli-${randomUUID().slice(0, 8)}`
     }
   }
+
+  /**
+   * Centralized handler for cleaning up resources like Ably connections
+   * Includes a timeout to prevent hanging if cleanup takes too long
+   * @param cleanupFunction The async function to perform cleanup
+   * @param timeoutMs Timeout duration in milliseconds (default 5000)
+   */
+  protected setupCleanupHandler(cleanupFunction: () => Promise<void>, timeoutMs = 5_000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let cleanupTimedOut = false;
+      const timeout = setTimeout(() => {
+        cleanupTimedOut = true;
+        // Log timeout only if not in JSON mode
+        if (!this.shouldOutputJson({})) { // TODO: Pass actual flags here
+          this.log(chalk.yellow('Cleanup operation timed out.'));
+        }
+        reject(new Error('Cleanup timed out')); // Reject promise on timeout
+      }, timeoutMs);
+
+      // Execute the cleanup function
+      (async () => {
+        try {
+          await cleanupFunction();
+        } catch (error) {
+          // Log cleanup error only if not in JSON mode
+          if (!this.shouldOutputJson({})) { // TODO: Pass actual flags here
+            this.log(chalk.red(`Error during cleanup: ${(error as Error).message}`));
+          }
+          // Don't necessarily reject the main promise here, depends on desired behavior
+          // For now, we just log it
+        } finally {
+          clearTimeout(timeout);
+          // Only resolve if the timeout didn't already reject
+          if (!cleanupTimedOut) {
+            resolve();
+          }
+        }
+      })();
+    });
+  }
 } 
 export {BaseFlags} from './types/cli.js'

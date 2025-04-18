@@ -101,8 +101,8 @@ export default class BenchSubscriber extends AblyBaseCommand {
 
   // --- Refactored Helper Methods ---
 
-  private addLogToBuffer(logMessage: string): void {
-    if (this.shouldOutputJson({})) return; // Don't buffer in JSON mode
+  private addLogToBuffer(logMessage: string, flags: Record<string, unknown>): void {
+    if (this.shouldOutputJson(flags)) return; // Use passed flags
     this.messageLogBuffer.push(`[${new Date().toLocaleTimeString()}] ${logMessage}`);
     if (this.messageLogBuffer.length > this.MAX_LOG_LINES) {
         this.messageLogBuffer.shift(); // Remove the oldest log
@@ -410,44 +410,30 @@ export default class BenchSubscriber extends AblyBaseCommand {
    }
 
   private subscribeToMessages(channel: Ably.RealtimeChannel, metrics: TestMetrics, flags: Record<string, unknown>): void {
-    let testInProgress = false; // Local state for message handler
     let _display: InstanceType<typeof Table> | null = null;
 
-    channel.subscribe('benchmark', (message: Ably.Message) => {
-      if (!message.data || typeof message.data !== 'object' || !('timestamp' in message.data) || !('testId' in message.data) || !('index' in message.data)) {
-        return; // Not a valid benchmark message
-      }
+    channel.subscribe((message: Ably.Message) => {
+      const currentTime = Date.now()
 
-      const now = Date.now();
-      const { index: msgIndex, testId, timestamp: publishTime } = message.data as { index: number, testId: string, timestamp: number }; // Destructure data
+      // Check if this message is the start of a new test
+      if (message.data.type === 'start' && message.data.testId !== metrics.testId) {
+        this.startNewTest(metrics, message.data.testId, message.data.startTime, flags);
+        // Initialize publisher check only when a test starts
+        this.startPublisherCheckInterval(metrics, flags, () => this.finishTest(flags, metrics));
+        this.logCliEvent(flags, 'benchmark', 'testStarted', `Benchmark test started with ID: ${metrics.testId}`, { testId: metrics.testId });
+        const logMsg = `Benchmark test started: ${metrics.testId}`;
+        this.addLogToBuffer(logMsg, flags); // Pass flags here
+      } else if (metrics.publisherActive && message.data.type === 'message' && message.data.testId === metrics.testId) {
+        metrics.messagesReceived += 1
+        metrics.lastMessageTime = currentTime
 
-      // --- New Test Detection --- 
-      if (metrics.testId !== testId) {
-        if (testInProgress) {
-          this.finishTest(flags, metrics); // Finish previous test if active
-        }
-
-        this.startNewTest(metrics, testId, now, flags);
-        testInProgress = true;
-        _display = this.shouldOutputJson(flags) ? null : this.createStatusDisplay(testId);
-        if (_display && !this.shouldOutputJson(flags)) {
-          this.resetDisplay(_display);
-        }
-
-        this.startPublisherCheckInterval(metrics, flags, () => { testInProgress = false; _display = null; }); // Pass callback to update state
-      }
-
-      // --- Update Metrics for Received Message --- 
-      metrics.lastMessageTime = now;
-      metrics.publisherActive = true;
-      const endToEndLatency = now - publishTime;
-      metrics.messagesReceived++;
-      metrics.endToEndLatencies.push(endToEndLatency);
-
-      const logMsg = `Received message ${msgIndex} (latency: ${endToEndLatency}ms)`;
-      this.addLogToBuffer(logMsg);
-      if (this.shouldOutputJson(flags)) {
-         this.logCliEvent(flags, 'benchmark', 'messageReceived', logMsg, { endToEndLatency, msgIndex, testId });
+        // Calculate latency (assuming message.data.timestamp is publisher creation time)
+        const endToEndLatency = currentTime - message.data.timestamp
+        metrics.endToEndLatencies.push(endToEndLatency)
+        metrics.totalLatency += endToEndLatency // Accumulate for average calculation
+        
+        const logMsg = `Received message ${message.id} (e2e: ${endToEndLatency}ms)`;
+        this.addLogToBuffer(logMsg, flags); // Pass flags here
       }
     });
     this.logCliEvent(flags, 'benchmark', 'subscribedToMessages', `Subscribed to benchmark messages on channel '${channel.name}'`);

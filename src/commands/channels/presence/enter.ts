@@ -61,7 +61,7 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
       await this.enterAndDisplayPresence(channel, client, flags, presenceData);
 
       // Keep the process running indefinitely until SIGINT/SIGTERM
-      await this.setupCleanupHandler(channel, client, flags);
+      await this.setupCleanupHandler(() => this._cleanupPresence(channel, client, flags));
 
     } catch (error) {
        const errorMsg = error instanceof Error ? error.message : String(error);
@@ -131,75 +131,6 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
     }
   }
 
-  private async setupCleanupHandler(channel: Ably.RealtimeChannel, client: Ably.Realtime, flags: Record<string, unknown>): Promise<void> {
-      return new Promise<void>((resolve, reject) => {
-        let cleanupInProgress = false;
-
-        const cleanup = async (): Promise<void> => {
-          if (cleanupInProgress) return;
-          cleanupInProgress = true;
-
-          this.logCliEvent(flags, 'presence', 'cleanupInitiated', 'Cleanup initiated (Signal received)');
-          if (!this.shouldOutputJson(flags)) {
-             this.log('\nLeaving presence and closing connection...');
-          }
-
-          const forceExitTimeout = setTimeout(() => {
-             this.logCliEvent(flags, 'presence', 'forceExit', 'Force exiting after timeout during cleanup');
-             if (!this.shouldOutputJson(flags)) {
-                this.log(chalk.red('Force exiting after timeout...'));
-             }
-
-             reject(new Error('Cleanup timed out')); // Reject promise on timeout
-          }, 5000);
-
-            try {
-              // Try to leave presence first
-              this.logCliEvent(flags, 'presence', 'leaving', 'Attempting to leave presence');
-            await channel.presence.leave();
-              this.logCliEvent(flags, 'presence', 'left', 'Successfully left presence');
-              if (!this.shouldOutputJson(flags)) {
-                 this.log(chalk.green('Successfully left presence.'));
-              }
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              this.logCliEvent(flags, 'presence', 'leaveError', `Error leaving presence: ${errorMsg}`, { error: errorMsg });
-              if (!this.shouldOutputJson(flags)) {
-                 this.log(`Note: ${errorMsg}`);
-                 this.log('Continuing with connection close.');
-              }
-          } finally {
-             // Ensure connection close happens even if leave fails
-             try {
-                 if (client && client.connection.state !== 'closed') {
-               this.logCliEvent(flags, 'connection', 'closing', 'Closing Ably connection.');
-               client.close();
-                    // Wait for close event might be better, but for CLI, immediate exit is okay
-               this.logCliEvent(flags, 'connection', 'closed', 'Ably connection closed.');
-               if (!this.shouldOutputJson(flags)) {
-                  this.log(chalk.green('Successfully closed connection.'));
-               }
-            }
-             } catch (closeError) {
-                 const errorMsg = closeError instanceof Error ? closeError.message : String(closeError);
-                 this.logCliEvent(flags, 'connection', 'closeError', `Error closing connection: ${errorMsg}`, { error: errorMsg });
-             if (!this.shouldOutputJson(flags)) {
-                    this.log(chalk.red(`Error closing connection: ${errorMsg}`));
-             }
-                 // Still resolve/clear timeout even if close fails
-             } finally {
-                  clearTimeout(forceExitTimeout);
-                  resolve(); // Resolve the main promise to allow natural exit
-          }
-        }
-        };
-
-        // Handle signals gracefully
-        process.once('SIGINT', () => { cleanup().catch(reject); }); // Invoke async cleanup, reject main promise on error
-        process.once('SIGTERM', () => { cleanup().catch(reject); });
-      });
-  }
-
   private async setupClientAndChannel(flags: Record<string, unknown>, channelName: string): Promise<{ channel: Ably.RealtimeChannel | null; client: Ably.Realtime | null }> {
     this.client = await this.createAblyClient(flags);
     if (!this.client) return { channel: null, client: null };
@@ -243,5 +174,50 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
     channel.presence.subscribe('enter', (msg) => logOtherPresence('memberEntered', 'entered presence', chalk.blue, chalk.green('✓'), msg));
     channel.presence.subscribe('leave', (msg) => logOtherPresence('memberLeft', 'left presence', chalk.blue, chalk.red('✗'), msg));
     channel.presence.subscribe('update', (msg) => logOtherPresence('memberUpdated', 'updated presence data', chalk.blue, chalk.yellow('⟲'), msg));
+  }
+
+  // This method contains the specific cleanup logic for this command.
+  private async _cleanupPresence(channel: Ably.RealtimeChannel, client: Ably.Realtime, flags: Record<string, unknown>): Promise<void> {
+    this.logCliEvent(flags, 'presence', 'cleanupInitiated', 'Cleanup initiated (Signal received)');
+    if (!this.shouldOutputJson(flags)) {
+        this.log('\nLeaving presence and closing connection...');
+    }
+
+    try {
+      // Try to leave presence first
+      this.logCliEvent(flags, 'presence', 'leaving', 'Attempting to leave presence');
+      await channel.presence.leave();
+      this.logCliEvent(flags, 'presence', 'left', 'Successfully left presence');
+      if (!this.shouldOutputJson(flags)) {
+          this.log(chalk.green('Successfully left presence.'));
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'presence', 'leaveError', `Error leaving presence: ${errorMsg}`, { error: errorMsg });
+      if (!this.shouldOutputJson(flags)) {
+          this.log(`Note: ${errorMsg}`);
+          this.log('Continuing with connection close.');
+      }
+    } finally {
+      // Ensure connection close happens even if leave fails
+      try {
+          if (client && client.connection.state !== 'closed') {
+        this.logCliEvent(flags, 'connection', 'closing', 'Closing Ably connection.');
+        client.close();
+             // Wait for close event might be better, but for CLI, immediate exit is okay
+        this.logCliEvent(flags, 'connection', 'closed', 'Ably connection closed.');
+        if (!this.shouldOutputJson(flags)) {
+            this.log(chalk.green('Successfully closed connection.'));
+        }
+     }
+      } catch (closeError) {
+          const errorMsg = closeError instanceof Error ? closeError.message : String(closeError);
+          this.logCliEvent(flags, 'connection', 'closeError', `Error closing connection: ${errorMsg}`, { error: errorMsg });
+      if (!this.shouldOutputJson(flags)) {
+             this.log(chalk.red(`Error closing connection: ${errorMsg}`));
+      }
+          // Error during close is logged, but cleanup continues
+      }
+    }
   }
 } 
