@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class LogsConnectionSubscribe extends AblyBaseCommand {
@@ -17,8 +18,8 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
   static override flags = {
     ...AblyBaseCommand.globalFlags,
     rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
       default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 
@@ -49,9 +50,9 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
       client.connection.on('connected', () => {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
+            channel: channelName,
             status: 'connected',
-            channel: channelName
+            success: true
           }, flags))
         } else {
           this.log(`Subscribing to ${chalk.cyan(channelName)}...`)
@@ -63,9 +64,9 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
       client.connection.on('disconnected', () => {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
+            channel: channelName,
             status: 'disconnected',
-            channel: channelName
+            success: false
           }, flags))
         } else {
           this.log('Disconnected from Ably')
@@ -75,10 +76,10 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
       client.connection.on('failed', (err: Ably.ConnectionStateChange) => {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
-            status: 'failed',
+            channel: channelName,
             error: err.reason?.message || 'Unknown error',
-            channel: channelName
+            status: 'failed',
+            success: false
           }, flags))
         } else {
           this.error(`Connection failed: ${err.reason?.message || 'Unknown error'}`)
@@ -92,15 +93,15 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
         
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            timestamp,
             channel: channelName,
-            event,
-            data: message.data,
-            encoding: message.encoding,
             clientId: message.clientId,
             connectionId: message.connectionId,
-            id: message.id
+            data: message.data,
+            encoding: message.encoding,
+            event,
+            id: message.id,
+            success: true,
+            timestamp
           }, flags))
           return
         }
@@ -129,6 +130,7 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
             this.log(`Data: ${message.data}`)
           }
         }
+
         this.log('')
       })
 
@@ -142,9 +144,9 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
           client.connection.once('closed', () => {
             if (this.shouldOutputJson(flags)) {
               this.log(this.formatJsonOutput({
-                success: true,
+                channel: channelName,
                 status: 'closed',
-                channel: channelName
+                success: true
               }, flags))
             } else {
               this.log('Connection closed')
@@ -158,15 +160,17 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
       process.on('SIGINT', () => {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
+            channel: channelName,
             status: 'unsubscribed',
-            channel: channelName
+            success: true
           }, flags))
         } else {
           this.log('\nSubscription ended')
         }
+
         cleanup()
-        process.exit(0)
+         
+        process.exit(0) // Reinstated: Explicit exit on signal
       })
 
       // Wait indefinitely
@@ -174,9 +178,9 @@ export default class LogsConnectionSubscribe extends AblyBaseCommand {
     } catch (error: unknown) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          channel: channelName,
           error: error instanceof Error ? error.message : String(error),
-          channel: channelName
+          success: false
         }, flags))
       } else {
         const err = error as Error

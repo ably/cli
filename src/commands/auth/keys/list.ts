@@ -1,6 +1,7 @@
 import { Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../../control-base-command.js'
 import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysListCommand extends ControlBaseCommand {
   static description = 'List all keys in the app'
@@ -33,12 +34,13 @@ export default class KeysListCommand extends ControlBaseCommand {
     if (!appId) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: 'No app specified. Please provide --app flag or switch to an app with "ably apps switch".'
+          error: 'No app specified. Please provide --app flag or switch to an app with "ably apps switch".',
+          success: false
         }, flags))
       } else {
         this.error('No app specified. Please provide --app flag or switch to an app with "ably apps switch".')
       }
+
       return
     }
     
@@ -57,14 +59,14 @@ export default class KeysListCommand extends ControlBaseCommand {
           const keyName = `${key.appId}.${key.id}`
           return {
             ...key,
-            keyName, // Add the full key name
-            current: keyName === currentKeyName
+            current: keyName === currentKeyName,
+            keyName // Add the full key name
           }
         })
         this.log(this.formatJsonOutput({
-          success: true,
           appId,
-          keys: keysWithCurrent
+          keys: keysWithCurrent,
+          success: true
         }, flags))
       } else {
         if (keys.length === 0) {
@@ -74,7 +76,7 @@ export default class KeysListCommand extends ControlBaseCommand {
         
         this.log(`Found ${keys.length} keys for app ${appId}:\n`)
         
-        keys.forEach(key => {
+        for (const key of keys) {
           const keyName = `${key.appId}.${key.id}`
           const isCurrent = keyName === currentKeyName
           const prefix = isCurrent ? chalk.green('▶ ') : '  '
@@ -93,23 +95,23 @@ export default class KeysListCommand extends ControlBaseCommand {
               this.log(`  Capabilities: ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
             } else {
               this.log(`  Capabilities:`)
-              capEntries.forEach(([scope, privileges]) => {
+              for (const [scope, privileges] of capEntries) {
                 this.log(`    • ${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`)
-              })
+              }
             }
           } else {
             this.log(`  Capabilities: None`)
           }
           
           this.log('')
-        })
+        }
       }
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
-          appId
+          success: false
         }, flags))
       } else {
         this.error(`Error listing keys: ${error instanceof Error ? error.message : String(error)}`)

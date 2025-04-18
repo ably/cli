@@ -1,9 +1,17 @@
 import { Args, Flags } from '@oclif/core'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
-import * as fs from 'fs'
-import * as path from 'path'
 
 export default class AppsSetApnsP12Command extends ControlBaseCommand {
+  static args = {
+    id: Args.string({
+      description: 'App ID to set the APNS certificate for',
+      required: true,
+    }),
+  }
+
   static description = 'Upload Apple Push Notification Service P12 certificate for an app'
 
   static examples = [
@@ -22,17 +30,10 @@ export default class AppsSetApnsP12Command extends ControlBaseCommand {
       description: 'Password for the P12 certificate',
     }),
     'use-for-sandbox': Flags.boolean({
-      description: 'Whether to use this certificate for the APNS sandbox environment',
       default: false,
+      description: 'Whether to use this certificate for the APNS sandbox environment',
     }),
     
-  }
-
-  static args = {
-    id: Args.string({
-      description: 'App ID to set the APNS certificate for',
-      required: true,
-    }),
   }
 
   async run(): Promise<void> {
@@ -60,8 +61,8 @@ export default class AppsSetApnsP12Command extends ControlBaseCommand {
         args.id,
         certificateData,
         {
-          useForSandbox: flags['use-for-sandbox'],
           password: flags.password,
+          useForSandbox: flags['use-for-sandbox'],
         }
       )
       

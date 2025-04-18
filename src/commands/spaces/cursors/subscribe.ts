@@ -1,15 +1,18 @@
-import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
-import Spaces, { Space } from '@ably/spaces'
+import Spaces, { type CursorUpdate, type Space } from '@ably/spaces'
+import { Args, Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
+import chalk from 'chalk'
 
-interface SpacesClients {
-  spacesClient: Spaces;
-  realtimeClient: Ably.Realtime;
-}
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
 
 export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to subscribe to cursors for',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to cursor movements in a space'
 
   static override examples = [
@@ -22,31 +25,40 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
 
   }
 
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to subscribe to cursors for',
-      required: true,
-    }),
-  }
-
-  private clients: SpacesClients | null = null;
-  private subscription: any = null; // Store subscription for cleanup
   private cleanupInProgress = false;
+  private realtimeClient: Ably.Realtime | null = null;
+  private spacesClient: Spaces | null = null;
+  private space: Space | null = null;
+  private listener: ((update: CursorUpdate) => void) | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<void> {
+     if (this.listener && this.space) { try { await this.space.cursors.unsubscribe(this.listener); } catch { /* ignore */ } }
+     // No need to explicitly leave space here as cleanup handles it
+     if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed' && this.realtimeClient.connection.state !== 'failed') {
+           this.realtimeClient.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesCursorsSubscribe)
-    const spaceId = args.spaceId;
-    let space: Space | null = null; // Define space in outer scope
+    const {spaceId} = args;
 
     try {
-      // Create Spaces client
-      this.clients = await this.createSpacesClient(flags)
-      if (!this.clients) return;
-
-      const { spacesClient, realtimeClient } = this.clients
+      // Create Spaces client using setupSpacesClient
+      const setupResult = await this.setupSpacesClient(flags, spaceId);
+      this.realtimeClient = setupResult.realtimeClient;
+      this.spacesClient = setupResult.spacesClient;
+      this.space = setupResult.space;
+      if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.error('Failed to initialize clients or space');
+        return;
+      }
 
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.realtimeClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
 
@@ -54,7 +66,7 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
       this.logCliEvent(flags, 'connection', 'waiting', 'Waiting for connection to establish...');
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = this.realtimeClient!.connection;
           if (state === 'connected') {
              this.logCliEvent(flags, 'connection', 'connected', 'Realtime connection established.');
             resolve();
@@ -67,6 +79,7 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
             setTimeout(checkConnection, 100);
           }
         };
+
         checkConnection();
       });
 
@@ -75,13 +88,13 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
       if (!this.shouldOutputJson(flags)) {
         this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
       }
-      space = await spacesClient.get(spaceId)
+
       this.logCliEvent(flags, 'spaces', 'gotSpace', `Successfully got space handle: ${spaceId}`);
 
       // Enter the space
       this.logCliEvent(flags, 'spaces', 'entering', 'Entering space...');
-      await space.enter()
-      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: realtimeClient.auth.clientId });
+      await this.space.enter()
+      this.logCliEvent(flags, 'spaces', 'entered', 'Successfully entered space', { clientId: this.realtimeClient!.auth.clientId });
 
       // Subscribe to cursor updates
       this.logCliEvent(flags, 'cursor', 'subscribing', 'Subscribing to cursor updates');
@@ -90,18 +103,19 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
       }
 
       try {
-        this.subscription = await space.cursors.subscribe('update', (cursorUpdate: any) => {
+        // Define the listener function
+        this.listener = (cursorUpdate: CursorUpdate) => {
           try {
             const timestamp = new Date().toISOString();
             const eventData = {
-                spaceId,
-                type: 'cursor_update',
-                timestamp,
                 member: {
                   clientId: cursorUpdate.clientId,
                   connectionId: cursorUpdate.connectionId
                 },
-                position: cursorUpdate.position
+                position: cursorUpdate.position,
+                spaceId,
+                timestamp,
+                type: 'cursor_update'
             };
             this.logCliEvent(flags, 'cursor', 'updateReceived', 'Cursor update received', eventData);
 
@@ -112,20 +126,24 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
             }
           } catch (error) {
              const errorMsg = `Error processing cursor update: ${error instanceof Error ? error.message : String(error)}`;
-             this.logCliEvent(flags, 'cursor', 'updateProcessError', errorMsg, { spaceId, error: errorMsg });
+             this.logCliEvent(flags, 'cursor', 'updateProcessError', errorMsg, { error: errorMsg, spaceId });
              if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+              this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
             } else {
               this.log(chalk.red(errorMsg));
             }
           }
-        });
+        };
+
+        // Subscribe using the listener
+        await this.space.cursors.subscribe('update', this.listener);
+
         this.logCliEvent(flags, 'cursor', 'subscribed', 'Successfully subscribed to cursor updates');
       } catch (error) {
          const errorMsg = `Error subscribing to cursor updates: ${error instanceof Error ? error.message : String(error)}`;
-         this.logCliEvent(flags, 'cursor', 'subscribeError', errorMsg, { spaceId, error: errorMsg });
+         this.logCliEvent(flags, 'cursor', 'subscribeError', errorMsg, { error: errorMsg, spaceId });
          if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+          this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
         } else {
           this.log(chalk.red(errorMsg));
           this.log(chalk.yellow('Will continue running, but may not receive cursor updates.'));
@@ -134,7 +152,7 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
 
       this.logCliEvent(flags, 'cursor', 'listening', 'Listening for cursor updates...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         const cleanup = async () => {
           if (this.cleanupInProgress) return;
           this.cleanupInProgress = true;
@@ -151,21 +169,22 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
              if (!this.shouldOutputJson(flags)) {
                 this.log(chalk.red('Force exiting after timeout...'));
              }
-            process.exit(1);
+
+            this.exit(1);
           }, 5000);
 
           try {
             // Unsubscribe from cursor events
-            if (this.subscription) {
+            if (this.listener && this.space) {
               try {
                  this.logCliEvent(flags, 'cursor', 'unsubscribing', 'Unsubscribing from cursor events');
-                 this.subscription.unsubscribe();
+                 await this.space.cursors.unsubscribe(this.listener);
                  this.logCliEvent(flags, 'cursor', 'unsubscribed', 'Successfully unsubscribed from cursor events');
               } catch (error) {
                   const errorMsg = `Error unsubscribing: ${error instanceof Error ? error.message : String(error)}`;
-                  this.logCliEvent(flags, 'cursor', 'unsubscribeError', errorMsg, { spaceId, error: errorMsg });
+                  this.logCliEvent(flags, 'cursor', 'unsubscribeError', errorMsg, { error: errorMsg, spaceId });
                   if (this.shouldOutputJson(flags)) {
-                     this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+                     this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
                   } else {
                      this.log(`Note: ${errorMsg}`);
                      this.log('Continuing with cleanup.');
@@ -173,17 +192,17 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
               }
             }
 
-            if (space) {
+            if (this.space) {
                try {
                  // Leave the space
                  this.logCliEvent(flags, 'spaces', 'leaving', 'Leaving space...');
-                 await space.leave();
+                 await this.space.leave();
                  this.logCliEvent(flags, 'spaces', 'left', 'Successfully left space');
                } catch (error) {
                    const errorMsg = `Error leaving space: ${error instanceof Error ? error.message : String(error)}`;
-                   this.logCliEvent(flags, 'spaces', 'leaveError', errorMsg, { spaceId, error: errorMsg });
+                   this.logCliEvent(flags, 'spaces', 'leaveError', errorMsg, { error: errorMsg, spaceId });
                    if (this.shouldOutputJson(flags)) {
-                      this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+                      this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
                    } else {
                       this.log(`Error leaving space: ${errorMsg}`);
                       this.log('Continuing with cleanup.');
@@ -192,16 +211,16 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
             }
 
             try {
-              if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+              if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed') {
                 this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-                this.clients.realtimeClient.close();
+                this.realtimeClient.close();
                 this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
               }
             } catch (error) {
                const errorMsg = `Error closing client: ${error instanceof Error ? error.message : String(error)}`;
-               this.logCliEvent(flags, 'connection', 'closeError', errorMsg, { spaceId, error: errorMsg });
+               this.logCliEvent(flags, 'connection', 'closeError', errorMsg, { error: errorMsg, spaceId });
                if (this.shouldOutputJson(flags)) {
-                 this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+                 this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
                } else {
                  this.log(errorMsg);
                }
@@ -212,19 +231,19 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
             if (!this.shouldOutputJson(flags)) {
                 this.log(chalk.green('\nDisconnected.'));
             }
+
             resolve();
-            // Force exit after cleanup
-            process.exit(0);
           } catch (error) {
              const errorMsg = `Error during cleanup: ${error instanceof Error ? error.message : String(error)}`;
-             this.logCliEvent(flags, 'cursor', 'cleanupError', errorMsg, { spaceId, error: errorMsg });
+             this.logCliEvent(flags, 'cursor', 'cleanupError', errorMsg, { error: errorMsg, spaceId });
              if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+              this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
             } else {
               this.log(`Error during cleanup: ${errorMsg}`);
             }
+
             clearTimeout(forceExitTimeout);
-            process.exit(1);
+            reject(new Error(errorMsg));
           }
         };
 
@@ -235,22 +254,10 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
        const errorMsg = error instanceof Error ? error.message : String(error);
        this.logCliEvent(flags, 'cursor', 'fatalError', `Failed to subscribe to cursors: ${errorMsg}`, { error: errorMsg, spaceId });
        if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ success: false, spaceId, error: errorMsg, status: 'error' }, flags));
+        this.log(this.formatJsonOutput({ error: errorMsg, spaceId, status: 'error', success: false }, flags));
       } else {
         this.error(`Failed to subscribe to cursors: ${errorMsg}`);
       }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.subscription) { try { this.subscription.unsubscribe(); } catch (e) { /* ignore */ } }
-     // No need to explicitly leave space here as cleanup handles it
-     if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
-       if (this.clients.realtimeClient.connection.state !== 'failed') {
-           this.clients.realtimeClient.close();
-       }
-     }
-     return super.finally(err);
-   }
 }

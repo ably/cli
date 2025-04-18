@@ -2,8 +2,12 @@ import { ControlBaseCommand } from '../../control-base-command.js'
 
 // Track execution in each process run, not globally across all runs
 const executionTracker = new class {
-  private lastExecutionTimestamp = 0;
   private isExecuting = false;
+  private lastExecutionTimestamp = 0;
+  
+  done(): void {
+    this.isExecuting = false;
+  }
   
   shouldExecute(): boolean {
     // If we're already in an execution, don't run again
@@ -19,10 +23,6 @@ const executionTracker = new class {
     }
     
     return false;
-  }
-  
-  done(): void {
-    this.isExecuting = false;
   }
 }();
 

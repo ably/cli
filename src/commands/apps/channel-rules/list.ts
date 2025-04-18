@@ -1,23 +1,25 @@
-import { ControlBaseCommand } from '../../../control-base-command.js'
 import chalk from 'chalk'
+
 import type { Namespace } from '../../../services/control-api.js'
 
+import { ControlBaseCommand } from '../../../control-base-command.js'
+
 interface ChannelRuleOutput {
-  id: string;
-  persisted: boolean;
-  pushEnabled: boolean;
   authenticated: boolean;
-  persistLast: boolean;
-  exposeTimeSerial: boolean;
-  populateChannelRegistry: boolean;
   batchingEnabled: boolean;
-  batchingInterval: number | null;
+  batchingInterval: null | number;
   conflationEnabled: boolean;
-  conflationInterval: number | null;
-  conflationKey: string | null;
-  tlsOnly: boolean;
+  conflationInterval: null | number;
+  conflationKey: null | string;
   created: string;
+  exposeTimeSerial: boolean;
+  id: string;
   modified: string;
+  persistLast: boolean;
+  persisted: boolean;
+  populateChannelRegistry: boolean;
+  pushEnabled: boolean;
+  tlsOnly: boolean;
 }
 
 export default class ChannelRulesListCommand extends ControlBaseCommand {
@@ -36,18 +38,19 @@ export default class ChannelRulesListCommand extends ControlBaseCommand {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(ChannelRulesListCommand)
-    const appId = await this.getAppId(flags)
+    const appId = await this.resolveAppId(flags)
     
     if (!appId) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: 'No app specified. Use --app-id flag or select an app with "ably apps switch"',
-          status: 'error'
+          status: 'error',
+          success: false
         }, flags));
       } else {
         this.error('No app specified. Use --app-id flag or select an app with "ably apps switch"');
       }
+
       return;
     }
 
@@ -57,26 +60,26 @@ export default class ChannelRulesListCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           appId,
           rules: namespaces.map((rule: Namespace): ChannelRuleOutput => ({
-            id: rule.id,
-            persisted: rule.persisted || false,
-            pushEnabled: rule.pushEnabled || false,
             authenticated: rule.authenticated || false,
-            persistLast: rule.persistLast || false,
-            exposeTimeSerial: rule.exposeTimeSerial || false,
-            populateChannelRegistry: rule.populateChannelRegistry || false,
             batchingEnabled: rule.batchingEnabled || false,
             batchingInterval: rule.batchingInterval || null,
             conflationEnabled: rule.conflationEnabled || false,
             conflationInterval: rule.conflationInterval || null,
             conflationKey: rule.conflationKey || null,
-            tlsOnly: rule.tlsOnly || false,
             created: new Date(rule.created).toISOString(),
-            modified: new Date(rule.modified).toISOString()
+            exposeTimeSerial: rule.exposeTimeSerial || false,
+            id: rule.id,
+            modified: new Date(rule.modified).toISOString(),
+            persistLast: rule.persistLast || false,
+            persisted: rule.persisted || false,
+            populateChannelRegistry: rule.populateChannelRegistry || false,
+            pushEnabled: rule.pushEnabled || false,
+            tlsOnly: rule.tlsOnly || false
           })),
+          success: true,
+          timestamp: new Date().toISOString(),
           total: namespaces.length
         }, flags));
       } else {
@@ -94,33 +97,43 @@ export default class ChannelRulesListCommand extends ControlBaseCommand {
           if (namespace.authenticated !== undefined) {
             this.log(`  Authenticated: ${namespace.authenticated ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           if (namespace.persistLast !== undefined) {
             this.log(`  Persist Last Message: ${namespace.persistLast ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           if (namespace.exposeTimeSerial !== undefined) {
             this.log(`  Expose Time Serial: ${namespace.exposeTimeSerial ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           if (namespace.populateChannelRegistry !== undefined) {
             this.log(`  Populate Channel Registry: ${namespace.populateChannelRegistry ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           if (namespace.batchingEnabled !== undefined) {
             this.log(`  Batching Enabled: ${namespace.batchingEnabled ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           if (namespace.batchingInterval !== undefined && namespace.batchingInterval !== null && namespace.batchingInterval !== 0) {
             this.log(`  Batching Interval: ${chalk.bold.green(`✓ ${namespace.batchingInterval}`)}`);
           }
+
           if (namespace.conflationEnabled !== undefined) {
             this.log(`  Conflation Enabled: ${namespace.conflationEnabled ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           if (namespace.conflationInterval !== undefined && namespace.conflationInterval !== null && namespace.conflationInterval !== 0) {
             this.log(`  Conflation Interval: ${chalk.bold.green(`✓ ${namespace.conflationInterval}`)}`);
           }
+
           if (namespace.conflationKey !== undefined && namespace.conflationKey && namespace.conflationKey !== '') {
             this.log(`  Conflation Key: ${chalk.bold.green(`✓ ${namespace.conflationKey}`)}`);
           }
+
           if (namespace.tlsOnly !== undefined) {
             this.log(`  TLS Only: ${namespace.tlsOnly ? chalk.bold.green('✓ Yes') : 'No'}`);
           }
+
           this.log(`  Created: ${this.formatDate(namespace.created)}`);
           this.log(`  Updated: ${this.formatDate(namespace.modified)}`);
           this.log(''); // Add a blank line between rules
@@ -129,10 +142,10 @@ export default class ChannelRulesListCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId
+          success: false
         }, flags));
       } else {
         this.error(`Error listing channel rules: ${error instanceof Error ? error.message : String(error)}`);

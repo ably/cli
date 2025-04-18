@@ -1,187 +1,281 @@
-import { Command, Help } from '@oclif/core'
-import { displayLogo } from './utils/logo.js'
+import { Command, Help, Config, Interfaces } from '@oclif/core'
 import chalk from 'chalk'
+import stripAnsi from 'strip-ansi'
+
 import { ConfigManager } from './services/config-manager.js'
+import { displayLogo } from './utils/logo.js'
+
+import { WEB_CLI_RESTRICTED_COMMANDS } from './base-command.js' // Import the single source of truth
 
 export default class CustomHelp extends Help {
-  configManager = new ConfigManager()
+  static skipCache = true // For development - prevents help commands from being cached
 
-  // Override the formatCommands method to filter out our alias commands
-  formatCommands(commands: Command.Loadable[]): string {
-    // Filter out commands that have the isAlias property or start with -
-    const filteredCommands = commands.filter(c => {
-      try {
-        // Access the command class to check for our custom isAlias property
-        const CommandClass = c.load()
-        
-        // Skip alias commands, internal commands, and commands starting with --
-        return !(
-          (CommandClass as any).isAlias || 
-          (CommandClass as any).isInternal ||
-          c.id.startsWith('--')
-        )
-      } catch (error) {
-        return true // Include command if there's an error loading it
-      }
-    })
-    
-    // Use the parent formatCommands method with the filtered commands
-    return super.formatCommands(filteredCommands)
+  protected webCliMode: boolean;
+  protected configManager: ConfigManager;
+  // Flag to track if we're already showing root help to prevent duplication
+  protected isShowingRootHelp: boolean = false;
+
+  constructor(config: Config, opts?: Record<string, unknown>) {
+    super(config, opts);
+    this.webCliMode = process.env.ABLY_WEB_CLI_MODE === 'true';
+    this.configManager = new ConfigManager();
   }
 
-  // Completely override the root help to implement custom welcome screen
-  async showRootHelp(): Promise<void> {
-    // Check if this is a web CLI help request
-    // @ts-ignore oclif Help class has argv property in its options
-    const isWebCliHelp = this.opts.argv?.includes('--web-cli-help')
-
-    // Don't use the default root help output
-    const output = isWebCliHelp
-      ? await this.createWebCliWelcomeScreen()
-      : await this.createCustomWelcomeScreen()
-
-    this.log(output)
-  }
-
-  // Override the formatRoot method to return an empty string, as we're using showRootHelp instead
-  formatRoot(): string {
-    // Only proceed with default behavior if we're not at the root
-    // @ts-ignore oclif Help class has argv property in its options
-    if (this.opts.argv && this.opts.argv.length > 0) {
-      // Hide the --web-cli-help flag from regular help output
-      // @ts-ignore oclif Help class has argv property in its options
-      const isWebCliHelpRequest = this.opts.argv.includes('--web-cli-help')
-      if (isWebCliHelpRequest) {
-        return ''
-      }
-      return super.formatRoot()
+  // Override formatHelpOutput to apply stripAnsi when necessary
+  formatHelpOutput(output: string): string {
+    // Check if we're generating readme (passed as an option from oclif)
+    if (this.opts?.stripAnsi || process.env.GENERATING_README === 'true') {
+      return stripAnsi(output);
     }
-    
-    // Return empty string for root help since we're using showRootHelp
-    return ''
+    return output;
   }
 
-  // Create web CLI specific welcome screen
-  private async createWebCliWelcomeScreen(): Promise<string> {
+  // Helper to ensure no trailing whitespace
+  private removeTrailingWhitespace(text: string): string {
+    // Remove all trailing newlines completely
+    return text.replace(/\n+$/, '');
+  }
+
+  // Override the display method to clean up trailing whitespace and exit cleanly
+  async showHelp(argv: string[]): Promise<void> {
+    const command = this.config.findCommand(argv[0])
+    if (!command) return super.showHelp(argv);
+
+    // Get formatted output
+    const output = this.formatCommand(command);
+    const cleanedOutput = this.removeTrailingWhitespace(output);
+    // Apply stripAnsi when needed
+    console.log(this.formatHelpOutput(cleanedOutput));
+    process.exit(0);
+  }
+
+  // Override for root help as well
+  async showRootHelp(): Promise<void> {
+    // Get formatted output
+    const output = this.formatRoot();
+    const cleanedOutput = this.removeTrailingWhitespace(output);
+    // Apply stripAnsi when needed
+    console.log(this.formatHelpOutput(cleanedOutput));
+    process.exit(0);
+  }
+
+  formatRoot(): string {
+    let output: string;
+    // Set flag to indicate we're showing root help
+    this.isShowingRootHelp = true;
+    
+    const args = process.argv || [];
+    const isWebCliHelp = args.includes('web-cli') || args.includes('webcli');
+    
+    if (this.webCliMode || isWebCliHelp) {
+      output = this.formatWebCliRoot();
+    } else {
+      output = this.formatStandardRoot();
+    }
+    return output; // Let the overridden render handle stripping
+  }
+
+  formatStandardRoot(): string {
+    // Manually construct root help (bypassing super.formatRoot)
+    const { config } = this;
+    const lines: string[] = [];
+
+    // 1. Logo (conditionally)
+    const logoLines: string[] = [];
+    if (process.stdout.isTTY) {
+      displayLogo((m: string) => logoLines.push(m)); // Use capture
+    }
+    lines.push(...logoLines);
+
+    // 2. Title & Usage
+    const headerLines = [
+      chalk.bold('ably.com CLI for Pub/Sub, Chat, Spaces and the Control API'),
+      '',
+      `${chalk.bold('USAGE')}`,
+      `  $ ${config.bin} [COMMAND]`,
+      '',
+      chalk.bold('COMMANDS') // Use the desired single heading
+    ];
+    lines.push(...headerLines);
+
+    // 3. Get, filter, combine, sort, and format visible commands/topics
+    // Use a Map to ensure unique entries by command/topic name
+    const uniqueEntries = new Map();
+    
+    // Process commands first
+    config.commands
+      .filter(c => !c.hidden && !c.id.includes(':')) // Filter hidden and top-level only
+      .filter(c => this.shouldDisplay(c)) // Apply web mode filtering
+      .forEach(c => {
+        uniqueEntries.set(c.id, {
+          id: c.id,
+          description: c.description, 
+          isCommand: true
+        });
+      });
+    
+    // Then add topics if they don't already exist as commands
+    config.topics
+      .filter(t => !t.hidden && !t.name.includes(':')) // Filter hidden and top-level only
+      .filter(t => this.shouldDisplay({ id: t.name } as Command.Loadable)) // Apply web mode filtering
+      .forEach(t => {
+        if (!uniqueEntries.has(t.name)) {
+          uniqueEntries.set(t.name, {
+            id: t.name,
+            description: t.description,
+            isCommand: false
+          });
+        }
+      });
+
+    // Convert to array and sort
+    const combined = [...uniqueEntries.values()].sort((a, b) => {
+      return a.id.localeCompare(b.id);
+    });
+
+    if (combined.length > 0) {
+      const commandListString = this.renderList(
+        combined.map(c => {
+          const description = c.description && this.render(c.description.split('\n')[0]);
+          const descString = description ? chalk.dim(description) : undefined; 
+          return [chalk.cyan(c.id), descString];
+        }),
+        { indentation: 2, spacer: '\n' } // Adjust spacing if needed
+      );
+      lines.push(commandListString); 
+    } else {
+      lines.push('  No commands found.');
+    }
+
+    // 4. Login prompt (if needed and not in web mode)
+    if (!this.webCliMode) {
+      const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken();
+      const apiKey = process.env.ABLY_API_KEY;
+      if (!accessToken && !apiKey) {
+        lines.push('', 
+                     chalk.yellow('You are not logged in. Run the following command to log in:'), 
+                     chalk.cyan('  $ ably accounts login')
+                    );
+      }
+    }
+
+    // Join lines and return
+    return lines.join('\n');
+  }
+
+  formatWebCliRoot(): string {
     const lines: string[] = []
-
-    // 1. Display the Ably logo
-    const captureLog: string[] = []
-    displayLogo((message) => captureLog.push(message))
-    lines.push(...captureLog)
-
-    // 2. Show the CLI description with web-specific wording
-    lines.push(chalk.bold('ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API'))
-    lines.push('')
+    if (process.stdout.isTTY) {
+      displayLogo((m: string) => lines.push(m)); // Add logo lines directly
+    }
+    lines.push(chalk.bold('ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API'), '')
 
     // 3. Show the web CLI specific instructions
-    lines.push(`${chalk.bold('COMMON COMMANDS')}`)
-    lines.push(`  ${chalk.cyan('View Ably commands:')} ably --help`)
-    lines.push(`  ${chalk.cyan('Publish a message:')} ably channels publish [channel] [message]`)
-    lines.push(`  ${chalk.cyan('View live channel lifecycle events:')} ably channels logs`)
-    lines.push('')
+    const webCliCommands = [
+      `${chalk.bold('COMMON COMMANDS')}`, 
+      `  ${chalk.cyan('View Ably commands:')} ably --help`,
+      `  ${chalk.cyan('Publish a message:')} ably channels publish [channel] [message]`,
+      `  ${chalk.cyan('View live channel lifecycle events:')} ably channels logs`
+    ];
+    lines.push(...webCliCommands)
 
     // 4. Check if login recommendation is needed
     const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken()
     const apiKey = process.env.ABLY_API_KEY
     
     if (!accessToken && !apiKey) {
-      lines.push('')
-      lines.push(chalk.yellow('You are not logged in. Run the following command to log in:'))
-      lines.push(chalk.cyan('  $ ably login'))
+      lines.push('', 
+                   chalk.yellow('You are not logged in. Run the following command to log in:'), 
+                   chalk.cyan('  $ ably login')
+                  )
     }
 
-    return lines.join('\n')
+    // Join lines and return
+    return lines.join('\n');
   }
 
-  // Create our custom welcome screen
-  private async createCustomWelcomeScreen(): Promise<string> {
-    const { config } = this
-    
-    // Build the custom welcome screen
-    const lines: string[] = []
+  formatCommand(command: Command.Loadable): string {
+    let output: string;
+    // Special case handling for web-cli help command
+    if (command.id === 'help:web-cli' || command.id === 'help:webcli') {
+      this.isShowingRootHelp = true; // Prevent further sections
+      output = this.formatWebCliRoot();
+    } else { 
+      // Reset root help flag when showing individual command help
+      this.isShowingRootHelp = false;
+      // Use super's formatCommand
+      output = super.formatCommand(command);
 
-    // 1. Display the Ably logo
-    const captureLog: string[] = []
-    displayLogo((message) => captureLog.push(message))
-    lines.push(...captureLog)
-
-    // 2. Show the CLI description beneath the logo
-    // The description might not be accessible through config in some environments
-    // So we'll hardcode the description from package.json
-    lines.push(chalk.bold('ably.com CLI for Pub/Sub, Chat, Spaces and the Control API'))
-    lines.push('')
-
-    // 3. Show version info
-    // @ts-ignore showVersion is a valid property in opts
-    if (this.opts.showVersion && config.version) {
-      lines.push(`${chalk.bold('VERSION')}`)
-      lines.push(`  ${config.version}`)
-      lines.push('')
-    }
-
-    // 4. Show usage info
-    lines.push(`${chalk.bold('USAGE')}`)
-    lines.push(`  $ ${config.bin} [COMMAND]`)
-    lines.push('')
-
-    // 5. Show a unified list of commands
-    lines.push(`${chalk.bold('COMMANDS')}`)
-    
-    // Get all top-level commands and topics
-    const rootCommands: { id: string, description: string }[] = []
-    
-    // Process all commands, filtering for root-level commands only
-    for (const c of this.config.commands) {
-      try {
-        // Skip commands with dashes in name
-        if (c.id.startsWith('--')) {
-          continue;
+      // Modify based on web CLI mode using the imported list
+      if (this.webCliMode && WEB_CLI_RESTRICTED_COMMANDS.some(restricted => command.id === restricted || command.id.startsWith(restricted + ':'))) {
+          output = [
+            `${chalk.bold('This command is not available in the web CLI mode.')}`,
+            '',
+            'Please use the standalone CLI installation instead.'
+          ].join('\n');
         }
-        
-        // Only process commands with no spaces or colons (top-level commands)
-        if (c.id.includes(' ') || c.id.includes(':')) {
-          continue
-        }
-        
-        // Skip alias and internal commands
-        const cmd = await c.load()
-        if ((cmd as any).isAlias || (cmd as any).isInternal || (cmd as any).hidden) {
-          continue
-        }
-        
-        rootCommands.push({
-          id: c.id,
-          description: cmd.description || ''
-        })
-      } catch (error) {
-        // Skip commands that can't be loaded
-      }
     }
-    
-    // Sort commands alphabetically
-    rootCommands.sort((a, b) => a.id.localeCompare(b.id))
-    
-    // Calculate padding - find the longest command ID
-    const maxLength = Math.max(...rootCommands.map(cmd => cmd.id.length))
-    const paddingLength = maxLength + 4 // Add 4 spaces of padding
-    
-    // Add each command with its description to the output
-    rootCommands.forEach(entry => {
-      const padding = ' '.repeat(paddingLength - entry.id.length)
-      lines.push(`  ${chalk.cyan(entry.id)}${padding}${entry.description}`)
-    })
-    
-    // 6. Check if login recommendation is needed
-    const accessToken = process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken()
-    const apiKey = process.env.ABLY_API_KEY
-    
-    if (!accessToken && !apiKey) {
-      lines.push('')
-      lines.push(chalk.yellow('You are not logged in. Run the following command to log in:'))
-      lines.push(chalk.cyan('  $ ably login'))
-    }
-
-    return lines.join('\n')
+    return output; // Let the overridden render handle stripping
   }
-} 
+
+  // Re-add the check for web CLI mode command availability
+  shouldDisplay(command: Command.Loadable): boolean {
+    if (!this.webCliMode) {
+      return true; // Always display if not in web mode
+    }
+
+    // In web mode, check if the command should be hidden using the imported list
+    // Check if the commandId starts with any restricted command base
+    return !WEB_CLI_RESTRICTED_COMMANDS.some(restricted => command.id === restricted || command.id.startsWith(restricted + ':'));
+  }
+
+  formatCommands(commands: Command.Loadable[]): string {
+    // Skip if we're already showing root help to prevent duplication
+    if (this.isShowingRootHelp) {
+      return '';
+    }
+    
+    // Filter commands based on webCliMode using shouldDisplay
+    const visibleCommands = commands.filter(c => this.shouldDisplay(c));
+
+    if (visibleCommands.length === 0) return ''; // Return empty if no commands should be shown
+
+    return this.section(chalk.bold('COMMANDS'), this.renderList(
+      visibleCommands
+        .map(c => {
+          const description = c.description && this.render(c.description.split('\n')[0]);
+          return [chalk.cyan(c.id), description ? chalk.dim(description) : undefined];
+        }),
+      { indentation: 2 },
+    ));
+  }
+
+  formatTopics(topics: Interfaces.Topic[]): string {
+    // Skip if we're already showing root help to prevent duplication
+    if (this.isShowingRootHelp) {
+      return '';
+    }
+    
+    // Filter topics based on webCliMode using shouldDisplay logic
+    const visibleTopics = topics.filter(t => {
+      if (!this.webCliMode) return true;
+      // Check if the topic name itself is restricted or if any restricted command starts with the topic name
+      return !WEB_CLI_RESTRICTED_COMMANDS.some(restricted => 
+        t.name === restricted || 
+        (restricted.startsWith(t.name + ':') && t.name !== 'help') // Check if command starts with topic: avoids hiding 'help'
+      );
+    });
+
+    if (visibleTopics.length === 0) return '';
+
+    return this.section(chalk.bold('TOPICS'), topics
+      .filter(t => this.shouldDisplay({ id: t.name } as Command.Loadable)) // Reuse shouldDisplay logic
+      .map(c => {
+        const description = c.description && this.render(c.description.split('\n')[0]);
+        return [chalk.cyan(c.name), description ? chalk.dim(description) : undefined];
+      })
+      .map(([left, right]) => this.renderList([[left, right]], { indentation: 2 }))
+      .join('\n')
+    );
+  }
+}

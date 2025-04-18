@@ -1,4 +1,4 @@
-import {Command, Flags} from '@oclif/core'
+import { Command } from "@oclif/core"
 
 export default class SpacesLocks extends Command {
   static override description = 'Commands for component locking in Ably Spaces'

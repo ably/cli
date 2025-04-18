@@ -1,6 +1,7 @@
 import { Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../control-base-command.js'
 import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../control-base-command.js'
 
 export default class IntegrationsListCommand extends ControlBaseCommand {
   static description = 'List all integration rules'
@@ -30,18 +31,19 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      appId = await this.getAppId(flags)
+      appId = await this.resolveAppId(flags)
       
       if (!appId) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
             error: 'No app specified. Use --app flag or select an app with "ably apps switch"',
-            status: 'error'
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error('No app specified. Use --app flag or select an app with "ably apps switch"');
         }
+
         return;
       }
       
@@ -49,24 +51,23 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           appId,
           rules: rules.map(rule => ({
-            id: rule.id,
             appId: rule.appId,
-            type: rule.ruleType,
+            created: new Date(rule.created).toISOString(),
+            id: rule.id,
+            modified: new Date(rule.modified).toISOString(),
             requestMode: rule.requestMode,
-            status: rule.status,
             source: {
-              type: rule.source.type,
-              channelFilter: rule.source.channelFilter || null
+              channelFilter: rule.source.channelFilter || null,
+              type: rule.source.type
             },
             target: rule.target,
-            version: rule.version,
-            created: new Date(rule.created).toISOString(),
-            modified: new Date(rule.modified).toISOString()
+            type: rule.ruleType,
+            version: rule.version
           })),
+          success: true,
+          timestamp: new Date().toISOString(),
           total: rules.length
         }, flags));
       } else {
@@ -77,29 +78,27 @@ export default class IntegrationsListCommand extends ControlBaseCommand {
         
         this.log(`Found ${rules.length} integration rules:\n`);
         
-        rules.forEach(rule => {
+        for (const rule of rules) {
           this.log(chalk.bold(`Rule ID: ${rule.id}`));
           this.log(`  App ID: ${rule.appId}`);
           this.log(`  Type: ${rule.ruleType}`);
           this.log(`  Request Mode: ${rule.requestMode}`);
-          this.log(`  Status: ${rule.status}`);
-          this.log(`  Source:`);
-          this.log(`    Type: ${rule.source.type}`);
-          this.log(`    Channel Filter: ${rule.source.channelFilter || '(none)'}`);
-          this.log(`  Target: ${this.formatJsonOutput(rule.target, flags).replace(/\n/g, '\n    ')}`);
+          this.log(`  Source Type: ${rule.source.type}`);
+          this.log(`  Channel Filter: ${rule.source.channelFilter || '(none)'}`);
+          this.log(`  Target: ${this.formatJsonOutput(rule.target as Record<string, unknown>, flags).replaceAll('\n', '\n    ')}`);
           this.log(`  Version: ${rule.version}`);
           this.log(`  Created: ${this.formatDate(rule.created)}`);
           this.log(`  Updated: ${this.formatDate(rule.modified)}`);
           this.log(''); // Add a blank line between rules
-        });
+        }
       }
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId
+          success: false
         }, flags));
       } else {
         this.error(`Error listing integration rules: ${error instanceof Error ? error.message : String(error)}`);

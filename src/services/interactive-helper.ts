@@ -1,6 +1,6 @@
 import inquirer from 'inquirer'
-import { ConfigManager } from './config-manager.js'
-import { ControlApi, App, Key } from './control-api.js'
+import type { ConfigManager, AccountConfig } from './config-manager.js'
+import type { App, ControlApi, Key } from './control-api.js'
 
 export class InteractiveHelper {
   private configManager: ConfigManager
@@ -10,9 +10,25 @@ export class InteractiveHelper {
   }
 
   /**
+   * Confirm an action with the user
+   */
+  async confirm(message: string): Promise<boolean> {
+    const { confirmed } = await inquirer.prompt([
+      {
+        default: false,
+        message,
+        name: 'confirmed',
+        type: 'confirm'
+      }
+    ])
+    
+    return confirmed
+  }
+
+  /**
    * Interactively select an account from the list of configured accounts
    */
-  async selectAccount(): Promise<{alias: string, account: any} | null> {
+  async selectAccount(): Promise<{ account: AccountConfig; alias: string } | null> {
     try {
       const accounts = this.configManager.listAccounts()
       const currentAlias = this.configManager.getCurrentAccountAlias()
@@ -24,9 +40,6 @@ export class InteractiveHelper {
       
       const { selectedAccount } = await inquirer.prompt([
         {
-          type: 'list',
-          name: 'selectedAccount',
-          message: 'Select an account:',
           choices: accounts.map(account => {
             const isCurrent = account.alias === currentAlias
             const accountInfo = account.account.accountName || account.account.accountId || 'Unknown'
@@ -35,7 +48,10 @@ export class InteractiveHelper {
               name: `${isCurrent ? '* ' : '  '}${account.alias} (${accountInfo}, ${userInfo})`,
               value: account
             }
-          })
+          }),
+          message: 'Select an account:',
+          name: 'selectedAccount',
+          type: 'list'
         }
       ])
       
@@ -60,13 +76,13 @@ export class InteractiveHelper {
       
       const { selectedApp } = await inquirer.prompt([
         {
-          type: 'list',
-          name: 'selectedApp',
-          message: 'Select an app:',
           choices: apps.map(app => ({
             name: `${app.name} (${app.id})`,
             value: app
-          }))
+          })),
+          message: 'Select an app:',
+          name: 'selectedApp',
+          type: 'list'
         }
       ])
       
@@ -91,13 +107,13 @@ export class InteractiveHelper {
       
       const { selectedKey } = await inquirer.prompt([
         {
-          type: 'list',
-          name: 'selectedKey',
-          message: 'Select a key:',
           choices: keys.map(key => ({
             name: `${key.name || 'Unnamed key'} (${key.id})`,
             value: key
-          }))
+          })),
+          message: 'Select a key:',
+          name: 'selectedKey',
+          type: 'list'
         }
       ])
       
@@ -106,21 +122,5 @@ export class InteractiveHelper {
       console.error('Error fetching keys:', error)
       return null
     }
-  }
-
-  /**
-   * Confirm an action with the user
-   */
-  async confirm(message: string): Promise<boolean> {
-    const { confirmed } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirmed',
-        message,
-        default: false
-      }
-    ])
-    
-    return confirmed
   }
 } 

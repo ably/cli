@@ -1,8 +1,16 @@
 import { Args } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
 import { ControlApi } from '../../services/control-api.js'
 
 export default class AccountsSwitch extends ControlBaseCommand {
+  static override args = {
+    alias: Args.string({
+      description: 'Alias of the account to switch to',
+      required: false
+    })
+  }
+
   static override description = 'Switch to a different Ably account'
 
   static override examples = [
@@ -16,13 +24,6 @@ export default class AccountsSwitch extends ControlBaseCommand {
     ...ControlBaseCommand.globalFlags,
   }
 
-  static override args = {
-    alias: Args.string({
-      description: 'Alias of the account to switch to',
-      required: false
-    })
-  }
-
   public async run(): Promise<void> {
     const { args, flags } = await this.parse(AccountsSwitch)
     
@@ -33,12 +34,13 @@ export default class AccountsSwitch extends ControlBaseCommand {
       const error = 'No accounts configured. Use "ably accounts login" to add an account.'
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error
+          error,
+          success: false
         }, flags))
       } else {
         this.error(error)
       }
+
       return
     }
     
@@ -52,13 +54,13 @@ export default class AccountsSwitch extends ControlBaseCommand {
     if (this.shouldOutputJson(flags)) {
       const error = 'No account alias provided. Please specify an account alias to switch to.'
       this.log(this.formatJsonOutput({
-        success: false,
-        error,
-        availableAccounts: accounts.map(({ alias, account }) => ({
+        availableAccounts: accounts.map(({ account, alias }) => ({
           alias,
-          name: account.accountName || 'Unknown',
-          id: account.accountId || 'Unknown'
-        }))
+          id: account.accountId || 'Unknown',
+          name: account.accountName || 'Unknown'
+        })),
+        error,
+        success: false
       }, flags))
       return
     }
@@ -73,7 +75,11 @@ export default class AccountsSwitch extends ControlBaseCommand {
     }
   }
   
-  private async switchToAccount(alias: string, accounts: Array<{alias: string, account: any}>, flags: any): Promise<void> {
+  private async switchToAccount(
+    alias: string, 
+    accounts: Array<{account: {accountId?: string, accountName?: string}, alias: string}>, 
+    flags: Record<string, unknown>
+  ): Promise<void> {
     // Check if account exists
     const accountExists = accounts.some(account => account.alias === alias)
 
@@ -81,17 +87,18 @@ export default class AccountsSwitch extends ControlBaseCommand {
       const error = `Account with alias "${alias}" not found. Use "ably accounts list" to see available accounts.`
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error,
-          availableAccounts: accounts.map(({ alias, account }) => ({
+          availableAccounts: accounts.map(({ account, alias }) => ({
             alias,
-            name: account.accountName || 'Unknown',
-            id: account.accountId || 'Unknown'
-          }))
+            id: account.accountId || 'Unknown',
+            name: account.accountName || 'Unknown'
+          })),
+          error,
+          success: false
         }, flags))
       } else {
         this.error(error)
       }
+
       return
     }
 
@@ -105,44 +112,45 @@ export default class AccountsSwitch extends ControlBaseCommand {
         const error = 'No access token found for this account. Please log in again.'
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
-            error
+            error,
+            success: false
           }, flags))
         } else {
           this.error(error)
         }
+
         return
       }
 
       const controlApi = new ControlApi({
         accessToken,
-        controlHost: flags['control-host']
+        controlHost: flags['control-host'] as string | undefined
       })
 
-      const { user, account } = await controlApi.getMe()
+      const { account, user } = await controlApi.getMe()
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           account: {
+            alias,
             id: account.id,
             name: account.name,
-            alias,
             user: {
               email: user.email
             }
-          }
+          },
+          success: true
         }, flags))
       } else {
         this.log(`Switched to account: ${account.name} (${account.id})`)
         this.log(`User: ${user.email}`)
       }
-    } catch (error) {
+    } catch {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          account: { alias },
           error: 'Access token may have expired or is invalid.',
-          account: { alias }
+          success: false
         }, flags))
       } else {
         this.warn('Switched to account, but the access token may have expired or is invalid.')

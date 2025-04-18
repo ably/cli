@@ -1,7 +1,8 @@
 import { Flags } from '@oclif/core'
+import { execSync } from 'node:child_process'
+import * as fs from 'node:fs'
+
 import { AblyBaseCommand } from '../base-command.js'
-import { execSync } from 'child_process'
-import * as fs from 'fs'
 
 export default class Config extends AblyBaseCommand {
   static override description = 'Open the Ably config file in the default text editor'
@@ -53,9 +54,12 @@ export default class Config extends AblyBaseCommand {
     // Platform-specific default editors
     if (process.platform === 'win32') {
       return 'notepad'
-    } else if (process.platform === 'darwin') {
+    }
+
+ if (process.platform === 'darwin') {
       return 'open -e'  // TextEdit on macOS
-    } else {
+    }
+ 
       // Try common editors on Linux
       try {
         execSync('which nano', { stdio: 'ignore' })
@@ -73,6 +77,6 @@ export default class Config extends AblyBaseCommand {
           }
         }
       }
-    }
+    
   }
 }

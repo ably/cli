@@ -1,8 +1,17 @@
-import { Flags, Args } from '@oclif/core'
+import { Args, Flags } from '@oclif/core'
+import * as readline from 'node:readline'
+import chalk from 'chalk'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
-import * as readline from 'readline'
 
 export default class IntegrationsDeleteCommand extends ControlBaseCommand {
+  static args = {
+    ruleId: Args.string({
+      description: 'The rule ID to delete',
+      required: true,
+    }),
+  }
+
   static description = 'Delete an integration rule'
 
   static examples = [
@@ -18,17 +27,10 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
       required: false,
     }),
     'force': Flags.boolean({
+      char: 'f',
+      default: false,
       description: 'Force deletion without confirmation',
       required: false,
-      default: false,
-      char: 'f',
-    }),
-  }
-
-  static args = {
-    ruleId: Args.string({
-      description: 'The rule ID to delete',
-      required: true,
     }),
   }
 
@@ -39,7 +41,7 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
@@ -55,7 +57,6 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
         this.log(`Rule ID: ${rule.id}`)
         this.log(`Type: ${rule.ruleType}`)
         this.log(`Request Mode: ${rule.requestMode}`)
-        this.log(`Status: ${rule.status}`)
         this.log(`Source Type: ${rule.source.type}`)
         this.log(`Channel Filter: ${rule.source.channelFilter || '(none)'}`)
         
@@ -69,7 +70,11 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
       
       await controlApi.deleteRule(appId, args.ruleId)
       
-      this.log(`Integration rule "${args.ruleId}" deleted successfully`)
+      this.log(chalk.green('Integration Rule Deleted Successfully:'))
+      this.log(`ID: ${rule.id}`)
+      this.log(`App ID: ${rule.appId}`)
+      this.log(`Rule Type: ${rule.ruleType}`)
+      this.log(`Source Type: ${rule.source.type}`)
     } catch (error) {
       this.error(`Error deleting integration rule: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -81,11 +86,11 @@ export default class IntegrationsDeleteCommand extends ControlBaseCommand {
       output: process.stdout,
     })
 
-    return new Promise<boolean>((resolve) => {
-      rl.question(message + ' ', (answer) => {
+    return new Promise((resolve) => {
+      rl.question(message, (answer) => {
         rl.close()
-        resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes')
+        resolve(answer.toLowerCase() === 'y')
       })
     })
   }
-} 
+}

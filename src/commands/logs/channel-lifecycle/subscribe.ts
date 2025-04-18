@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
@@ -14,19 +15,29 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
-      default: 0,
-    }),
     json: Flags.boolean({
-      description: 'Output results as JSON',
       default: false,
+      description: 'Output results as JSON',
+    }),
+    rewind: Flags.integer({
+      default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 
   private client: Ably.Realtime | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+  async finally(err: Error | undefined): Promise<void> {
+     if (this.client && this.client.connection.state !== 'closed' && // Check state before closing to avoid errors if already closed
+       this.client.connection.state !== 'failed') {
+           this.client.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const {flags} = await this.parse(LogsChannelLifecycleSubscribe)
 
     const channelName = '[meta]channel.lifecycle'
@@ -36,7 +47,7 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
       this.client = await this.createAblyClient(flags)
       if (!this.client) return
 
-      const client = this.client; // local const
+      const {client} = this; // local const
       const channelOptions: Ably.ChannelOptions = {}
 
        // Add listeners for connection state changes
@@ -72,10 +83,10 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
         const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
         const event = message.name || 'unknown'
          const logEvent = {
-             timestamp,
              channel: channelName,
+             data: message.data,
              event,
-             data: message.data
+             timestamp
          };
          this.logCliEvent(flags, 'logs', 'logReceived', `Log received on ${channelName}`, logEvent);
 
@@ -109,6 +120,7 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
             this.log(`${chalk.blue('Data:')} ${message.data}`)
           }
         }
+
         this.log('') // Empty line for better readability
       })
       this.logCliEvent(flags, 'logs', 'subscribed', `Successfully subscribed to ${channelName}`);
@@ -128,12 +140,15 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
          if (!this.shouldOutputJson(flags)) {
             this.log('\nSubscription ended');
          }
+
          cleanup();
-         process.exit(0);
+          
+         process.exit(0); // Reinstated: Explicit exit on signal
       });
       process.on('SIGTERM', () => {
           cleanup();
-          process.exit(0);
+           
+          process.exit(0); // Reinstated: Explicit exit on signal
       });
 
       this.logCliEvent(flags, 'logs', 'listening', 'Listening for logs...');
@@ -141,7 +156,7 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
       await new Promise(() => {})
     } catch (error: unknown) {
       const err = error as Error
-       this.logCliEvent(flags, 'logs', 'fatalError', `Error during log subscription: ${err.message}`, { error: err.message, channel: channelName });
+       this.logCliEvent(flags, 'logs', 'fatalError', `Error during log subscription: ${err.message}`, { channel: channelName, error: err.message });
       this.error(err.message)
     } finally {
        // Ensure client is closed
@@ -151,15 +166,4 @@ export default class LogsChannelLifecycleSubscribe extends AblyBaseCommand {
        }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.client && this.client.connection.state !== 'closed') {
-       // Check state before closing to avoid errors if already closed
-       if (this.client.connection.state !== 'failed') {
-           this.client.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

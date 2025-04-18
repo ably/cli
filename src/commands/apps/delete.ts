@@ -1,9 +1,17 @@
 import { Args, Flags } from '@oclif/core'
+import * as readline from 'node:readline'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
-import * as readline from 'readline'
 import AppsSwitch from './switch.js'
 
 export default class AppsDeleteCommand extends ControlBaseCommand {
+  static args = {
+    id: Args.string({
+      description: 'App ID to delete (uses current app if not specified)',
+      required: false,
+    }),
+  }
+
   static description = 'Delete an app'
 
   static examples = [
@@ -18,16 +26,9 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
   static flags = {
     ...ControlBaseCommand.globalFlags,
     'force': Flags.boolean({
-      description: 'Skip confirmation prompt',
-      default: false,
       char: 'f',
-    }),
-  }
-
-  static args = {
-    id: Args.string({
-      description: 'App ID to delete (uses current app if not specified)',
-      required: false,
+      default: false,
+      description: 'Skip confirmation prompt',
     }),
   }
 
@@ -44,13 +45,14 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
         const error = 'No app ID provided and no current app selected. Please provide an app ID or select a default app with "ably apps switch".'
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
             error,
-            status: 'error'
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error(error);
         }
+
         return;
       }
     }
@@ -76,14 +78,15 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
         if (!nameConfirmed) {
           if (this.shouldOutputJson(flags)) {
             this.log(this.formatJsonOutput({
-              success: false,
+              appId: app.id,
               error: 'Deletion cancelled - app name did not match',
               status: 'cancelled',
-              appId: app.id
+              success: false
             }, flags));
           } else {
             this.log('Deletion cancelled - app name did not match');
           }
+
           return;
         }
         
@@ -92,14 +95,15 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
         if (!confirmed) {
           if (this.shouldOutputJson(flags)) {
             this.log(this.formatJsonOutput({
-              success: false,
+              appId: app.id,
               error: 'Deletion cancelled by user',
               status: 'cancelled',
-              appId: app.id
+              success: false
             }, flags));
           } else {
             this.log('Deletion cancelled');
           }
+
           return;
         }
       }
@@ -112,12 +116,12 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           app: {
             id: app.id,
             name: app.name
-          }
+          },
+          success: true,
+          timestamp: new Date().toISOString()
         }, flags));
       } else {
         this.log('App deleted successfully');
@@ -134,10 +138,10 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId: appIdToDelete,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId: appIdToDelete
+          success: false
         }, flags));
       } else {
         this.error(`Error deleting app: ${error instanceof Error ? error.message : String(error)}`);
@@ -145,20 +149,6 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
     }
   }
 
-  private promptForConfirmation(message: string): Promise<boolean> {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    })
-
-    return new Promise<boolean>((resolve) => {
-      rl.question(message + ' ', (answer) => {
-        rl.close()
-        resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes')
-      })
-    })
-  }
-  
   private promptForAppName(appName: string): Promise<boolean> {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -169,6 +159,20 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
       rl.question(`For confirmation, please enter the app name (${appName}): `, (answer) => {
         rl.close()
         resolve(answer === appName)
+      })
+    })
+  }
+  
+  private promptForConfirmation(message: string): Promise<boolean> {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    })
+
+    return new Promise<boolean>((resolve) => {
+      rl.question(message + ' ', (answer) => {
+        rl.close()
+        resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes')
       })
     })
   }

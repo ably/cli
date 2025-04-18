@@ -1,6 +1,6 @@
 import {Command, Flags} from '@oclif/core'
-import open from 'open'
 import chalk from 'chalk'
+import open from 'open'
 
 export default class SupportCommand extends Command {
   static description = 'Get support from Ably'
@@ -14,9 +14,9 @@ export default class SupportCommand extends Command {
   }
 
   async run(): Promise<void> {
-    const {flags} = await this.parse(SupportCommand)
+    await this.parse(SupportCommand)
 
     this.log(`${chalk.cyan('Opening')} https://ably.com/support ${chalk.cyan('in your browser')}...`)
     await open('https://ably.com/support')
   }
-} 
+}

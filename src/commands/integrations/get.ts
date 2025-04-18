@@ -1,8 +1,16 @@
-import { Flags, Args } from '@oclif/core'
-import { ControlBaseCommand } from '../../control-base-command.js'
+import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
 
+import { ControlBaseCommand } from '../../control-base-command.js'
+
 export default class IntegrationsGetCommand extends ControlBaseCommand {
+  static args = {
+    ruleId: Args.string({
+      description: 'The rule ID to get',
+      required: true,
+    }),
+  }
+
   static description = 'Get an integration rule by ID'
 
   static examples = [
@@ -19,13 +27,6 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
     }),
   }
 
-  static args = {
-    ruleId: Args.string({
-      description: 'The rule ID to get',
-      required: true,
-    }),
-  }
-
   async run(): Promise<void> {
     const { args, flags } = await this.parse(IntegrationsGetCommand)
     
@@ -36,7 +37,7 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
@@ -46,17 +47,16 @@ export default class IntegrationsGetCommand extends ControlBaseCommand {
       const rule = await controlApi.getRule(appId, args.ruleId)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(rule, flags))
+        this.log(this.formatJsonOutput(structuredClone(rule) as unknown as Record<string, unknown>, flags))
       } else {
-        this.log(chalk.bold(`Rule ID: ${rule.id}`))
+        this.log(chalk.green('Integration Rule Details:'))
+        this.log(`ID: ${rule.id}`)
         this.log(`App ID: ${rule.appId}`)
-        this.log(`Type: ${rule.ruleType}`)
+        this.log(`Rule Type: ${rule.ruleType}`)
         this.log(`Request Mode: ${rule.requestMode}`)
-        this.log(`Status: ${rule.status}`)
-        this.log(`Source:`)
-        this.log(`  Type: ${rule.source.type}`)
-        this.log(`  Channel Filter: ${rule.source.channelFilter || '(none)'}`)
-        this.log(`Target: ${this.formatJsonOutput(rule.target, flags).replace(/\n/g, '\n  ')}`)
+        this.log(`Source Channel Filter: ${rule.source.channelFilter}`)
+        this.log(`Source Type: ${rule.source.type}`)
+        this.log(`Target: ${this.formatJsonOutput(structuredClone(rule.target) as unknown as Record<string, unknown>, flags).replaceAll('\n', '\n  ')}`)
         this.log(`Version: ${rule.version}`)
         this.log(`Created: ${this.formatDate(rule.created)}`)
         this.log(`Updated: ${this.formatDate(rule.modified)}`)

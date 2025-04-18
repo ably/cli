@@ -1,14 +1,18 @@
-import { Args, Flags } from '@oclif/core'
-import { ChatBaseCommand } from '../../../chat-base-command.js'
-import { ChatClient, RoomStatus, Subscription, PresenceEvent, PresenceMember } from '@ably/chat'
+import { PresenceMember, RoomStatus, Subscription, PresenceEvents } from '@ably/chat'
+import { Args } from '@oclif/core'
+import * as Ably from 'ably'
 import chalk from 'chalk'
 
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
+import { ChatBaseCommand } from '../../../chat-base-command.js'
 
 export default class RoomsPresenceSubscribe extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'Room ID to subscribe to presence for',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to presence events in a chat room'
 
   static override examples = [
@@ -21,32 +25,32 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
     
   }
 
-  static override args = {
-    roomId: Args.string({
-      description: 'Room ID to subscribe to presence for',
-      required: true,
-    }),
-  }
-
-  private clients: ChatClients | null = null;
+  private ablyClient: Ably.Realtime | null = null;
   private presenceSubscription: Subscription | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsPresenceSubscribe)
     
-    let presenceSubscription: Subscription | null = null
-    
     try {
       // Create Chat client
-      this.clients = await this.createChatClient(flags)
-      if (!this.clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const { chatClient, realtimeClient } = this.clients
-      const roomId = args.roomId
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client'); // Should not happen if chatClient created
+        return;
+      }
+
+      const {roomId} = args
       
       // Add listeners for connection state changes
-      realtimeClient.connection.on((stateChange: any) => {
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
         this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
       });
       
@@ -60,25 +64,39 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
       // Subscribe to room status changes
       this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
       const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
-        let reason: string | Error | undefined | null = undefined;
+        let reason: Error | null | string | undefined;
         if (statusChange.current === RoomStatus.Failed) {
           reason = room.error; // Get reason from room.error on failure
         }
+
         const reasonMsg = reason instanceof Error ? reason.message : reason;
         this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: reasonMsg });
 
-        if (statusChange.current === RoomStatus.Attached) {
+        switch (statusChange.current) {
+        case RoomStatus.Attached: {
           if (!this.shouldOutputJson(flags)) {
             this.log(`${chalk.green('Successfully connected to room:')} ${chalk.cyan(roomId)}`);
           }
-        } else if (statusChange.current === RoomStatus.Detached) {
+        
+        break;
+        }
+
+        case RoomStatus.Detached: {
           if (!this.shouldOutputJson(flags)) {
             this.log(chalk.yellow('Disconnected from room'));
           }
-        } else if (statusChange.current === RoomStatus.Failed) {
+        
+        break;
+        }
+
+        case RoomStatus.Failed: {
           if (!this.shouldOutputJson(flags)) {
             this.error(`${chalk.red('Connection failed:')} ${reasonMsg || 'Unknown error'}`);
           }
+        
+        break;
+        }
+        // No default
         }
       });
       this.unsubscribeStatusFn = unsubscribeStatus;
@@ -105,24 +123,22 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
       
       // Output current members based on format
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({ success: true, members: initialMembers, roomId }, flags))
-      } else {
-        if (members.length === 0) {
+        this.log(this.formatJsonOutput({ members: initialMembers, roomId, success: true }, flags))
+      } else if (members.length === 0) {
           this.log(chalk.yellow('No members are currently present in this room.'))
         } else {
           this.log(`\n${chalk.cyan('Current presence members')} (${chalk.bold(members.length.toString())}):\n`)
           
-          members.forEach(member => {
+          for (const member of members) {
             this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`)
             
             if (member.data && Object.keys(member.data).length > 0) {
-              this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`)
+              this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput({ data: member.data }, flags)}`)
             }
             
             // Connection ID isn't available in the Chat SDK's PresenceMember type
-          })
+          }
         }
-      }
       
       // Subscribe to presence events
       this.logCliEvent(flags, 'presence', 'subscribingToEvents', 'Subscribing to presence events');
@@ -130,17 +146,17 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
         this.log(`\n${chalk.dim('Subscribing to presence events. Press Ctrl+C to exit.')}\n`);
       }
       
-      this.presenceSubscription = room.presence.subscribe((member: PresenceEvent) => {
+      this.presenceSubscription = room.presence.subscribe(PresenceEvents.Update, (member) => {
         const timestamp = new Date().toISOString() // Chat SDK doesn't provide timestamp in event
         const action = member.action || 'unknown'
         const eventData = {
-          timestamp,
           action,
           member: {
             clientId: member.clientId,
             data: member.data
           },
-          roomId
+          roomId,
+          timestamp
         };
         this.logCliEvent(flags, 'presence', action, `Presence event '${action}' received`, eventData);
 
@@ -151,24 +167,29 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
           let actionColor = chalk.white
           
           switch (action) {
-            case 'enter':
+            case 'enter': {
               actionSymbol = '✓'
               actionColor = chalk.green
               break
-            case 'leave':
+            }
+
+            case 'leave': {
               actionSymbol = '✗'
               actionColor = chalk.red
               break
-            case 'update':
+            }
+
+            case 'update': {
               actionSymbol = '⟲'
               actionColor = chalk.yellow
               break
+            }
           }
           
           this.log(`[${timestamp}] ${actionColor(actionSymbol)} ${chalk.blue(member.clientId || 'Unknown')} ${actionColor(action)}`)
           
           if (member.data && Object.keys(member.data).length > 0) {
-            this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput(member.data, flags)}`)
+            this.log(`  ${chalk.dim('Data:')} ${this.formatJsonOutput({ data: member.data }, flags)}`)
           }
         }
       })
@@ -176,7 +197,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
 
       this.logCliEvent(flags, 'presence', 'listening', 'Listening for presence events...');
       // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, _reject) => {
         let cleanupInProgress = false
         
         const cleanup = async () => {
@@ -195,6 +216,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
             if (!this.shouldOutputJson(flags)) {
               this.log(chalk.red('Force exiting after timeout...'));
             }
+
             process.exit(1)
           }, 5000)
           
@@ -219,7 +241,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
             if (this.unsubscribeStatusFn) {
               try {
                 this.logCliEvent(flags, 'room', 'unsubscribingStatus', 'Unsubscribing from room status');
-                this.unsubscribeStatusFn();
+                this.unsubscribeStatusFn()
                 this.logCliEvent(flags, 'room', 'unsubscribedStatus', 'Successfully unsubscribed from status events');
               } catch (error) {
                 const errorMsg = error instanceof Error ? error.message : String(error);
@@ -245,17 +267,19 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
               }
             }
             
-            if (this.clients?.realtimeClient) {
+            if (this.ablyClient) {
               this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
-              this.clients.realtimeClient.close();
+              this.ablyClient.close();
               this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
             }
             
             if (!this.shouldOutputJson(flags)) {
               this.log(chalk.green('Successfully disconnected.'));
             }
+
             clearTimeout(forceExitTimeout)
             resolve()
+             
             process.exit(0)
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
@@ -263,8 +287,9 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
             if (!this.shouldOutputJson(flags)) {
               this.log(`Error during cleanup: ${errorMsg}`);
             }
+
             clearTimeout(forceExitTimeout)
-            process.exit(1)
+            resolve()
           }
         }
 
@@ -277,9 +302,9 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
        this.error(`Error: ${errorMsg}`);
     } finally {
        // Ensure client is closed even if cleanup promise didn't resolve
-       if (this.clients?.realtimeClient && this.clients.realtimeClient.connection.state !== 'closed') {
+       if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
            this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-           this.clients.realtimeClient.close();
+           this.ablyClient.close();
        }
     }
   }

@@ -1,8 +1,8 @@
-import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
+import { Flags as _Flags } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
-import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
+
+import { AblyBaseCommand } from '../../../base-command.js'
 
 export default class AppsLogsHistory extends AblyBaseCommand {
   static override description = 'Alias for `ably logs app history`'
@@ -16,18 +16,18 @@ export default class AppsLogsHistory extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    limit: Flags.integer({
-      description: 'Maximum number of messages to retrieve',
-      default: 100,
-    }),
-    direction: Flags.string({
+    direction: _Flags.string({
+      default: 'backwards',
       description: 'Direction of message retrieval',
       options: ['backwards', 'forwards'],
-      default: 'backwards',
     }),
-    json: Flags.boolean({
-      description: 'Output results in JSON format',
+    json: _Flags.boolean({
       default: false,
+      description: 'Output results in JSON format',
+    }),
+    limit: _Flags.integer({
+      default: 100,
+      description: 'Maximum number of messages to retrieve',
     }),
   }
 
@@ -43,6 +43,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
           this.error('No API key provided. Please specify --api-key or set an app with "ably apps switch"')
           return
         }
+
         flags['api-key'] = appAndKey.apiKey
       }
       
@@ -58,8 +59,8 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       
       // Build history query parameters
       const historyParams: Ably.RealtimeHistoryParams = {
-        limit: flags.limit,
         direction: flags.direction as 'backwards' | 'forwards',
+        limit: flags.limit,
       }
       
       // Get history
@@ -68,7 +69,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       
       // Display results based on format
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(messages, flags))
+        this.log(this.formatJsonOutput({ messages }, flags))
       } else {
         if (messages.length === 0) {
           this.log('No application log messages found.')
@@ -78,7 +79,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
         this.log(`Found ${chalk.cyan(messages.length.toString())} application log messages:`)
         this.log('')
         
-        messages.forEach(message => {
+        for (const message of messages) {
           // Format timestamp
           const timestamp = new Date(message.timestamp).toISOString()
           this.log(`${chalk.gray(timestamp)} [${chalk.yellow(message.name || 'message')}]`)
@@ -95,7 +96,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
           }
           
           this.log('') // Add a blank line between messages
-        })
+        }
         
         if (messages.length === flags.limit) {
           this.log(chalk.yellow(`Showing maximum of ${flags.limit} messages. Use --limit to show more.`))

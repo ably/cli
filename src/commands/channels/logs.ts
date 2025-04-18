@@ -1,7 +1,15 @@
 import {Args, Flags} from '@oclif/core'
+
 import {AblyBaseCommand} from '../../base-command.js'
 
 export default class ChannelsLogs extends AblyBaseCommand {
+  static override args = {
+    topic: Args.string({
+      default: 'channel-lifecycle',
+      description: 'Log topic to subscribe to (currently only channel-lifecycle is supported)',
+    }),
+  }
+
   static override description = 'Alias for ably logs channel-lifecycle subscribe'
 
   static override examples = [
@@ -11,20 +19,13 @@ export default class ChannelsLogs extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
-      default: 0,
-    }),
     json: Flags.boolean({
-      description: 'Output results as JSON',
       default: false,
+      description: 'Output results as JSON',
     }),
-  }
-
-  static override args = {
-    topic: Args.string({
-      description: 'Log topic to subscribe to (currently only channel-lifecycle is supported)',
-      default: 'channel-lifecycle',
+    rewind: Flags.integer({
+      default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 

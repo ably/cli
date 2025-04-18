@@ -1,19 +1,22 @@
 import {Command, Flags} from '@oclif/core'
 
 export default class SpacesCursors extends Command {
-  static override description = 'Commands for realtime cursor tracking in Ably Spaces'
+  static override description = 'Commands for interacting with Cursors in Ably Spaces'
 
-  static override examples = [
-    '$ ably spaces cursors set my-space --position "{\"x\":100,\"y\":150}"',
-    '$ ably spaces cursors subscribe my-space',
-    '$ ably spaces cursors get-all my-space',
+  static override examples: Command.Example[] = [
+    `$ ably spaces cursors set my-space --position '{"x": 100, "y": 200}' --data '{"color": "red"}'`,
+    `$ ably spaces cursors subscribe my-space`,
+    `$ ably spaces cursors get-all my-space`,
   ]
 
-  async run(): Promise<void> {
-    this.log('Use one of the spaces cursors subcommands:')
-    this.log('')
-    this.log('  ably spaces cursors set         - Set your cursor position in a space')
-    this.log('  ably spaces cursors subscribe   - Subscribe to cursor movements in a space')
-    this.log('  ably spaces cursors get-all     - Get all current cursor positions in a space')
+  static override flags = {
+    scope: Flags.string({
+      description: 'Space ID or comma-separated IDs for the scope (e.g., "my-space-1,my-space-2")',
+      required: true,
+    }),
+  }
+
+  public async run(): Promise<void> {
+    this.log('Use `ably spaces cursors set` or `ably spaces cursors subscribe`.')
   }
 } 

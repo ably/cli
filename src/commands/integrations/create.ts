@@ -1,5 +1,19 @@
 import { Flags } from '@oclif/core'
+import chalk from 'chalk'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
+
+// Interface for basic rule data structure
+interface RuleData {
+  requestMode: string;
+  ruleType: string;
+  source: {
+    channelFilter: string;
+    type: string;
+  };
+  status: 'disabled' | 'enabled';
+  target: Record<string, unknown>; // Target is highly variable
+}
 
 export default class IntegrationsCreateCommand extends ControlBaseCommand {
   static description = 'Create an integration rule'
@@ -15,31 +29,31 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
       description: 'App ID or name to create the integration rule in',
       required: false,
     }),
-    'rule-type': Flags.string({
-      description: 'Type of integration rule (http, amqp, etc.)',
-      required: true,
-      options: ['http', 'amqp', 'kinesis', 'firehose', 'pulsar', 'kafka', 'azure', 'azure-functions', 'mqtt', 'cloudmqtt'],
-    }),
-    'source-type': Flags.string({
-      description: 'The event source type',
-      required: true,
-      options: ['channel.message', 'channel.presence', 'channel.lifecycle', 'presence.message'],
-    }),
     'channel-filter': Flags.string({
       description: 'Channel filter pattern',
       required: false,
     }),
     'request-mode': Flags.string({
-      description: 'Request mode for the rule',
-      required: false,
-      options: ['single', 'batch'],
       default: 'single',
+      description: 'Request mode for the rule',
+      options: ['single', 'batch'],
+      required: false,
+    }),
+    'rule-type': Flags.string({
+      description: 'Type of integration rule (http, amqp, etc.)',
+      options: ['http', 'amqp', 'kinesis', 'firehose', 'pulsar', 'kafka', 'azure', 'azure-functions', 'mqtt', 'cloudmqtt'],
+      required: true,
+    }),
+    'source-type': Flags.string({
+      description: 'The event source type',
+      options: ['channel.message', 'channel.presence', 'channel.lifecycle', 'presence.message'],
+      required: true,
     }),
     'status': Flags.string({
-      description: 'Initial status of the rule',
-      required: false,
-      options: ['enabled', 'disabled'],
       default: 'enabled',
+      description: 'Initial status of the rule',
+      options: ['enabled', 'disabled'],
+      required: false,
     }),
     'target-url': Flags.string({
       description: 'Target URL for HTTP rules',
@@ -55,7 +69,7 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')
@@ -63,62 +77,68 @@ export default class IntegrationsCreateCommand extends ControlBaseCommand {
       }
       
       // Prepare rule data
-      const ruleData: any = {
-        ruleType: flags['rule-type'],
-        requestMode: flags['request-mode'],
-        status: flags.status === 'enabled' ? 'enabled' : 'disabled',
+      const ruleData: RuleData = {
+        requestMode: flags['request-mode'] as string,
+        ruleType: flags['rule-type'] as string,
         source: {
           channelFilter: flags['channel-filter'] || '',
           type: flags['source-type'],
         },
+        status: flags.status === 'enabled' ? 'enabled' : 'disabled',
         target: {},
       }
       
       // Add target data based on rule type
       switch (flags['rule-type']) {
-      case 'http':
+      case 'http': {
         if (!flags['target-url']) {
           this.error('--target-url is required for HTTP integration rules')
           return
         }
+
         ruleData.target = {
-          url: flags['target-url'],
-          format: 'json',
           enveloped: true,
+          format: 'json',
+          url: flags['target-url'],
         }
         break
-      case 'amqp':
+      }
+
+      case 'amqp': {
         // Simplified AMQP config for demo purposes
         ruleData.target = {
-          queueType: 'classic',
-          exchangeName: 'ably',
-          routingKey: 'events',
-          mandatory: true,
-          immediate: false,
-          persistent: true,
-          headers: {},
-          format: 'json',
           enveloped: true,
+          exchangeName: 'ably',
+          format: 'json',
+          headers: {},
+          immediate: false,
+          mandatory: true,
+          persistent: true,
+          queueType: 'classic',
+          routingKey: 'events',
         }
         break
-      default:
+      }
+
+      default: {
         this.log(`Note: Using default target for ${flags['rule-type']}. In a real implementation, more target options would be required.`)
-        ruleData.target = { format: 'json', enveloped: true }
+        ruleData.target = { enveloped: true, format: 'json' }
+      }
       }
       
       const createdRule = await controlApi.createRule(appId, ruleData)
       
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(createdRule, flags))
+        this.log(this.formatJsonOutput({ rule: createdRule }, flags))
       } else {
-        this.log('Integration rule created successfully:')
-        this.log(`Rule ID: ${createdRule.id}`)
-        this.log(`Type: ${createdRule.ruleType}`)
+        this.log(chalk.green('Integration Rule Created Successfully:'))
+        this.log(`ID: ${createdRule.id}`)
+        this.log(`App ID: ${createdRule.appId}`)
+        this.log(`Rule Type: ${createdRule.ruleType}`)
         this.log(`Request Mode: ${createdRule.requestMode}`)
-        this.log(`Status: ${createdRule.status}`)
+        this.log(`Source Channel Filter: ${createdRule.source.channelFilter}`)
         this.log(`Source Type: ${createdRule.source.type}`)
-        this.log(`Channel Filter: ${createdRule.source.channelFilter || '(none)'}`)
-        this.log(`Created: ${this.formatDate(createdRule.created)}`)
+        this.log(`Target: ${this.formatJsonOutput(createdRule.target as Record<string, unknown>, flags)}`)
       }
     } catch (error) {
       this.error(`Error creating integration rule: ${error instanceof Error ? error.message : String(error)}`)

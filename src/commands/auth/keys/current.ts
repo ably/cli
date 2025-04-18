@@ -1,6 +1,7 @@
 import { Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../../control-base-command.js'
 import chalk from 'chalk'
+
+import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysCurrentCommand extends ControlBaseCommand {
   static description = 'Show the current API key for the selected app'
@@ -77,7 +78,7 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
   /**
    * Handle the command in web CLI mode by extracting API key from environment variables
    */
-  private async handleWebCliMode(flags: any): Promise<void> {
+  private async handleWebCliMode(flags: Record<string, unknown>): Promise<void> {
     // Extract API key from environment variable
     const apiKey = process.env.ABLY_API_KEY
     if (!apiKey) {
@@ -109,10 +110,10 @@ export default class KeysCurrentCommand extends ControlBaseCommand {
       
       try {
         const controlApi = this.createControlApi(flags)
-        const { user, account } = await controlApi.getMe()
+        const { account } = await controlApi.getMe()
         accountName = account.name
         accountId = account.id
-      } catch (error) {
+      } catch {
         // If we can't get account details, just use default values
       }
       

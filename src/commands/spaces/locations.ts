@@ -1,5 +1,5 @@
-import {Command, Flags} from '@oclif/core'
 import chalk from 'chalk'
+
 import { SpacesBaseCommand } from '../../spaces-base-command.js'
 
 export default class SpacesLocations extends SpacesBaseCommand {
@@ -9,8 +9,8 @@ export default class SpacesLocations extends SpacesBaseCommand {
     ...SpacesBaseCommand.globalFlags,
   }
 
-  async run() {
-    const { flags } = await this.parse(SpacesLocations)
+  async run(): Promise<void> {
+    const _flags = await this.parse(SpacesLocations)
     this.log(chalk.bold.cyan('Spaces Locations API Commands:'))
     this.log('\nAvailable commands:')
     this.log('  ably spaces locations get-all    - Get all current locations in a space')

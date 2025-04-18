@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import fetch, { type RequestInit } from 'node-fetch'
 
 export interface ControlApiOptions {
   accessToken: string
@@ -6,127 +6,157 @@ export interface ControlApiOptions {
 }
 
 export interface App {
-  id: string
-  name: string
   accountId: string
+  apnsUsesSandboxCert?: boolean
+  created: number
+  id: string
+  modified: number
+  name: string
   status: string
   tlsOnly: boolean
-  created: number
-  modified: number
-  apnsUsesSandboxCert?: boolean
+  [key: string]: unknown;
 }
 
 export interface AppStats {
-  intervalId: string
-  unit: string
   appId?: string
-  schema?: string
   entries: {
     [key: string]: number
   }
+  intervalId: string
+  schema?: string
+  unit: string
 }
 
 // Since account stats have the same structure as app stats
 export type AccountStats = AppStats;
 
 export interface Key {
-  id: string
   appId: string
-  name: string
-  key: string
-  capability: any;
-  revocable: boolean;
+  capability: unknown;
   created: number;
+  id: string
+  key: string
   modified: number;
+  name: string
+  revocable: boolean;
   status: string;
 }
 
 export interface Namespace {
-  id: string;
   appId: string;
-  persisted: boolean;
-  pushEnabled: boolean;
-  created: number;
-  modified: number;
   authenticated?: boolean;
-  persistLast?: boolean;
-  exposeTimeSerial?: boolean;
-  populateChannelRegistry?: boolean;
   batchingEnabled?: boolean;
   batchingInterval?: number;
   conflationEnabled?: boolean;
   conflationInterval?: number;
   conflationKey?: string;
+  created: number;
+  exposeTimeSerial?: boolean;
+  id: string;
+  modified: number;
+  persistLast?: boolean;
+  persisted: boolean;
+  populateChannelRegistry?: boolean;
+  pushEnabled: boolean;
   tlsOnly?: boolean;
 }
 
 export interface Rule {
-  id: string;
+  _links?: {
+    self: string;
+  };
   appId: string;
-  ruleType: string;
+  created: number;
+  id: string;
+  modified: number;
   requestMode: string;
-  status: string;
+  ruleType: string;
   source: {
     channelFilter: string;
     type: string;
   };
-  target: any;
+  target: unknown;
   version: string;
-  created: number;
-  modified: number;
-  _links?: {
-    self: string;
+}
+
+// Define RuleData interface for rule creation and updates
+export interface RuleData {
+  requestMode: string;
+  ruleType: string;
+  source: {
+    channelFilter: string;
+    type: string;
   };
+  status?: 'disabled' | 'enabled';
+  target: Record<string, unknown>; // Target is highly variable
+}
+
+// Type for updating a rule, allowing partial source/target
+export interface RuleUpdateData {
+  requestMode?: string;
+  ruleType?: string;
+  source?: Partial<{ // Allow partial source
+    channelFilter: string;
+    type: string;
+  }>;
+  status?: 'disabled' | 'enabled';
+  target?: Partial<Record<string, unknown>>; // Allow partial target
 }
 
 export interface Queue {
-  id: string;
-  appId: string;
-  name: string;
-  region: string;
   amqp: {
-    uri: string;
     queueName: string;
-  };
-  stomp: {
     uri: string;
-    host: string;
-    destination: string;
   };
-  state: string;
-  messages: {
-    ready: number;
-    unacknowledged: number;
-    total: number;
-  };
-  stats: {
-    publishRate: number | null;
-    deliveryRate: number | null;
-    acknowledgementRate: number | null;
-  };
-  ttl: number;
-  maxLength: number;
+  appId: string;
   deadletter: boolean;
   deadletterId: string;
+  id: string;
+  maxLength: number;
+  messages: {
+    ready: number;
+    total: number;
+    unacknowledged: number;
+  };
+  name: string;
+  region: string;
+  state: string;
+  stats: {
+    acknowledgementRate: null | number;
+    deliveryRate: null | number;
+    publishRate: null | number;
+  };
+  stomp: {
+    destination: string;
+    host: string;
+    uri: string;
+  };
+  ttl: number;
 }
 
 export interface HelpResponse {
   answer: string;
   links: {
+    breadcrumbs: string[];
+    description: null | string;
     label: string;
+    title: string;
     type: string;
     url: string;
-    title: string;
-    breadcrumbs: string[];
-    description: string | null;
   }[];
 }
 
 export interface Conversation {
   messages: {
-    role: 'user' | 'assistant';
     content: string;
+    role: 'assistant' | 'user';
   }[];
+}
+
+// Response type for Control API /me endpoint
+export interface MeResponse {
+  account: { id: string; name: string };
+  user: { email: string };
 }
 
 export class ControlApi {
@@ -138,62 +168,14 @@ export class ControlApi {
     this.controlHost = options.controlHost || 'control.ably.net'
   }
 
-  private async request<T>(path: string, method = 'GET', body?: any): Promise<T> {
-    const url = this.controlHost.includes('local') ? `http://${this.controlHost}/api/v1${path}` : `https://${this.controlHost}/v1${path}`
+  // Ask a question to the Ably AI agent
+  async askHelp(question: string, conversation?: Conversation): Promise<HelpResponse> {
+    const payload = { 
+      question,
+      ...(conversation && { context: conversation.messages })
+    };
     
-    const options: any = {
-      method,
-      headers: {
-        'Authorization': `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    }
-
-    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-      options.body = JSON.stringify(body)
-    }
-
-    const response = await fetch(url, options)
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Control API request failed: ${response.status} ${response.statusText} - ${errorText}`)
-    }
-
-    if (response.status === 204) {
-      return {} as T
-    }
-
-    return await response.json() as T
-  }
-
-  // Get user and account info
-  async getMe(): Promise<{ user: any, account: any }> {
-    return this.request<{ user: any, account: any }>('/me')
-  }
-
-  // Get all apps
-  async listApps(): Promise<App[]> {
-    // First get the account ID from /me endpoint
-    const meResponse = await this.getMe()
-    const accountId = meResponse.account.id
-    
-    // Use correct path with account ID prefix
-    return this.request<App[]>(`/accounts/${accountId}/apps`)
-  }
-
-  // Get an app by ID
-  async getApp(appId: string): Promise<App> {
-    // There's no single app GET endpoint, need to get all apps and filter
-    const apps = await this.listApps()
-    const app = apps.find(a => a.id === appId)
-    
-    if (!app) {
-      throw new Error(`App with ID "${appId}" not found`)
-    }
-    
-    return app
+    return this.request<HelpResponse>('/help', 'POST', payload);
   }
 
   // Create a new app
@@ -206,10 +188,44 @@ export class ControlApi {
     return this.request<App>(`/accounts/${accountId}/apps`, 'POST', appData)
   }
 
-  // Update an app
-  async updateApp(appId: string, appData: { name?: string, tlsOnly?: boolean }): Promise<App> {
-    // Update app uses /apps/{appId} path
-    return this.request<App>(`/apps/${appId}`, 'PATCH', appData)
+  // Create a new key for an app
+  async createKey(appId: string, keyData: {
+    capability?: Record<string, string[]>
+    name: string,
+  }): Promise<Key> {
+    return this.request<Key>(`/apps/${appId}/keys`, 'POST', keyData)
+  }
+
+  async createNamespace(appId: string, namespaceData: {
+    authenticated?: boolean;
+    batchingEnabled?: boolean;
+    batchingInterval?: number;
+    channelNamespace: string;
+    conflationEnabled?: boolean;
+    conflationInterval?: number;
+    conflationKey?: string;
+    exposeTimeSerial?: boolean;
+    persistLast?: boolean;
+    persisted?: boolean;
+    populateChannelRegistry?: boolean;
+    pushEnabled?: boolean;
+    tlsOnly?: boolean;
+  }): Promise<Namespace> {
+    return this.request<Namespace>(`/apps/${appId}/namespaces`, 'POST', namespaceData)
+  }
+
+  async createQueue(appId: string, queueData: {
+    maxLength?: number;
+    name: string;
+    region?: string;
+    ttl?: number;
+  }): Promise<Queue> {
+    return this.request<Queue>(`/apps/${appId}/queues`, 'POST', queueData)
+  }
+
+  // Create a new rule with typed RuleData interface
+  async createRule(appId: string, ruleData: RuleData): Promise<Rule> {
+    return this.request<Rule>(`/apps/${appId}/rules`, 'POST', ruleData)
   }
 
   // Delete an app
@@ -218,37 +234,25 @@ export class ControlApi {
     return this.request<void>(`/apps/${appId}`, 'DELETE')
   }
 
-  // Get app stats
-  async getAppStats(
-    appId: string, 
-    options: { 
-      start?: number, 
-      end?: number, 
-      by?: string, 
-      limit?: number, 
-      unit?: string 
-    } = {}
-  ): Promise<AppStats[]> {
-    const queryParams = new URLSearchParams()
-    if (options.start) queryParams.append('start', options.start.toString())
-    if (options.end) queryParams.append('end', options.end.toString())
-    if (options.by) queryParams.append('by', options.by)
-    if (options.limit) queryParams.append('limit', options.limit.toString())
-    if (options.unit) queryParams.append('unit', options.unit)
+  async deleteNamespace(appId: string, namespaceId: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/namespaces/${namespaceId}`, 'DELETE')
+  }
 
-    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : ''
-    
-    // App ID-specific operations don't need account ID in the path
-    return this.request<AppStats[]>(`/apps/${appId}/stats${queryString}`)
+  async deleteQueue(appId: string, queueName: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/queues/${queueName}`, 'DELETE')
+  }
+
+  async deleteRule(appId: string, ruleId: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/rules/${ruleId}`, 'DELETE')
   }
 
   // Get account stats
   async getAccountStats(
     options: { 
-      start?: number, 
-      end?: number, 
       by?: string, 
+      end?: number, 
       limit?: number, 
+      start?: number, 
       unit?: string 
     } = {}
   ): Promise<AccountStats[]> {
@@ -269,36 +273,41 @@ export class ControlApi {
     return this.request<AccountStats[]>(`/accounts/${accountId}/stats${queryString}`)
   }
 
-  // Upload Apple Push Notification Service P12 certificate for an app
-  async uploadApnsP12(
-    appId: string, 
-    certificateData: string, 
-    options: { 
-      useForSandbox?: boolean, 
-      password?: string 
-    } = {}
-  ): Promise<{ id: string }> {
-    const data = {
-      p12Certificate: certificateData,
-      useForSandbox: options.useForSandbox,
-      password: options.password
+  // Get an app by ID
+  async getApp(appId: string): Promise<App> {
+    // There's no single app GET endpoint, need to get all apps and filter
+    const apps = await this.listApps()
+    const app = apps.find(a => a.id === appId)
+    
+    if (!app) {
+      throw new Error(`App with ID "${appId}" not found`)
     }
     
+    return app
+  }
+
+  // Get app stats
+  async getAppStats(
+    appId: string, 
+    options: { 
+      by?: string, 
+      end?: number, 
+      limit?: number, 
+      start?: number, 
+      unit?: string 
+    } = {}
+  ): Promise<AppStats[]> {
+    const queryParams = new URLSearchParams()
+    if (options.start) queryParams.append('start', options.start.toString())
+    if (options.end) queryParams.append('end', options.end.toString())
+    if (options.by) queryParams.append('by', options.by)
+    if (options.limit) queryParams.append('limit', options.limit.toString())
+    if (options.unit) queryParams.append('unit', options.unit)
+
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : ''
+    
     // App ID-specific operations don't need account ID in the path
-    return this.request<{ id: string }>(`/apps/${appId}/push/certificate`, 'POST', data)
-  }
-
-  // List all keys for an app
-  async listKeys(appId: string): Promise<Key[]> {
-    return this.request<Key[]>(`/apps/${appId}/keys`)
-  }
-
-  // Create a new key for an app
-  async createKey(appId: string, keyData: {
-    name: string,
-    capability?: any
-  }): Promise<Key> {
-    return this.request<Key>(`/apps/${appId}/keys`, 'POST', keyData)
+    return this.request<AppStats[]>(`/apps/${appId}/stats${queryString}`)
   }
 
   // Get a specific key by ID or key value
@@ -316,23 +325,39 @@ export class ControlApi {
       }
       
       return matchingKey
-    } else {
+    }
+ 
       // If it's just an ID, we can fetch it directly
       return this.request<Key>(`/apps/${appId}/keys/${keyIdOrValue}`)
-    }
+    
   }
 
-  // Update a key
-  async updateKey(appId: string, keyId: string, keyData: { 
-    name?: string,
-    capability?: any 
-  }): Promise<Key> {
-    return this.request<Key>(`/apps/${appId}/keys/${keyId}`, 'PATCH', keyData)
+  // Get user and account info
+  async getMe(): Promise<MeResponse> {
+    return this.request<MeResponse>('/me')
   }
 
-  // Revoke a key
-  async revokeKey(appId: string, keyId: string): Promise<void> {
-    return this.request<void>(`/apps/${appId}/keys/${keyId}`, 'DELETE')
+  async getNamespace(appId: string, namespaceId: string): Promise<Namespace> {
+    return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`)
+  }
+
+  async getRule(appId: string, ruleId: string): Promise<Rule> {
+    return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`)
+  }
+
+  // Get all apps
+  async listApps(): Promise<App[]> {
+    // First get the account ID from /me endpoint
+    const meResponse = await this.getMe()
+    const accountId = meResponse.account.id
+    
+    // Use correct path with account ID prefix
+    return this.request<App[]>(`/accounts/${accountId}/apps`)
+  }
+
+  // List all keys for an app
+  async listKeys(appId: string): Promise<Key[]> {
+    return this.request<Key[]>(`/apps/${appId}/keys`)
   }
 
   // Namespace (Channel Rules) methods
@@ -340,47 +365,9 @@ export class ControlApi {
     return this.request<Namespace[]>(`/apps/${appId}/namespaces`)
   }
 
-  async getNamespace(appId: string, namespaceId: string): Promise<Namespace> {
-    return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`)
-  }
-
-  async createNamespace(appId: string, namespaceData: {
-    channelNamespace: string;
-    persisted?: boolean;
-    pushEnabled?: boolean;
-    authenticated?: boolean;
-    persistLast?: boolean;
-    exposeTimeSerial?: boolean;
-    populateChannelRegistry?: boolean;
-    batchingEnabled?: boolean;
-    batchingInterval?: number;
-    conflationEnabled?: boolean;
-    conflationInterval?: number;
-    conflationKey?: string;
-    tlsOnly?: boolean;
-  }): Promise<Namespace> {
-    return this.request<Namespace>(`/apps/${appId}/namespaces`, 'POST', namespaceData)
-  }
-
-  async updateNamespace(appId: string, namespaceId: string, namespaceData: {
-    persisted?: boolean;
-    pushEnabled?: boolean;
-    authenticated?: boolean;
-    persistLast?: boolean;
-    exposeTimeSerial?: boolean;
-    populateChannelRegistry?: boolean;
-    batchingEnabled?: boolean;
-    batchingInterval?: number;
-    conflationEnabled?: boolean;
-    conflationInterval?: number;
-    conflationKey?: string;
-    tlsOnly?: boolean;
-  }): Promise<Namespace> {
-    return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`, 'PATCH', namespaceData)
-  }
-
-  async deleteNamespace(appId: string, namespaceId: string): Promise<void> {
-    return this.request<void>(`/apps/${appId}/namespaces/${namespaceId}`, 'DELETE')
+  // Queues methods
+  async listQueues(appId: string): Promise<Queue[]> {
+    return this.request<Queue[]>(`/apps/${appId}/queues`)
   }
 
   // Rules (Integrations) methods
@@ -388,47 +375,116 @@ export class ControlApi {
     return this.request<Rule[]>(`/apps/${appId}/rules`)
   }
 
-  async getRule(appId: string, ruleId: string): Promise<Rule> {
-    return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`)
+  // Revoke a key
+  async revokeKey(appId: string, keyId: string): Promise<void> {
+    return this.request<void>(`/apps/${appId}/keys/${keyId}`, 'DELETE')
   }
 
-  async createRule(appId: string, ruleData: any): Promise<Rule> {
-    return this.request<Rule>(`/apps/${appId}/rules`, 'POST', ruleData)
+  // Update an app
+  async updateApp(appId: string, appData: { name?: string, tlsOnly?: boolean }): Promise<App> {
+    // Update app uses /apps/{appId} path
+    return this.request<App>(`/apps/${appId}`, 'PATCH', appData)
   }
 
-  async updateRule(appId: string, ruleId: string, ruleData: any): Promise<Rule> {
+  // Update an existing key
+  async updateKey(appId: string, keyId: string, keyData: { 
+    capability?: Record<string, string[]>
+    name?: string, 
+  }): Promise<Key> {
+    return this.request<Key>(`/apps/${appId}/keys/${keyId}`, 'PATCH', keyData)
+  }
+
+  async updateNamespace(appId: string, namespaceId: string, namespaceData: {
+    authenticated?: boolean;
+    batchingEnabled?: boolean;
+    batchingInterval?: number;
+    conflationEnabled?: boolean;
+    conflationInterval?: number;
+    conflationKey?: string;
+    exposeTimeSerial?: boolean;
+    persistLast?: boolean;
+    persisted?: boolean;
+    populateChannelRegistry?: boolean;
+    pushEnabled?: boolean;
+    tlsOnly?: boolean;
+  }): Promise<Namespace> {
+    return this.request<Namespace>(`/apps/${appId}/namespaces/${namespaceId}`, 'PATCH', namespaceData)
+  }
+
+  // Update a rule with typed RuleData interface
+  async updateRule(appId: string, ruleId: string, ruleData: RuleUpdateData): Promise<Rule> {
     return this.request<Rule>(`/apps/${appId}/rules/${ruleId}`, 'PATCH', ruleData)
   }
 
-  async deleteRule(appId: string, ruleId: string): Promise<void> {
-    return this.request<void>(`/apps/${appId}/rules/${ruleId}`, 'DELETE')
-  }
-
-  // Queues methods
-  async listQueues(appId: string): Promise<Queue[]> {
-    return this.request<Queue[]>(`/apps/${appId}/queues`)
-  }
-
-  async createQueue(appId: string, queueData: {
-    name: string;
-    ttl?: number;
-    maxLength?: number;
-    region?: string;
-  }): Promise<Queue> {
-    return this.request<Queue>(`/apps/${appId}/queues`, 'POST', queueData)
-  }
-
-  async deleteQueue(appId: string, queueName: string): Promise<void> {
-    return this.request<void>(`/apps/${appId}/queues/${queueName}`, 'DELETE')
-  }
-
-  // Ask a question to the Ably AI agent
-  async askHelp(question: string, conversation?: Conversation): Promise<HelpResponse> {
-    const payload = { 
-      question,
-      ...(conversation && { context: conversation.messages })
-    };
+  // Upload Apple Push Notification Service P12 certificate for an app
+  async uploadApnsP12(
+    appId: string, 
+    certificateData: string, 
+    options: { 
+      password?: string 
+      useForSandbox?: boolean, 
+    } = {}
+  ): Promise<{ id: string }> {
+    const data = {
+      p12Certificate: certificateData,
+      password: options.password,
+      useForSandbox: options.useForSandbox
+    }
     
-    return this.request<HelpResponse>('/help', 'POST', payload);
+    // App ID-specific operations don't need account ID in the path
+    return this.request<{ id: string }>(`/apps/${appId}/push/certificate`, 'POST', data)
+  }
+
+  private async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+    const url = this.controlHost.includes('local') ? `http://${this.controlHost}/api/v1${path}` : `https://${this.controlHost}/v1${path}`
+    
+    const options: RequestInit = {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      method
+    }
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      options.body = JSON.stringify(body)
+    }
+
+    const response = await fetch(url, options)
+    
+    if (!response.ok) {
+      const responseBody = await response.text()
+      // Attempt to parse JSON, otherwise use raw text
+      let responseData: unknown = responseBody;
+      try {
+        responseData = JSON.parse(responseBody);
+      } catch { /* Ignore parsing errors, keep as string */ }
+      
+      const errorDetails = {
+        message: `API request failed with status ${response.status}: ${response.statusText}`,
+        response: responseData, // Assign unknown type
+        statusCode: response.status,
+      };
+
+      // Log the detailed error
+      console.error('Control API Request Error:', JSON.stringify(errorDetails, null, 2));
+
+      // Throw a more user-friendly error, including the message from the response if available
+      let errorMessage = `API request failed (${response.status} ${response.statusText})`;
+      if (typeof responseData === 'object' && responseData !== null && 'message' in responseData && typeof responseData.message === 'string') {
+          errorMessage += `: ${responseData.message}`;
+      } else if (typeof responseData === 'string' && responseData.length < 100) {
+          // Include short string responses directly
+          errorMessage += `: ${responseData}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    if (response.status === 204) {
+      return {} as T
+    }
+
+    return await response.json() as T
   }
 } 

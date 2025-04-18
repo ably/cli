@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
@@ -17,14 +18,24 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
   static override flags = {
     ...AblyBaseCommand.globalFlags,
     rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
       default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 
   private client: Ably.Realtime | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+  async finally(err: Error | undefined): Promise<void> {
+     if (this.client && this.client.connection.state !== 'closed' && // Check state before closing to avoid errors if already closed
+       this.client.connection.state !== 'failed') {
+           this.client.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const {flags} = await this.parse(LogsConnectionLifecycleSubscribe)
 
     const channelName = '[meta]connection.lifecycle'
@@ -34,7 +45,7 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
       this.client = await this.createAblyClient(flags)
       if (!this.client) return
 
-      const client = this.client; // local const
+      const {client} = this; // local const
       const channelOptions: Ably.ChannelOptions = {}
 
        // Add listeners for connection state changes (important for understanding meta channel behavior)
@@ -70,15 +81,15 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
         const timestamp = message.timestamp ? new Date(message.timestamp).toISOString() : new Date().toISOString()
         const event = message.name || 'unknown'
         const logEvent = {
-             success: true,
-             timestamp,
              channel: channelName,
-             event,
-             data: message.data,
-             encoding: message.encoding,
              clientId: message.clientId,
              connectionId: message.connectionId,
-             id: message.id
+             data: message.data,
+             encoding: message.encoding,
+             event,
+             id: message.id,
+             success: true,
+             timestamp
          };
          this.logCliEvent(flags, 'logs', 'logReceived', `Log received on ${channelName}`, logEvent);
 
@@ -113,6 +124,7 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
             this.log(`Data: ${message.data}`)
           }
         }
+
         this.log('')
       })
       this.logCliEvent(flags, 'logs', 'subscribed', `Successfully subscribed to ${channelName}`);
@@ -141,12 +153,15 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
          if (!this.shouldOutputJson(flags)) {
             this.log('\nSubscription ended');
          }
+
          cleanup();
-         process.exit(0);
+          
+         process.exit(0); // Reinstated: Explicit exit on signal
       });
       process.on('SIGTERM', () => {
           cleanup();
-          process.exit(0);
+           
+          process.exit(0); // Reinstated: Explicit exit on signal
       });
 
       this.logCliEvent(flags, 'logs', 'listening', 'Listening for logs...');
@@ -154,9 +169,9 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
       await new Promise(() => {})
     } catch (error: unknown) {
        const err = error as Error
-       this.logCliEvent(flags, 'logs', 'fatalError', `Error during log subscription: ${err.message}`, { error: err.message, channel: channelName });
+       this.logCliEvent(flags, 'logs', 'fatalError', `Error during log subscription: ${err.message}`, { channel: channelName, error: err.message });
        if (this.shouldOutputJson(flags)) {
-         this.log(this.formatJsonOutput({ success: false, error: err.message, channel: channelName }, flags))
+         this.log(this.formatJsonOutput({ channel: channelName, error: err.message, success: false }, flags))
        } else {
          this.error(err.message)
        }
@@ -168,15 +183,4 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
        }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.client && this.client.connection.state !== 'closed') {
-       // Check state before closing to avoid errors if already closed
-       if (this.client.connection.state !== 'failed') {
-           this.client.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

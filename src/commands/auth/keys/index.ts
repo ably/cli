@@ -29,5 +29,8 @@ export default class AuthKeys extends AblyBaseCommand {
     this.log('  switch   Switch to a key for all client requests')
     this.log('')
     this.log('Run $ ably auth keys [COMMAND] --help for more information on a command.')
+
+    // Display authentication information
+    this.showAuthInfoIfNeeded({ app: args.appId })
   }
 } 

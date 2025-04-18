@@ -1,18 +1,15 @@
-import { Args, Flags } from '@oclif/core'
+import { Args } from '@oclif/core'
+import * as Ably from 'ably'
 import { ChatBaseCommand } from '../../../chat-base-command.js'
-import { ChatClient } from '@ably/chat'
-
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
-
-interface OccupancyMetrics {
-  connections?: number;
-  presenceMembers?: number;
-}
 
 export default class RoomsOccupancyGet extends ChatBaseCommand {
+  static args = {
+    roomId: Args.string({
+      description: 'Room ID to get occupancy for',
+      required: true,
+    }),
+  }
+
   static description = 'Get current occupancy metrics for a room'
 
   static examples = [
@@ -27,25 +24,23 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
     
   }
 
-  static args = {
-    roomId: Args.string({
-      description: 'Room ID to get occupancy for',
-      required: true,
-    }),
-  }
+  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsOccupancyGet)
     
-    let clients: ChatClients | null = null
-    
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const { chatClient } = clients
-      const roomId = args.roomId
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+
+      const {roomId} = args
       
       // Get the room with occupancy enabled
       const room = await chatClient.rooms.get(roomId, {
@@ -61,9 +56,9 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
       // Output the occupancy metrics based on format
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
+          metrics: occupancyMetrics,
           roomId,
-          metrics: occupancyMetrics
+          success: true
         }, flags))
       } else {
         this.log(`Occupancy metrics for room '${roomId}':\n`)
@@ -80,16 +75,16 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: error instanceof Error ? error.message : String(error),
-          roomId: args.roomId
+          roomId: args.roomId,
+          success: false
         }, flags))
       } else {
         this.error(`Error fetching room occupancy: ${error instanceof Error ? error.message : String(error)}`)
       }
     } finally {
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+      if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
+        this.ablyClient.close()
       }
     }
   }

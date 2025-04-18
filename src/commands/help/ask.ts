@@ -1,11 +1,18 @@
-import {Args, Command, Flags} from '@oclif/core'
-import {ControlBaseCommand} from '../../control-base-command.js'
-import {ControlApi, HelpResponse, Conversation} from '../../services/control-api.js'
+import {Args, Flags} from '@oclif/core'
 import chalk from 'chalk'
 import ora from 'ora'
-import open from 'open'
+
+import {ControlBaseCommand} from '../../control-base-command.js'
+import {Conversation, HelpResponse} from '../../services/control-api.js'
 
 export default class AskCommand extends ControlBaseCommand {
+  static args = {
+    question: Args.string({
+      description: 'The question to ask the Ably AI agent',
+      required: true,
+    }),
+  }
+
   static description = 'Ask a question to the Ably AI agent for help'
 
   static examples = [
@@ -16,18 +23,11 @@ export default class AskCommand extends ControlBaseCommand {
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
-    help: Flags.help({char: 'h'}),
     continue: Flags.boolean({
-      description: 'Continue the previous conversation with the Ably AI agent',
-      default: false
+      default: false,
+      description: 'Continue the previous conversation with the Ably AI agent'
     }),
-  }
-
-  static args = {
-    question: Args.string({
-      description: 'The question to ask the Ably AI agent',
-      required: true,
-    }),
+    help: Flags.help({char: 'h'}),
   }
 
   async run(): Promise<void> {
@@ -38,20 +38,20 @@ export default class AskCommand extends ControlBaseCommand {
     
     try {
       let response: HelpResponse
-      let existingContext = this.configManager.getHelpContext();
+      const existingContext = this.configManager.getHelpContext();
       
       if (flags.continue) {
         // Continue the conversation using stored context
-        if (!existingContext) {
-          spinner.stop()
-          this.log(chalk.yellow('No previous conversation found. Starting a new conversation.'))
-          response = await controlApi.askHelp(args.question)
-        } else {
+        if (existingContext) {
           // Convert configManager's format to ControlApi's Conversation type
           const conversation: Conversation = {
             messages: existingContext.conversation.messages
           }
           response = await controlApi.askHelp(args.question, conversation)
+        } else {
+          spinner.stop()
+          this.log(chalk.yellow('No previous conversation found. Starting a new conversation.'))
+          response = await controlApi.askHelp(args.question)
         }
       } else {
         // Start a new conversation, clear previous context
@@ -64,26 +64,26 @@ export default class AskCommand extends ControlBaseCommand {
       // Display the AI agent's answer
       // Convert markdown to styled terminal output
       // Process code blocks first
-      const processedWithCodeBlocks = response.answer.replace(
-        /```(?:javascript|js|html)?\n([\s\S]*?)```/g,
-        (_, codeContent) => {
+      const processedWithCodeBlocks = response.answer.replaceAll(
+        /```(?:javascript|js|html)?\n([\S\s]*?)```/g,
+        (_, codeContent) => 
           // Return the code block with each line highlighted in cyan
-          return codeContent
+           codeContent
             .split('\n')
             .map((line: string) => chalk.green(`  ${line}`))
-            .join('\n');
-        }
+            .join('\n')
+        
       );
       
       // Then apply other markdown formatting
       const formattedAnswer = processedWithCodeBlocks
-        .replace(/\*\*(.*?)\*\*/g, (_, text) => chalk.bold(text))
-        .replace(/\*(.*?)\*/g, (_, text) => chalk.italic(text))
-        .replace(/`(.*?)`/g, (_, text) => chalk.green(text))
-        .replace(/\[(.*?)\]\((.*?)\)/g, (_, text, url) => `${text} (${chalk.blueBright(url)})`)
-        .replace(/^# (.*?)$/gm, (_, text) => chalk.bold.underline(text))
-        .replace(/^## (.*?)$/gm, (_, text) => chalk.bold(text))
-        .replace(/^### (.*?)$/gm, (_, text) => chalk.yellow(text));
+        .replaceAll(/\*\*(.*?)\*\*/g, (_, text) => chalk.bold(text))
+        .replaceAll(/\*(.*?)\*/g, (_, text) => chalk.italic(text))
+        .replaceAll(/`(.*?)`/g, (_, text) => chalk.green(text))
+        .replaceAll(/\[(.*?)]\((.*?)\)/g, (_, text, url) => `${text} (${chalk.blueBright(url)})`)
+        .replaceAll(/^# (.*?)$/gm, (_, text) => chalk.bold.underline(text))
+        .replaceAll(/^## (.*?)$/gm, (_, text) => chalk.bold(text))
+        .replaceAll(/^### (.*?)$/gm, (_, text) => chalk.yellow(text));
       
       this.log(formattedAnswer);
       
@@ -91,9 +91,9 @@ export default class AskCommand extends ControlBaseCommand {
       if (response.links && response.links.length > 0) {
         this.log('')
         this.log(chalk.bold('Helpful Links:'))
-        response.links.forEach((link, index) => {
+        for (const [index, link] of response.links.entries()) {
           this.log(`${index + 1}. ${chalk.cyan(link.title)} - ${chalk.blue(link.url)}`)
-        })
+        }
       }
       
       // Store the conversation for future reference

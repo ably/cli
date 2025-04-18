@@ -1,7 +1,8 @@
 import {Flags} from '@oclif/core'
-import {AblyBaseCommand} from '../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import {AblyBaseCommand} from '../../base-command.js'
 
 export default class LogsChannelLifecycle extends AblyBaseCommand {
   static override description = 'Stream logs from [meta]channel.lifecycle meta channel'
@@ -13,13 +14,13 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    rewind: Flags.integer({
-      description: 'Number of messages to rewind when subscribing',
-      default: 0,
-    }),
     json: Flags.boolean({
-      description: 'Output results as JSON',
       default: false,
+      description: 'Output results as JSON',
+    }),
+    rewind: Flags.integer({
+      default: 0,
+      description: 'Number of messages to rewind when subscribing',
     }),
   }
 
@@ -57,10 +58,10 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
         
         if (this.shouldOutputJson(flags)) {
           const jsonOutput = {
-            timestamp,
             channel: channelName,
+            data: message.data,
             event: message.name || 'unknown',
-            data: message.data
+            timestamp
           }
           this.log(this.formatJsonOutput(jsonOutput, flags))
           return
@@ -87,6 +88,7 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
         } else {
           this.log(`Data: ${this.formatJsonOutput(message.data, flags)}`)
         }
+
         this.log('')
       })
 
@@ -101,7 +103,8 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
       process.on('SIGINT', () => {
         this.log('\nSubscription ended')
         cleanup()
-        process.exit(0)
+         
+        process.exit(0) // Reinstated: Explicit exit on signal
       })
 
       // Wait indefinitely

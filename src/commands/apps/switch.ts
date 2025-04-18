@@ -1,7 +1,16 @@
 import { Args } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
+import { ControlApi } from '../../services/control-api.js'
 
 export default class AppsSwitch extends ControlBaseCommand {
+  static override args = {
+    appId: Args.string({
+      description: 'ID of the app to switch to',
+      required: false
+    })
+  }
+
   static override description = 'Switch to a different Ably app'
 
   static override examples = [
@@ -11,13 +20,6 @@ export default class AppsSwitch extends ControlBaseCommand {
 
   static override flags = {
     ...ControlBaseCommand.globalFlags,
-  }
-
-  static override args = {
-    appId: Args.string({
-      description: 'ID of the app to switch to',
-      required: false
-    })
   }
 
   public async run(): Promise<void> {
@@ -45,7 +47,7 @@ export default class AppsSwitch extends ControlBaseCommand {
     }
   }
   
-  private async switchToApp(appId: string, controlApi: any): Promise<void> {
+  private async switchToApp(appId: string, controlApi: ControlApi): Promise<void> {
     try {
       // Verify the app exists
       const app = await controlApi.getApp(appId)
@@ -55,7 +57,7 @@ export default class AppsSwitch extends ControlBaseCommand {
       this.configManager.storeAppInfo(appId, { appName: app.name })
       
       this.log(`Switched to app: ${app.name} (${app.id})`)
-    } catch (error) {
+    } catch {
       this.error(`App with ID "${appId}" not found or access denied.`)
     }
   }

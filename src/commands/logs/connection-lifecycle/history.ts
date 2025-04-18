@@ -1,7 +1,8 @@
 import { Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import { AblyBaseCommand } from '../../../base-command.js'
 import { formatJson, isJsonData } from '../../../utils/json-formatter.js'
 
 export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
@@ -16,14 +17,14 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    limit: Flags.integer({
-      description: 'Maximum number of logs to retrieve',
-      default: 100,
-    }),
     direction: Flags.string({
+      default: 'backwards',
       description: 'Direction of log retrieval',
       options: ['backwards', 'forwards'],
-      default: 'backwards',
+    }),
+    limit: Flags.integer({
+      default: 100,
+      description: 'Maximum number of logs to retrieve',
     }),
   }
 
@@ -47,8 +48,8 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
 
       // Build history query parameters
       const historyParams: Ably.RealtimeHistoryParams = {
-        limit: flags.limit,
         direction: flags.direction as 'backwards' | 'forwards',
+        limit: flags.limit,
       }
 
       // Get history
@@ -58,16 +59,16 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
       // Output results based on format
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           messages: messages.map(msg => ({
-            timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString(),
-            name: msg.name,
-            data: msg.data,
-            encoding: msg.encoding,
             clientId: msg.clientId,
             connectionId: msg.connectionId,
-            id: msg.id
-          }))
+            data: msg.data,
+            encoding: msg.encoding,
+            id: msg.id,
+            name: msg.name,
+            timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString()
+          })),
+          success: true
         }, flags))
       } else {
         if (messages.length === 0) {
@@ -78,7 +79,7 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
         this.log(`Found ${chalk.cyan(messages.length.toString())} connection lifecycle logs:`)
         this.log('')
 
-        messages.forEach((message, index) => {
+        for (const [index, message] of messages.entries()) {
           const timestamp = message.timestamp
             ? new Date(message.timestamp).toISOString()
             : 'Unknown timestamp'
@@ -114,7 +115,7 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
           }
 
           this.log('')
-        })
+        }
 
         if (messages.length === flags.limit) {
           this.log(chalk.yellow(`Showing maximum of ${flags.limit} logs. Use --limit to show more.`))
@@ -123,8 +124,8 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          success: false
         }, flags))
       } else {
         this.error(`Error retrieving connection lifecycle logs: ${error instanceof Error ? error.message : String(error)}`)

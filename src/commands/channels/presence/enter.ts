@@ -1,9 +1,17 @@
 import { Args, Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
+import { AblyBaseCommand } from '../../../base-command.js'
+
 export default class ChannelsPresenceEnter extends AblyBaseCommand {
+  static override args = {
+    channel: Args.string({
+      description: 'Channel name to enter presence on',
+      required: true,
+    }),
+  }
+
   static override description = 'Enter presence on a channel and remain present until terminated'
 
   static override examples = [
@@ -15,123 +23,89 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
   static override flags = {
     ...AblyBaseCommand.globalFlags,
     'data': Flags.string({
-      description: 'Presence data to publish (JSON string)',
       default: '{}',
+      description: 'Presence data to publish (JSON string)',
     }),
     'show-others': Flags.boolean({
-      description: 'Show other presence events while present',
       default: true,
-    }),
-  }
-
-  static override args = {
-    channel: Args.string({
-      description: 'Channel name to enter presence on',
-      required: true,
+      description: 'Show other presence events while present',
     }),
   }
 
   private client: Ably.Realtime | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<void> {
+     if (this.client && this.client.connection.state !== 'closed' && // Check state before closing to avoid errors if already closed
+       this.client.connection.state !== 'failed') {
+           this.client.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsPresenceEnter)
 
     try {
-      // Create the Ably client
-      this.client = await this.createAblyClient(flags)
-      if (!this.client) return
+      const { channel, client } = await this.setupClientAndChannel(flags, args.channel);
+      if (!client || !channel) return;
 
-      const client = this.client; // Local const
-      const channelName = args.channel
-
-      // Add listeners for connection state changes
-      client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-        this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
-      });
-
-      // Get the channel
-      const channel = client.channels.get(channelName)
-
-       // Add listeners for channel state changes
-       channel.on((stateChange: Ably.ChannelStateChange) => {
-         this.logCliEvent(flags, 'channel', stateChange.current, `Channel '${channelName}' state changed to ${stateChange.current}`, { reason: stateChange.reason });
-       });
-
-      // Parse the data
-      let presenceData = {}
-      try {
-        presenceData = JSON.parse(flags.data)
-        this.logCliEvent(flags, 'presence', 'dataParsed', 'Presence data parsed successfully', { data: presenceData });
-      } catch (error) {
-        const errorMsg = 'Invalid JSON data format. Please provide a valid JSON string.';
-        this.logCliEvent(flags, 'presence', 'dataParseError', errorMsg, { error: error instanceof Error ? error.message : String(error) });
-        this.error(errorMsg)
-        return
-      }
-
-      // Setup presence event handlers if we're showing other presence events
-      if (flags['show-others']) {
-        this.logCliEvent(flags, 'presence', 'subscribingToOthers', 'Subscribing to other presence events');
-        channel.presence.subscribe('enter', (presenceMessage) => {
-          if (presenceMessage.clientId !== client?.auth.clientId) {
-             this.logCliEvent(flags, 'presence', 'memberEntered', `${presenceMessage.clientId || 'Unknown'} entered presence`, { clientId: presenceMessage.clientId, data: presenceMessage.data });
-             if (!this.shouldOutputJson(flags)) {
-                this.log(`${chalk.green('✓')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} entered presence`);
-             }
-          }
-        })
-
-        channel.presence.subscribe('leave', (presenceMessage) => {
-          if (presenceMessage.clientId !== client?.auth.clientId) {
-             this.logCliEvent(flags, 'presence', 'memberLeft', `${presenceMessage.clientId || 'Unknown'} left presence`, { clientId: presenceMessage.clientId });
-             if (!this.shouldOutputJson(flags)) {
-                this.log(`${chalk.red('✗')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} left presence`);
-             }
-          }
-        })
-
-        channel.presence.subscribe('update', (presenceMessage) => {
-          if (presenceMessage.clientId !== client?.auth.clientId) {
-             this.logCliEvent(flags, 'presence', 'memberUpdated', `${presenceMessage.clientId || 'Unknown'} updated presence data`, { clientId: presenceMessage.clientId, data: presenceMessage.data });
-             if (!this.shouldOutputJson(flags)) {
-                this.log(`${chalk.yellow('⟲')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} updated presence data:`);
-                this.log(`  ${this.formatJsonOutput(presenceMessage.data, flags)}`); // Format JSON nicely
-             }
-          }
-        })
-      }
-
-      // Enter presence
-      this.logCliEvent(flags, 'presence', 'entering', `Attempting to enter presence on ${channelName}`, { data: presenceData });
-      await channel.presence.enter(presenceData)
-      this.logCliEvent(flags, 'presence', 'entered', `Successfully entered presence on ${channelName}`, { clientId: client.auth.clientId });
-
-      if (!this.shouldOutputJson(flags)) {
-         this.log(`${chalk.green('✓')} Entered presence on channel ${chalk.cyan(channelName)} as ${chalk.blue(client.auth.clientId)}`);
-      }
+      const presenceData = this.parsePresenceData(flags);
+      if (presenceData === null) return; // Error handled in helper
 
       if (flags['show-others']) {
-        // Get and display current presence members
+        this.setupPresenceSubscriptions(channel, client, flags);
+      }
+
+      await this.enterAndDisplayPresence(channel, client, flags, presenceData);
+
+      // Keep the process running indefinitely until SIGINT/SIGTERM
+      await this.setupCleanupHandler(() => this._cleanupPresence(channel, client, flags));
+
+    } catch (error) {
+       const errorMsg = error instanceof Error ? error.message : String(error);
+       this.logCliEvent(flags || {}, 'presence', 'fatalError', `Error entering presence: ${errorMsg}`, { error: errorMsg });
+       this.error(`Error entering presence: ${errorMsg}`);
+    } finally {
+      // Cleanup handled by the override and the cleanup handler
+    }
+  }
+
+  // --- Refactored Helper Methods ---
+
+  private async displayCurrentMembers(channel: Ably.RealtimeChannel, client: Ably.Realtime, flags: Record<string, unknown>): Promise<void> {
         this.logCliEvent(flags, 'presence', 'gettingMembers', 'Fetching current presence members');
-        const members = await channel.presence.get()
+    const members = await channel.presence.get();
         this.logCliEvent(flags, 'presence', 'membersFetched', `Fetched ${members.length} presence members`, { count: members.length });
 
         if (!this.shouldOutputJson(flags)) {
-           if (members.length > 1) {
-             this.log(`\nCurrent presence members (${members.length - 1} others):\n`)
-             members.forEach(member => {
-               if (member.clientId !== client?.auth.clientId) {
-                 this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`)
+       const otherMembers = members.filter(member => member.clientId !== client?.auth.clientId);
+       if (otherMembers.length > 0) {
+         this.log(`\nCurrent presence members (${otherMembers.length} others):\n`);
+         for (const member of otherMembers) {
+           this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`);
                  if (member.data && Object.keys(member.data).length > 0) {
-                   this.log(`  Data: ${JSON.stringify(member.data, null, 2)}`)
-                 }
+             this.log(`  Data: ${JSON.stringify(member.data, null, 2)}`);
                }
-             })
+             }
            } else {
-             this.log('\nNo other clients are present in this channel')
+         this.log('\nNo other clients are present in this channel');
            }
         }
+  }
 
+  private async enterAndDisplayPresence(channel: Ably.RealtimeChannel, client: Ably.Realtime, flags: Record<string, unknown>, presenceData: Record<string, unknown>): Promise<void> {
+    this.logCliEvent(flags, 'presence', 'entering', `Attempting to enter presence on ${channel.name}`, { data: presenceData });
+    await channel.presence.enter(presenceData);
+    this.logCliEvent(flags, 'presence', 'entered', `Successfully entered presence on ${channel.name}`, { clientId: client.auth.clientId });
+
+    if (!this.shouldOutputJson(flags)) {
+       this.log(`${chalk.green('✓')} Entered presence on channel ${chalk.cyan(channel.name)} as ${chalk.blue(client.auth.clientId)}`);
+    }
+
+    if (flags['show-others']) {
+      await this.displayCurrentMembers(channel, client, flags);
         this.logCliEvent(flags, 'presence', 'listening', 'Listening for presence events until terminated');
         if (!this.shouldOutputJson(flags)) {
            this.log('\nListening for presence events until terminated. Press Ctrl+C to exit.');
@@ -142,96 +116,108 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
             this.log('\nStaying present until terminated. Press Ctrl+C to exit.');
          }
       }
+  }
 
-      // Keep the process running until interrupted
-      await new Promise((resolve) => {
-        let cleanupInProgress = false
-
-        const cleanup = async () => {
-          if (cleanupInProgress) return
-          cleanupInProgress = true
-
-          this.logCliEvent(flags, 'presence', 'cleanupInitiated', 'Cleanup initiated (Ctrl+C pressed)');
-          if (!this.shouldOutputJson(flags)) {
-             this.log('\nLeaving presence and closing connection...');
-          }
-
-          // Set a force exit timeout
-          const forceExitTimeout = setTimeout(() => {
-             this.logCliEvent(flags, 'presence', 'forceExit', 'Force exiting after timeout during cleanup');
-             if (!this.shouldOutputJson(flags)) {
-                this.log(chalk.red('Force exiting after timeout...'));
-             }
-            process.exit(1)
-          }, 5000)
-
-          try {
-            try {
-              // Try to leave presence first
-              this.logCliEvent(flags, 'presence', 'leaving', 'Attempting to leave presence');
-              await channel.presence.leave()
-              this.logCliEvent(flags, 'presence', 'left', 'Successfully left presence');
-              if (!this.shouldOutputJson(flags)) {
-                 this.log(chalk.green('Successfully left presence.'));
-              }
-            } catch (error) {
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              this.logCliEvent(flags, 'presence', 'leaveError', `Error leaving presence: ${errorMsg}`, { error: errorMsg });
-              // If leaving presence fails (likely due to channel being detached), just log and continue
-              if (!this.shouldOutputJson(flags)) {
-                 this.log(`Note: ${errorMsg}`);
-                 this.log('Continuing with connection close.');
-              }
-            }
-
-            // Now close the connection
-            if (client) {
-               this.logCliEvent(flags, 'connection', 'closing', 'Closing Ably connection.');
-               client.close();
-               this.logCliEvent(flags, 'connection', 'closed', 'Ably connection closed.');
-               if (!this.shouldOutputJson(flags)) {
-                  this.log(chalk.green('Successfully closed connection.'));
-               }
-            }
-
-            clearTimeout(forceExitTimeout)
-            resolve(null)
-            process.exit(0)
-          } catch (error) {
-             const errorMsg = error instanceof Error ? error.message : String(error);
-             this.logCliEvent(flags, 'presence', 'cleanupError', `Error during cleanup: ${errorMsg}`, { error: errorMsg });
-             if (!this.shouldOutputJson(flags)) {
-                this.log(`Error during cleanup: ${errorMsg}`);
-             }
-            clearTimeout(forceExitTimeout)
-            process.exit(1)
-          }
-        }
-
-        process.once('SIGINT', () => void cleanup())
-        process.once('SIGTERM', () => void cleanup())
-      })
+  private parsePresenceData(flags: Record<string, unknown>): Record<string, unknown> | null {
+    try {
+      const data = JSON.parse(flags.data as string);
+      this.logCliEvent(flags, 'presence', 'dataParsed', 'Presence data parsed successfully', { data });
+      return data;
     } catch (error) {
-       const errorMsg = error instanceof Error ? error.message : String(error);
-       this.logCliEvent(flags || {}, 'presence', 'fatalError', `Error entering presence: ${errorMsg}`, { error: errorMsg });
-       this.error(`Error entering presence: ${errorMsg}`);
-    } finally {
-      // Ensure client is closed even if cleanup promise didn't resolve
-      if (this.client && this.client.connection.state !== 'closed') {
-          this.logCliEvent(flags || {}, 'connection', 'finalCloseAttempt', 'Ensuring connection is closed in finally block.');
-          this.client.close();
-      }
+      const errorMsg = 'Invalid JSON data format. Please provide a valid JSON string.';
+      this.logCliEvent(flags, 'presence', 'dataParseError', errorMsg, { error: error instanceof Error ? error.message : String(error) });
+      this.error(errorMsg);
+      return null;
     }
   }
 
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.client && this.client.connection.state !== 'closed') {
-       // Check state before closing to avoid errors if already closed
-       if (this.client.connection.state !== 'failed') {
-           this.client.close();
-       }
+  private async setupClientAndChannel(flags: Record<string, unknown>, channelName: string): Promise<{ channel: Ably.RealtimeChannel | null; client: Ably.Realtime | null }> {
+    this.client = await this.createAblyClient(flags);
+    if (!this.client) return { channel: null, client: null };
+
+    const {client} = this;
+
+    client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+    });
+
+    const channel = client.channels.get(channelName);
+    channel.on((stateChange: Ably.ChannelStateChange) => {
+      this.logCliEvent(flags, 'channel', stateChange.current, `Channel '${channelName}' state changed to ${stateChange.current}`, { reason: stateChange.reason });
+    });
+
+    await channel.attach().catch(error => {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'presence', 'attachError', `Error attaching to channel: ${errorMsg}`, { channel: channelName, error: errorMsg });
+      throw new Error(`Failed to attach to channel ${channelName}: ${errorMsg}`);
+    });
+    this.logCliEvent(flags, 'presence', 'attachSuccess', 'Successfully attached to channel', { channel: channelName });
+
+    return { channel, client };
+  }
+
+  private setupPresenceSubscriptions(channel: Ably.RealtimeChannel, client: Ably.Realtime, flags: Record<string, unknown>): void {
+    this.logCliEvent(flags, 'presence', 'subscribingToOthers', 'Subscribing to other presence events');
+
+    const logOtherPresence = (eventType: string, eventDesc: string, chalkColor: (text: string) => string, icon: string, presenceMessage: Ably.PresenceMessage) => {
+      if (presenceMessage.clientId !== client?.auth.clientId) {
+        this.logCliEvent(flags, 'presence', eventType, `${presenceMessage.clientId || 'Unknown'} ${eventDesc}`, { clientId: presenceMessage.clientId, data: presenceMessage.data });
+        if (!this.shouldOutputJson(flags)) {
+           this.log(`${icon} ${chalkColor(presenceMessage.clientId || 'Unknown')} ${eventDesc}`);
+           if (eventType === 'memberUpdated' && presenceMessage.data) {
+              this.log(`  ${this.formatJsonOutput(presenceMessage.data, flags)}`);
+           }
+        }
+      }
+    };
+
+    channel.presence.subscribe('enter', (msg) => logOtherPresence('memberEntered', 'entered presence', chalk.blue, chalk.green('✓'), msg));
+    channel.presence.subscribe('leave', (msg) => logOtherPresence('memberLeft', 'left presence', chalk.blue, chalk.red('✗'), msg));
+    channel.presence.subscribe('update', (msg) => logOtherPresence('memberUpdated', 'updated presence data', chalk.blue, chalk.yellow('⟲'), msg));
+  }
+
+  // This method contains the specific cleanup logic for this command.
+  private async _cleanupPresence(channel: Ably.RealtimeChannel, client: Ably.Realtime, flags: Record<string, unknown>): Promise<void> {
+    this.logCliEvent(flags, 'presence', 'cleanupInitiated', 'Cleanup initiated (Signal received)');
+    if (!this.shouldOutputJson(flags)) {
+        this.log('\nLeaving presence and closing connection...');
+    }
+
+    try {
+      // Try to leave presence first
+      this.logCliEvent(flags, 'presence', 'leaving', 'Attempting to leave presence');
+      await channel.presence.leave();
+      this.logCliEvent(flags, 'presence', 'left', 'Successfully left presence');
+      if (!this.shouldOutputJson(flags)) {
+          this.log(chalk.green('Successfully left presence.'));
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'presence', 'leaveError', `Error leaving presence: ${errorMsg}`, { error: errorMsg });
+      if (!this.shouldOutputJson(flags)) {
+          this.log(`Note: ${errorMsg}`);
+          this.log('Continuing with connection close.');
+      }
+    } finally {
+      // Ensure connection close happens even if leave fails
+      try {
+          if (client && client.connection.state !== 'closed') {
+        this.logCliEvent(flags, 'connection', 'closing', 'Closing Ably connection.');
+        client.close();
+             // Wait for close event might be better, but for CLI, immediate exit is okay
+        this.logCliEvent(flags, 'connection', 'closed', 'Ably connection closed.');
+        if (!this.shouldOutputJson(flags)) {
+            this.log(chalk.green('Successfully closed connection.'));
+        }
      }
-     return super.finally(err);
-   }
+      } catch (closeError) {
+          const errorMsg = closeError instanceof Error ? closeError.message : String(closeError);
+          this.logCliEvent(flags, 'connection', 'closeError', `Error closing connection: ${errorMsg}`, { error: errorMsg });
+      if (!this.shouldOutputJson(flags)) {
+             this.log(chalk.red(`Error closing connection: ${errorMsg}`));
+      }
+          // Error during close is logged, but cleanup continues
+      }
+    }
+  }
 } 

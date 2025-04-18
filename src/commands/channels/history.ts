@@ -1,10 +1,18 @@
 import { Args, Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../base-command.js'
 import * as Ably from 'ably'
 import chalk from 'chalk'
+
+import { AblyBaseCommand } from '../../base-command.js'
 import { formatJson, isJsonData } from '../../utils/json-formatter.js'
 
 export default class ChannelsHistory extends AblyBaseCommand {
+  static override args = {
+    channel: Args.string({
+      description: 'Channel name to retrieve history for',
+      required: true,
+    }),
+  }
+
   static override description = 'Retrieve message history for a channel'
 
   static override examples = [
@@ -18,31 +26,24 @@ export default class ChannelsHistory extends AblyBaseCommand {
 
   static override flags = {
     ...AblyBaseCommand.globalFlags,
-    'limit': Flags.integer({
-      description: 'Maximum number of messages to retrieve',
-      default: 50,
-    }),
-    'direction': Flags.string({
-      description: 'Direction of message retrieval',
-      options: ['backwards', 'forwards'],
-      default: 'backwards',
-    }),
-    
-    'start': Flags.string({
-      description: 'Start time for the history query (ISO 8601 format)',
-    }),
-    'end': Flags.string({
-      description: 'End time for the history query (ISO 8601 format)',
-    }),
     'cipher': Flags.string({
       description: 'Decryption key for encrypted messages (AES-128)',
     }),
-  }
-
-  static override args = {
-    channel: Args.string({
-      description: 'Channel name to retrieve history for',
-      required: true,
+    'direction': Flags.string({
+      default: 'backwards',
+      description: 'Direction of message retrieval',
+      options: ['backwards', 'forwards'],
+    }),
+    
+    'end': Flags.string({
+      description: 'End time for the history query (ISO 8601 format)',
+    }),
+    'limit': Flags.integer({
+      default: 50,
+      description: 'Maximum number of messages to retrieve',
+    }),
+    'start': Flags.string({
+      description: 'Start time for the history query (ISO 8601 format)',
     }),
   }
 
@@ -81,8 +82,8 @@ export default class ChannelsHistory extends AblyBaseCommand {
       
       // Build history query parameters
       const historyParams: Ably.RealtimeHistoryParams = {
-        limit: flags.limit,
         direction: flags.direction as 'backwards' | 'forwards',
+        limit: flags.limit,
       }
       
       // Add time range if specified
@@ -98,9 +99,9 @@ export default class ChannelsHistory extends AblyBaseCommand {
       const history = await channel.history(historyParams)
       const messages = history.items
       
-      // Output results based on format
+      // Display results based on format
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput(messages, flags))
+        this.log(this.formatJsonOutput({ messages }, flags))
       } else {
         if (messages.length === 0) {
           this.log('No messages found in the channel history.')
@@ -110,7 +111,7 @@ export default class ChannelsHistory extends AblyBaseCommand {
         this.log(`Found ${chalk.cyan(messages.length.toString())} messages in the history of channel ${chalk.green(channelName)}:`)
         this.log('')
         
-        messages.forEach((message, index) => {
+        for (const [index, message] of messages.entries()) {
           const timestamp = message.timestamp 
             ? new Date(message.timestamp).toISOString() 
             : 'Unknown timestamp'
@@ -130,7 +131,7 @@ export default class ChannelsHistory extends AblyBaseCommand {
           }
           
           this.log('')
-        })
+        }
         
         if (messages.length === flags.limit) {
           this.log(chalk.yellow(`Showing maximum of ${flags.limit} messages. Use --limit to show more.`))

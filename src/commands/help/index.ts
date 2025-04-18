@@ -1,6 +1,8 @@
-import {Command, Flags} from '@oclif/core'
-import chalk from 'chalk'
-import CustomHelp from '../../help.js'
+import { Command, Flags, Config } from "@oclif/core";
+import chalk from "chalk";
+import stripAnsi from 'strip-ansi';
+
+import { ConfigManager } from "../../services/config-manager.js";
 
 export default class HelpCommand extends Command {
   static description = 'Get help from Ably'
@@ -16,9 +18,19 @@ export default class HelpCommand extends Command {
     help: Flags.help({char: 'h'}),
   }
 
-  async run(): Promise<void> {
-    const {flags} = await this.parse(HelpCommand)
+  protected webCliMode: boolean;
+  protected configManager: ConfigManager;
+  protected isShowingRootHelp: boolean = false;
 
+  constructor(argv: string[], config: Config) {
+    super(argv, config);
+    this.webCliMode = process.env.ABLY_WEB_CLI_MODE === 'true';
+    this.configManager = new ConfigManager();
+  }
+  
+  async run(): Promise<void> {
+    await this.parse(HelpCommand)
+    
     this.log('Ably help commands:')
     this.log('')
     this.log('  ably help ask       - Ask a question to the Ably AI agent for help')
@@ -28,69 +40,50 @@ export default class HelpCommand extends Command {
     this.log('')
     this.log('Run `ably help COMMAND --help` for more information on a command.')
     
-    // Add suggestion for ably --help
     this.log('')
     this.log(chalk.yellow('Did you mean ably --help? Here\'s a list of all commands available for ably:'))
     this.log('')
     
-    // Show usage similar to the welcome message
     this.log(`${chalk.bold('USAGE')}`)
     this.log(`  $ ably [COMMAND]`)
     this.log('')
     
-    // Show commands list
     this.displayAllCommands()
   }
-  
+
+  formatHelpOutput(output: string): string {
+    if (process.env.GENERATING_README === 'true') {
+      return stripAnsi(output);
+    }
+    return output;
+  }
+
   private async displayAllCommands(): Promise<void> {
-    // Create an instance of CustomHelp to access its methods
-    const help = new CustomHelp(this.config)
-    
-    // Get all top-level commands and topics
-    const rootCommands: { id: string, description: string }[] = []
-    
-    // Process all commands, filtering for root-level commands only
+    const rootCommands: { description: string, id: string }[] = []
     for (const c of this.config.commands) {
       try {
-        // Skip commands with dashes in name
-        if (c.id.startsWith('--')) {
-          continue;
-        }
-        
-        // Only process commands with no spaces or colons (top-level commands)
-        if (c.id.includes(' ') || c.id.includes(':')) {
+        if (c.id.startsWith('--') || c.id.includes(' ') || c.id.includes(':')) {
           continue
         }
-        
-        // Skip alias and internal commands
         const cmd = await c.load()
-        if ((cmd as any).isAlias || (cmd as any).isInternal || (cmd as any).hidden) {
+        if ((cmd && ('isAlias' in cmd && cmd.isAlias)) || 
+            (cmd && ('isInternal' in cmd && cmd.isInternal)) || 
+            (cmd && ('hidden' in cmd && cmd.hidden))) {
           continue
         }
-        
         rootCommands.push({
-          id: c.id,
-          description: cmd.description || ''
+          description: cmd.description || '',
+          id: c.id
         })
-      } catch (error) {
-        // Skip commands that can't be loaded
-      }
+      } catch { /* Skip commands that can't be loaded */ }
     }
-    
-    // Sort commands alphabetically
     rootCommands.sort((a, b) => a.id.localeCompare(b.id))
-    
-    // Calculate padding - find the longest command ID
     const maxLength = Math.max(...rootCommands.map(cmd => cmd.id.length))
-    const paddingLength = maxLength + 4 // Add 4 spaces of padding
-    
-    // Show commands heading
+    const paddingLength = maxLength + 4
     this.log(`${chalk.bold('COMMANDS')}`)
-    
-    // Add each command with its description to the output
-    rootCommands.forEach(entry => {
+    for (const entry of rootCommands) {
       const padding = ' '.repeat(paddingLength - entry.id.length)
       this.log(`  ${chalk.cyan(entry.id)}${padding}${entry.description}`)
-    })
+    }
   }
 } 

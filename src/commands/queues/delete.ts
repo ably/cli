@@ -1,8 +1,16 @@
-import { Flags, Args } from '@oclif/core'
+import { Args, Flags } from '@oclif/core'
+import * as readline from 'node:readline'
+
 import { ControlBaseCommand } from '../../control-base-command.js'
-import * as readline from 'readline'
 
 export default class QueuesDeleteCommand extends ControlBaseCommand {
+  static args = {
+    queueName: Args.string({
+      description: 'Name of the queue to delete',
+      required: true,
+    }),
+  }
+
   static description = 'Delete a queue'
 
   static examples = [
@@ -18,17 +26,10 @@ export default class QueuesDeleteCommand extends ControlBaseCommand {
       required: false,
     }),
     'force': Flags.boolean({
+      char: 'f',
+      default: false,
       description: 'Force deletion without confirmation',
       required: false,
-      default: false,
-      char: 'f',
-    }),
-  }
-
-  static args = {
-    queueName: Args.string({
-      description: 'Name of the queue to delete',
-      required: true,
     }),
   }
 
@@ -39,7 +40,7 @@ export default class QueuesDeleteCommand extends ControlBaseCommand {
     
     try {
       // Get app ID from flags or config
-      const appId = await this.getAppId(flags)
+      const appId = await this.resolveAppId(flags)
       
       if (!appId) {
         this.error('No app specified. Use --app flag or select an app with "ably apps switch"')

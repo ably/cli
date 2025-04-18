@@ -1,9 +1,18 @@
 import { Args, Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../base-command.js'
 import * as Ably from 'ably'
-import * as https from 'https'
+import * as https from 'node:https'
+
+import { AblyBaseCommand } from '../../base-command.js'
 
 export default class RevokeTokenCommand extends AblyBaseCommand {
+  static args = {
+    token: Args.string({
+      description: 'Token to revoke',
+      name: 'token',
+      required: true,
+    }),
+  }
+
   static description = 'Revokes the token provided'
 
   static examples = [
@@ -11,14 +20,6 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
     '$ ably auth revoke-token TOKEN --client-id clientid',
     '$ ably auth revoke-token TOKEN --json',
     '$ ably auth revoke-token TOKEN --pretty-json']
-
-  static args = {
-    token: Args.string({
-      name: 'token',
-      required: true,
-      description: 'Token to revoke',
-    }),
-  }
 
   static flags = {
     ...AblyBaseCommand.globalFlags,
@@ -28,12 +29,12 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
     }),
     
     'client-id': Flags.string({
-      description: 'Client ID to revoke tokens for',
       char: 'c',
+      description: 'Client ID to revoke tokens for',
     }),
     'debug': Flags.boolean({
-      description: 'Show debug information',
       default: false,
+      description: 'Show debug information',
     }),
   }
 
@@ -49,8 +50,8 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
       return
     }
     
-    const { appId, apiKey } = appAndKey
-    const token = args.token
+    const { apiKey } = appAndKey
+    const { token } = args
     
     try {
       if (flags.debug) {
@@ -64,7 +65,7 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
       this.ablyClient = client
       
       // Create Ably REST client with client options
-      const rest = new Ably.Rest(this.getClientOptions(flags))
+      const _rest = new Ably.Rest(this.getClientOptions(flags))
       
       const clientId = flags['client-id'] || token
       
@@ -106,9 +107,9 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
         
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            response: response,
             message: 'Token revocation processed successfully',
+            response,
+            success: true,
           }, flags))
         } else {
           this.log('Token successfully revoked')
@@ -124,8 +125,8 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
         if (error.message && error.message.includes('token_not_found')) {
           if (this.shouldOutputJson(flags)) {
             this.log(this.formatJsonOutput({
-              success: false,
               error: 'Token not found or already revoked',
+              success: false,
             }, flags))
           } else {
             this.log('Error: Token not found or already revoked')
@@ -155,20 +156,25 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
   }
   
   // Helper method to make a direct HTTP request to the Ably REST API
-  private makeHttpRequest(keyName: string, secret: string, requestBody: any, debug: boolean): Promise<any> {
+  private makeHttpRequest(
+    keyName: string, 
+    secret: string, 
+    requestBody: Record<string, unknown>, 
+    debug: boolean
+  ): Promise<Record<string, unknown> | string | null> {
     return new Promise((resolve, reject) => {
       const encodedAuth = Buffer.from(`${keyName}:${secret}`).toString('base64')
       
       const options = {
-        hostname: 'rest.ably.io',
-        port: 443,
-        path: `/keys/${keyName}/revokeTokens`,
-        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': `Basic ${encodedAuth}`
-        }
+          'Authorization': `Basic ${encodedAuth}`,
+          'Content-Type': 'application/json'
+        },
+        hostname: 'rest.ably.io',
+        method: 'POST',
+        path: `/keys/${keyName}/revokeTokens`,
+        port: 443
       }
       
       if (debug) {
@@ -187,7 +193,7 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
             try {
               const jsonResponse = data.length > 0 ? JSON.parse(data) : null
               resolve(jsonResponse)
-            } catch (e) {
+            } catch {
               resolve(data)
             }
           } else {

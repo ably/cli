@@ -1,8 +1,16 @@
-import { Flags, Args } from '@oclif/core'
-import { ControlBaseCommand } from '../../../control-base-command.js'
+import { Args, Flags } from '@oclif/core'
 import chalk from 'chalk'
 
+import { ControlBaseCommand } from '../../../control-base-command.js'
+
 export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
+  static args = {
+    nameOrId: Args.string({
+      description: 'Name or ID of the channel rule to update',
+      required: true,
+    }),
+  }
+
   static description = 'Update a channel rule'
 
   static examples = [
@@ -13,49 +21,28 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
-    'persisted': Flags.boolean({
-      description: 'Whether messages on channels matching this rule should be persisted',
+    'app': Flags.string({
+      description: 'App ID or name to update the channel rule in',
       required: false,
-      allowNo: true,
-    }),
-    'push-enabled': Flags.boolean({
-      description: 'Whether push notifications should be enabled for channels matching this rule',
-      required: false,
-      allowNo: true,
     }),
     'authenticated': Flags.boolean({
+      allowNo: true,
       description: 'Whether channels matching this rule require clients to be authenticated',
       required: false,
-      allowNo: true,
-    }),
-    'persist-last': Flags.boolean({
-      description: 'Whether to persist only the last message on channels matching this rule',
-      required: false,
-      allowNo: true,
-    }),
-    'expose-time-serial': Flags.boolean({
-      description: 'Whether to expose the time serial for messages on channels matching this rule',
-      required: false,
-      allowNo: true,
-    }),
-    'populate-channel-registry': Flags.boolean({
-      description: 'Whether to populate the channel registry for channels matching this rule',
-      required: false,
-      allowNo: true,
     }),
     'batching-enabled': Flags.boolean({
+      allowNo: true,
       description: 'Whether to enable batching for messages on channels matching this rule',
       required: false,
-      allowNo: true,
     }),
     'batching-interval': Flags.integer({
       description: 'The batching interval for messages on channels matching this rule',
       required: false,
     }),
     'conflation-enabled': Flags.boolean({
+      allowNo: true,
       description: 'Whether to enable conflation for messages on channels matching this rule',
       required: false,
-      allowNo: true,
     }),
     'conflation-interval': Flags.integer({
       description: 'The conflation interval for messages on channels matching this rule',
@@ -65,21 +52,35 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
       description: 'The conflation key for messages on channels matching this rule',
       required: false,
     }),
+    'expose-time-serial': Flags.boolean({
+      allowNo: true,
+      description: 'Whether to expose the time serial for messages on channels matching this rule',
+      required: false,
+    }),
+    'persist-last': Flags.boolean({
+      allowNo: true,
+      description: 'Whether to persist only the last message on channels matching this rule',
+      required: false,
+    }),
+    'persisted': Flags.boolean({
+      allowNo: true,
+      description: 'Whether messages on channels matching this rule should be persisted',
+      required: false,
+    }),
+    'populate-channel-registry': Flags.boolean({
+      allowNo: true,
+      description: 'Whether to populate the channel registry for channels matching this rule',
+      required: false,
+    }),
+    'push-enabled': Flags.boolean({
+      allowNo: true,
+      description: 'Whether push notifications should be enabled for channels matching this rule',
+      required: false,
+    }),
     'tls-only': Flags.boolean({
+      allowNo: true,
       description: 'Whether to enforce TLS for channels matching this rule',
       required: false,
-      allowNo: true,
-    }),
-    'app': Flags.string({
-      description: 'App ID or name to update the channel rule in',
-      required: false,
-    }),
-  }
-
-  static args = {
-    nameOrId: Args.string({
-      description: 'Name or ID of the channel rule to update',
-      required: true,
     }),
   }
 
@@ -90,19 +91,22 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
     let appId: string | undefined;
     
     try {
-      // Get app ID from flags or config
-      appId = await this.getAppId(flags)
+      let appId = flags.app
+      if (!appId) {
+        appId = await this.resolveAppId(flags)
+      }
       
       if (!appId) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
             error: 'No app specified. Use --app flag or select an app with "ably apps switch"',
-            status: 'error'
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error('No app specified. Use --app flag or select an app with "ably apps switch"');
         }
+
         return;
       }
       
@@ -113,14 +117,15 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
       if (!namespace) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
+            appId,
             error: `Channel rule "${args.nameOrId}" not found`,
             status: 'error',
-            appId: appId
+            success: false
           }, flags));
         } else {
           this.error(`Channel rule "${args.nameOrId}" not found`);
         }
+
         return;
       }
       
@@ -179,15 +184,16 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
       if (Object.keys(updateData).length === 0) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
+            appId,
             error: 'No update parameters provided. Use one of the flag options to update the channel rule.',
+            ruleId: namespace.id,
             status: 'error',
-            appId: appId,
-            ruleId: namespace.id
+            success: false
           }, flags));
         } else {
           this.error('No update parameters provided. Use one of the flag options to update the channel rule.');
         }
+
         return;
       }
       
@@ -195,26 +201,26 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
-          appId: appId,
+          appId,
           rule: {
-            id: updatedNamespace.id,
-            persisted: updatedNamespace.persisted,
-            pushEnabled: updatedNamespace.pushEnabled,
             authenticated: updatedNamespace.authenticated,
-            persistLast: updatedNamespace.persistLast,
-            exposeTimeSerial: updatedNamespace.exposeTimeSerial,
-            populateChannelRegistry: updatedNamespace.populateChannelRegistry,
             batchingEnabled: updatedNamespace.batchingEnabled,
             batchingInterval: updatedNamespace.batchingInterval,
             conflationEnabled: updatedNamespace.conflationEnabled,
             conflationInterval: updatedNamespace.conflationInterval,
             conflationKey: updatedNamespace.conflationKey,
-            tlsOnly: updatedNamespace.tlsOnly,
             created: new Date(updatedNamespace.created).toISOString(),
-            modified: new Date(updatedNamespace.modified).toISOString()
-          }
+            exposeTimeSerial: updatedNamespace.exposeTimeSerial,
+            id: updatedNamespace.id,
+            modified: new Date(updatedNamespace.modified).toISOString(),
+            persistLast: updatedNamespace.persistLast,
+            persisted: updatedNamespace.persisted,
+            populateChannelRegistry: updatedNamespace.populateChannelRegistry,
+            pushEnabled: updatedNamespace.pushEnabled,
+            tlsOnly: updatedNamespace.tlsOnly
+          },
+          success: true,
+          timestamp: new Date().toISOString()
         }, flags));
       } else {
         this.log('Channel rule updated successfully:');
@@ -225,30 +231,39 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
         if (updatedNamespace.authenticated !== undefined) {
           this.log(`Authenticated: ${updatedNamespace.authenticated ? chalk.green('Yes') : 'No'}`);
         }
+
         if (updatedNamespace.persistLast !== undefined) {
           this.log(`Persist Last: ${updatedNamespace.persistLast ? chalk.green('Yes') : 'No'}`);
         }
+
         if (updatedNamespace.exposeTimeSerial !== undefined) {
           this.log(`Expose Time Serial: ${updatedNamespace.exposeTimeSerial ? chalk.green('Yes') : 'No'}`);
         }
+
         if (updatedNamespace.populateChannelRegistry !== undefined) {
           this.log(`Populate Channel Registry: ${updatedNamespace.populateChannelRegistry ? chalk.green('Yes') : 'No'}`);
         }
+
         if (updatedNamespace.batchingEnabled !== undefined) {
           this.log(`Batching Enabled: ${updatedNamespace.batchingEnabled ? chalk.green('Yes') : 'No'}`);
         }
+
         if (updatedNamespace.batchingInterval !== undefined) {
           this.log(`Batching Interval: ${chalk.green(updatedNamespace.batchingInterval.toString())}`);
         }
+
         if (updatedNamespace.conflationEnabled !== undefined) {
           this.log(`Conflation Enabled: ${updatedNamespace.conflationEnabled ? chalk.green('Yes') : 'No'}`);
         }
+
         if (updatedNamespace.conflationInterval !== undefined) {
           this.log(`Conflation Interval: ${chalk.green(updatedNamespace.conflationInterval.toString())}`);
         }
+
         if (updatedNamespace.conflationKey !== undefined) {
           this.log(`Conflation Key: ${chalk.green(updatedNamespace.conflationKey)}`);
         }
+
         if (updatedNamespace.tlsOnly !== undefined) {
           this.log(`TLS Only: ${updatedNamespace.tlsOnly ? chalk.green('Yes') : 'No'}`);
         }
@@ -259,10 +274,10 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
+          appId,
           error: error instanceof Error ? error.message : String(error),
           status: 'error',
-          appId: appId
+          success: false
         }, flags));
       } else {
         this.error(`Error updating channel rule: ${error instanceof Error ? error.message : String(error)}`);

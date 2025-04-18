@@ -1,8 +1,17 @@
 import {Args, Flags} from '@oclif/core'
-import {ChatBaseCommand} from '../../../chat-base-command.js'
+import * as Ably from 'ably'
 import chalk from 'chalk'
 
+import {ChatBaseCommand} from '../../../chat-base-command.js'
+
 export default class MessagesGet extends ChatBaseCommand {
+  static override args = {
+    roomId: Args.string({
+      description: 'The room ID to get messages from',
+      required: true,
+    }),
+  }
+
   static override description = 'Get historical messages from an Ably Chat room'
 
   static override examples = [
@@ -18,33 +27,30 @@ export default class MessagesGet extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
     limit: Flags.integer({
       char: 'l',
-      description: 'Maximum number of messages to retrieve',
       default: 20,
+      description: 'Maximum number of messages to retrieve',
     }),
     'show-metadata': Flags.boolean({
-      description: 'Display message metadata if available',
       default: false,
+      description: 'Display message metadata if available',
     }),
   }
 
-  static override args = {
-    roomId: Args.string({
-      description: 'The room ID to get messages from',
-      required: true,
-    }),
-  }
+  private ablyClient: Ably.Realtime | null = null;
 
   async run(): Promise<void> {
     const {args, flags} = await this.parse(MessagesGet)
     
-    let clients = null
-    
     try {
       // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      const chatClient = await this.createChatClient(flags)
+      // Also get the underlying Ably client for cleanup
+      this.ablyClient = await this.createAblyClient(flags);
 
-      const {chatClient, realtimeClient} = clients
+      if (!chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
       
       // Get the room
       const room = await chatClient.rooms.get(args.roomId, {})
@@ -55,10 +61,10 @@ export default class MessagesGet extends ChatBaseCommand {
       if (!this.shouldSuppressOutput(flags)) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            status: 'fetching',
             limit: flags.limit,
-            roomId: args.roomId
+            roomId: args.roomId,
+            status: 'fetching',
+            success: true
           }, flags))
         } else {
           this.log(`${chalk.green('Fetching')} ${chalk.yellow(flags.limit.toString())} ${chalk.green('most recent messages from room:')} ${chalk.bold(args.roomId)}`)
@@ -67,18 +73,18 @@ export default class MessagesGet extends ChatBaseCommand {
       
       // Get historical messages
       const messagesResult = await room.messages.get({ limit: flags.limit })
-      const items = messagesResult.items
+      const {items} = messagesResult
       
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
           messages: items.map(message => ({
-            text: message.text,
             clientId: message.clientId,
+            text: message.text,
             timestamp: message.timestamp,
             ...(flags['show-metadata'] && message.metadata ? { metadata: message.metadata } : {})
           })),
-          roomId: args.roomId
+          roomId: args.roomId,
+          success: true
         }, flags))
       } else {
         // Display messages count
@@ -112,17 +118,17 @@ export default class MessagesGet extends ChatBaseCommand {
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: false,
           error: error instanceof Error ? error.message : String(error),
-          roomId: args.roomId
+          roomId: args.roomId,
+          success: false
         }, flags))
       } else {
         this.error(`Failed to get messages: ${error instanceof Error ? error.message : String(error)}`)
       }
     } finally {
-      // Close the connection
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+      // Close the underlying Ably connection
+      if (this.ablyClient && this.ablyClient.connection.state !== 'closed') {
+        this.ablyClient.close()
       }
     }
   }

@@ -1,18 +1,17 @@
 import { AblyBaseCommand } from '../../base-command.js'
-import { ConfigManager } from '../../services/config-manager.js'
 import { AblyMcpServer } from '../../mcp/index.js'
-import { Flags } from '@oclif/core'
+import { ConfigManager } from '../../services/config-manager.js'
 
 export default class StartMcpServer extends AblyBaseCommand {
   static description = 'Start an MCP server for AI tools to interact with Ably (currently experimental)'
   
-  static flags = {
-    // AblyBaseCommand already defines control-host as a global flag
-  }
-  
   static examples = [
     '<%= config.bin %> <%= command.id %>',
   ]
+  
+  static flags = {
+    // AblyBaseCommand already defines control-host as a global flag
+  }
 
   async run(): Promise<void> {
     // Check if this command is allowed in web CLI mode

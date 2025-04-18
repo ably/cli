@@ -1,10 +1,18 @@
 import { Args, Flags } from '@oclif/core'
-import { ControlBaseCommand } from '../../../control-base-command.js'
-import { AppStats } from '../../../services/control-api.js'
-import { StatsDisplay } from '../../../services/stats-display.js'
 import chalk from 'chalk'
+import { StatsDisplay } from '../../../services/stats-display.js'
+import { ControlBaseCommand } from '../../../control-base-command.js'
+import type { BaseFlags } from '../../../types/cli.js'
+import type { ControlApi } from '../../../services/control-api.js'
 
 export default class AppsStatsCommand extends ControlBaseCommand {
+  static args = {
+    id: Args.string({
+      description: 'App ID to get stats for (uses default app if not provided)',
+      required: false,
+    }),
+  }
+
   static description = 'Get app stats with optional live updates'
 
   static examples = [
@@ -23,46 +31,39 @@ export default class AppsStatsCommand extends ControlBaseCommand {
 
   static flags = {
     ...ControlBaseCommand.globalFlags,
-    'start': Flags.integer({
-      description: 'Start time in milliseconds since epoch',
+    'debug': Flags.boolean({
+      default: false,
+      description: 'Show debug information for live stats polling',
     }),
     'end': Flags.integer({
       description: 'End time in milliseconds since epoch',
     }),
-    'unit': Flags.string({
-      description: 'Time unit for stats',
-      options: ['minute', 'hour', 'day', 'month'],
-      default: 'minute',
+    'interval': Flags.integer({
+      default: 6,
+      description: 'Polling interval in seconds (only used with --live)',
     }),
     'limit': Flags.integer({
-      description: 'Maximum number of stats records to return',
       default: 10,
+      description: 'Maximum number of stats records to return',
     }),
     
     'live': Flags.boolean({
+      default: false,
       description: 'Subscribe to live stats updates (uses minute interval)',
-      default: false,
     }),
-    'interval': Flags.integer({
-      description: 'Polling interval in seconds (only used with --live)',
-      default: 6,
+    'start': Flags.integer({
+      description: 'Start time in milliseconds since epoch',
     }),
-    'debug': Flags.boolean({
-      description: 'Show debug information for live stats polling',
-      default: false,
-    }),
-  }
-
-  static args = {
-    id: Args.string({
-      description: 'App ID to get stats for (uses default app if not provided)',
-      required: false,
+    'unit': Flags.string({
+      default: 'minute',
+      description: 'Time unit for stats',
+      options: ['minute', 'hour', 'day', 'month'],
     }),
   }
 
+  private isPolling = false
   private pollInterval: NodeJS.Timeout | undefined = undefined
-  private statsDisplay: StatsDisplay | null = null
-  private isPolling = false // Track when we're already fetching stats
+  private statsDisplay: StatsDisplay | null = null // Track when we're already fetching stats
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(AppsStatsCommand)
@@ -88,53 +89,54 @@ export default class AppsStatsCommand extends ControlBaseCommand {
     
     // Create stats display
     this.statsDisplay = new StatsDisplay({
+      intervalSeconds: flags.interval as number,
+      json: this.shouldOutputJson(flags),
       live: flags.live,
       startTime: flags.live ? new Date() : undefined,
-      json: this.shouldOutputJson(flags),
-      unit: flags.unit as 'minute' | 'hour' | 'day' | 'month',
-      intervalSeconds: flags.interval
+      unit: flags.unit as 'day' | 'hour' | 'minute' | 'month'
     })
     
-    if (flags.live) {
-      await this.runLiveStats(appId, flags, controlApi)
-    } else {
-      await this.runOneTimeStats(appId, flags, controlApi)
-    }
+    await (flags.live ? this.runLiveStats(appId, flags, controlApi) : this.runOneTimeStats(appId, flags, controlApi));
   }
 
-  private async runOneTimeStats(appId: string, flags: any, controlApi: any): Promise<void> {
+  private async fetchAndDisplayStats(appId: string, flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
-      this.log(`Fetching stats for app ${appId}...`)
-      
-      // If no start/end time provided, use the last 24 hours
-      if (!flags.start && !flags.end) {
-        const now = new Date()
-        flags.end = now.getTime()
-        flags.start = now.getTime() - (24 * 60 * 60 * 1000) // 24 hours ago
-      }
+      const now = new Date()
+      const start = new Date(now.getTime() - (24 * 60 * 60 * 1000)) // Last 24 hours
       
       const stats = await controlApi.getAppStats(appId, {
-        start: flags.start,
-        end: flags.end,
-        unit: flags.unit,
-        limit: flags.limit,
+        end: now.getTime(),
+        limit: 1, // Only get the most recent stats for live updates
+        start: start.getTime(),
+        unit: flags.unit as string,
       })
       
-      if (stats.length === 0) {
-        this.log('No stats found for the specified period')
-        return
-      }
-
-      // Display each stat interval
-      for (const stat of stats) {
-        this.statsDisplay!.display(stat)
+      if (stats.length > 0) {
+        this.statsDisplay!.display(stats[0])
       }
     } catch (error) {
-      this.error(`Error fetching app stats: ${error instanceof Error ? error.message : String(error)}`)
+      this.error(`Error fetching stats: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
-  private async runLiveStats(appId: string, flags: any, controlApi: any): Promise<void> {
+  private async pollStats(appId: string, flags: BaseFlags, controlApi: ControlApi): Promise<void> {
+    try {
+      this.isPolling = true
+      if (flags.debug) {
+        console.log(chalk.dim(`\n[${new Date().toISOString()}] Polling for new stats...`))
+      }
+      
+      await this.fetchAndDisplayStats(appId, flags, controlApi)
+    } catch (error) {
+      if (flags.debug) {
+        console.error(chalk.red(`Error during stats polling: ${error instanceof Error ? error.message : String(error)}`))
+      }
+    } finally {
+      this.isPolling = false
+    }
+  }
+
+  private async runLiveStats(appId: string, flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
       this.log(`Subscribing to live stats for app ${appId}...`)
       
@@ -144,8 +146,8 @@ export default class AppsStatsCommand extends ControlBaseCommand {
           clearInterval(this.pollInterval)
           this.pollInterval = undefined
         }
+
         this.log('\nUnsubscribed from live stats')
-        process.exit(0)
       }
 
       process.on('SIGINT', cleanup)
@@ -163,7 +165,7 @@ export default class AppsStatsCommand extends ControlBaseCommand {
           // Only show this message if debug flag is enabled
           console.log(chalk.yellow('Skipping poll - previous request still in progress'))
         }
-      }, flags.interval * 1000)
+      }, (flags.interval as number) * 1000)
       
       // Keep the process running
       await new Promise<void>(() => {
@@ -179,40 +181,35 @@ export default class AppsStatsCommand extends ControlBaseCommand {
     }
   }
 
-  private async pollStats(appId: string, flags: any, controlApi: any): Promise<void> {
+  private async runOneTimeStats(appId: string, flags: BaseFlags, controlApi: ControlApi): Promise<void> {
     try {
-      this.isPolling = true
-      if (flags.debug) {
-        console.log(chalk.dim(`\n[${new Date().toISOString()}] Polling for new stats...`))
-      }
+      this.log(`Fetching stats for app ${appId}...`)
       
-      await this.fetchAndDisplayStats(appId, flags, controlApi)
-    } catch (error) {
-      if (flags.debug) {
-        console.error(chalk.red(`Error during stats polling: ${error instanceof Error ? error.message : String(error)}`))
+      // If no start/end time provided, use the last 24 hours
+      if (!flags.start && !flags.end) {
+        const now = new Date()
+        flags.end = now.getTime()
+        flags.start = now.getTime() - (24 * 60 * 60 * 1000) // 24 hours ago
       }
-    } finally {
-      this.isPolling = false
-    }
-  }
-
-  private async fetchAndDisplayStats(appId: string, flags: any, controlApi: any): Promise<void> {
-    try {
-      const now = new Date()
-      const start = new Date(now.getTime() - (24 * 60 * 60 * 1000)) // Last 24 hours
       
       const stats = await controlApi.getAppStats(appId, {
-        start: start.getTime(),
-        end: now.getTime(),
-        unit: flags.unit,
-        limit: 1, // Only get the most recent stats for live updates
+        end: flags.end as number,
+        limit: flags.limit as number,
+        start: flags.start as number,
+        unit: flags.unit as string,
       })
       
-      if (stats.length > 0) {
-        this.statsDisplay!.display(stats[0])
+      if (stats.length === 0) {
+        this.log('No stats found for the specified period')
+        return
+      }
+
+      // Display each stat interval
+      for (const stat of stats) {
+        this.statsDisplay!.display(stat)
       }
     } catch (error) {
-      this.error(`Error fetching stats: ${error instanceof Error ? error.message : String(error)}`)
+      this.error(`Error fetching app stats: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 } 

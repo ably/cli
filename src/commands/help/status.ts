@@ -1,6 +1,6 @@
 import {Command, Flags} from '@oclif/core'
-import fetch from 'node-fetch'
 import chalk from 'chalk'
+import fetch from 'node-fetch'
 import open from 'open'
 import ora from 'ora'
 
@@ -19,8 +19,8 @@ export default class StatusCommand extends Command {
     help: Flags.help({char: 'h'}),
     open: Flags.boolean({
       char: 'o',
-      description: 'Open the Ably status page in a browser',
       default: false,
+      description: 'Open the Ably status page in a browser',
     }),
   }
 

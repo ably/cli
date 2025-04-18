@@ -1,30 +1,50 @@
-import { Args, Flags } from '@oclif/core'
-import { SpacesBaseCommand } from '../../../spaces-base-command.js'
-import chalk from 'chalk'
 import Spaces from '@ably/spaces'
+import { type Space } from '@ably/spaces'
+import { Args, Flags } from '@oclif/core'
 import * as Ably from 'ably'
+import chalk from 'chalk'
 
-interface SpacesClients {
-  spacesClient: Spaces;
-  realtimeClient: Ably.Realtime;
+import { SpacesBaseCommand } from '../../../spaces-base-command.js'
+
+interface LocationData {
+  [key: string]: unknown;
+}
+
+interface Member {
+  clientId?: string;
+  memberId?: string;
+  isCurrentMember?: boolean;
+}
+
+interface LocationWithCurrent {
+  current: {
+    member: Member;
+  };
+  location?: LocationData;
+  data?: LocationData;
+  [key: string]: unknown;
 }
 
 interface LocationItem {
-  memberId?: string;
-  member?: {
-    clientId?: string;
-    isCurrentMember?: boolean;
-  };
+  [key: string]: unknown;
   clientId?: string;
-  id?: string;
-  userId?: string;
-  location?: any;
-  data?: any;
   connectionId?: string;
-  [key: string]: any;
+  data?: LocationData;
+  id?: string;
+  location?: LocationData;
+  member?: Member;
+  memberId?: string;
+  userId?: string;
 }
 
 export default class SpacesLocationsGetAll extends SpacesBaseCommand {
+  static override args = {
+    spaceId: Args.string({
+      description: 'Space ID to get locations from',
+      required: true,
+    }),
+  }
+
   static override description = 'Get all current locations in a space'
 
   static override examples = [
@@ -36,42 +56,39 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
     ...SpacesBaseCommand.globalFlags,
     format: Flags.string({
       char: 'f',
+      default: 'text',
       description: 'Output format',
       options: ['text', 'json'],
-      default: 'text',
     }),
   }
 
-  static override args = {
-    spaceId: Args.string({
-      description: 'Space ID to get locations from',
-      required: true,
-    }),
-  }
+  private realtimeClient: Ably.Realtime | null = null;
+  private spacesClient: Spaces | null = null;
+  private space: Space | null = null;
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesLocationsGetAll)
     
-    let clients: SpacesClients | null = null
+    const {spaceId} = args
     
     try {
-      // Create Spaces client
-      clients = await this.createSpacesClient(flags)
-      if (!clients) return
+      const setupResult = await this.setupSpacesClient(flags, spaceId);
+      this.realtimeClient = setupResult.realtimeClient;
+      this.spacesClient = setupResult.spacesClient;
+      this.space = setupResult.space;
+      if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.error('Failed to initialize clients or space');
+        return;
+      }
 
-      const { spacesClient, realtimeClient } = clients
-      const spaceId = args.spaceId
-      
-      // Make sure we have a connection before proceeding
       await new Promise<void>((resolve, reject) => {
         const checkConnection = () => {
-          const state = realtimeClient.connection.state;
+          const {state} = this.realtimeClient!.connection;
           if (state === 'connected') {
             resolve();
           } else if (state === 'failed' || state === 'closed' || state === 'suspended') {
             reject(new Error(`Connection failed with state: ${state}`));
           } else {
-            // Still connecting, check again shortly
             setTimeout(checkConnection, 100);
           }
         };
@@ -79,34 +96,26 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
         checkConnection();
       });
       
-      // Get the space
       this.log(`Connecting to space: ${chalk.cyan(spaceId)}...`);
-      const space = await spacesClient.get(spaceId);
+      await this.space.enter();
       
-      // Enter the space with proper connection verification
-      await space.enter();
-      
-      // Wait for space to be properly entered before fetching locations
       await new Promise<void>((resolve, reject) => {
-        // Set a reasonable timeout to avoid hanging indefinitely
         const timeout = setTimeout(() => {
           reject(new Error('Timed out waiting for space connection'));
         }, 5000);
         
         const checkSpaceStatus = () => {
           try {
-            // Instead of checking space.status which doesn't exist, check the realtime connection
-            if (realtimeClient.connection.state === 'connected') {
+            if (this.realtimeClient!.connection.state === 'connected') {
               clearTimeout(timeout);
               this.log(`${chalk.green('Connected to space:')} ${chalk.cyan(spaceId)}`);
               resolve();
-            } else if (realtimeClient.connection.state === 'failed' || 
-                       realtimeClient.connection.state === 'closed' || 
-                       realtimeClient.connection.state === 'suspended') {
+            } else if (this.realtimeClient!.connection.state === 'failed' || 
+                       this.realtimeClient!.connection.state === 'closed' || 
+                       this.realtimeClient!.connection.state === 'suspended') {
               clearTimeout(timeout);
-              reject(new Error(`Space connection failed with connection state: ${realtimeClient.connection.state}`));
+              reject(new Error(`Space connection failed with connection state: ${this.realtimeClient!.connection.state}`));
             } else {
-              // Still connecting, check again shortly
               setTimeout(checkSpaceStatus, 100);
             }
           } catch (error) {
@@ -118,100 +127,131 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
         checkSpaceStatus();
       });
       
-      // Get current locations
       if (!this.shouldOutputJson(flags)) {
         this.log(`Fetching locations for space ${chalk.cyan(spaceId)}...`);
       }
       
-      let locations: any = [];
+      let locations: LocationItem[] = [];
       try {
-        const result = await space.locations.getAll();
+        const { items: locationsFromSpace } = await this.space.locations.getAll();
         
-        // Convert locations to consistent format
-        if (result && typeof result === 'object') {
-          if (Array.isArray(result)) {
-            locations = result;
-          } else if (Object.keys(result).length > 0) {
-            locations = Object.entries(result).map(([memberId, locationData]) => ({
-              memberId,
-              location: locationData
-            }));
+        if (locationsFromSpace && typeof locationsFromSpace === 'object') {
+          if (Array.isArray(locationsFromSpace)) {
+            locations = locationsFromSpace as LocationItem[];
+          } else if (Object.keys(locationsFromSpace).length > 0) {
+            locations = Object.entries(locationsFromSpace).map(([memberId, locationData]) => ({
+              location: locationData,
+              memberId
+            })) as LocationItem[];
           }
         }
 
-        // Filter out invalid locations
-        const validLocations = locations.filter((item: any) => {
+        const validLocations = locations.filter((item: LocationItem) => {
           if (item === null || item === undefined) return false;
           
-          let locationData;
+          let locationData: unknown;
           if (item.location !== undefined) {
             locationData = item.location;
-          } else if (item.data !== undefined) {
-            locationData = item.data;
-          } else {
-            const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
+          } else if (item.data === undefined) {
+            const {
+              clientId: _clientId,
+              connectionId: _connectionId,
+              id: _id,
+              member: _member,
+              memberId: _memberId,
+              userId: _userId,
+              ...rest
+            } = item;
             if (Object.keys(rest).length === 0) return false;
             locationData = rest;
+          } else {
+            locationData = item.data;
           }
           
           if (locationData === null || locationData === undefined) return false;
-          if (typeof locationData === 'object' && Object.keys(locationData).length === 0) return false;
+          if (typeof locationData === 'object' && Object.keys(locationData as object).length === 0) return false;
           
           return true;
         });
         
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            spaceId,
-            timestamp: new Date().toISOString(),
             locations: validLocations.map((item: LocationItem) => {
               const memberId = item.memberId || item.member?.clientId || item.clientId || item.id || item.userId || 'Unknown';
               const locationData = item.location || item.data || (() => {
-                const { clientId, id, userId, memberId, connectionId, member, ...rest } = item;
+                const {
+                  clientId: _clientId,
+                  connectionId: _connectionId,
+                  id: _id,
+                  member: _member,
+                  memberId: _memberId,
+                  userId: _userId,
+                  ...rest
+                } = item;
                 return rest;
               })();
               return {
-                memberId,
+                isCurrentMember: item.member?.isCurrentMember || false,
                 location: locationData,
-                isCurrentMember: item.member?.isCurrentMember || false
+                memberId
               };
-            })
+            }),
+            spaceId,
+            success: true,
+            timestamp: new Date().toISOString()
           }, flags));
-        } else {
-          if (!validLocations || validLocations.length === 0) {
+        } else if (!validLocations || validLocations.length === 0) {
             this.log(chalk.yellow('No locations are currently set in this space.'));
           } else {
             const locationsCount = validLocations.length;
             this.log(`\n${chalk.cyan('Current locations')} (${chalk.bold(String(locationsCount))}):\n`);
             
-            validLocations.forEach((locationItem: any) => {
-              try {
-                const memberId = locationItem.memberId || locationItem.member?.clientId || locationItem.clientId || locationItem.id || locationItem.userId || 'Unknown';
-                const locationData = locationItem.location || locationItem.data || (() => {
-                  const { clientId, id, userId, memberId, connectionId, member, ...rest } = locationItem;
-                  return rest;
-                })();
-                
-                this.log(`- ${chalk.blue(memberId)}:`);
-                this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
-                
-                if (locationItem?.member?.isCurrentMember) {
-                  this.log(`  ${chalk.green('(Current member)')}`);
+            for (const location of validLocations) {
+              // Check if location has 'current' property with expected structure
+              if ('current' in location && 
+                  typeof location.current === 'object' && 
+                  location.current !== null && 
+                  'member' in location.current) {
+                const locationWithCurrent = location as LocationWithCurrent;
+                const { member } = locationWithCurrent.current;
+                this.log(`Member ID: ${chalk.cyan(member.memberId || member.clientId)}`);
+                try {
+                  const locationData = location.location || location.data || (() => {
+                    const {
+                      clientId: _clientId,
+                      connectionId: _connectionId,
+                      id: _id,
+                      member: _member,
+                      memberId: _memberId,
+                      userId: _userId,
+                      ...rest
+                    } = location;
+                    return rest;
+                  })();
+                  
+                  this.log(`- ${chalk.blue(member.memberId || member.clientId)}:`);
+                  this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(locationData, null, 2)}`);
+                  
+                  if (member.isCurrentMember) {
+                    this.log(`  ${chalk.green('(Current member)')}`);
+                  }
+                } catch (error) {
+                  this.log(`- ${chalk.red('Error displaying location item')}: ${error instanceof Error ? error.message : String(error)}`);
                 }
-              } catch (err) {
-                this.log(`- ${chalk.red('Error displaying location item')}: ${err instanceof Error ? err.message : String(err)}`);
+              } else {
+                // Simpler display if location doesn't have expected structure
+                this.log(`- ${chalk.blue('Member')}:`);
+                this.log(`  ${chalk.dim('Location:')} ${JSON.stringify(location, null, 2)}`);
               }
-            });
+            }
           }
-        }
       } catch (error) {
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: false,
-            spaceId,
             error: error instanceof Error ? error.message : String(error),
-            status: 'error'
+            spaceId,
+            status: 'error',
+            success: false
           }, flags));
         } else {
           this.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -219,31 +259,24 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
       }
       
       try {
-        // Leave the space after fetching locations
-        await space.leave();
+        await this.space.leave();
         this.log(chalk.green('\nSuccessfully disconnected.'));
-        process.exit(0);
       } catch (error) {
         this.log(chalk.yellow(`Error leaving space: ${error instanceof Error ? error.message : String(error)}`));
-        process.exit(1);
       }
     } catch (error) {
-      // Handle original error more carefully
       if (error === undefined || error === null) {
         this.log(chalk.red('An unknown error occurred (error object is undefined or null)'));
-        process.exit(1);
       } else {
         const errorMessage = error instanceof Error ? error.message : String(error || 'Unknown error');
         this.log(chalk.red(`Error: ${errorMessage}`));
-        process.exit(1);
       }
     } finally {
       try {
-        if (clients?.realtimeClient) {
-          clients.realtimeClient.close();
+        if (this.realtimeClient) {
+          this.realtimeClient.close();
         }
       } catch (closeError) {
-        // Just log, don't throw
         this.log(chalk.yellow(`Error closing client: ${closeError instanceof Error ? closeError.message : String(closeError)}`));
       }
     }

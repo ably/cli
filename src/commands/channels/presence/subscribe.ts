@@ -1,9 +1,17 @@
-import { Args, Flags } from '@oclif/core'
-import { AblyBaseCommand } from '../../../base-command.js'
+import { Args } from '@oclif/core'
 import * as Ably from 'ably'
 import chalk from 'chalk'
 
+import { AblyBaseCommand } from '../../../base-command.js'
+
 export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
+  static override args = {
+    channel: Args.string({
+      description: 'Channel name to subscribe to presence on',
+      required: true,
+    }),
+  }
+
   static override description = 'Subscribe to presence events on a channel'
 
   static override examples = [
@@ -15,16 +23,19 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
     ...AblyBaseCommand.globalFlags,
   }
 
-  static override args = {
-    channel: Args.string({
-      description: 'Channel name to subscribe to presence on',
-      required: true,
-    }),
-  }
-
   private client: Ably.Realtime | null = null;
 
-  async run(): Promise<void> {
+  // Override finally to ensure resources are cleaned up
+   async finally(err: Error | undefined): Promise<void> {
+     if (this.client && this.client.connection.state !== 'closed' && // Check state before closing to avoid errors if already closed
+       this.client.connection.state !== 'failed') {
+           this.client.close();
+       }
+
+     return super.finally(err);
+   }
+
+   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsPresenceSubscribe)
 
     try {
@@ -32,19 +43,32 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
       this.client = await this.createAblyClient(flags)
       if (!this.client) return
 
-      const client = this.client; // Local const
+      const {client} = this; // Local const
       const channelName = args.channel
 
        // Add listeners for connection state changes
        client.connection.on((stateChange: Ably.ConnectionStateChange) => {
          this.logCliEvent(flags, 'connection', stateChange.current, `Connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
          if (!this.shouldOutputJson(flags)) {
-             if (stateChange.current === 'connected') {
+             switch (stateChange.current) {
+             case 'connected': {
                  this.log('Successfully connected to Ably');
-             } else if (stateChange.current === 'disconnected') {
+             
+             break;
+             }
+
+             case 'disconnected': {
                  this.log('Disconnected from Ably');
-             } else if (stateChange.current === 'failed') {
+             
+             break;
+             }
+
+             case 'failed': {
                   this.error(`Connection failed: ${stateChange.reason?.message || 'Unknown error'}`);
+             
+             break;
+             }
+             // No default
              }
          }
        });
@@ -56,12 +80,25 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
        channel.on((stateChange: Ably.ChannelStateChange) => {
          this.logCliEvent(flags, 'channel', stateChange.current, `Channel '${channelName}' state changed to ${stateChange.current}`, { reason: stateChange.reason });
           if (!this.shouldOutputJson(flags)) {
-             if (stateChange.current === 'attached') {
+             switch (stateChange.current) {
+             case 'attached': {
                  this.log(`${chalk.green('✓')} Successfully attached to channel: ${chalk.cyan(channelName)}`);
-             } else if (stateChange.current === 'failed') {
+             
+             break;
+             }
+
+             case 'failed': {
                   this.log(`${chalk.red('✗')} Failed to attach to channel ${chalk.cyan(channelName)}: ${stateChange.reason?.message || 'Unknown error'}`);
-             } else if (stateChange.current === 'detached') {
+             
+             break;
+             }
+
+             case 'detached': {
                   this.log(`${chalk.yellow('!')} Detached from channel: ${chalk.cyan(channelName)} ${stateChange.reason ? `(Reason: ${stateChange.reason.message})` : ''}`);
+             
+             break;
+             }
+             // No default
              }
           }
        });
@@ -83,18 +120,17 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
       // Output current members based on format
       if (this.shouldOutputJson(flags)) {
         this.log(this.formatJsonOutput({
-          success: true,
-          timestamp: new Date().toISOString(),
           channel: channelName,
-          members: initialMembers
+          members: initialMembers,
+          success: true,
+          timestamp: new Date().toISOString()
         }, flags))
-      } else {
-        if (members.length === 0) {
+      } else if (members.length === 0) {
           this.log('No members are currently present on this channel.')
         } else {
           this.log(`\nCurrent presence members (${chalk.cyan(members.length.toString())}):\n`)
 
-          members.forEach(member => {
+          for (const member of members) {
             this.log(`- ${chalk.blue(member.clientId || 'Unknown')}`)
 
             if (member.data && Object.keys(member.data).length > 0) {
@@ -104,9 +140,8 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
             if (member.connectionId) {
               this.log(`  Connection ID: ${chalk.dim(member.connectionId)}`)
             }
-          })
+          }
         }
-      }
 
       this.logCliEvent(flags, 'presence', 'subscribingToEvents', 'Subscribing to subsequent presence events');
       if (!this.shouldOutputJson(flags)) {
@@ -122,15 +157,15 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
             connectionId: presenceMessage.connectionId,
             data: presenceMessage.data
         };
-        this.logCliEvent(flags, 'presence', 'memberEntered', `Member entered presence: ${presenceMessage.clientId}`, { timestamp, channel: channelName, member: memberData });
+        this.logCliEvent(flags, 'presence', 'memberEntered', `Member entered presence: ${presenceMessage.clientId}`, { channel: channelName, member: memberData, timestamp });
 
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            timestamp,
             action: 'enter',
             channel: channelName,
-            member: memberData
+            member: memberData,
+            success: true,
+            timestamp
           }, flags))
         } else {
           this.log(`[${chalk.dim(timestamp)}] ${chalk.green('✓')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} entered presence`)
@@ -150,15 +185,15 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
             connectionId: presenceMessage.connectionId,
             data: presenceMessage.data // Note: Data might not be present on leave
         };
-         this.logCliEvent(flags, 'presence', 'memberLeft', `Member left presence: ${presenceMessage.clientId}`, { timestamp, channel: channelName, member: memberData });
+         this.logCliEvent(flags, 'presence', 'memberLeft', `Member left presence: ${presenceMessage.clientId}`, { channel: channelName, member: memberData, timestamp });
 
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            timestamp,
             action: 'leave',
             channel: channelName,
-            member: memberData
+            member: memberData,
+            success: true,
+            timestamp
           }, flags))
         } else {
           this.log(`[${chalk.dim(timestamp)}] ${chalk.red('✗')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} left presence`)
@@ -174,15 +209,15 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
              connectionId: presenceMessage.connectionId,
              data: presenceMessage.data
          };
-         this.logCliEvent(flags, 'presence', 'memberUpdated', `Member updated presence: ${presenceMessage.clientId}`, { timestamp, channel: channelName, member: memberData });
+         this.logCliEvent(flags, 'presence', 'memberUpdated', `Member updated presence: ${presenceMessage.clientId}`, { channel: channelName, member: memberData, timestamp });
 
         if (this.shouldOutputJson(flags)) {
           this.log(this.formatJsonOutput({
-            success: true,
-            timestamp,
             action: 'update',
             channel: channelName,
-            member: memberData
+            member: memberData,
+            success: true,
+            timestamp
           }, flags))
         } else {
           this.log(`[${chalk.dim(timestamp)}] ${chalk.yellow('⟲')} ${chalk.blue(presenceMessage.clientId || 'Unknown')} updated presence data:`)
@@ -195,10 +230,10 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
       this.logCliEvent(flags, 'presence', 'listening', 'Now listening for real-time presence events');
 
       // Keep the process running until interrupted
-      await new Promise((resolve) => {
+      await new Promise((resolve, reject) => {
         let cleanupInProgress = false
 
-        const cleanup = async () => {
+        const cleanup = async (): Promise<void> => {
           if (cleanupInProgress) return
           cleanupInProgress = true
 
@@ -212,11 +247,12 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
             const errorMsg = 'Force exiting after timeout during cleanup';
             this.logCliEvent(flags, 'presence', 'forceExit', errorMsg, { channel: channelName });
             if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: false, error: errorMsg, channel: channelName }, flags))
+              this.log(this.formatJsonOutput({ channel: channelName, error: errorMsg, success: false }, flags))
             } else {
               this.log(chalk.red('Force exiting after timeout...'))
             }
-            process.exit(1)
+
+            reject(new Error('Cleanup timed out'));
           }, 5000)
 
           try {
@@ -227,9 +263,9 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
               this.logCliEvent(flags, 'presence', 'unsubscribed', 'Successfully unsubscribed from presence events');
               if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({
-                  success: true,
                   action: 'unsubscribed',
-                  channel: channelName
+                  channel: channelName,
+                  success: true
                 }, flags))
               } else {
                 this.log(chalk.green('Successfully unsubscribed from presence events.'))
@@ -238,7 +274,7 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
                 const errorMsg = error instanceof Error ? error.message : String(error);
                 this.logCliEvent(flags, 'presence', 'unsubscribeError', `Error unsubscribing from presence: ${errorMsg}`, { channel: channelName, error: errorMsg });
                 if (this.shouldOutputJson(flags)) {
-                  this.log(this.formatJsonOutput({ success: false, error: errorMsg, channel: channelName }, flags))
+                  this.log(this.formatJsonOutput({ channel: channelName, error: errorMsg, success: false }, flags))
                 } else {
                   this.log(`Note: ${errorMsg}`);
                   this.log('Continuing with connection close.')
@@ -251,36 +287,37 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
               client.close()
               this.logCliEvent(flags, 'connection', 'closed', 'Ably connection closed.');
               if (this.shouldOutputJson(flags)) {
-                this.log(this.formatJsonOutput({ success: true, status: 'closed', channel: channelName }, flags))
+                this.log(this.formatJsonOutput({ channel: channelName, status: 'closed', success: true }, flags))
               } else {
                 this.log(chalk.green('Successfully closed connection.'))
               }
             }
 
             clearTimeout(forceExitTimeout)
-            resolve(null)
-            process.exit(0)
+            // eslint-disable-next-line unicorn/no-useless-undefined
+            resolve(undefined) // Satisfy TS2794, disable conflicting lint rule
           } catch (error) {
              const errorMsg = error instanceof Error ? error.message : String(error);
              this.logCliEvent(flags, 'presence', 'cleanupError', `Error during cleanup: ${errorMsg}`, { channel: channelName, error: errorMsg });
              if (this.shouldOutputJson(flags)) {
-              this.log(this.formatJsonOutput({ success: false, error: errorMsg, channel: channelName }, flags))
+              this.log(this.formatJsonOutput({ channel: channelName, error: errorMsg, success: false }, flags))
             } else {
               this.log(`Error during cleanup: ${errorMsg}`)
             }
+
             clearTimeout(forceExitTimeout)
-            process.exit(1)
+            reject(new Error(`Cleanup failed: ${errorMsg}`));
           }
         }
 
-        process.once('SIGINT', () => void cleanup())
-        process.once('SIGTERM', () => void cleanup())
+        process.once('SIGINT', () => { cleanup().catch(reject); });
+        process.once('SIGTERM', () => { cleanup().catch(reject); });
       })
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        this.logCliEvent(flags || {}, 'presence', 'fatalError', `Error subscribing to presence: ${errorMsg}`, { error: errorMsg, channel: args.channel });
+        this.logCliEvent(flags || {}, 'presence', 'fatalError', `Error subscribing to presence: ${errorMsg}`, { channel: args.channel, error: errorMsg });
         if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({ success: false, error: errorMsg, channel: args.channel }, flags))
+          this.log(this.formatJsonOutput({ channel: args.channel, error: errorMsg, success: false }, flags))
         } else {
           this.error(`Error subscribing to presence: ${errorMsg}`)
         }
@@ -292,15 +329,4 @@ export default class ChannelsPresenceSubscribe extends AblyBaseCommand {
        }
     }
   }
-
-   // Override finally to ensure resources are cleaned up
-   async finally(err: Error | undefined): Promise<any> {
-     if (this.client && this.client.connection.state !== 'closed') {
-       // Check state before closing to avoid errors if already closed
-       if (this.client.connection.state !== 'failed') {
-           this.client.close();
-       }
-     }
-     return super.finally(err);
-   }
 } 

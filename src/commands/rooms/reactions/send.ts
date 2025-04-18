@@ -1,113 +1,174 @@
+import { RoomStatus, ChatClient, RoomStatusChange } from '@ably/chat'
 import { Args, Flags } from '@oclif/core'
-import { ChatBaseCommand } from '../../../chat-base-command.js'
-import { ChatClient } from '@ably/chat'
+import * as Ably from 'ably'
 import chalk from 'chalk'
 
-interface ChatClients {
-  chatClient: ChatClient;
-  realtimeClient: any;
-}
+import { ChatBaseCommand } from '../../../chat-base-command.js'
 
 export default class RoomsReactionsSend extends ChatBaseCommand {
-  static override description = 'Send a reaction to a chat room'
+  static override args = {
+    roomId: Args.string({
+      description: 'The room ID to send the reaction to',
+      required: true,
+    }),
+    messageId: Args.string({
+      description: 'The message ID to react to',
+      required: true,
+    }),
+    emoji: Args.string({
+      description: 'The emoji reaction to send (e.g. 👍, ❤️, 😂)',
+      required: true,
+    }),
+  }
+
+  static override description = 'Send a reaction to a message in a chat room'
 
   static override examples = [
-    '$ ably rooms reactions send my-room thumbs_up',
-    '$ ably rooms reactions send my-room heart --metadata \'{"effect":"fireworks"}\'',
-    '$ ably rooms reactions send my-room thumbs_up --json',
-    '$ ably rooms reactions send my-room heart --metadata \'{"effect":"fireworks"}\' --pretty-json'
+    '$ ably rooms reactions send my-room abc123 👍',
+    '$ ably rooms reactions send --api-key "YOUR_API_KEY" my-room abc123 🎉',
+    '$ ably rooms reactions send my-room abc123 ❤️ --json',
+    '$ ably rooms reactions send my-room abc123 😂 --pretty-json',
   ]
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
-    'metadata': Flags.string({
-      description: 'Optional metadata for the reaction (JSON string)',
-      default: '{}',
+    metadata: Flags.string({
+      description: 'Additional metadata to send with the reaction (as JSON string)',
+      required: false,
     }),
   }
 
-  static override args = {
-    roomId: Args.string({
-      description: 'Room ID to send the reaction to',
-      required: true,
-    }),
-    type: Args.string({
-      description: 'Reaction type/emoji to send',
-      required: true,
-    }),
+  private ablyClient: Ably.Realtime | null = null;
+  private chatClient: ChatClient | null = null;
+  private unsubscribeStatusFn: (() => void) | null = null;
+  private metadataObj: Record<string, unknown> | null = null;
+
+  async finally(err: Error | undefined): Promise<void> {
+    if (this.unsubscribeStatusFn) { try { this.unsubscribeStatusFn(); } catch { /* ignore */ } }
+    if (this.ablyClient && this.ablyClient.connection.state !== 'closed' && this.ablyClient.connection.state !== 'failed') {
+      this.ablyClient.close();
+    }
+
+    return super.finally(err);
   }
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(RoomsReactionsSend)
-
-    let clients: ChatClients | null = null
+    const {args, flags} = await this.parse(RoomsReactionsSend);
+    const {roomId, messageId, emoji} = args;
 
     try {
-      // Create Chat client
-      clients = await this.createChatClient(flags)
-      if (!clients) return
+      // Parse metadata if provided
+      if (flags.metadata) {
+        try {
+          this.metadataObj = JSON.parse(flags.metadata);
+          this.logCliEvent(flags, 'reaction', 'metadataParsed', 'Metadata parsed successfully', { metadata: this.metadataObj });
+        } catch (error) {
+          const errorMsg = `Invalid metadata JSON: ${error instanceof Error ? error.message : String(error)}`;
+          this.logCliEvent(flags, 'reaction', 'metadataParseError', errorMsg, { error: errorMsg, roomId, messageId });
+          if (this.shouldOutputJson(flags)) {
+            this.log(this.formatJsonOutput({ error: errorMsg, roomId, messageId, success: false }, flags));
+          } else {
+            this.error(errorMsg);
+          }
 
-      const { chatClient } = clients
-      const roomId = args.roomId
-      const reactionType = args.type
-      
-      // Parse the metadata
-      let metadata = {}
-      try {
-        metadata = JSON.parse(flags.metadata)
-      } catch (error) {
-        if (this.shouldOutputJson(flags)) {
-          this.log(this.formatJsonOutput({
-            success: false,
-            error: 'Invalid JSON metadata format. Please provide a valid JSON string.',
-            roomId,
-            reactionType
-          }, flags))
-        } else {
-          this.error('Invalid JSON metadata format. Please provide a valid JSON string.')
+          return;
         }
-        return
       }
+
+      // Create Chat client
+      this.chatClient = await this.createChatClient(flags);
+      // Also get the underlying Ably client for connection state changes
+      this.ablyClient = await this.createAblyClient(flags);
+
+      if (!this.chatClient) {
+        this.error('Failed to create Chat client');
+        return;
+      }
+      if (!this.ablyClient) {
+        this.error('Failed to create Ably client');
+        return;
+      }
+
+      // Add listeners for connection state changes
+      this.ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
+        this.logCliEvent(flags, 'connection', stateChange.current, `Realtime connection state changed to ${stateChange.current}`, { reason: stateChange.reason });
+      });
 
       // Get the room
-      const room = await chatClient.rooms.get(roomId, {
+      this.logCliEvent(flags, 'room', 'gettingRoom', `Getting room handle for ${roomId}`);
+      const room = await this.chatClient.rooms.get(roomId, {
         reactions: {}
-      })
+      });
+      this.logCliEvent(flags, 'room', 'gotRoom', `Got room handle for ${roomId}`);
+
+      // Subscribe to room status changes
+      this.logCliEvent(flags, 'room', 'subscribingToStatus', 'Subscribing to room status changes');
+      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: RoomStatusChange) => {
+        let reason: Error | null | string | undefined;
+        if (statusChange.current === RoomStatus.Failed) {
+          reason = room.error; // Get reason from room.error on failure
+        }
+
+        const reasonMsg = reason instanceof Error ? reason.message : reason;
+        this.logCliEvent(flags, 'room', `status-${statusChange.current}`, `Room status changed to ${statusChange.current}`, { reason: reasonMsg });
+
+        if (statusChange.current === RoomStatus.Failed && !this.shouldOutputJson(flags)) {
+          this.error(`Failed to attach to room: ${reasonMsg || 'Unknown error'}`);
+        }
+      });
+      this.unsubscribeStatusFn = unsubscribeStatus;
+      this.logCliEvent(flags, 'room', 'subscribedToStatus', 'Successfully subscribed to room status changes');
 
       // Attach to the room
-      await room.attach()
-      
-      // Send room reaction using the reactions API
+      this.logCliEvent(flags, 'room', 'attaching', `Attaching to room ${roomId}`);
+      await room.attach();
+      this.logCliEvent(flags, 'room', 'attached', `Successfully attached to room ${roomId}`);
+
+      // Send the reaction
+      this.logCliEvent(flags, 'reaction', 'sending', `Sending reaction ${emoji} to message ${messageId}`, { emoji, metadata: this.metadataObj || {} });
       await room.reactions.send({
-        type: reactionType,
-        metadata: metadata
-      })
-      
+        type: emoji,
+        metadata: this.metadataObj || {}
+      });
+      this.logCliEvent(flags, 'reaction', 'sent', `Successfully sent reaction ${emoji} to message ${messageId}`);
+
+      // Format the response
+      const resultData = {
+        emoji,
+        messageId,
+        metadata: this.metadataObj,
+        roomId,
+        success: true,
+      };
+
       if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({
-          success: true,
-          roomId,
-          reactionType,
-          metadata
-        }, flags))
+        this.log(this.formatJsonOutput(resultData, flags));
       } else {
-        this.log(`${chalk.green('✓')} Reaction '${chalk.yellow(reactionType)}' sent successfully to room ${chalk.blue(roomId)}`)
+        this.log(`${chalk.green('✓')} Sent reaction ${emoji} to message ${chalk.cyan(messageId)} in room ${chalk.cyan(roomId)}`);
       }
+
+      // Clean up resources
+      this.logCliEvent(flags, 'room', 'releasing', `Releasing room ${roomId}`);
+      await this.chatClient.rooms.release(roomId);
+      this.logCliEvent(flags, 'room', 'released', `Released room ${roomId}`);
+
+      this.logCliEvent(flags, 'connection', 'closing', 'Closing Realtime connection');
+      this.ablyClient.close();
+      this.logCliEvent(flags, 'connection', 'closed', 'Realtime connection closed');
     } catch (error) {
-      if (this.shouldOutputJson(flags)) {
-        this.log(this.formatJsonOutput({
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-          roomId: args.roomId,
-          reactionType: args.type
-        }, flags))
-      } else {
-        this.error(`Error sending reaction: ${error instanceof Error ? error.message : String(error)}`)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, 'reaction', 'error', `Failed to send reaction: ${errorMsg}`, { error: errorMsg, roomId, messageId, emoji });
+
+      // Close the connection in case of error
+      if (this.ablyClient) {
+        this.ablyClient.close();
       }
-    } finally {
-      if (clients?.realtimeClient) {
-        clients.realtimeClient.close()
+
+      if (this.shouldOutputJson(flags)) {
+        this.log(this.formatJsonOutput({ error: errorMsg, roomId, messageId, emoji, success: false }, flags));
+      } else {
+        this.error(`Failed to send reaction: ${errorMsg}`);
       }
     }
   }
-} 
+}

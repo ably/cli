@@ -1,7 +1,15 @@
 import { Args, Flags } from '@oclif/core'
+
 import { ControlBaseCommand } from '../../../control-base-command.js'
 
 export default class KeysUpdateCommand extends ControlBaseCommand {
+  static args = {
+    keyName: Args.string({
+      description: 'Key name (APP_ID.KEY_ID) of the key to update',
+      required: true
+    })
+  }
+
   static description = 'Update a key\'s properties'
 
   static examples = [
@@ -16,35 +24,14 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       description: 'App ID the key belongs to (uses current app if not specified)',
       env: 'ABLY_APP_ID',
     }),
-    'name': Flags.string({
-      description: 'New name for the key',
-      required: false,
-    }),
     'capabilities': Flags.string({
       description: 'New capabilities for the key (comma-separated list)',
       required: false,
     }),
-  }
-
-  static args = {
-    keyName: Args.string({
-      description: 'Key name (APP_ID.KEY_ID) of the key to update',
-      required: true
-    })
-  }
-
-  // Helper function to format capabilities
-  private formatCapability(capability: any): string {
-    if (!capability) return 'None';
-    
-    const capEntries = Object.entries(capability);
-    if (capEntries.length === 0) {
-      return 'None';
-    }
-    
-    return capEntries.map(([scope, privileges]) => 
-      `${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`
-    ).join('\n    ');
+    'name': Flags.string({
+      description: 'New name for the key',
+      required: false,
+    }),
   }
 
   async run(): Promise<void> {
@@ -79,15 +66,25 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       const originalKey = await controlApi.getKey(appId, keyId)
       
       // Prepare the update data
-      const updateData: { name?: string, capability?: any } = {}
+      const updateData: { capability?: Record<string, string[]>; name?: string } = {};
       
       if (flags.name) {
         updateData.name = flags.name
       }
       
       if (flags.capabilities) {
-        // Parse the capabilities - this depends on how the Control API expects the format
-        updateData.capability = flags.capabilities
+        // Parse the capabilities string into the expected format
+        // The expected format is a Record<string, string[]> (channel => permissions)
+        try {
+          // Split by commas to get individual capabilities
+          const capabilityArray = flags.capabilities.split(',').map(cap => cap.trim());
+          // Create capability object with "*" channel and array of capabilities
+          updateData.capability = {
+            "*": capabilityArray
+          };
+        } catch (error) {
+          this.error(`Invalid capabilities format: ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
       
       // Update the key
@@ -102,12 +99,26 @@ export default class KeysUpdateCommand extends ControlBaseCommand {
       
       if (flags.capabilities) {
         this.log(`Capabilities:`)
-        this.log(`  Before: ${this.formatCapability(originalKey.capability)}`)
-        this.log(`  After:  ${this.formatCapability(updatedKey.capability)}`)
+        this.log(`  Before: ${this.formatCapability(originalKey.capability as Record<string, string[]>)}`)
+        this.log(`  After:  ${this.formatCapability(updatedKey.capability as Record<string, string[]>)}`)
       }
       
     } catch (error) {
       this.error(`Error updating key: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  // Helper function to format capabilities
+  private formatCapability(capability: Record<string, string[] | string> | undefined): string {
+    if (!capability) return 'None';
+    
+    const capEntries = Object.entries(capability);
+    if (capEntries.length === 0) {
+      return 'None';
+    }
+    
+    return capEntries.map(([scope, privileges]) => 
+      `${scope} → ${Array.isArray(privileges) ? privileges.join(', ') : privileges}`
+    ).join('\n    ');
   }
 } 

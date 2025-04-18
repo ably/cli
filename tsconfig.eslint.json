@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*", 
+    "test/**/*.test.ts", // Ensure test files use .test.ts convention
+    "scripts/**/*", // Keep scripts included for linting too
+    "packages/react-web-cli/src/index.ts", // Added specific file
+    "packages/react-web-cli/src/AblyCliTerminal.tsx", // Also include the component file
+    "*.config.js" // Include root config files if needed
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+} 

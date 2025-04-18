@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
 import { AblyCliTerminal } from '@ably/react-web-cli'
+import { useCallback, useEffect, useState } from 'react'
+
 import './App.css'
 
 // Default WebSocket URL assuming the terminal-server is run locally from the repo root
@@ -10,17 +11,17 @@ const envApiKey = import.meta.env.VITE_ABLY_API_KEY;
 const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN;
 
 // Check if initial credentials were provided via env
-const hasInitialCredentials = !!(envApiKey && envAccessToken);
+const hasInitialCredentials = Boolean(envApiKey && envAccessToken);
 
 function App() {
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected' | 'error'>('disconnected');
   const [apiKey, setApiKey] = useState<string | undefined>(envApiKey);
   const [accessToken, setAccessToken] = useState<string | undefined>(envAccessToken);
   
   // Remove state vars that cause remounting issues
   const [shouldConnect, setShouldConnect] = useState<boolean>(hasInitialCredentials);
 
-  const handleConnectionChange = useCallback((status: 'connecting' | 'connected' | 'disconnected' | 'error') => {
+  const handleConnectionChange = useCallback((status: 'connected' | 'connecting' | 'disconnected' | 'error') => {
       console.log('Connection Status:', status);
       setConnectionStatus(status);
   }, []);
@@ -52,19 +53,19 @@ function App() {
         <div className="Terminal-container">
           {shouldConnect && apiKey && accessToken && (
             <AblyCliTerminal
-              websocketUrl={DEFAULT_WEBSOCKET_URL}
-              ablyApiKey={apiKey}
               ablyAccessToken={accessToken}
+              ablyApiKey={apiKey}
               onConnectionStatusChange={handleConnectionChange}
               onSessionEnd={handleSessionEnd}
               renderRestartButton={(onRestart) => (
                 <button 
-                  onClick={onRestart}
                   className="Restart-button"
+                  onClick={onRestart}
                 >
                   Restart Terminal
                 </button>
               )}
+              websocketUrl={DEFAULT_WEBSOCKET_URL}
             />
           )}
         </div>
