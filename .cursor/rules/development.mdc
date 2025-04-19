@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Node & TypeScript
+
+- Use TypeScript and follow best practice naming conventions
+- ESLint is used to ensure all code adheres best practices, ensure you check that all code passes the linter before concluding your work. You can use `pnpm exec eslint -- [filepath]` to run the linter on single files.
+- This CLI is using the very popular and well maintained oclif framework, see https://github.com/oclif/oclif and https://oclif.io/. Please read the docs and follow best practice.
+
+## Builds, linting and tests
+
+- After code changes are made, you must run a build to check changes made with `pnpm prepare`. This will ensure TypeScript is compiled, the `oclif.manifest.json` file is updated, and the `README.md` is regenerated to reflect the command structure.
+- All code must pass lint checks with `pnpm exec eslint`
+- Code changes may break tests. We do not want to wait until the changes are committed and pushed via git triggering a CI build which runes all tests. Following code changes, run tests locally that could be affected by your code changes to help short-circuit the process of finding out builds have broken tests.
+
+## Libraries and dependencies
+
+- When installing libraries, do not rely on your own training data. Your training data has a cut-off date. You’re probably not aware of all of the latest developments in the JavaScript and TypeScript world. This means that instead of picking a version manually (via updating the package.json file), you should use a script to install the latest version of a library. This will ensure you’re always using the latest version.
+    ```sh
+        pnpm add -D @typescript-eslint/eslint-plugin
+    ```
+- Avoid unnecessary dependencies, keep the dependencies to a pragmatic minimum i.e. don't write code when libraries exist to solve these common problems, equally don't go mad installing libraries for every problem.
+- This project uses `pnpm` for package management as opposed to `npm` or `yard`.
+
+# Code quality
+
+- This CLI is used by software developers who will look at the code written in this CLI. The quality of the code matters to Ably and to them. The target audience for this CLI are experienced developers and care about code quality as much as we do. Always put in extra effort to ensure that code produced would be objectively considered best in class and contemporary.
