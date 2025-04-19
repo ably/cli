@@ -9,6 +9,7 @@ The following documents must be read and considered before making any changes to
 
 1. [Product-Requirements.md](mdc:docs/Product-Requirements.md) - outlines the project's goals, features, and technical specifications, acting as the primary blueprint for the Ably CLI's development.
 2. [Testing.md](mdc:docs/Testing.md) - details the strategy and approach for testing the CLI, ensuring its quality, reliability, and adherence to the defined requirements.
+3. [Project-Structure.md](mdc:docs/Project-Structure.md) - provides an overview of the project's structure and purpose of each folder/file.
 
 ## Outstanding tasks
 

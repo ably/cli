@@ -58,3 +58,4 @@
 - [ ] Add inactivity timeout to the terminal server
 - [ ] Build binaries and embed into the Docker image which should be published to Docker Hub.
 - [ ] Release new versions automatically from Github for NPM
+- [ ] Now that we have .editorconfig, ensure all files adhere in one commit

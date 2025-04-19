@@ -27,3 +27,8 @@ alwaysApply: true
 # Code quality
 
 - This CLI is used by software developers who will look at the code written in this CLI. The quality of the code matters to Ably and to them. The target audience for this CLI are experienced developers and care about code quality as much as we do. Always put in extra effort to ensure that code produced would be objectively considered best in class and contemporary.
+
+# Core Maintenance
+
+- Whenever new features or changes are made, you must look at the .cursor/rules and /docs and update them to reflect any changes made.
+- When new features are added or changes made, tests must be updated or added, and it is your responsibility to ensure the tests pass before deeming your work complete.
