@@ -271,4 +271,3 @@
   - [ ] Test terminal rendering and command execution
   - [ ] Test session timeout and reconnection
 - [ ] **Environment Overrides:** Test `--host`, `--env`, `--control-host` flags override endpoints
-

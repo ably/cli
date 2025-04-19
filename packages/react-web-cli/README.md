@@ -38,24 +38,22 @@ pnpm add @ably/react-web-cli
 ## Usage
 
 ```jsx
-import React, { useState } from 'react';
-import { AblyCliTerminal } from '@ably/react-web-cli';
+import React, { useState } from "react";
+import { AblyCliTerminal } from "@ably/react-web-cli";
 
 const MyTerminalComponent = () => {
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
+
   return (
-    <div style={{ height: '500px', width: '100%' }}>
-      <AblyCliTerminal 
+    <div style={{ height: "500px", width: "100%" }}>
+      <AblyCliTerminal
         websocketUrl="ws://localhost:8080"
         ablyApiKey="YOUR_ABLY_API_KEY"
         ablyAccessToken="YOUR_ABLY_ACCESS_TOKEN"
         onConnectionStatusChange={setConnectionStatus}
-        onSessionEnd={(reason) => console.log('Session ended:', reason)}
+        onSessionEnd={(reason) => console.log("Session ended:", reason)}
         renderRestartButton={(onRestart) => (
-          <button onClick={onRestart}>
-            Restart Terminal
-          </button>
+          <button onClick={onRestart}>Restart Terminal</button>
         )}
       />
       <div>Terminal status: {connectionStatus}</div>
@@ -68,26 +66,28 @@ export default MyTerminalComponent;
 
 ## Props
 
-| Prop | Type | Required | Description |
-|------|------|----------|-------------|
-| `websocketUrl` | string | Yes | The WebSocket URL of the terminal server |
-| `ablyApiKey` | string | Yes | Your Ably API Key |
-| `ablyAccessToken` | string | Yes | Your Ably Access Token |
-| `onConnectionStatusChange` | function | No | Callback triggered when connection status changes. Receives status: 'connecting' \| 'connected' \| 'disconnected' \| 'error' |
-| `onSessionEnd` | function | No | Callback triggered when the terminal session ends. Receives the reason as a string |
-| `renderRestartButton` | function | No | Custom render function for the restart button when session ends. Receives `onRestart` function as parameter |
+| Prop                       | Type     | Required | Description                                                                                                                  |
+| -------------------------- | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `websocketUrl`             | string   | Yes      | The WebSocket URL of the terminal server                                                                                     |
+| `ablyApiKey`               | string   | Yes      | Your Ably API Key                                                                                                            |
+| `ablyAccessToken`          | string   | Yes      | Your Ably Access Token                                                                                                       |
+| `onConnectionStatusChange` | function | No       | Callback triggered when connection status changes. Receives status: 'connecting' \| 'connected' \| 'disconnected' \| 'error' |
+| `onSessionEnd`             | function | No       | Callback triggered when the terminal session ends. Receives the reason as a string                                           |
+| `renderRestartButton`      | function | No       | Custom render function for the restart button when session ends. Receives `onRestart` function as parameter                  |
 
 ## Setting Up a Terminal Server
 
 The terminal server required for this component is provided in the main Ably CLI package. To run it:
 
 1. Ensure you have the Ably CLI Docker image built:
+
    ```bash
    # In the Ably CLI repository root
    docker build --no-cache -t ably-cli-sandbox .
    ```
 
 2. Start the terminal server:
+
    ```bash
    # In the Ably CLI repository root
    pnpm terminal-server
@@ -108,4 +108,4 @@ For a complete example of using this component, see the [web-cli example](https:
 
 ## License
 
-[Apache-2.0](https://github.com/ably/cli/blob/main/LICENSE) 
+[Apache-2.0](https://github.com/ably/cli/blob/main/LICENSE)

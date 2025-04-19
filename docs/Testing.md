@@ -5,7 +5,7 @@
 1. Confidence: Ensure each command works as intended and avoid regressions.
 2. Speed & Developer Experience: Most tests should be quick to run, easy to debug, and not require a live environment.
 3. Real Integration Coverage (where needed): Some commands may need to be tested against real APIs (e.g. Ably’s pub/sub product APIs and Control APIs) to verify end-to-end flows—especially for mission-critical commands.
-4.Scalability: The test setup should scale as commands grow in complexity.
+4. Scalability: The test setup should scale as commands grow in complexity.
 
 ## Testing Approach
 
@@ -48,22 +48,22 @@ The CLI will use common folder structures for tests as follows:
 
 .
 ├── src
-│   ├── commands
-│   │   ├── apps
-│   │   │   └── create.ts
-│   │   └── realtime
-│   │       └── connect.ts
-│   └── ...
+│ ├── commands
+│ │ ├── apps
+│ │ │ └── create.ts
+│ │ └── realtime
+│ │ └── connect.ts
+│ └── ...
 ├── test
-│   ├── unit
-│   │   ├── apps
-│   │   │   └── create.test.ts
-│   │   └── realtime
-│   │       └── connect.test.ts
-│   ├── integration
-│   │   └── cli-flows.test.ts
-│   └── e2e
-│       └── e2e.test.ts
+│ ├── unit
+│ │ ├── apps
+│ │ │ └── create.test.ts
+│ │ └── realtime
+│ │ └── connect.test.ts
+│ ├── integration
+│ │ └── cli-flows.test.ts
+│ └── e2e
+│ └── e2e.test.ts
 └── ...
 
 - test/unit mirrors the command structure, focusing on command-level logic.
