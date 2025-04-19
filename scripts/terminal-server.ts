@@ -34,11 +34,11 @@ const sessions = new Map<string, ClientSession>();
 const docker = new Docker();
 
 function log(message: string): void {
-    console.log(`[TerminalServer] ${message}`);
+    console.log(`[TerminalServer ${new Date().toISOString()}] ${message}`);
 }
 
 function logError(message: unknown): void {
-    console.error(`[TerminalServerError] ${message instanceof Error ? message.message : String(message)}`);
+    console.error(`[TerminalServerError ${new Date().toISOString()}] ${message instanceof Error ? message.message : String(message)}`);
     if (message instanceof Error && message.stack) {
         console.error(message.stack);
     }
