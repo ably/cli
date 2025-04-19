@@ -59,3 +59,216 @@
 - [ ] Build binaries and embed into the Docker image which should be published to Docker Hub.
 - [ ] Release new versions automatically from Github for NPM
 - [ ] Now that we have .editorconfig, ensure all files adhere in one commit
+
+## Test coverage
+
+### Unit tests
+
+- [ ] **Core CLI & Infrastructure:**
+  - [ ] `BaseCommand`: Flag parsing, error handling, output modes (JSON, pretty-JSON, Web CLI), API client creation (mocked), `showAuthInfoIfNeeded`, `setupCleanupHandler`, `parseApiKey`, `ensureAppAndKey` flows.
+    - [ ] Test global flags (--host, --env, --control-host, --access-token, --api-key, --client-id, --verbose) propagation and overrides across commands.
+    - [ ] Test invalid API key/token error flows and correct JSON error output
+    - [ ] Test interpolation and variable substitution in message templates (`{{.Count}}`, `{{.Timestamp}}`)
+    - [ ] Test conflict error when using `--json` and `--pretty-json` together.
+    - [ ] Test `parseApiKey` with invalid formats (missing key secret, malformed string).
+    - [ ] Test `setClientId` behavior for explicit `--client-id none` and default random UUID.
+    - [ ] Test `ensureAppAndKey` fallback with env vars vs interactive prompts when config missing.
+    - [ ] Test error output JSON structure for invalid API key or token.
+  - [ ] `login.ts`: Mocked account login flow interaction.
+  - [ ] `config.ts`: Mocked config read/write operations.
+  - [ ] `help` commands: Output generation, argument handling.
+    - [ ] Test `help ask` AI agent integration with mocked responses
+    - [ ] Test help command with and without web-cli-help flag
+  - [ ] `hooks/init/alias-command.ts`: Command aliasing logic.
+  - [ ] `hooks/command_not_found/did-you-mean.ts`: Command suggestion logic.
+    - [ ] Test Levenshtein distance calculation for command suggestions
+    - [ ] Test formatting of suggestions
+  - [ ] `services/config-manager.ts`: Test storage and retrieval of account, app, and API key information
+  - [ ] `services/control-api.ts`: Test Control API request formatting and error handling
+  - [ ] `services/interactive-helper.ts`: Test interactive prompts (mocked)
+  - [ ] Output Formatting Utilities: Table formatting, colorization logic.
+- [ ] **Accounts:**
+  - [ ] `accounts login/logout/list/switch/current/stats`: Mock Control API calls, flag handling, output formats, config interactions.
+    - [ ] Test account login flow with browser opener mock
+    - [ ] Test account storing with and without aliases
+    - [ ] Test switch functionality between different accounts
+    - [ ] Test invalid access token input error and user guidance output
+- [ ] **Apps:**
+  - [ ] `apps create/list/update/delete/switch/current/set-apns-p12`: Mock Control API calls, flag handling, output formats, config interactions.
+    - [ ] Test app creation with all available options
+    - [ ] Test app update with partial data
+    - [ ] Test P12 certificate file upload handling
+    - [ ] Test failure scenarios: duplicate app names, API error mapping
+  - [ ] `apps stats`: Mock Control API calls, flag handling, output formats.
+    - [ ] Test stats parsing and formatting for different time ranges
+    - [ ] Test --live polling functionality with mocked responses
+  - [ ] `apps logs history/subscribe`: Mock Control API/SDK, flag handling, output formats, SIGINT handling.
+    - [ ] Test logs filtering by types and parameters
+    - [ ] Test SIGINT handling for log subscription
+  - [ ] `apps channel-rules create/list/update/delete`: Mock Control API calls, flag handling, output formats.
+    - [ ] Test rule creation with various permission combinations
+    - [ ] Test namespace pattern validations
+- [ ] **Auth:**
+  - [ ] `auth issue-ably-token/issue-jwt-token/revoke-token`: Mock SDK/API calls, flag handling, output formats.
+    - [ ] Test token generation with different capabilities
+    - [ ] Test token TTL parameter handling
+    - [ ] Test JWT token claims and signing
+    - [ ] Test invalid capability JSON and error reporting
+  - [ ] `auth keys create/list/get/update/revoke/switch/current`: Mock Control API calls, flag handling, output formats, config interactions.
+    - [ ] Test key creation with different capability sets
+    - [ ] Test key revocation flow including confirmation
+- [ ] **Channels (Pub/Sub):**
+  - [ ] `channels list/publish/subscribe/history/batch-publish`: Mock SDK/API calls, flag handling, encoding, output formats, SIGINT handling.
+    - [ ] Test message encoding/decoding (including binary data)
+    - [ ] Test channel reuse for multiple publish operations
+    - [ ] Test batch publish with file input
+    - [ ] Test `--count` and `--delay` options apply correct number/timing of messages
+    - [ ] Test encryption flag (`--cipher`) produces encrypted messages and proper decryption
+  - [ ] `channels presence enter/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
+    - [ ] Test presence data handling (clientId, data payloads)
+    - [ ] Test presence filtering by clientId
+  - [ ] `channels occupancy get/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
+    - [ ] Test occupancy metrics parsing and formatting
+    - [ ] Test live updates with simulated changes
+- [ ] **Channel Rules (Legacy):**
+  - [ ] `channel-rule create/list/update/delete`: Mock Control API calls, flag handling, output formats. (Verify necessity).
+- [ ] **Connections:**
+  - [ ] `connections stats`: Mock REST API call, flag handling, output formats.
+    - [ ] Test different stat aggregation periods
+    - [ ] Test connection types filtering
+  - [ ] `connections test`: Mock SDK connection attempts, flag handling, output formats.
+    - [ ] Test different transport options (WebSockets, HTTP)
+    - [ ] Test environment selection
+  - [ ] `connections logs`: Verify proxying to `logs connection subscribe`.
+- [ ] **Logs:**
+  - [ ] `logs connection/connection-lifecycle/channel-lifecycle/push/app`: Mock SDK/API calls, flag handling, output formats, SIGINT handling.
+    - [ ] Test log filtering by types and channels
+    - [ ] Test rewind capability for supported channels
+    - [ ] Test formatted output for different log types
+    - [ ] Test rewind and live subscription flags interop and error conditions
+- [ ] **Queues:**
+  - [ ] `queues create/list/delete`: Mock Control API calls, flag handling, output formats.
+    - [ ] Test queue creation with various TTL and size options
+    - [ ] Test deletion confirmation flow
+    - [ ] Test invalid TTL or size parameters produce meaningful errors
+- [ ] **Integrations:**
+  - [ ] `integrations create/list/get/update/delete`: Mock Control API calls, flag handling, output formats.
+    - [ ] Test creation of different integration types
+    - [ ] Test source/target configuration validation
+    - [ ] Test invalid integration configuration fields rejected
+- [ ] **Spaces:**
+  - [ ] `spaces list`: Mock SDK/API call, flag handling, output formats.
+  - [ ] `spaces members/locks/locations/cursors`: Mock Spaces SDK calls, flag handling, output formats, SIGINT handling for subscribe commands.
+    - [ ] Test location coordinate handling and updates
+    - [ ] Test cursor movement simulation
+    - [ ] Test lock acquisition and conflict handling
+    - [ ] Test auto-simulation of cursor movement when no coordinates provided
+- [ ] **Rooms (Chat):**
+  - [ ] `rooms list`: Mock Chat SDK/API call, flag handling, output formats.
+  - [ ] `rooms messages/occupancy/reactions/presence/typing`: Mock Chat SDK calls, flag handling, output formats, SIGINT handling for subscribe commands.
+    - [ ] Test message formatting and rendering
+    - [ ] Test typing indicators state handling
+    - [ ] Test reactions to specific message ids
+    - [ ] Test `--count` and `--delay` interpolation identical to channels
+    - [ ] Test invalid room ID errors handled gracefully
+- [ ] **Benchmarking:**
+  - [ ] `bench publisher/subscriber`: Mock SDK, complex flag interactions, parameter validation, summary generation logic.
+    - [ ] Test metrics calculation (throughput, latency)
+    - [ ] Test synchronization between publisher and subscriber
+    - [ ] Test throttling and rate limiting
+    - [ ] Test invalid rate limits (>20 msgs/sec) are rejected early
+- [ ] **MCP:**
+  - [ ] `mcp start-server`: Server startup logic, argument parsing.
+    - [ ] Test MCP request handling for supported commands
+    - [ ] Test resource URI parsing
+    - [ ] Test timeout handling for long-running operations
+    - [ ] Test unsupported MCP methods return JSON-RPC "Method not found"
+  - [ ] Test resource listing and operations
+- [ ] **Web CLI:** Test the terminal server with mocked Docker container.
+  - [ ] Test WebSocket connection handling
+  - [ ] Test command restriction enforcement
+  - [ ] Test environment variable passing
+- [ ] **Web CLI Restrictions:** For each restricted command, simulate `ABLY_WEB_CLI_MODE` and assert correct error message
+
+### Integration tests
+
+- [ ] **Core CLI:** `config set` -> `config get`, default/topic help output, command not found hook trigger.
+  - [ ] Test that a user's config file is correctly written with expected values and structure
+  - [ ] Test that topics show proper help information with examples
+  - [ ] Test `ably help` without arguments lists all high-level topics correctly.
+  - [ ] Test interactive `ensureAppAndKey` prompts sequence in one CLI invocation.
+- [ ] **Accounts:** Mocked login -> list -> current -> switch -> current -> logout sequence.
+  - [ ] Verify account state is properly maintained across commands
+  - [ ] Test that logout properly clears sensitive information
+- [ ] **Apps:** Mocked create -> list -> current -> switch -> update -> delete sequence; mocked channel-rules CRUD sequence.
+  - [ ] Verify app selection state affects subsequent commands
+  - [ ] Test that app properties are properly persisted after update
+- [ ] **Auth:** Mocked keys create -> list -> current -> switch -> update -> revoke sequence.
+  - [ ] Test that key capabilities are correctly applied
+  - [ ] Verify that revoked keys can no longer be used
+- [ ] **Channels (Pub/Sub):** Mocked publish -> subscribe, publish -> history, presence enter -> presence subscribe, occupancy get/subscribe sequences.
+  - [ ] Test message delivery from publish to subscribe
+  - [ ] Test that published messages appear in history
+  - [ ] Test that presence state is correctly maintained
+- [ ] **Queues:** Mocked create -> list -> delete sequence.
+  - [ ] Test queue configuration validation
+- [ ] **Integrations:** Mocked create -> list -> get -> update -> delete sequence.
+  - [ ] Test that integration rules are properly applied
+- [ ] **Spaces:** Mocked SDK interactions for members, locks, locations, cursors (e.g., enter -> subscribe, acquire -> get).
+  - [ ] Test concurrent lock operations
+  - [ ] Test member entry/exit notifications
+- [ ] **Rooms (Chat):** Mocked SDK interactions for messages, occupancy, reactions, presence, typing (e.g., enter -> subscribe, send -> subscribe).
+  - [ ] Test message threading and ordering
+  - [ ] Test reaction aggregation
+- [ ] **Benchmarking:** Local publisher/subscriber run (mocked SDK connections), report generation.
+  - [ ] Test report formatting and data accuracy
+- [ ] **MCP:** Local server start, mock client connection, basic request/response test.
+  - [ ] Test resource listing and operations
+- [ ] **Web CLI:** Test the terminal server with mocked Docker container.
+  - [ ] Test WebSocket connection handling
+  - [ ] Test command restriction enforcement
+  - [ ] Test environment variable passing
+- [ ] **Web CLI Restrictions:** For each restricted command, simulate `ABLY_WEB_CLI_MODE` and assert correct error message
+
+### End to End (e2e) tests
+
+- [ ] **Core CLI:** `ably --version`, `ably help`, `ably help ask`.
+  - [ ] Verify version output matches package.json
+  - [ ] Test AI help agent with real queries
+  - [ ] Test interactive login flow end-to-end using pseudo-TTY simulation.
+- [ ] **Accounts:** Real login flow (interactive/token), `list`, `current`, `stats`.
+  - [ ] Test end-to-end login with browser redirect
+  - [ ] Test stats retrieval with different time periods
+- [ ] **Apps:** Real create, list, delete; real `stats`, `channel-rules list`, `apps logs subscribe`.
+  - [ ] Create app with specific settings and verify creation
+  - [ ] Test app lifecycle from creation to deletion
+- [ ] **Auth:** Real keys create, list, revoke; real `issue-ably-token`.
+  - [ ] Create key with specific capabilities and verify they work
+  - [ ] Test token creation and use with client libraries
+- [ ] **Channels (Pub/Sub):** Real publish/subscribe, history, presence enter/subscribe, list.
+  - [ ] Test cross-client communication
+  - [ ] Test message persistence and retrieval
+- [ ] **Connections:** Real `test`, `stats`.
+  - [ ] Test connection across different networks/environments
+  - [ ] Verify connection metrics are accurately reported
+- [ ] **Logs:** Real `connection subscribe`, `push subscribe`.
+  - [ ] Test log delivery timing and completeness
+  - [ ] Verify push notification logs appear correctly
+- [ ] **Queues:** Real create, list, delete.
+  - [ ] Test queue throughput and message retention
+- [ ] **Integrations:** Real create, list, delete.
+  - [ ] Test integration with real external services (e.g., AWS, Google)
+- [ ] **Spaces:** Real basic enter, subscribe members, set location, get-all locations.
+  - [ ] Test multi-client collaboration scenarios
+  - [ ] Test spatial data consistency across clients
+- [ ] **Rooms (Chat):** Real enter presence, send message, subscribe messages.
+  - [ ] Test chat message delivery and ordering
+  - [ ] Test persistent history across sessions
+- [ ] **Benchmarking:** Real publisher/subscriber run against Ably app.
+  - [ ] Test with various message sizes and rates
+  - [ ] Measure real-world performance metrics
+- [ ] **Web Example:** Test the web terminal interface with real commands.
+  - [ ] Test terminal rendering and command execution
+  - [ ] Test session timeout and reconnection
+- [ ] **Environment Overrides:** Test `--host`, `--env`, `--control-host` flags override endpoints
+
