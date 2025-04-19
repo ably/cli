@@ -4,7 +4,7 @@
 
 [Ably](https://ably.com) CLI and MCP server for [Ably Pub/Sub](https://ably.com/pubsub), [Ably Spaces](https://ably.com/spaces), [Ably Chat](https://ably.com/chat) and the [Ably Control API](https://ably.com/docs/account/control-api).
 
-> [!NOTE]  
+> [!NOTE]
 > This project is in beta and this CLI and MCP server project is being actively developed.
 > Please [raise an issue](https://github.com/ably/cli/issues) if you have feedback, feature requests or want to report a bug. We welcome [pull requests too](https://github.com/ably/cli/pulls).
 
@@ -44,7 +44,7 @@ LOGIN (recommended first step)
 
 # MCP Usage
 
-> [!WARNING]  
+> [!WARNING]
 > The MCP server is currently experimental. Please [raise an issue](https://github.com/ably/cli/issues) if you have feedback or suggestions for features.
 
 1. Install the CLI following the [CLI usage](#cli-usage) steps.
@@ -53,7 +53,7 @@ LOGIN (recommended first step)
 
 See [MCP Server section](#mcp-server) for more details on how to use the MCP Server.
 
-> [!NOTE]  
+> [!NOTE]
 > If you are having trouble getting the MCP server running, use [MCP inspector](https://github.com/modelcontextprotocol/inspector)
 
 # Commands

@@ -90,16 +90,18 @@ _Note: The `topicSeparator` configured for oclif is not a `:` but instead a spac
 - `$ ably channels publish` -> publish a message to a channel with optional support for encryption. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
 - `$ ably channels batch-publish` -> use the REST batch publish API to publish a batch of messages
 - `$ ably channels subscribe` -> subscribe to messages published on one or more provided channels. Support for encryption, deltas, and rewind are available as arguments. Stay subscribed until terminated.
-- `$ ably channels occupancy` -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
+- `$ ably channels occupancy get` -> returns the current occupancy on a channel
+- `$ ably channels occupancy subscribe` -> subscribes to ongoing occupancy changes using the meta occupancy channel
 - `$ ably channels history` -> provides access to historical messages on a channel
 - `$ ably channels presence` -> this is a topic that groups presence functionality together
-- `$ ably channels presence` enter -> enter presence and remain present until the script is terminated. Show who is entering and leaving whilst present,
+- `$ ably channels presence enter` -> enter presence and remain present until the script is terminated. Show who is entering and leaving whilst present.
 - `$ ably channels presence subscribe` -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
-- `$ ably channels logs` channel-lifecycle -> set up as an alias to ably logs channel-lifecycle
+- `$ ably channels logs channel-lifecycle subscribe` -> alias for `ably logs channel-lifecycle subscribe`
 
 - `$ ably config` -> opens the config TOML file with the default text editor
 
 - `$ ably connections logs` connections-lifecycle -> set up as an alias to ably logs connection-lifecycle
+- `$ ably connections logs connection-lifecycle subscribe` -> alias for `ably logs connection-lifecycle subscribe`
 - `$ ably connections stats` -> this is largely a duplication of ably app stats, however it is focussed on connection stats only. This should also support the --live option.
 - `$ ably connections test` -> simply connects to Ably, confirms that the conenction was established, and closes the connection. Allows transport params options so that WebSockets can be disabled for example, and only HTTP is used, or only WebSockets is used without HTTP support.
 
@@ -107,10 +109,12 @@ _Note: The `topicSeparator` configured for oclif is not a `:` but instead a spac
 - `$ ably rooms list` -> list chat rooms using the channel enumeration API, filtering out those that are not chat
 - `$ ably rooms messages` send -> send a chat message. Support --count and --delay arguments to send multiple messages, with interpolation for `{{.Count}}` and `{{.Timestamp}}` in the message argument.
 - `$ ably rooms messages` subscribe -> subscribe to chat messages
-- `$ ably rooms messages` get -> get historical messages
-- `$ ably rooms occupancy` -> returns the occupany on a channel, with a --live option to subscribe to occupancy ongoing using the meta occupancy channel
+- `$ ably rooms messages` get` -> get historical messages
+- `$ ably rooms messages get` -> get historical messages
+- `$ ably rooms occupancy get` -> returns the current occupancy on a room
+- `$ ably rooms occupancy subscribe` -> subscribes to ongoing occupancy changes using the meta occupancy channel
 - `$ ably rooms presence subscribe` -> show the complete list of members present, then show events of who is entering or leaving, until the script is terminated.
-- `$ ably rooms presence enter` -> enter a room and remain present until the script is terminated. Show who is entering and leaving whilst present,
+- `$ ably rooms presence enter` -> enter a room and remain present until the script is terminated. Show who is entering and leaving whilst present.
 - `$ ably rooms reactions subscribe` -> subscribe to room reactions
 - `$ ably rooms reactions send` -> send a room reaction
 - `$ ably rooms typing subscribe` -> subscribe to typing indicators and show who is typing and stops typing in realtime
@@ -132,12 +136,14 @@ _Note: The `topicSeparator` configured for oclif is not a `:` but instead a spac
 - `$ ably spaces locks get-all` -> show a list of all locks and exit
 
 - `$ ably logs` -> Topic for streaming and retrieving logs
-- `$ ably logs channel-lifecycle subscribe` -> Stream logs from [meta]channel.lifecycle meta channel, see <https://ably.com/docs/metadata-stats/metadata/subscribe#channel-lifecycle> for types of evetns, and the data type.
-- `$ ably logs connection-lifecycle subscribe` -> Stream logs from [meta]connection.lifecycle meta channel.
-- `$ ably logs app subscribe` -> Stream logs from the app-wide meta channel `[meta]log`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
-- `$ ably logs app history` -> View historical app logs from `[meta]log` by using the ably pub/sub history API for channels
-- `$ ably logs push subscribe` -> Stream logs from the app push notifications `[meta]log:push`. Rewind is supported for this channel, so offer a rewind option to see recent log entries.
-- `$ ably logs push history` -> View historical push logs from `[meta]log:push` by using the ably pub/sub history API for channels
+- `$ ably logs channel-lifecycle subscribe` -> Stream logs from the `[meta]channel.lifecycle` meta channel. See Ably docs for event types.
+- `$ ably logs connection-lifecycle subscribe` -> Stream logs from the `[meta]connection.lifecycle` meta channel.
+- `$ ably logs connection-lifecycle history` -> View historical connection lifecycle logs.
+- `$ ably logs connection subscribe` -> Stream logs from the `[meta]connection` meta channel.
+- `$ ably logs app subscribe` -> Stream logs from the app-wide `[meta]log` meta channel. Supports `--rewind`.
+- `$ ably logs app history` -> View historical app logs from `[meta]log`.
+- `$ ably logs push subscribe` -> Stream logs from the app push notifications `[meta]log:push` meta channel. Supports `--rewind`.
+- `$ ably logs push history` -> View historical push logs from `[meta]log:push`.
 
 - `$ ably integrations` -> Manage Ably integrations (named rules in the Control API)
 - `$ ably integrations list` -> list all integrations in the app
@@ -392,7 +398,7 @@ Once an answer is provided:
 - When the --continue flag is used, inject the previous conversation thread, including all previous questions and answers
 - Any subsequent question without --continue, resets the locally stored info and stores the most recent question and answer
 
-````json
+```json
 {
   "answer": "
 
@@ -404,7 +410,7 @@ Here's how to get started with Ably:
 
 ```html
 <script src=\"https://cdn.ably.com/lib/ably.min-2.js\"></script>
-````
+```
 
 [(1)](https://ably.com/docs/getting-started/quickstart#step-2)
 
