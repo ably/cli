@@ -21,36 +21,43 @@ ably accounts stats
 ## Examples
 
 Basic usage (shows last 24 hours of stats):
+
 ```
 ably accounts stats
 ```
 
 Get stats with specific time unit:
+
 ```
 ably accounts stats --unit hour
 ```
 
 Get stats for a specific period:
+
 ```
 ably accounts stats --start 1618005600000 --end 1618091999999
 ```
 
 Limit the number of returned records:
+
 ```
 ably accounts stats --limit 10
 ```
 
 Get stats in JSON format:
+
 ```
 ably accounts stats --format json
 ```
 
 Subscribe to live stats updates:
+
 ```
 ably accounts stats --live
 ```
 
 Subscribe to live stats with custom polling interval:
+
 ```
 ably accounts stats --live --interval 15
 ```
@@ -67,4 +74,4 @@ The command displays the following metrics:
 - **Integrations**: Peak rates for various integration types (HTTP Events, AMQP, External Queue, Webhook) if available
 - **Push Notifications**: Messages sent, delivery status, and peak push request rate (per second) if available
 
-Peak rates are reported per second and values between 0 and 1 are displayed with one decimal place for clarity. 
+Peak rates are reported per second and values between 0 and 1 are displayed with one decimal place for clarity.

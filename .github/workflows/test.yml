@@ -3,10 +3,10 @@ name: Run Tests
 on:
   push:
     # Trigger on pushes to any branch
-    branches: [ '**' ]
+    branches: ["**"]
   pull_request:
     # Trigger on pull requests targeting any branch
-    branches: [ '**' ]
+    branches: ["**"]
 
 jobs:
   test:
@@ -24,11 +24,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.x' # Use Node.js 22.x
-          cache: 'pnpm'
+          node-version: "22.x" # Use Node.js 22.x
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Run tests
-        run: pnpm test 
+        run: pnpm test

@@ -1,23 +1,23 @@
-import { Config } from '@oclif/core'
-import * as Ably from 'ably'
+import { Config } from "@oclif/core";
+import * as Ably from "ably";
 
 /**
  * Base interface for CLI flags.
  */
 export interface BaseFlags {
-  'access-token'?: string;
-  'api-key'?: string;
-  'client-id'?: string;
-  'control-host'?: string;
+  "access-token"?: string;
+  "api-key"?: string;
+  "client-id"?: string;
+  "control-host"?: string;
   env?: string;
   host?: string;
   json?: boolean;
-  'pretty-json'?: boolean;
+  "pretty-json"?: boolean;
   token?: string;
   verbose?: boolean;
-  'web-cli-help'?: boolean;
+  "web-cli-help"?: boolean;
   format?: string;
-  'token-only'?: boolean;
+  "token-only"?: boolean;
   quiet?: boolean;
   app?: string;
   [key: string]: unknown;
@@ -27,12 +27,14 @@ export interface BaseFlags {
  * Error details structure for formatted output
  * Compatible with Ably's ErrorInfo
  */
-export type ErrorDetails = Ably.ErrorInfo | {
-  code?: number;
-  message?: string;
-  statusCode?: number;
-  [key: string]: unknown;
-}
+export type ErrorDetails =
+  | Ably.ErrorInfo
+  | {
+      code?: number;
+      message?: string;
+      statusCode?: number;
+      [key: string]: unknown;
+    };
 
 /**
  * Command configuration type - using any for now to avoid type conflicts
@@ -44,4 +46,4 @@ export type CommandConfig = Config;
  */
 export interface CommandArgs {
   [key: string]: string | undefined;
-} 
+}
