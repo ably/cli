@@ -76,7 +76,7 @@
     "@eslint/js": "^9.21.0",
     "@oclif/test": "^2.5.5",
     "@types/chai": "^4.3.11",
-    "@types/dockerode": "^3.3.29",
+    "@types/dockerode": "^3.3.38",
     "@types/fast-levenshtein": "^0.0.4",
     "@types/inquirer": "^9.0.7",
     "@types/jsonwebtoken": "^9.0.7",
