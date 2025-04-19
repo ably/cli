@@ -1,12 +1,12 @@
-import inquirer from 'inquirer'
-import type { ConfigManager, AccountConfig } from './config-manager.js'
-import type { App, ControlApi, Key } from './control-api.js'
+import inquirer from "inquirer";
+import type { ConfigManager, AccountConfig } from "./config-manager.js";
+import type { App, ControlApi, Key } from "./control-api.js";
 
 export class InteractiveHelper {
-  private configManager: ConfigManager
+  private configManager: ConfigManager;
 
   constructor(configManager: ConfigManager) {
-    this.configManager = configManager
+    this.configManager = configManager;
   }
 
   /**
@@ -17,48 +17,56 @@ export class InteractiveHelper {
       {
         default: false,
         message,
-        name: 'confirmed',
-        type: 'confirm'
-      }
-    ])
-    
-    return confirmed
+        name: "confirmed",
+        type: "confirm",
+      },
+    ]);
+
+    return confirmed;
   }
 
   /**
    * Interactively select an account from the list of configured accounts
    */
-  async selectAccount(): Promise<{ account: AccountConfig; alias: string } | null> {
+  async selectAccount(): Promise<{
+    account: AccountConfig;
+    alias: string;
+  } | null> {
     try {
-      const accounts = this.configManager.listAccounts()
-      const currentAlias = this.configManager.getCurrentAccountAlias()
-      
+      const accounts = this.configManager.listAccounts();
+      const currentAlias = this.configManager.getCurrentAccountAlias();
+
       if (accounts.length === 0) {
-        console.log('No accounts configured. Use "ably accounts login" to add an account.')
-        return null
+        console.log(
+          'No accounts configured. Use "ably accounts login" to add an account.',
+        );
+        return null;
       }
-      
+
       const { selectedAccount } = await inquirer.prompt([
         {
-          choices: accounts.map(account => {
-            const isCurrent = account.alias === currentAlias
-            const accountInfo = account.account.accountName || account.account.accountId || 'Unknown'
-            const userInfo = account.account.userEmail || 'Unknown'
+          choices: accounts.map((account) => {
+            const isCurrent = account.alias === currentAlias;
+            const accountInfo =
+              account.account.accountName ||
+              account.account.accountId ||
+              "Unknown";
+            const userInfo = account.account.userEmail || "Unknown";
             return {
-              name: `${isCurrent ? '* ' : '  '}${account.alias} (${accountInfo}, ${userInfo})`,
-              value: account
-            }
+              name: `${isCurrent ? "* " : "  "}${account.alias} (${accountInfo}, ${userInfo})`,
+              value: account,
+            };
           }),
-          message: 'Select an account:',
-          name: 'selectedAccount',
-          type: 'list'
-        }
-      ])
-      
-      return selectedAccount
+          message: "Select an account:",
+          name: "selectedAccount",
+          type: "list",
+        },
+      ]);
+
+      return selectedAccount;
     } catch (error) {
-      console.error('Error selecting account:', error)
-      return null
+      console.error("Error selecting account:", error);
+      return null;
     }
   }
 
@@ -67,29 +75,31 @@ export class InteractiveHelper {
    */
   async selectApp(controlApi: ControlApi): Promise<App | null> {
     try {
-      const apps = await controlApi.listApps()
-      
+      const apps = await controlApi.listApps();
+
       if (apps.length === 0) {
-        console.log('No apps found. Create an app with "ably apps create" first.')
-        return null
+        console.log(
+          'No apps found. Create an app with "ably apps create" first.',
+        );
+        return null;
       }
-      
+
       const { selectedApp } = await inquirer.prompt([
         {
-          choices: apps.map(app => ({
+          choices: apps.map((app) => ({
             name: `${app.name} (${app.id})`,
-            value: app
+            value: app,
           })),
-          message: 'Select an app:',
-          name: 'selectedApp',
-          type: 'list'
-        }
-      ])
-      
-      return selectedApp
+          message: "Select an app:",
+          name: "selectedApp",
+          type: "list",
+        },
+      ]);
+
+      return selectedApp;
     } catch (error) {
-      console.error('Error fetching apps:', error)
-      return null
+      console.error("Error fetching apps:", error);
+      return null;
     }
   }
 
@@ -98,29 +108,29 @@ export class InteractiveHelper {
    */
   async selectKey(controlApi: ControlApi, appId: string): Promise<Key | null> {
     try {
-      const keys = await controlApi.listKeys(appId)
-      
+      const keys = await controlApi.listKeys(appId);
+
       if (keys.length === 0) {
-        console.log('No keys found for this app.')
-        return null
+        console.log("No keys found for this app.");
+        return null;
       }
-      
+
       const { selectedKey } = await inquirer.prompt([
         {
-          choices: keys.map(key => ({
-            name: `${key.name || 'Unnamed key'} (${key.id})`,
-            value: key
+          choices: keys.map((key) => ({
+            name: `${key.name || "Unnamed key"} (${key.id})`,
+            value: key,
           })),
-          message: 'Select a key:',
-          name: 'selectedKey',
-          type: 'list'
-        }
-      ])
-      
-      return selectedKey
+          message: "Select a key:",
+          name: "selectedKey",
+          type: "list",
+        },
+      ]);
+
+      return selectedKey;
     } catch (error) {
-      console.error('Error fetching keys:', error)
-      return null
+      console.error("Error fetching keys:", error);
+      return null;
     }
   }
-} 
+}
