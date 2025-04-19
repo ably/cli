@@ -1,6 +1,6 @@
-import { confirm } from '@inquirer/prompts';
-import chalk from 'chalk';
-import { setTimeout } from 'node:timers/promises';
+import { confirm } from "@inquirer/prompts";
+import chalk from "chalk";
+import { setTimeout } from "node:timers/promises";
 
 export class PromptHelper {
   /**
@@ -14,7 +14,7 @@ export class PromptHelper {
       default: true,
       message: `Did you mean ${chalk.blueBright(suggestion)}?`,
       theme: {
-        prefix: '',
+        prefix: "",
         style: {
           message: (text: string) => chalk.reset(text),
         },
@@ -22,7 +22,7 @@ export class PromptHelper {
     });
 
     // Timeout the prompt after 10 seconds
-    setTimeout(10_000, 'timeout', { signal })
+    setTimeout(10_000, "timeout", { signal })
       .catch(() => false) // Ignore timeout errors, treat as 'No'
       .then(() => confirmation.cancel());
 
@@ -39,17 +39,20 @@ export class PromptHelper {
 }
 
 // Utility function to format a prompt message with chalk
-export function formatPromptMessage(message: string, suggestion?: string): string {
+export function formatPromptMessage(
+  message: string,
+  suggestion?: string,
+): string {
   if (suggestion) {
     // Use chalk for styling
-    return `${message} ${chalk.blueBright(suggestion)}?`; 
-  } 
+    return `${message} ${chalk.blueBright(suggestion)}?`;
+  }
   return message;
 }
 
-// Note: The actual prompt logic (using inquirer) is now handled directly 
+// Note: The actual prompt logic (using inquirer) is now handled directly
 // within the did-you-mean.ts hook for better context management.
-// This file now only contains utility functions if needed, 
+// This file now only contains utility functions if needed,
 // or can be removed if formatPromptMessage is moved/inlined.
 
 // Example of how you might use chalk for other styling if needed:
@@ -66,4 +69,4 @@ export function formatSuggestion(suggestion: string): string {
   return chalk.blueBright(suggestion);
 }
 
-// You can add other prompt-related utility functions here if needed. 
+// You can add other prompt-related utility functions here if needed.
