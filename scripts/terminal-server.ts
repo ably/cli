@@ -13,12 +13,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- Configuration ---
-const DOCKER_IMAGE_NAME = 'ably-terminal:latest';
+const DOCKER_IMAGE_NAME = 'ably-cli-sandbox';
 const SESSION_TIMEOUT_MS = 1000 * 60 * 15; // 15 minutes
 const DEFAULT_PORT = 8080;
 const DEFAULT_MAX_SESSIONS = 50;
 const AUTH_TIMEOUT_MS = 10_000; // 10 seconds
-const SHUTDOWN_GRACE_PERIOD_MS = 10_000; // 10 seconds
 
 type ClientSession = {
   ws: WebSocket;
@@ -174,8 +173,8 @@ async function createContainer(
             StopSignal: 'SIGTERM',
             StopTimeout: 5,
             Tty: true,          // Enable TTY mode
-            // Don't override the container's default CMD
-            // This will ensure the restricted-shell.sh is used as defined in the Dockerfile
+            // Explicitly set the command to run the restricted shell script
+            Cmd: ["/bin/bash", "/scripts/restricted-shell.sh"]
         });
         log(`Container ${container.id} created.`);
         return container;
@@ -212,23 +211,20 @@ function isValidToken(token: string): boolean {
             return false;
         }
 
-        // Check for expiration claim (exp)
-        if (typeof decoded.exp !== 'number') {
-            logError('Token validation failed: Missing or invalid expiration claim (exp).');
-            // Allow tokens without expiry for now, but log it.
-            // Consider making this stricter if Control API tokens always have expiry.
-            log('Warning: Provided token does not have a standard expiration claim.');
-            return true; // Allow for now
+        // Check for expiration claim (exp) only if it exists
+        if (typeof decoded.exp === 'number') {
+            // Check if the token is expired
+            const nowInSeconds = Date.now() / 1000;
+            if (decoded.exp < nowInSeconds) {
+                logError('Token validation failed: Token has expired.');
+                return false;
+            }
+            log(`Token structure and expiry check passed for token starting with: ${token.slice(0, 10)}... (Expiry: ${new Date(decoded.exp * 1000).toISOString()})`);
+        } else {
+            // No expiration claim, token is still valid
+            log(`Token structure check passed for token starting with: ${token.slice(0, 10)}... (No expiration claim)`);
         }
-
-        // Check if the token is expired
-        const nowInSeconds = Date.now() / 1000;
-        if (decoded.exp < nowInSeconds) {
-            logError('Token validation failed: Token has expired.');
-            return false;
-        }
-
-        log(`Token structure and expiry check passed for token starting with: ${token.slice(0, 10)}... (Expiry: ${new Date(decoded.exp * 1000).toISOString()})`);
+        
         return true;
     } catch (error: unknown) {
         logError(`Token validation failed with unexpected decoding error: ${String(error)}`);
@@ -310,280 +306,178 @@ async function cleanupAllSessions(): Promise<void> {
 }
 
 // --- Main Connection Handler using Exec --- 
-async function _handleAuth(ws: WebSocket, req: http.IncomingMessage): Promise<boolean> {
-    if (ws.readyState !== WebSocket.OPEN) {
-        logError('WebSocket is not open during handleAuth.');
-        return false;
-    }
+async function _handleAuth(ws: WebSocket, docker: Docker, 
+  sessionId: string, 
+  containerInfo: Docker.ContainerInfo,
+  cmdExecData: Docker.ExecCreateOptions): Promise<boolean> {
+  
+  if (ws.readyState !== WebSocket.OPEN) {
+    logError(`[${sessionId}] WebSocket is not open during handleAuth.`);
+    return false;
+  }
 
-    let credentials: { accessToken?: string; apiKey?: string; environmentVariables?: Record<string, string>; type?: string } = {};
+  log(`[${sessionId}] Creating and starting exec process...`);
+  let sessionTerminated = false;
+  let execStream: Duplex | null = null;
+    
+  const cleanupAndTerminate = async (reason: string) => {
+    if (sessionTerminated) return;
+    sessionTerminated = true;
+        
+    log(`[${sessionId}] Triggering session termination due to: ${reason}`);
+    await terminateSession(sessionId, reason);
+
+    // Ensure WS is closed if session termination didn't catch it
+    if(ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close(1011, reason);
+    }
+  };
+
+  try {
+    // 1. Execute process in the container
+    log(`[${sessionId}] Executing process in container...`);
+    const container = docker.getContainer(containerInfo.Id);
+    const exec = await container.exec(cmdExecData);
+    
+    // 2. Start the exec process with stream
+    const execOptions = { hijack: true, stdin: true };
+    execStream = await exec.start(execOptions) as Duplex;
+    log(`[${sessionId}] Attached to exec stream (process running).`);
+
+    // Resize the PTY to a default size initially
     try {
-        // Treat req as unknown; extract headers if available
-        const headers = (req as { headers?: Record<string, string> }).headers || {};
-        credentials = JSON.parse(headers.authorization || '');
-    } catch {
-        logError('Failed to parse auth message');
-        ws.send('Invalid authentication message format.\r\n');
-        ws.close(1008, 'Invalid auth message');
-        return false;
+      await exec.resize({ h: 24, w: 80 });
+      log(`[${sessionId}] Resized exec PTY to default 80x24.`);
+    } catch (resizeError) {
+      logError(`[${sessionId}] Failed to resize PTY initially: ${resizeError}`);
+      // Continue connection even if resize fails initially
     }
 
-    if (credentials.type !== 'auth' || !credentials.apiKey || !credentials.accessToken) {
-        logError('Invalid auth message content');
-        ws.send('Invalid authentication credentials provided.\r\n');
-        ws.close(1008, 'Invalid credentials');
-        return false;
-    }
-
-    log('Client authenticated. Creating container and exec process...');
-    let container: Docker.Container | null = null;
-    let sessionId: null | string = null;
-    let execStream: Duplex | null = null;
-    let sessionTerminated = false;
-    const cleanupAndTerminate = async (reason: string) => {
-        if (sessionTerminated) return;
-        sessionTerminated = true;
-        log(`Triggering session termination for ${sessionId} due to: ${reason}`);
-        if (sessionId) {
-            await terminateSession(sessionId, reason); 
-        }
-
-        // Ensure WS is closed if session termination didn't catch it
-        if(ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-            ws.close(1011, reason);
-        }
+    // 3. Store session with the exec information
+    const timeoutId = setTimeout(() => 
+      cleanupAndTerminate('Session timed out.'), SESSION_TIMEOUT_MS);
+    
+    const fullSession: ClientSession = {
+      ws,
+      authenticated: true,
+      timeoutId,
+      container,
+      execInstance: exec,
+      stdinStream: execStream,
+      stdoutStream: execStream,
+      sessionId,
     };
+    sessions.set(sessionId, fullSession);
+    log(`[${sessionId}] Session created and stored.`);
 
-    try {
-        // 1. Create & Start Container
-        container = await createContainer(credentials.apiKey!, credentials.accessToken!, credentials.environmentVariables || {}); 
-        sessionId = container.id;
-        await container.start();
-        log(`Main container ${sessionId} started.`);
+    // 4. Set up binary data handling between Docker and WebSocket
+    let processingBuffer = Buffer.alloc(0);
+    
+    execStream.on('data', (chunk: Buffer) => {
+      // Docker multiplexes stdout/stderr over the same stream with a header
+      processingBuffer = Buffer.concat([processingBuffer, chunk]);
 
-        // 2. Execute the restricted shell script directly via exec
-        log(`Executing restricted shell in container ${sessionId}...`);
-        const exec = await container.exec({
-            AttachStderr: true, 
-            AttachStdin: true,
-            AttachStdout: true,
-            // Explicitly run the restricted shell script
-            Cmd: ['/bin/bash', '/scripts/restricted-shell.sh'],
-            // Set critical environment variables FOR the restricted shell process
-            Env: [
-                'TERM=xterm-256color',
-                'LANG=en_US.UTF-8',
-                'LC_ALL=en_US.UTF-8',
-                'LC_CTYPE=en_US.UTF-8',
-                'CLICOLOR=1',
-                'PS1=$ ' // Ensure prompt is set for this exec context
-            ],
-            Tty: true          // Use TTY for the exec process
-        });
-        const execAttachOptions = { hijack: true, stdin: true }; // Keep hijack: true
-        execStream = await exec.start(execAttachOptions) as Duplex; 
-        log(`Attached to exec stream for ${sessionId} (restricted shell).`);
-
-        // Resize the PTY to a default size initially
-        try {
-            await exec.resize({ h: 24, w: 80 });
-            log(`Resized exec PTY for ${sessionId} to default 80x24.`);
-        } catch (resizeError) {
-            logError(`[${sessionId}] Failed to resize PTY initially: ${resizeError}`);
-            // Continue connection even if resize fails initially
-        }
-
-        // 3. Create WS Stream in RAW BINARY mode
-        // Omit stream options entirely to get default Buffer behavior
-        const websocketStream = createWebSocketStream(ws); 
-
-        // Removed: , { decodeStrings: true } or other encoding options
-
-        // 4. Store Session
-        const timeoutId = setTimeout(() => cleanupAndTerminate('Session timed out.'), SESSION_TIMEOUT_MS);
-        const fullSession: ClientSession = {
-            ws,
-            authenticated: true,
-            timeoutId,
-            container,
-            execInstance: exec,
-            stdinStream: execStream,
-            stdoutStream: execStream,
-            sessionId: sessionId,
-        };
-        sessions.set(sessionId, fullSession);
-        log(`Session ${sessionId} created and stored.`);
-
-        // 5. Manual Forwarding & Demultiplexing
-        let processingBuffer = Buffer.alloc(0); // Buffer to handle partial stream frames
-        execStream.on('data', (chunk: Buffer) => {
-            processingBuffer = Buffer.concat([processingBuffer, chunk]);
-            // --- DEBUGGING: Log incoming raw chunk and current buffer ---
-            // log(`[DEBUG EXEC_CHUNK_RECV] Chunk(${chunk.length}): ${chunk.toString('hex')}`);
-            // log(`[DEBUG EXEC_BUFFER_PRE] Buffer(${processingBuffer.length}): ${processingBuffer.toString('hex')}`);
-            // --- END DEBUGGING ---
-
-            while (processingBuffer.length >= 8) { // Need at least 8 bytes for the header
-                const header = processingBuffer.slice(0, 8);
-                const streamType = header[0]; // 1 for stdout, 2 for stderr
-                const payloadSize = header.readUInt32BE(4); // Read size from bytes 4-7
-
-                if (processingBuffer.length >= 8 + payloadSize) {
-                    // We have the full frame (header + payload)
-                    const payload = processingBuffer.slice(8, 8 + payloadSize);
-                    // --- DEBUGGING: Log header, size, and extracted payload ---
-                    // log(`[DEBUG DEMUX_FRAME] Header: ${header.toString('hex')}, Type: ${streamType}, Size: ${payloadSize}`);
-                    // log(`[DEBUG DEMUX_PAYLOAD] Payload(${payload.length}): ${payload.toString('hex')}`);
-                    // --- END DEBUGGING ---
-
-                    // Only forward stdout (streamType 1) to the WebSocket for the terminal
-                    if (streamType === 1) {
-                        try {
-                            if (!websocketStream.destroyed) {
-                                // --- DEBUGGING: Log payload being written to websocketStream ---
-                                // log(`[DEBUG WS_WRITE_DEMUXED] Buffer(${payload.length}): ${payload.toString('hex')}`);
-                                // --- END DEBUGGING ---
-                                websocketStream.write(payload);
-                            }
-                        } catch (error) {
-                            const logSessionId = sessionId || 'unknown';
-                            logError(`[${logSessionId}] WS stream write error after demux: ${error instanceof Error ? error.message : String(error)}`);
-                            cleanupAndTerminate('WS stream write error');
-                            return; // Stop processing if write fails
-                        }
-                    } else if (streamType === 2) {
-                        // Optionally log stderr or handle it differently
-                        // log(`[DEBUG DEMUX_STDERR] Payload(${payload.length}): ${payload.toString('utf-8')}`);
-                    } else {
-                        // log(`[DEBUG DEMUX_UNKNOWN] Unknown stream type: ${streamType}`);
-                    }
-
-                    // Remove the processed frame (header + payload) from the buffer
-                    processingBuffer = processingBuffer.slice(8 + payloadSize);
-                    // log(`[DEBUG EXEC_BUFFER_POST] Buffer(${processingBuffer.length}): ${processingBuffer.toString('hex')}`);
-
-                } else {
-                    // Not enough data in buffer for the full payload yet, break and wait for more data
-                    // log(`[DEBUG DEMUX_WAIT] Need ${8 + payloadSize} bytes, have ${processingBuffer.length}. Waiting for more data.`);
-                    break;
-                }
-            }
-        });
-
-        websocketStream.on('data', (chunk: Buffer | string) => {
-            // Find the current session ID (assuming it's available in the closure)
-            // NOTE: sessionId might be null briefly before session is fully stored.
-            // It's safer to look up the session by the WebSocket instance if needed,
-            // but for simplicity, we assume sessionId is correctly captured here.
-            const currentSessionId = sessionId; 
-            if (!currentSessionId) { 
-                logError('Resize handler: Could not determine session ID.');
-                return; 
-            }
-
-            try {
-                let parsedMessage: { type?: string; cols?: number; rows?: number };
-                let isResizeMessage = false;
-
-                // Check if it's a resize message
-                if (Buffer.isBuffer(chunk) || typeof chunk === 'string') {
-                    try {
-                        parsedMessage = JSON.parse(chunk.toString());
-                        if (parsedMessage && parsedMessage.type === 'resize' && 
-                            typeof parsedMessage.cols === 'number' && typeof parsedMessage.rows === 'number') 
-                        {
-                            isResizeMessage = true;
-                        }
-                    } catch {
-                        // Not a JSON message, treat as regular data
-                        parsedMessage = {}; // Initialize with empty object if parsing fails
-                    }
-                } else {
-                    parsedMessage = {}; // Initialize with empty object if not a buffer or string
-                }
-
-                if (isResizeMessage) {
-                    const { cols = 0, rows = 0 } = parsedMessage;
-                    // Ensure cols and rows are positive integers
-                    if (cols > 0 && rows > 0) {
-                        log(`[${currentSessionId}] Received resize request: ${cols}x${rows}`);
-                        // Find the session and its exec instance
-                        const currentSession = sessions.get(currentSessionId);
-                        if (currentSession && currentSession.execInstance) {
-                            // Resize the *original* exec instance
-                            currentSession.execInstance.resize({ h: rows, w: cols })
-                                .catch(resizeError => {
-                                    logError(`[${currentSessionId}] Failed to resize PTY on request: ${resizeError}`);
-                                });
-                        } else {
-                            logError(`[${currentSessionId}] Could not find session or execInstance to resize PTY.`);
-                        }
-                    } else {
-                        logError(`[${currentSessionId}] Received invalid dimensions in resize request: ${cols}x${rows}`);
-                    }
-                } else {
-                    // Not a resize message, forward to the container
-                    const currentSession = sessions.get(currentSessionId);
-                    if (currentSession && currentSession.stdinStream && !currentSession.stdinStream.destroyed) {
-                        currentSession.stdinStream.write(chunk);
-                    } else {
-                        // Log if forwarding fails (e.g., stream closed before message processed)
-                        // Avoid terminating session here, let other handlers manage stream closure.
-                        log(`[${currentSessionId}] Could not forward non-resize data, stream unavailable.`);
-                    }
-                }
-            } catch (error) {
-                 // Use the captured sessionId for consistent logging
-                 logError(`[${currentSessionId}] Error processing incoming websocket data: ${error}`);
-                 // Terminate the session on general processing errors within this handler
-                 cleanupAndTerminate('WebSocket data processing error');
-            }
-        });
+      // Process all complete frames in the buffer
+      while (processingBuffer.length >= 8) {
+        const streamType = processingBuffer[0]; // 1=stdout, 2=stderr
+        const payloadSize = processingBuffer.readUInt32BE(4);
         
-        // Error and Close handlers for BOTH streams
-        execStream.on('error', (err: Error) => {
-             logError(`[${sessionId}] Exec Stream Error: ${err.message}`);
-             if (!websocketStream.destroyed) websocketStream.destroy(err);
-             cleanupAndTerminate('Exec stream error.'); 
-         });
-        execStream.on('close', () => {
-             log(`[${sessionId}] Exec Stream Closed.`);
-             if (!websocketStream.destroyed) websocketStream.destroy();
-             cleanupAndTerminate('Container process exited.');
-        });
-        websocketStream.on('error', (err: Error) => {
-             logError(`[${sessionId}] WebSocket Stream Error: ${err.message}`);
-             if (!execStream!.destroyed) execStream!.destroy(err);
-             cleanupAndTerminate('WebSocket stream error.');
-        });
-        websocketStream.on('close', () => {
-             log(`[${sessionId}] WebSocket Stream Closed (Client disconnected).`);
-             if (!execStream!.destroyed) execStream!.destroy();
-             cleanupAndTerminate('Client disconnected.');
-        });
-
-        log(`[${sessionId}] Manual forwarding established.`);
-
-        // 6. Send confirmation
-        ws.send('Authentication successful. Session established.\r\n');
-        
-        // 7. No explicit startup command needed here, handled by restricted-shell.sh welcome message
-
-        // Attach to container
-        await attachToContainer(fullSession, ws);
-
-        log(`Session ${sessionId} authenticated and attached.`);
-
-        return true;
-    } catch (error) {
-        logError(`Error during authentication for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-           ws.close(1011, 'Authentication failed');
+        // Check if we have a complete frame
+        if (processingBuffer.length < 8 + payloadSize) {
+          break; // Wait for more data
         }
-        // Add null check for sessionId before cleanup
-        if (sessionId) cleanupSession(sessionId);
-        return false;
-    }
+        
+        // Extract the payload and send it directly without filtering
+        const payload = processingBuffer.slice(8, 8 + payloadSize);
+        
+        // Only forward stdout/stderr to the terminal
+        if (streamType === 1 || streamType === 2) {
+          try {
+            if (ws.readyState !== WebSocket.OPEN) {
+              cleanupAndTerminate('WebSocket closed');
+              return;
+            }
+            
+            // Send raw binary data without any filtering
+            ws.send(payload);
+          } catch (error) {
+            logError(`[${sessionId}] Failed to send data: ${error instanceof Error ? error.message : String(error)}`);
+            cleanupAndTerminate('Failed to send data');
+            return;
+          }
+        }
+        
+        // Remove the processed frame from the buffer
+        processingBuffer = processingBuffer.slice(8 + payloadSize);
+      }
+    });
+
+    // 5. Forward data from WebSocket to container
+    ws.on('message', (data) => {
+      try {
+        // Check if it's a resize message (JSON format)
+        let isResizeMessage = false;
+        let parsedData;
+        
+        if (Buffer.isBuffer(data) || typeof data === 'string') {
+          try {
+            parsedData = JSON.parse(data.toString());
+            if (parsedData?.type === 'resize' && 
+                typeof parsedData.cols === 'number' && 
+                typeof parsedData.rows === 'number') {
+              isResizeMessage = true;
+            }
+          } catch {
+            // Not JSON, treat as regular data
+          }
+        }
+        
+        if (isResizeMessage && parsedData) {
+          // Handle resize event
+          log(`[${sessionId}] Resizing terminal: ${parsedData.cols}x${parsedData.rows}`);
+          fullSession.execInstance?.resize({ 
+            h: parsedData.rows, 
+            w: parsedData.cols 
+          }).catch(error => {
+            logError(`[${sessionId}] Resize error: ${error}`);
+          });
+        } else if (execStream && !execStream.destroyed) {
+          // Forward raw data to container
+          execStream.write(data);
+        }
+      } catch (error) {
+        logError(`[${sessionId}] Error processing WS message: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+
+    // 6. Error and close handlers
+    execStream.on('error', (err: Error) => {
+      logError(`[${sessionId}] Exec stream error: ${err.message}`);
+      cleanupAndTerminate('Container stream error');
+    });
+    
+    execStream.on('close', () => {
+      log(`[${sessionId}] Exec stream closed.`);
+      cleanupAndTerminate('Container process exited');
+    });
+    
+    ws.on('close', () => {
+      log(`[${sessionId}] WebSocket closed.`);
+      cleanupAndTerminate('Client disconnected');
+    });
+    
+    ws.on('error', (err: Error) => {
+      logError(`[${sessionId}] WebSocket error: ${err.message}`);
+      cleanupAndTerminate('WebSocket error');
+    });
+
+    log(`[${sessionId}] Bidirectional binary communication established.`);
+    return true;
+  } catch (error) {
+    logError(`[${sessionId}] Error in handleAuth: ${error instanceof Error ? error.message : String(error)}`);
+    cleanupAndTerminate('Error during connection setup');
+    return false;
+  }
 }
 
 // Moved from startServer scope
@@ -624,6 +518,11 @@ async function startServer() {
         server,
         handleProtocols, // Use function from outer scope
         verifyClient // Use function from outer scope
+    });
+
+    // Start the HTTP server so it listens for connections
+    server.listen(port, '0.0.0.0', () => {
+        log(`HTTP server listening on 0.0.0.0:${port}`);
     });
 
     wss.on('connection', (ws: WebSocket, _req: http.IncomingMessage) => {
@@ -686,14 +585,21 @@ async function startServer() {
 
                 // --- Auth Success -> Container Creation Phase ---
                 log(`[${sessionId}] Authentication successful.`);
+                
+                // Clear the auth timeout since we've authenticated successfully
+                clearTimeout(initialSession.timeoutId);
 
                 let container: Docker.Container;
                 try {
                    // Pass credentials to createContainer
                    container = await createContainer(apiKey, accessToken, environmentVariables || {}); 
                    log(`[${sessionId}] Container created successfully: ${container.id}`);
+                   
+                   // Start the container before attempting to attach
+                   await container.start();
+                   log(`[${sessionId}] Container started successfully: ${container.id}`);
                 } catch (containerError) {
-                    logError(`[${sessionId}] Failed to create container: ${containerError instanceof Error ? containerError.message : String(containerError)}`);
+                    logError(`[${sessionId}] Failed to create or start container: ${containerError instanceof Error ? containerError.message : String(containerError)}`);
                     if (ws.readyState === WebSocket.OPEN) {
                        ws.send('Failed to create session environment.\r\n');
                        ws.close(1011, 'Container creation failed');
@@ -757,20 +663,29 @@ async function startServer() {
         log(`Received ${signal}. Shutting down server...`);
         await cleanupAllSessions();
         log('Closing WebSocket server...');
-        wss.close((err) => {
-            if (err) {
-                logError(`Error closing WebSocket server: ${err}`);
-            }
-
-            log('WebSocket server closed.');
-            log('Shutdown complete.');
+        
+        // Close the HTTP server first
+        await new Promise<void>((resolve) => {
+            server.close(() => {
+                log('HTTP server closed.');
+                resolve();
+            });
         });
-        // Force exit if cleanup takes too long
-        setTimeout(() => {
-            logError('Shutdown timed out. Forcing exit.');
-             
-            process.exit(1); // Keep necessary exit with disable comment
-        }, SHUTDOWN_GRACE_PERIOD_MS);
+        
+        // Then close the WebSocket server
+        await new Promise<void>((resolve) => {
+            wss.close((err) => {
+                if (err) {
+                    logError(`Error closing WebSocket server: ${err}`);
+                }
+                log('WebSocket server closed.');
+                resolve();
+            });
+        });
+        
+        log('Shutdown complete.');
+        // Exit process immediately after clean shutdown
+        process.exit(0);
     };
 
     process.on('SIGINT', () => shutdown('SIGINT'));
@@ -789,14 +704,51 @@ try {
     process.exit(1); // Keep necessary exit with disable comment
 }
 
-function pipeStreams(wsStream: Duplex, containerStream: stream.Duplex) {
-    log('Piping WebSocket stream to container stream');
-    wsStream.pipe(containerStream).on('error', (err) => {
-        logError(`Error piping WebSocket stream to container stream: ${err.message}`);
+function pipeStreams(
+  ws: WebSocket,
+  containerStream: Duplex
+): void {
+  try {
+    log('Setting up bidirectional piping between WebSocket and container stream');
+    
+    // Set up data handling from container to WebSocket
+    let processingBuffer = Buffer.alloc(0);
+    
+    containerStream.on('data', (chunk: Buffer) => {
+      processingBuffer = Buffer.concat([processingBuffer, chunk]);
+      
+      // Process complete frames
+      while (processingBuffer.length >= 8) {
+        const streamType = processingBuffer[0]; // 1=stdout, 2=stderr
+        const payloadSize = processingBuffer.readUInt32BE(4);
+        
+        if (processingBuffer.length < 8 + payloadSize) {
+          break; // Wait for more data
+        }
+        
+        const payload = processingBuffer.slice(8, 8 + payloadSize);
+        
+        if (streamType === 1 || streamType === 2) {
+          try {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(payload);
+            }
+          } catch (error) {
+            logError(`Failed to send data: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+          }
+        }
+        
+        processingBuffer = processingBuffer.slice(8 + payloadSize);
+      }
     });
-    containerStream.pipe(wsStream).on('error', (err) => {
-        logError(`Error piping container stream to WebSocket: ${err.message}`);
-    });
+    
+    // NOTE: We no longer set up WebSocket message handling here
+    // This is now handled by the main message handler to avoid duplication
+    
+  } catch (error) {
+    logError(`Failed to pipe streams: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 // Helper to safely close WebSocket stream
@@ -810,7 +762,11 @@ function safeCloseWsStream(wsStream: Duplex) {
 // --- Container Attachment Logic ---
 
 async function attachToContainer(session: ClientSession, ws: WebSocket): Promise<void> {
-    const wsStream = createWebSocketStream(ws, { encoding: 'utf8' });
+    const wsStream = createWebSocketStream(ws, { 
+        encoding: 'utf8',
+        decodeStrings: false, // Don't convert strings to buffers
+        defaultEncoding: 'utf8'
+    });
     let containerStream: stream.Duplex | null = null;
 
     try {
@@ -818,13 +774,41 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         if (!session.container) {
             throw new Error('Container not associated with session during attach');
         }
+        
+        // Check if the container is running before attempting to attach
+        try {
+            const containerInfo = await session.container.inspect();
+            if (!containerInfo.State.Running) {
+                // Container is not running, start it
+                log(`Container ${session.container.id} is not running, attempting to start it...`);
+                await session.container.start();
+                log(`Container ${session.container.id} started successfully.`);
+            }
+        } catch (inspectError) {
+            logError(`Error checking container state for ${session.container.id}: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
+            throw new Error(`Failed to verify container state: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
+        }
+        
         log(`Attaching to container ${session.container.id} for session ${session.sessionId}`);
 
         const execOptions: Docker.ExecCreateOptions = {
             AttachStdin: true,
             AttachStdout: true,
             AttachStderr: true,
-            Cmd: ['/bin/bash'], // Or your desired shell
+            // Use the restricted shell script explicitly
+            Cmd: ['/bin/bash', '/scripts/restricted-shell.sh'],
+            // Set critical environment variables for proper terminal behavior
+            Env: [
+                'TERM=xterm-256color',
+                'COLORTERM=truecolor',
+                'LANG=en_US.UTF-8',
+                'LC_ALL=en_US.UTF-8',
+                'LC_CTYPE=en_US.UTF-8',
+                'CLICOLOR=1',
+                'PS1=$ ', // Ensure prompt is set properly
+                'LC_TERMINAL=xterm-256color',
+                'LC_TERMINAL_VERSION=3.4.0'
+            ],
             Tty: true,
         };
         const exec = await session.container.exec(execOptions);
@@ -840,7 +824,7 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         log(`Attached stream to container ${session.container.id} for session ${session.sessionId}`);
 
         // Now pipe streams, containerStream is guaranteed to be Duplex here
-        pipeStreams(wsStream, containerStream);
+        pipeStreams(ws, containerStream);
 
         // WebSocket stream event handlers
         wsStream.on('close', () => {
@@ -933,42 +917,63 @@ function handleExecResize(session: ClientSession, data: { cols: number, rows: nu
 }
 
 function handleMessage(session: ClientSession, message: Buffer) {
+    // Special handling for control commands like resize
     try {
-        const msgStr = message.toString('utf8');
-        const parsed: unknown = JSON.parse(msgStr);
+        // First attempt to parse as JSON for control messages (resize)
+        try {
+            // Only try to parse larger messages (control messages are usually JSON)
+            // Skip this for single characters & control keys
+            if (message.length > 3) {
+                const msgStr = message.toString('utf8');
+                const parsed: unknown = JSON.parse(msgStr);
 
-        // Check if parsed is an object and has the expected properties
-        if (typeof parsed === 'object' && parsed !== null) {
-            if ('type' in parsed && parsed.type === 'resize' && 'data' in parsed && parsed.data && typeof parsed.data === 'object') {
-                 // Further check for cols and rows if needed, assuming they are numbers for handleExecResize
-                 const resizeData = parsed.data as { cols?: unknown, rows?: unknown };
-                 if (typeof resizeData.cols === 'number' && typeof resizeData.rows === 'number') {
-                    handleExecResize(session, { cols: resizeData.cols, rows: resizeData.rows });
-                 } else {
-                    logError(`Received resize message with invalid data format for session ${session.sessionId}`);
-                 }
-            } else if ('type' in parsed && parsed.type === 'data' && 'data' in parsed) {
-                // Write data to the container's stdin stream
-                if (session.stdinStream && !session.stdinStream.destroyed) {
-                    log(`Received data for session ${session.sessionId}, writing to stdinStream.`);
-                    // Assuming parsed.data is string | Buffer based on context
-                    session.stdinStream.write(parsed.data as string | Buffer);
-                } else {
-                    logError(`Cannot write data: stdinStream not available or destroyed for session ${session.sessionId}`);
+                // Process JSON control messages (resize etc.)
+                if (typeof parsed === 'object' && parsed !== null) {
+                    if ('type' in parsed && parsed.type === 'resize') {
+                        // Handle resize message in two possible formats
+                        if ('data' in parsed && parsed.data && typeof parsed.data === 'object') {
+                            // Format 1: { type: 'resize', data: { cols, rows } }
+                            const resizeData = parsed.data as { cols?: unknown, rows?: unknown };
+                            if (typeof resizeData.cols === 'number' && typeof resizeData.rows === 'number') {
+                                handleExecResize(session, { cols: resizeData.cols, rows: resizeData.rows });
+                                return;
+                            }
+                        } else if ('cols' in parsed && 'rows' in parsed) {
+                            // Format 2: { type: 'resize', cols, rows }
+                            const parsedObj = parsed as { cols?: unknown, rows?: unknown };
+                            if (typeof parsedObj.cols === 'number' && typeof parsedObj.rows === 'number') {
+                                handleExecResize(session, { cols: parsedObj.cols, rows: parsedObj.rows });
+                                return;
+                            }
+                        }
+                    } else if ('type' in parsed && parsed.type === 'data' && 'data' in parsed && // Data messages should be written directly to container
+                        session.stdinStream && !session.stdinStream.destroyed) {
+                            session.stdinStream.write(parsed.data as string | Buffer);
+                            return;
+                        }
                 }
-            } else {
-                logError(`Received unknown message type or format for session ${session.sessionId}: ${msgStr}`);
             }
-        } else {
-             logError(`Received non-object message after JSON parse for session ${session.sessionId}: ${msgStr}`);
+        } catch {
+            // Not JSON, continue with raw input handling
         }
-    } catch {
-        // Handle non-JSON messages or binary data directly as input
-        // log(`Received non-JSON message for session ${session.sessionId}, writing directly to stdinStream.`);
+        
+        // Direct pass-through for raw input (both regular characters and control keys)
         if (session.stdinStream && !session.stdinStream.destroyed) {
             session.stdinStream.write(message);
         } else {
-             logError(`Cannot write raw data: stdinStream not available or destroyed for session ${session.sessionId}`);
+            // Only log if stream is not available (avoiding noise for normal keypresses)
+            logError(`Cannot write input: container stream unavailable for session ${session.sessionId}`);
+        }
+    } catch (error) {
+        logError(`Error processing input for session ${session.sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+        // Last resort fallback 
+        if (session.stdinStream && !session.stdinStream.destroyed) {
+            try {
+                // Attempt raw write as fallback
+                session.stdinStream.write(message);
+            } catch (writeError) {
+                logError(`Failed to write input as fallback: ${writeError instanceof Error ? writeError.message : String(writeError)}`);
+            }
         }
     }
 }
