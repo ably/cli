@@ -81,4 +81,3 @@ The CLI will use common folder structures for tests as follows:
 - For tests that subscribe or run on indefinitely waiting for events, the test suite will have to send a SIGINT to stop the command.
 - Testing commands where Realtime Ably clients are used, it's not practical to stub the network requests as the underlying websocket protocol is complicated which would result in this test suite being too coupled to the underlying protocol. Stubbing should be done on the SDK interfaces themselves instead.
 - Some end to end tests will exist that concurrent perform actions like publishing and subscribing to messages to ensure the CLI works with real network requests.
-
