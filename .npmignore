@@ -16,10 +16,8 @@ tsconfig.tsbuildinfo
 
 # Docs
 /docs
-PRD.md
-cursor_rules
-TODO.md
+.cursor
 
 # Other
 .DS_Store
-.env* 
+.env*

@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project rules
+
+The following documents must be read and considered before making any changes to this project.
+
+1. [Product-Requirements.md](mdc:docs/Product-Requirements.md) - outlines the project's goals, features, and technical specifications, acting as the primary blueprint for the Ably CLI's development.
+2. [Testing.md](mdc:docs/Testing.md) - details the strategy and approach for testing the CLI, ensuring its quality, reliability, and adherence to the defined requirements.
+
+## Outstanding tasks
+
+1. [TODO.md](mdc:docs/TODO.md) contains a list of outstanding tasks for this project. Note this list is not exhaustive as tasks may exist in Github issues or in JIRA, but this should give you some visibility into what is not yet done and will be done at some point in the future. Do not pick up any of these TODO tasks unless explicitly advised to.

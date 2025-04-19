@@ -5,8 +5,7 @@ alwaysApply: true
 ---
 # Ably knowledge
 
-- Please look at the prd.md file in the root which is the Product Requirements docuemnt. This document describes the project goals, technical considerations, and features. It's important to consider this context whenever you are making decisions.
-- When in doubt, refer to the Ably docs so that you can provide idiomatic suggestions in the CLI.
+- When in doubt about how Ably works, please refer to the Ably docs online at https://ably.com/docs so that you can provide idiomatic suggestions in the CLI.
 - The docs you need to pay attention to are:
   - Ably Pub/Sub guides https://ably.com/docs/basics and API references at https://ably.com/docs/api/realtime-sdk (note at this time, some of the API references are out of date, so please use https://ably.com/docs/sdk/js/v2.0/ when this is mentioned on the page)
   - Ably Chat guides at https://ably.com/docs/chat and API references at https://sdk.ably.com/builds/ably/ably-chat-js/main/typedoc/modules/chat-js.html
@@ -14,4 +13,4 @@ alwaysApply: true
   - Control API docs at https://ably.com/docs/account/control-api and Control API reference at https://ably.com/docs/api/control-api. 
   - Broader Ably platform docs at https://ably.com/docs/platform.
 - The CLI will always use the relevant product Ably SDKs for all data plane commands. In the rare instances that an API exists in the data plane REST API, but there is no corresponding method in the SDK, then the request method in the Pub/Sub SDK should be used to communicate with that REST API.
-- The Control API does not have an SDK, so raw HTTP requests are needed from the CLI.
+- The Control API does not have an official SDK, so raw HTTP requests will be used by the CLI.
