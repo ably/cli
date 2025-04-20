@@ -31,6 +31,7 @@
 ## Security
 
 - [ ] The Docker web terminal restrictions on what commands can be run is pretty poor as you can use & or | operators to simply get around this. For example, running `$ ably > /dev/null | echo "Hello"` returns "Hello", showing that the user can run additional commands.
+- [ ] Web terminal sessions should have a timeout to prevent sessions remaining open, idle timeout of say 10 minutes and total session max of 1 hour.
 
 ## API and Architecture
 
