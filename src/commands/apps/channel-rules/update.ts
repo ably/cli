@@ -102,7 +102,7 @@ export default class ChannelRulesUpdateCommand extends ControlBaseCommand {
     let appId: string | undefined;
 
     try {
-      let appId = flags.app;
+      appId = flags.app;
       if (!appId) {
         appId = await this.resolveAppId(flags);
       }
