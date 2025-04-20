@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2024-07-20
+
+### Added
+
+- Apache 2.0 LICENSE file.
+- Project Structure documentation.
+- `.editorconfig` for IDE formatting consistency.
+- Initial test strategy and proposed test coverage.
+
+### Changed
+
+- Improved terminal server with timestamps in logging.
+- Enhanced error handling in `AblyCliTerminal.tsx`.
+- Improved project documentation organization and clarity.
+- Applied consistent formatting across all files via `.editorconfig`.
+
+### Fixed
+
+- Terminal server regressions following TypeScript/lint fixes.
+- React mismatch issues in Web-CLI.
+- Fixed variable redeclaration in `channel-rules/update.ts`.
+- Ensured bottom line of terminal is always visible and resize works correctly.
+- Fixed dependency issues in `package.json`.
+- Various linting errors.
+
 ## [0.3.3] - 2024-07-09
 
 ### Fixed
