@@ -459,15 +459,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     };
 
     const handleWsError = (event: ErrorEvent | Event) => {
-      const reason =
-        event instanceof ErrorEvent
-          ? event.message
-          : "WebSocket connection error";
-      console.error(`[AblyCLITerminal] WebSocket Error: ${reason}`);
-      if (sessionStateRef.current === "connecting") {
-        term.current?.writeln(`\r\nConnection failed: ${reason}`);
-        handleSessionEnd(`Connection failed: ${reason}`); // Use defined handler
+      console.error("[AblyCLITerminal] WebSocket error:", event);
+      // No detailed error info from WebSocket error events typically
+      setSessionState("inactive");
+      onConnectionStatusChange?.("error");
+      if (term.current) {
+        term.current.writeln("\r\n\n--- WebSocket connection error ---\r\n");
       }
+      // Socket will close after error, which will trigger handleWsClose
     };
 
     const handleReconnectAttempt = (attempt: number) => {
