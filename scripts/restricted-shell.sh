@@ -69,6 +69,9 @@ handle_interrupt() {
 # Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
 trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
 
+# Redraw prompt on window resize (SIGWINCH)
+trap 'show_robust_prompt' SIGWINCH
+
 # -- Interactive Restricted Shell starts here --
 
 # Clear screen to start with a clean terminal 
