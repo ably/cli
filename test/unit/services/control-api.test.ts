@@ -9,7 +9,7 @@ describe("ControlApi", function() {
 
   beforeEach(function() {
     // Create fresh instance for each test
-    api = new ControlApi({ accessToken, controlHost });
+    api = new ControlApi({ accessToken, controlHost, logErrors: false });
 
     // Ensure all nock interceptors are cleared
     nock.cleanAll();
@@ -25,6 +25,7 @@ describe("ControlApi", function() {
       const customApi = new ControlApi({
         accessToken,
         controlHost: "custom.control.host",
+        logErrors: false,
       });
 
       // Set up nock to intercept request to custom host
@@ -39,7 +40,7 @@ describe("ControlApi", function() {
     });
 
     it("should use default control host if not provided", function() {
-      const defaultApi = new ControlApi({ accessToken });
+      const defaultApi = new ControlApi({ accessToken, logErrors: false });
 
       // Set up nock to intercept request to default host
       const scope = nock("https://control.ably.net")
@@ -321,6 +322,104 @@ describe("ControlApi", function() {
       const key = await api.createKey(appId, keyData);
 
       expect(key).to.deep.equal(expectedKey);
+    });
+
+    it("should handle error when creating API key", async function() {
+      const appId = "test-app-id";
+      const keyData = {
+        name: "New Key",
+        capabilities: { "channel:*": ["publish", "subscribe"] },
+      };
+
+      // Set up nock to intercept request
+      nock(`https://${controlHost}`)
+        .post(`/v1/apps/${appId}/keys`, keyData)
+        .reply(400, { message: "Bad Request" });
+
+      // Intercept any calls to /me
+      nock(`https://${controlHost}`)
+        .get("/v1/me")
+        .reply(200, { account: { id: "test-account-id" } });
+
+      try {
+        await api.createKey(appId, keyData);
+        expect.fail("Should have thrown an error");
+      } catch (error) {
+        expect(error).to.be.an.instanceOf(Error);
+        expect((error as Error).message).to.include("Bad Request");
+      }
+    });
+
+    it("should handle error when listing API keys", async function() {
+      const appId = "test-app-id";
+
+      // Set up nock to intercept request
+      nock(`https://${controlHost}`)
+        .get(`/v1/apps/${appId}/keys`)
+        .reply(404, { message: "Key not found" });
+
+      // Intercept any calls to /me
+      nock(`https://${controlHost}`)
+        .get("/v1/me")
+        .reply(200, { account: { id: "test-account-id" } });
+
+      try {
+        await api.listKeys(appId);
+        expect.fail("Should have thrown an error");
+      } catch (error) {
+        expect(error).to.be.an.instanceOf(Error);
+        expect((error as Error).message).to.include("Key not found");
+      }
+    });
+
+    it("should handle error when revoking API key", async function() {
+      const appId = "test-app-id";
+      const keyId = "test-key-id";
+
+      // Set up nock to intercept request
+      nock(`https://${controlHost}`)
+        .delete(`/v1/apps/${appId}/keys/${keyId}`)
+        .reply(500, { message: "Failed to revoke key" });
+
+      // Intercept any calls to /me
+      nock(`https://${controlHost}`)
+        .get("/v1/me")
+        .reply(200, { account: { id: "test-account-id" } });
+
+      try {
+        await api.revokeKey(appId, keyId);
+        expect.fail("Should have thrown an error");
+      } catch (error) {
+        expect(error).to.be.an.instanceOf(Error);
+        expect((error as Error).message).to.include("Failed to revoke key");
+      }
+    });
+
+    it("should handle error when updating API key", async function() {
+      const appId = "test-app-id";
+      const keyId = "test-key-id";
+      const updateData = {
+        name: "Updated Key Name",
+        capabilities: { "channel:*": ["publish", "subscribe"] },
+      };
+
+      // Set up nock to intercept request
+      nock(`https://${controlHost}`)
+        .patch(`/v1/apps/${appId}/keys/${keyId}`, updateData)
+        .reply(500, { message: "Failed to update key" });
+
+      // Intercept any calls to /me
+      nock(`https://${controlHost}`)
+        .get("/v1/me")
+        .reply(200, { account: { id: "test-account-id" } });
+
+      try {
+        await api.updateKey(appId, keyId, updateData);
+        expect.fail("Should have thrown an error");
+      } catch (error) {
+        expect(error).to.be.an.instanceOf(Error);
+        expect((error as Error).message).to.include("Failed to update key");
+      }
     });
   });
 });
