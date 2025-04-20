@@ -67,27 +67,27 @@
 ### Unit tests
 
 - [ ] **Core CLI & Infrastructure:**
-  - [ ] `BaseCommand`: Flag parsing, error handling, output modes (JSON, pretty-JSON, Web CLI), API client creation (mocked), `showAuthInfoIfNeeded`, `setupCleanupHandler`, `parseApiKey`, `ensureAppAndKey` flows.
-    - [ ] Test global flags (--host, --env, --control-host, --access-token, --api-key, --client-id, --verbose) propagation and overrides across commands.
-    - [ ] Test invalid API key/token error flows and correct JSON error output
+  - [x] `BaseCommand`: Flag parsing, error handling, output modes (JSON, pretty-JSON, Web CLI), API client creation (mocked), `showAuthInfoIfNeeded`, `setupCleanupHandler`, `parseApiKey`, `ensureAppAndKey` flows.
+    - [x] Test global flags (--host, --env, --control-host, --access-token, --api-key, --client-id, --verbose) propagation and overrides across commands.
+    - [x] Test invalid API key/token error flows and correct JSON error output
     - [ ] Test interpolation and variable substitution in message templates (`{{.Count}}`, `{{.Timestamp}}`)
-    - [ ] Test conflict error when using `--json` and `--pretty-json` together.
-    - [ ] Test `parseApiKey` with invalid formats (missing key secret, malformed string).
+    - [x] Test conflict error when using `--json` and `--pretty-json` together.
+    - [x] Test `parseApiKey` with invalid formats (missing key secret, malformed string).
     - [ ] Test `setClientId` behavior for explicit `--client-id none` and default random UUID.
-    - [ ] Test `ensureAppAndKey` fallback with env vars vs interactive prompts when config missing.
+    - [x] Test `ensureAppAndKey` fallback with env vars vs interactive prompts when config missing.
     - [ ] Test error output JSON structure for invalid API key or token.
   - [ ] `login.ts`: Mocked account login flow interaction.
-  - [ ] `config.ts`: Mocked config read/write operations.
+  - [x] `config.ts`: Mocked config read/write operations.
   - [ ] `help` commands: Output generation, argument handling.
     - [ ] Test `help ask` AI agent integration with mocked responses
     - [ ] Test help command with and without web-cli-help flag
   - [ ] `hooks/init/alias-command.ts`: Command aliasing logic.
-  - [ ] `hooks/command_not_found/did-you-mean.ts`: Command suggestion logic.
-    - [ ] Test Levenshtein distance calculation for command suggestions
-    - [ ] Test formatting of suggestions
-  - [ ] `services/config-manager.ts`: Test storage and retrieval of account, app, and API key information
-  - [ ] `services/control-api.ts`: Test Control API request formatting and error handling
-  - [ ] `services/interactive-helper.ts`: Test interactive prompts (mocked)
+  - [x] `hooks/command_not_found/did-you-mean.ts`: Command suggestion logic.
+    - [x] Test Levenshtein distance calculation for command suggestions
+    - [x] Test formatting of suggestions
+  - [x] `services/config-manager.ts`: Test storage and retrieval of account, app, and API key information
+  - [x] `services/control-api.ts`: Test Control API request formatting and error handling
+  - [x] `services/interactive-helper.ts`: Test interactive prompts (mocked)
   - [ ] Output Formatting Utilities: Table formatting, colorization logic.
 - [ ] **Accounts:**
   - [ ] `accounts login/logout/list/switch/current/stats`: Mock Control API calls, flag handling, output formats, config interactions.
@@ -195,9 +195,9 @@
 ### Integration tests
 
 - [ ] **Core CLI:** `config set` -> `config get`, default/topic help output, command not found hook trigger.
-  - [ ] Test that a user's config file is correctly written with expected values and structure
-  - [ ] Test that topics show proper help information with examples
-  - [ ] Test `ably help` without arguments lists all high-level topics correctly.
+  - [x] Test that a user's config file is correctly written with expected values and structure
+  - [x] Test that topics show proper help information with examples
+  - [x] Test `ably help` without arguments lists all high-level topics correctly.
   - [ ] Test interactive `ensureAppAndKey` prompts sequence in one CLI invocation.
 - [ ] **Accounts:** Mocked login -> list -> current -> switch -> current -> logout sequence.
   - [ ] Verify account state is properly maintained across commands
@@ -235,7 +235,7 @@
 ### End to End (e2e) tests
 
 - [ ] **Core CLI:** `ably --version`, `ably help`, `ably help ask`.
-  - [ ] Verify version output matches package.json
+  - [x] Verify version output matches package.json
   - [ ] Test AI help agent with real queries
   - [ ] Test interactive login flow end-to-end using pseudo-TTY simulation.
 - [ ] **Accounts:** Real login flow (interactive/token), `list`, `current`, `stats`.

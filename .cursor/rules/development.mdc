@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Node & TypeScript
@@ -8,6 +8,20 @@ alwaysApply: true
 - Use TypeScript and follow best practice naming conventions
 - ESLint is used to ensure all code adheres best practices, ensure you check that all code passes the linter before concluding your work. You can use `pnpm exec eslint -- [filepath]` to run the linter on single files.
 - This CLI is using the very popular and well maintained oclif framework, see https://github.com/oclif/oclif and https://oclif.io/. Please read the docs and follow best practice.
+
+## Mandatory Steps for All Code Changes
+
+**Before considering any task complete, you MUST perform the following steps:**
+
+1.  **Run Build:** Execute `pnpm prepare` to ensure the TypeScript code compiles successfully, the `oclif.manifest.json` is updated, and the `README.md` reflects any command changes.
+2.  **Run Linter:** Execute `pnpm exec eslint .` (or `pnpm exec eslint -- [filepath]` for specific files) and fix all reported issues. Code MUST pass lint checks.
+3.  **Run Tests:** Execute relevant tests locally (e.g., using `pnpm test`) to verify that your changes haven't introduced regressions. Ensure all affected tests pass. For new features, add appropriate unit, integration, or end-to-end tests.
+4.  **Update Documentation:** Update all relevant documentation, including:
+    *   `README.md` (especially the command list if commands were changed/added).
+    *   Files within the `docs/` directory (`Product-Requirements.md`, `Project-Structure.md`, `Testing.md` etc.) if the changes affect requirements, structure, or testing procedures.
+    *   Files within the `.cursor/rules/` directory if the changes impact development guidelines, Ably usage, or project structure.
+
+**Failure to complete these steps means the work is not finished.**
 
 ## Builds, linting and tests
 
@@ -17,7 +31,7 @@ alwaysApply: true
 
 ## Libraries and dependencies
 
-- When installing libraries, do not rely on your own training data. Your training data has a cut-off date. You’re probably not aware of all of the latest developments in the JavaScript and TypeScript world. This means that instead of picking a version manually (via updating the package.json file), you should use a script to install the latest version of a library. This will ensure you’re always using the latest version.
+- When installing libraries, do not rely on your own training data. Your training data has a cut-off date. You're probably not aware of all of the latest developments in the JavaScript and TypeScript world. This means that instead of picking a version manually (via updating the package.json file), you should use a script to install the latest version of a library. This will ensure you're always using the latest version.
     ```sh
         pnpm add -D @typescript-eslint/eslint-plugin
     ```
