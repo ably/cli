@@ -1,6 +1,6 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
-import React, { useCallback, useEffect, useRef, useState } from 'react'; // Step 4: Re-enable FitAddon import
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
 
 // Simple global reconnection state tracker
@@ -157,6 +157,8 @@ const debouncedSendResize = debounce((socket: WebSocket | null, cols: number, ro
   }
 }, 250); // Debounce resize sending by 250ms
 
+// Removed unused scrollbar gutter fix hooks
+
 export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   ablyAccessToken,
   ablyApiKey,
@@ -167,8 +169,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 }) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null); // Step 4: Re-enable FitAddon ref
+  const fitAddon = useRef<FitAddon | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  // Track previous cols/rows to only send backend resize on width changes
+  const prevSize = useRef({ cols: 0, rows: 0 });
   
   const [sessionState, setSessionState] = useState<SessionState>('inactive');
   const [sessionEndReason, setSessionEndReason] = useState<null | string>(null);
@@ -177,6 +181,15 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   // Use a ref for sessionState inside callbacks to avoid stale closures
   const sessionStateRef = useRef(sessionState);
   useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
+  
+  // Debounced backend resize: send resize 200ms after last event
+  const debouncedBackendResize = useRef(
+    debounce((cols: number, rows: number) => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+      }
+    }, 200)
+  ).current;
   
   // Handlers defined before useEffects that use them
   const handleSessionEnd = useCallback((reason: string) => {
@@ -221,13 +234,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     let initialFitTimeoutId: NodeJS.Timeout | null = null; 
     let isMounted = true;
 
-    // Debounced fit function for window resize
-    const debouncedWindowResizeFit = debounce(() => {
-      if (isMounted && fitAddon.current ) { // Step 4: Re-enable fitAddon check
-        console.log('[AblyCLITerminal] Window resize -> fit executing');
-        fitAddon.current.fit(); // Step 4: Re-enable fit call
-      }
-    }, 150); 
+    // Use ResizeObserver on the terminal container to trigger fit
+    let resizeObserver: ResizeObserver | null = null;
 
     if (terminalRef.current && !term.current) {
       console.log('[AblyCLITerminal] Initializing Terminal');
@@ -236,25 +244,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         convertEol: true,
         cursorBlink: true,
         fontSize: 14,
-        theme: { background: '#121212' }
+        theme: { background: '#121212' },
+        scrollback: 5000,  // Set a larger scrollback buffer to ensure all content is maintained
+        smoothScrollDuration: 300, // Enable smooth scrolling effect for 300ms duration
+        // @ts-ignore: reflowCursorLine exists at runtime though missing in types
+        reflowCursorLine: true
       });
-      const addon = new FitAddon(); // Step 4: Re-enable addon creation
-      terminal.loadAddon(addon); // Step 4: Re-enable loading addon
+      const addon = new FitAddon();
+      terminal.loadAddon(addon);
 
       term.current = terminal;
-      fitAddon.current = addon; // Step 4: Re-enable storing addon ref
+      fitAddon.current = addon;
 
       terminal.open(terminalRef.current);
-
-      // --- CRITICAL: Initial Fit --- 
-      initialFitTimeoutId = setTimeout(() => {
-         if (isMounted && fitAddon.current) { // Step 4: Add check here too
-            console.log('[AblyCLITerminal] Initial delayed fit executing');
-            fitAddon.current.fit(); // Step 4: Re-enable initial fit call
-            term.current?.focus(); 
-        }
-      }, 100);
-      // setTimeout(() => term.current?.focus(), 100); // Focus is now inside fit timeout
+      // Initialize prevSize to initial terminal dimensions
+      prevSize.current = { cols: terminal.cols, rows: terminal.rows };
 
       terminal.onData((data) => {
         if (isMounted && socketRef.current?.readyState === WebSocket.OPEN) {
@@ -262,27 +266,31 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         }
       });
 
-      // Attach listener ONLY for window resize events
-      window.addEventListener('resize', debouncedWindowResizeFit);
+      // Observe container resize to trigger fit and gutter fix
+      resizeObserver = new ResizeObserver(() => {
+        if (isMounted && fitAddon.current) {
+          console.log('[AblyCLITerminal] ResizeObserver triggered fit');
+          fitAddon.current.fit();
+        }
+      });
+      resizeObserver.observe(terminalRef.current);
 
-      // Add listener for terminal resize events (triggered by FitAddon)
-      terminal.onResize(({ cols, rows }) => {
-        if (isMounted && sessionStateRef.current === 'active') { // Only send when active
-          debouncedSendResize(socketRef.current, cols, rows);
+      // Initial fit and gutter fix
+      initialFitTimeoutId = setTimeout(() => {
+        if (!isMounted || !fitAddon.current) return;
+        console.log('[AblyCLITerminal] Initial delayed fit executing');
+        fitAddon.current.fit();
+        term.current?.focus();
+      }, 100);
+
+      // Scroll to bottom on any parsed write to keep last line visible
+      terminal.onWriteParsed(() => {
+        if (isMounted) {
+          terminal.scrollToBottom();
         }
       });
 
-      // Cleanup
-      return () => {
-        isMounted = false;
-        console.log('[AblyCLITerminal] Disposing Terminal');
-        if (initialFitTimeoutId) clearTimeout(initialFitTimeoutId); // Step 4: Re-enable timer clear
-        window.removeEventListener('resize', debouncedWindowResizeFit);
-        term.current?.dispose();
-        term.current = null;
-        fitAddon.current = null; // Step 4: Re-enable ref clear
-        socketRef.current?.close(1000, "Terminal component unmounting");
-      };
+      // Removed unused CSS injection
     }
   }, []); // IMPORTANT: Run only once on mount
 
@@ -432,6 +440,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
            console.error('[AblyCLITerminal] Error closing socket during cleanup:', error);
         }
       }
+      window.removeEventListener('resize', handleWindowResize);
     };
   }, [ablyApiKey, ablyAccessToken, websocketUrl, sessionState === 'inactive', handleSessionEnd, onConnectionStatusChange]); // Add handleSessionEnd to deps
 
@@ -439,13 +448,31 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   useEffect(() => {
     if (sessionState === 'active' && term.current) {
       console.log('[AblyCLITerminal] Session active - focusing terminal and triggering initial resize send');
+      console.log('[AblyCLITerminal] Session active - focusing terminal');
       // Using setTimeout to ensure DOM is ready and FitAddon has likely run
       setTimeout(() => {
         term.current?.focus();
-        // Trigger initial resize send after fit
+        
+        // Apply fit and send resize without manipulating rows
         if (fitAddon.current && term.current) {
-           const { cols, rows } = term.current;
-           debouncedSendResize(socketRef.current, cols, rows);
+          console.log('[AblyCLITerminal] Applying fit on session active');
+          fitAddon.current.fit();
+          
+          // Get current dimensions for resize message
+          // REMOVED: Manual resize send is no longer needed here, terminal.onResize handles it
+          /*
+          const { cols, rows } = term.current;
+          console.log(`[AblyCLITerminal] Session active, terminal size: ${cols}x${rows}`);
+          
+          // Send resize message with original dimensions
+          // FIX LINTER: Add null check for socketRef.current and readyState check
+          if (socketRef.current?.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+          }
+          */
+          // NOTE: We no longer manually send resize from here.
+          // The terminal.onResize handler, triggered by fitAddon.fit(),
+          // will send the necessary update immediately.
         }
       }, 100);
     }
@@ -459,31 +486,48 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
   }, [sessionState]);
 
+  // Handle window resize: fit terminal and optionally notify backend
+  const handleWindowResize = debounce(() => {
+    if (fitAddon.current && term.current) {
+      fitAddon.current.fit();
+      term.current.scrollToBottom();
+      const { cols, rows } = term.current;
+      // Only send resize to backend when width changes
+      if (sessionStateRef.current === 'active' && socketRef.current?.readyState === WebSocket.OPEN) {
+        if (cols !== prevSize.current.cols) {
+          socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+        }
+      }
+      prevSize.current = { cols, rows };
+    }
+  }, 200);
+  window.addEventListener('resize', handleWindowResize);
+
   // Render terminal with reconnection indicator
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
-      overflow: 'hidden',
-      position: 'relative', // Needed for absolute positioning of overlays
-      width: '100%'
+      overflow: 'hidden',          // Hide internal scrollbars
+      position: 'relative',       // Needed for overlays
+      width: '100%',
+      boxSizing: 'border-box',    // Include padding in width/height
     }}>
-      {/* Container for the terminal mount point */}
-      {/* CSS flex ensures this takes available space */}
-      {/* CSS padding ensures space around the terminal */}
+      {/* Terminal container with overflow handling and proper padding */}
       <div
         onClick={handleTerminalClick}
         ref={terminalRef}
         style={{
-          boxSizing: 'border-box', // Include padding in width/height
-          flex: '1 1 auto',        // Grow/shrink vertically
-          height: '100%',          // Needed for flex calculation
-          minHeight: 0,            // Fix flex height issues
-          overflow: 'hidden',       // Hide internal scrollbars if padding causes overflow
-          padding: '10px'         // Apply padding directly
+          flex: '1 1 auto',          // Grow/shrink vertically
+          height: '100%',            // Full height for FitAddon
+          minHeight: 0,              // Fix flex height issues
+          overflow: 'auto',          // Allow scroll when content overflows
+          padding: '10px',           // Side padding
+          position: 'relative',      // For child positioning
+          display: 'flex',           // Flex layout for terminal
+          flexDirection: 'column'    // Vertical stack
         }}
-        // The terminal instance is opened inside this div by terminal.open()
       />
 
       {/* Overlays for status/reconnect/restart */}
