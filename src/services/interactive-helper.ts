@@ -2,11 +2,20 @@ import inquirer from "inquirer";
 import type { ConfigManager, AccountConfig } from "./config-manager.js";
 import type { App, ControlApi, Key } from "./control-api.js";
 
+export interface InteractiveHelperOptions {
+  logErrors?: boolean;
+}
+
 export class InteractiveHelper {
   private configManager: ConfigManager;
+  private logErrors: boolean;
 
-  constructor(configManager: ConfigManager) {
+  constructor(
+    configManager: ConfigManager,
+    options: InteractiveHelperOptions = {},
+  ) {
     this.configManager = configManager;
+    this.logErrors = options.logErrors !== false; // Default to true
   }
 
   /**
@@ -65,7 +74,9 @@ export class InteractiveHelper {
 
       return selectedAccount;
     } catch (error) {
-      console.error("Error selecting account:", error);
+      if (this.logErrors) {
+        console.error("Error selecting account:", error);
+      }
       return null;
     }
   }
@@ -98,7 +109,9 @@ export class InteractiveHelper {
 
       return selectedApp;
     } catch (error) {
-      console.error("Error fetching apps:", error);
+      if (this.logErrors) {
+        console.error("Error fetching apps:", error);
+      }
       return null;
     }
   }
@@ -129,7 +142,9 @@ export class InteractiveHelper {
 
       return selectedKey;
     } catch (error) {
-      console.error("Error fetching keys:", error);
+      if (this.logErrors) {
+        console.error("Error fetching keys:", error);
+      }
       return null;
     }
   }

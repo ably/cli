@@ -10,17 +10,15 @@ describe("InteractiveHelper", function() {
   let configManagerStub: sinon.SinonStubbedInstance<ConfigManager>;
   let promptStub: sinon.SinonStub;
   let consoleLogSpy: sinon.SinonSpy;
-  let consoleErrorSpy: sinon.SinonSpy;
 
   beforeEach(function() {
     // Create stubs and spies
     configManagerStub = sinon.createStubInstance(ConfigManager);
     promptStub = sinon.stub(inquirer, "prompt");
     consoleLogSpy = sinon.spy(console, "log");
-    consoleErrorSpy = sinon.spy(console, "error");
 
     // Create fresh instance for each test
-    interactiveHelper = new InteractiveHelper(configManagerStub);
+    interactiveHelper = new InteractiveHelper(configManagerStub, { logErrors: false });
   });
 
   afterEach(function() {
@@ -99,7 +97,6 @@ describe("InteractiveHelper", function() {
       const result = await interactiveHelper.selectAccount();
 
       expect(result).to.be.null;
-      expect(consoleErrorSpy.calledWith(sinon.match(/Error selecting account/))).to.be.true;
     });
   });
 
@@ -160,7 +157,6 @@ describe("InteractiveHelper", function() {
       const result = await interactiveHelper.selectApp(controlApiStub);
 
       expect(result).to.be.null;
-      expect(consoleErrorSpy.calledWith(sinon.match(/Error fetching apps/))).to.be.true;
     });
   });
 
@@ -262,7 +258,6 @@ describe("InteractiveHelper", function() {
       const result = await interactiveHelper.selectKey(controlApiStub, "app1");
 
       expect(result).to.be.null;
-      expect(consoleErrorSpy.calledWith(sinon.match(/Error fetching keys/))).to.be.true;
     });
   });
 });

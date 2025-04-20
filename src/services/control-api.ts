@@ -3,6 +3,7 @@ import fetch, { type RequestInit } from "node-fetch";
 export interface ControlApiOptions {
   accessToken: string;
   controlHost?: string;
+  logErrors?: boolean;
 }
 
 export interface App {
@@ -163,10 +164,12 @@ export interface MeResponse {
 export class ControlApi {
   private accessToken: string;
   private controlHost: string;
+  private logErrors: boolean;
 
   constructor(options: ControlApiOptions) {
     this.accessToken = options.accessToken;
     this.controlHost = options.controlHost || "control.ably.net";
+    this.logErrors = options.logErrors !== false;
   }
 
   // Ask a question to the Ably AI agent
@@ -527,11 +530,14 @@ export class ControlApi {
         statusCode: response.status,
       };
 
-      // Log the detailed error
-      console.error(
-        "Control API Request Error:",
-        JSON.stringify(errorDetails, null, 2),
-      );
+      // Log the error for debugging purposes, but not during tests
+      if (this.logErrors) {
+        console.error("Control API Request Error:", {
+          message: errorDetails.message,
+          response: errorDetails.response || "No response body",
+          statusCode: errorDetails.statusCode,
+        });
+      }
 
       // Throw a more user-friendly error, including the message from the response if available
       let errorMessage = `API request failed (${response.status} ${response.statusText})`;
