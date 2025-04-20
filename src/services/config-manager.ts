@@ -47,8 +47,14 @@ export class ConfigManager {
   private configPath: string;
 
   constructor() {
-    this.configDir = path.join(os.homedir(), ".ably");
+    // Determine config directory: Use ABLY_CLI_CONFIG_DIR env var if set, otherwise default
+    const customConfigDir = process.env.ABLY_CLI_CONFIG_DIR;
+    this.configDir = customConfigDir || path.join(os.homedir(), ".ably");
+
+    // Define the config file path within the determined directory
     this.configPath = path.join(this.configDir, "config");
+
+    // Ensure the directory exists and load the configuration
     this.ensureConfigDirExists();
     this.loadConfig();
   }
