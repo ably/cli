@@ -119,21 +119,38 @@ describe("Basic CLI E2E", function() {
   });
 
   describe("Command not found handling", function() {
-    it("should suggest and run similar command for a typo in test mode", async function() {
-      const result = await execa("node", ["bin/run.js", "channls"], execaOptions); // Typo for 'channels'
+    it("should suggest and run similar command for a typo (colon input)", async function() {
+      // Input uses colon, should still suggest correctly
+      const result = await execa("node", ["bin/run.js", "channels:pubish"], execaOptions);
 
-      // 1. Check stderr for the initial warning
-      expect(result.stderr).to.include("channls is not an ably command");
+      // 1. Check stderr for the initial warning (input formatted with space)
+      expect(result.stderr).to.include("channels pubish is not an ably command");
 
-      // 2. Expect success because hook auto-confirms & runs suggested command in test mode
-      expect(result.failed, `Command stderr: ${result.stderr}`).to.be.false;
-      expect(result.exitCode).to.equal(0);
+      // 2. Expect FAILURE because hook runs suggested command ('channels:publish') which fails without args
+      expect(result.failed, `Command stderr: ${result.stderr}`).to.be.true;
+      expect(result.exitCode).not.equal(0);
 
-      // 3. Check stdout for output from the *suggested* command ('ably channels')
-      //    which logs its own help info when run without arguments.
-      expect(result.stdout).to.include("Ably Pub/Sub channel commands:");
-      expect(result.stdout).to.include("ably channels list"); // Example subcommand
-      expect(result.stdout).to.include("ably channels publish"); // Example subcommand
+      // 3. Check stderr for the error from the *suggested* command
+      expect(result.stderr).to.include("Missing 2 required args");
+      expect(result.stderr).to.include("channel");
+      expect(result.stderr).to.include("message");
+    });
+
+    it("should suggest and run similar command for a typo (space input)", async function() {
+      // Input uses space
+      const result = await execa("node", ["bin/run.js", "channels pubish"], execaOptions); // Typo for 'channels publish'
+
+      // 1. Check stderr for the initial warning (input formatted with space)
+      expect(result.stderr).to.include("channels pubish is not an ably command");
+
+      // 2. Expect FAILURE because hook runs suggested command ('channels:publish') which fails without args
+      expect(result.failed, `Command stderr: ${result.stderr}`).to.be.true;
+      expect(result.exitCode).not.equal(0);
+
+      // 3. Check stderr for the error from the *suggested* command
+      expect(result.stderr).to.include("Missing 2 required args");
+      expect(result.stderr).to.include("channel");
+      expect(result.stderr).to.include("message");
     });
 
     it("should suggest help for completely unknown commands", async function() {
@@ -144,6 +161,17 @@ describe("Basic CLI E2E", function() {
       // Check stderr for the 'command not found' and help suggestion
       expect(result.stderr).to.include("completelyunknowncommand not found");
       expect(result.stderr).to.include("Run ably help");
+    });
+
+    it("should show command not found for topic typo with subcommand", async function() {
+      // Example: `ably config doesnotexist` -> input is `config:doesnotexist` internally
+      const result = await execa("node", ["bin/run.js", "config", "doesnotexist"], execaOptions);
+
+      expect(result.failed).to.be.true;
+      expect(result.exitCode).not.equal(0);
+      // Check that the error message formats the input command with spaces
+      expect(result.stderr).to.include("Command config doesnotexist not found");
+      expect(result.stderr).to.include("Run ably help"); // Should suggest help as no close match found
     });
   });
 });

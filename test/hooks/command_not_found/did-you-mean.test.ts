@@ -135,46 +135,82 @@ const setupTestContext = test
 // --- Tests using @oclif/test structure ---
 
 setupTestContext.it(
-  "should run the suggested command (using space separator)",
+  "should warn with space separator and run the suggested command (colon input)",
   async (ctx: TestContext) => {
+    // User input uses colon, hook should normalize for comparison but display using space
     const hookOpts = {
       argv: [],
       config: ctx.config,
       context: ctx.mockContext,
-      id: "channels:pubish",
+      id: "channels:pubish", // User typo with colon
     };
+    // Set the separator in the test config
+    ctx.config.topicSeparator = ' ';
+
     await hook.apply(ctx.mockContext, [hookOpts]);
 
     expect(ctx.stubs.warn.calledOnce).to.be.true;
     const warnArg = ctx.stubs.warn.firstCall.args[0];
+    // Warning should display the *user's input* formatted with spaces
     expect(stripAnsi(warnArg)).to.contain(
-      "channels:pubish is not an ably command",
+      "channels pubish is not an ably command",
     );
-    expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be
-      .true;
+    // runCommand still uses the canonical colon-separated ID
+    expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be.true;
   },
 );
 
 setupTestContext.it(
-  "should pass arguments to the suggested command",
+  "should warn with space separator and run the suggested command (space input)",
   async (ctx: TestContext) => {
+    // User input uses space
     const hookOpts = {
-      argv: ["my-channel", "my-message", "--flag"],
+      argv: [],
       config: ctx.config,
       context: ctx.mockContext,
-      id: "channels:publsh",
+      id: "channels pubish", // User typo with space
     };
+    // Set the separator in the test config
+    ctx.config.topicSeparator = ' ';
+
     await hook.apply(ctx.mockContext, [hookOpts]);
 
     expect(ctx.stubs.warn.calledOnce).to.be.true;
     const warnArg = ctx.stubs.warn.firstCall.args[0];
+    // Warning should display the user's input as is (with spaces)
     expect(stripAnsi(warnArg)).to.contain(
-      "channels:publsh is not an ably command",
+      "channels pubish is not an ably command",
     );
+    // runCommand still uses the canonical colon-separated ID
+    expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be.true;
+  },
+);
+
+setupTestContext.it(
+  "should pass arguments to the suggested command (space input)",
+  async (ctx: TestContext) => {
+    // User input uses space
+    const hookOpts = {
+      argv: ["my-arg1", "--flag"], // Args passed separately
+      config: ctx.config,
+      context: ctx.mockContext,
+      id: "channels publsh", // Typo with space
+    };
+     // Set the separator in the test config
+    ctx.config.topicSeparator = ' ';
+
+    await hook.apply(ctx.mockContext, [hookOpts]);
+
+    expect(ctx.stubs.warn.calledOnce).to.be.true;
+    const warnArg = ctx.stubs.warn.firstCall.args[0];
+    // Warning displays user input with space
+    expect(stripAnsi(warnArg)).to.contain(
+      "channels publsh is not an ably command",
+    );
+    // runCommand uses colon ID, argv is passed correctly
     expect(
       ctx.stubs.runCommand.calledOnceWith("channels:publish", [
-        "my-channel",
-        "my-message",
+        "my-arg1",
         "--flag",
       ]),
     ).to.be.true;
@@ -230,14 +266,16 @@ const setupRejectingTestContext = test
   });
 
 setupRejectingTestContext.it(
-  "should re-throw CLIError when suggested command fails missing args",
+  "should re-throw CLIError when suggested command fails missing args (space input)",
   async (ctx: TestContext) => {
     const hookOpts = {
-      argv: [],
+      argv: [], // No args provided for channels:subscribe which requires one
       config: ctx.config,
       context: ctx.mockContext,
-      id: "channels:subscrib",
+      id: "channels subscrib", // Typo with space
     };
+    // Set the separator in the test config
+    ctx.config.topicSeparator = ' ';
 
     let caughtError: any = null;
     try {
@@ -248,17 +286,47 @@ setupRejectingTestContext.it(
 
     expect(ctx.stubs.warn.calledOnce).to.be.true;
     const warnArg = ctx.stubs.warn.firstCall.args[0];
+    // Warning displays user input with space
     expect(stripAnsi(warnArg)).to.contain(
-      "channels:subscrib is not an ably command",
+      "channels subscrib is not an ably command",
     );
+    // Ensure runCommand was called with the correct colon-separated ID
     expect(ctx.stubs.runCommand.calledOnceWith("channels:subscribe", [])).to.be
       .true;
+    // Ensure the specific CLIError was re-thrown by the hook's error handler
     expect(caughtError).to.be.instanceOf(Errors.CLIError);
-    expect(caughtError.message).to.contain("Missing 1 required arg: channel");
+    expect(caughtError.message).to.contain("Missing 1 required arg");
+    // Ensure the mockContext.error stub was called (which throws in tests)
+    expect(ctx.stubs.error.calledOnce).to.be.true;
+  },
+);
 
-    // Since we're throwing the error directly now, the error stub is still called
-    // But the process.exit should not be called
-    expect(ctx.stubs.exit.called).to.be.false;
+setupTestContext.it(
+  "should error correctly for completely unknown command (space input)",
+  async (ctx: TestContext) => {
+    const hookOpts = {
+      argv: [],
+      config: ctx.config,
+      context: ctx.mockContext,
+      id: "very wrong command", // Input with space, no close match
+    };
+     // Set the separator in the test config
+    ctx.config.topicSeparator = ' ';
+
+    let caughtError: any = null;
+    try {
+      await hook.apply(ctx.mockContext, [hookOpts]);
+    } catch (error: any) {
+      caughtError = error;
+    }
+
+    expect(ctx.stubs.warn.called).to.be.false; // No warning as no suggestion
+    expect(ctx.stubs.runCommand.called).to.be.false; // No command run
+    expect(caughtError).to.be.instanceOf(TypeError); // Thrown by mockContext.error
+    // Error message displays user input as is
+    expect(stripAnsi(caughtError.message)).to.equal(
+      "Command very wrong command not found. Run ably help for a list of available commands.",
+    );
   },
 );
 
