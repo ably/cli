@@ -2,30 +2,40 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createWebSocketStream } from "ws";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-// Use module.exports style import for Dockerode with type definitions
-// @ts-ignore - ignore the ESM/CJS mismatch warning
-import Dockerode from "dockerode";
 import { Duplex } from "node:stream";
 import * as stream from "node:stream";
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import * as jwt from "jsonwebtoken";
+// Import Dockerode with type import for type checking
+import type * as DockerodeTypes from "dockerode";
+// For ES Module compatibility
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const Dockerode = require("dockerode");
 
 // Simplified __dirname calculation
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- Configuration ---
 const DOCKER_IMAGE_NAME = 'ably-cli-sandbox';
-const SESSION_TIMEOUT_MS = 1000 * 60 * 15; // 15 minutes
+const _SESSION_TIMEOUT_MS = 1000 * 60 * 15; // 15 minutes
 const DEFAULT_PORT = 8080;
 const DEFAULT_MAX_SESSIONS = 50;
 const AUTH_TIMEOUT_MS = 10_000; // 10 seconds
 const SHUTDOWN_GRACE_PERIOD_MS = 10_000; // 10 seconds for graceful shutdown
 
 // Type definitions for Docker objects
-type DockerContainer = Dockerode.Container;
-type DockerExec = Dockerode.Exec;
-type DockerExecCreateOptions = Dockerode.ExecCreateOptions;
+type DockerContainer = DockerodeTypes.Container;
+type DockerExec = DockerodeTypes.Exec;
+type DockerExecCreateOptions = DockerodeTypes.ExecCreateOptions;
+
+// Type for Docker event
+interface DockerEvent {
+  stream?: string;
+  errorDetail?: { message: string };
+  [key: string]: unknown;
+}
 
 type ClientSession = {
   ws: WebSocket;
@@ -69,7 +79,7 @@ async function cleanupStaleContainers(): Promise<void> {
     }
 
     log(`Found ${containers.length} stale container(s). Attempting removal...`);
-    const removalPromises = containers.map(async (containerInfo: any) => {
+    const removalPromises = containers.map(async (containerInfo: DockerodeTypes.ContainerInfo) => {
       try {
         const container = docker.getContainer(containerInfo.Id);
         log(`Removing stale container ${containerInfo.Id}...`);
@@ -121,8 +131,8 @@ async function ensureDockerImage(): Promise<void> {
         await new Promise((resolve, reject) => {
           docker.modem.followProgress(
             stream,
-            (err: any, res: any) => (err ? reject(err) : resolve(res)),
-            (event: any) => {
+            (err: Error | null, res: unknown) => (err ? reject(err) : resolve(res)),
+            (event: DockerEvent) => {
               if (event.stream) process.stdout.write(event.stream); // Log build output
               if (event.errorDetail) logError(event.errorDetail.message);
             },
@@ -329,7 +339,7 @@ async function terminateSession(
         containerInfo &&
         (containerInfo.State.Running || containerInfo.State.Paused)
       ) {
-        await container.stop({ t: 2 }).catch((stopError: any) => {
+        await container.stop({ t: 2 }).catch((stopError: Error) => {
           logError(
             `Error stopping container ${container.id}: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
           );
@@ -407,6 +417,14 @@ async function startServer() {
         server,
         handleProtocols, // Use function from outer scope
         verifyClient, // Use function from outer scope
+    });
+
+    // Start the HTTP server
+    await new Promise<void>((resolve) => {
+        server.listen(port, () => {
+            log(`WebSocket server listening on port ${port}`);
+            resolve();
+        });
     });
 
     wss.on("connection", (ws: WebSocket, _req: http.IncomingMessage) => {
@@ -542,38 +560,111 @@ async function startServer() {
         // Consider more robust error handling? Shutdown?
     });
 
-    log(`WebSocket server listening on port ${port}`);
-
     // --- Graceful Shutdown ---
+    let isShuttingDown = false;
+
     const shutdown = async (signal: string) => {
+        // Prevent multiple shutdown attempts
+        if (isShuttingDown) {
+            log(`Already shutting down, ignoring additional ${signal} signal`);
+            return;
+        }
+
+        isShuttingDown = true;
         log(`Received ${signal}. Shutting down server...`);
+
+        // Clear the keep-alive interval
+        if (keepAliveInterval) {
+            clearInterval(keepAliveInterval);
+        }
+
         await cleanupAllSessions();
+
         log('Closing WebSocket server...');
-        wss.close((err) => {
-            if (err) {
-                logError(`Error closing WebSocket server: ${err}`);
-            }
 
-            log('WebSocket server closed.');
-            log('Shutdown complete.');
-        });
-        // Force exit if cleanup takes too long
-        setTimeout(() => {
+        // Set a timeout to force exit if cleanup takes too long
+        const forceExitTimeout = setTimeout(() => {
             logError("Shutdown timed out. Forcing exit.");
-
-            process.exit(1); // Keep necessary exit with disable comment
+            process.exit(1);
         }, SHUTDOWN_GRACE_PERIOD_MS);
+
+        try {
+            await new Promise<void>((resolve, reject) => {
+                wss.close((err) => {
+                    if (err) {
+                        logError(`Error closing WebSocket server: ${err}`);
+                        reject(err);
+                        return;
+                    }
+                    log('WebSocket server closed.');
+                    resolve();
+                });
+            });
+
+            await new Promise<void>((resolve, reject) => {
+                server.close((err) => {
+                    if (err) {
+                        logError(`Error closing HTTP server: ${err}`);
+                        reject(err);
+                        return;
+                    }
+                    log('HTTP server closed.');
+                    resolve();
+                });
+            });
+
+            // Clear the force exit timeout
+            clearTimeout(forceExitTimeout);
+            log('Shutdown complete.');
+
+            // Exit with success code
+            process.exit(0);
+        } catch (error) {
+            logError(`Error during shutdown: ${error}`);
+            // Let the timeout handle the force exit
+        }
     };
 
     process.on("SIGINT", () => shutdown("SIGINT"));
     process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+    return server;
 }
 
 // Removed IIFE - using top-level await directly
+let keepAliveInterval: NodeJS.Timeout;
 
 try {
   await startServer();
   log("Terminal server started successfully.");
+
+  // Keep the Node.js process alive
+  // This prevents the process from exiting after top-level code completes in ES modules
+  keepAliveInterval = setInterval(() => {
+    // No-op interval to keep event loop active
+  }, 60000);
+
+  // Handle Node.js debugger disconnection
+  // Use type assertion for Node.js internal properties
+  const nodeProcess = process as unknown as {
+    _debugProcess?: (pid: number) => void;
+    _debugEnd?: () => void;
+    pid?: number;
+  };
+
+  if (nodeProcess._debugProcess && nodeProcess.pid) {
+    process.on('SIGINT', () => {
+      try {
+        // Disable the debugger on first SIGINT to allow clean exit
+        if (nodeProcess._debugEnd) {
+          nodeProcess._debugEnd();
+        }
+      } catch {
+        // Ignore errors
+      }
+    });
+  }
+
 } catch (error) {
   logError("Server failed unexpectedly:");
   logError(error);
@@ -794,7 +885,7 @@ async function cleanupSession(sessionId: string) {
 function handleExecResize(
   session: ClientSession,
   data: { cols: number; rows: number },
-) {
+): void {
   if (session.execInstance) {
     const { cols, rows } = data;
     log(`Resizing TTY for session ${session.sessionId} to ${cols}x${rows}`);
@@ -821,7 +912,14 @@ function handleMessage(session: ClientSession, message: Buffer) {
             // Skip this for single characters & control keys
             if (message.length > 3) {
                 const msgStr = message.toString('utf8');
-                let parsed: any;
+                // Use a more specific type than 'any'
+                let parsed: {
+                    type?: string;
+                    data?: unknown;
+                    cols?: unknown;
+                    rows?: unknown;
+                    [key: string]: unknown;
+                } | null = null;
                 try {
                     parsed = JSON.parse(msgStr);
                 } catch {
