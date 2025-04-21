@@ -1,8 +1,6 @@
 import { Flags } from "@oclif/core";
-import * as Ably from "ably";
-import chalk from "chalk";
-
 import { ChatBaseCommand } from "../../chat-base-command.js";
+import chalk from "chalk";
 
 // Add interface definitions at the beginning of the file
 interface RoomMetrics {
@@ -63,7 +61,7 @@ export default class RoomsList extends ChatBaseCommand {
 
     try {
       // REST client for channel enumeration
-      const rest = new Ably.Rest(this.getClientOptions(flags));
+      const rest = this.createAblyRestClient(this.getClientOptions(flags));
 
       // Build params for channel listing
       // We request more channels than the limit to account for filtering

@@ -93,7 +93,7 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
       }
 
       // Create Ably REST client and request token
-      const rest = new Ably.Rest({ key: apiKey });
+      const rest = this.createAblyRestClient({ key: apiKey });
       const tokenRequest = await rest.auth.createTokenRequest(tokenParams);
 
       // Use the token request to get an actual token

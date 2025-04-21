@@ -95,7 +95,7 @@ export default class ConnectionsStats extends AblyBaseCommand {
 
     // Create the Ably REST client
     const options: Ably.ClientOptions = this.getClientOptions(flags);
-    this.client = new Ably.Rest(options);
+    this.client = this.createAblyRestClient(options);
     const { client } = this; // Local const
 
     // Create stats display

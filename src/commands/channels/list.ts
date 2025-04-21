@@ -1,8 +1,6 @@
 import { Flags } from "@oclif/core";
-import * as Ably from "ably";
-import chalk from "chalk";
-
 import { AblyBaseCommand } from "../../base-command.js";
+import chalk from "chalk";
 
 interface ChannelMetrics {
   connections?: number;
@@ -61,8 +59,8 @@ export default class ChannelsList extends AblyBaseCommand {
     if (!client) return;
 
     try {
-      // REST client for channel enumeration
-      const rest = new Ably.Rest(this.getClientOptions(flags));
+      // REST client for channel enumeration - use our test-enabled method
+      const rest = this.createAblyRestClient(flags);
 
       // Build params for channel listing
       const params: ChannelListParams = {

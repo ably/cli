@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: true
 ---
 # Node & TypeScript
@@ -25,7 +25,7 @@ alwaysApply: true
 
 ## Builds, linting and tests
 
-- After code changes are made, you must run a build to check changes made with `pnpm prepare`. This will ensure TypeScript is compiled, the `oclif.manifest.json` file is updated, and the `README.md` is regenerated to reflect the command structure.
+- After code changes are made, you must run a build to check changes made with `pnpm build`. This will ensure TypeScript is compiled. If you want the `oclif.manifest.json` file to be updated and the `README.md` to be regenerated to reflect the command structure too, use `pnpm prepare`.
 - All code must pass lint checks with `pnpm exec eslint`
 - Code changes may break tests. We do not want to wait until the changes are committed and pushed via git triggering a CI build which runes all tests. Following code changes, run tests locally that could be affected by your code changes to help short-circuit the process of finding out builds have broken tests.
 

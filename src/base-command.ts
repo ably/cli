@@ -100,6 +100,52 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   /**
+   * Check if we're running in test mode
+   * @returns true if running in test mode
+   */
+  protected isTestMode(): boolean {
+    return process.env.ABLY_CLI_TEST_MODE === "true";
+  }
+
+  /**
+   * Get test mocks if in test mode
+   * @returns Test mocks object or undefined if not in test mode
+   */
+  protected getMockAblyRest(): Ably.Rest | undefined {
+    if (!this.isTestMode()) return undefined;
+
+    // Access global mock if running in test mode
+    return (globalThis as { __TEST_MOCKS__?: { ablyRestMock: Ably.Rest } }).__TEST_MOCKS__?.ablyRestMock;
+  }
+
+  /**
+   * Create an Ably REST client
+   * Returns a mocked client if in test mode
+   * @param options Client options or flags
+   */
+  protected createAblyRestClient(options: Ably.ClientOptions | BaseFlags): Ably.Rest {
+    // If in test mode, return mock client
+    if (this.isTestMode()) {
+      this.debug('Running in test mode, using mock Ably Rest client');
+      const mockAblyRest = this.getMockAblyRest();
+
+      if (mockAblyRest) {
+        return mockAblyRest as Ably.Rest;
+      }
+
+      this.error('No mock Ably Rest client available in test mode');
+      throw new Error('Missing mock Ably Rest client in test mode');
+    }
+
+    // Convert flags to client options if needed
+    const clientOptions = 'token' in options || 'key' in options ?
+      options as Ably.ClientOptions :
+      this.getClientOptions(options as BaseFlags);
+
+    return new Ably.Rest(clientOptions);
+  }
+
+  /**
    * Check if this is a web CLI version and return a consistent error message
    * for commands that are not allowed in web CLI mode
    */
@@ -136,6 +182,20 @@ export abstract class AblyBaseCommand extends Command {
   protected async createAblyClient(
     flags: BaseFlags,
   ): Promise<Ably.Realtime | null> {
+    // If in test mode, skip connection and use mock
+    if (this.isTestMode()) {
+      this.debug('Running in test mode, using mock Ably client');
+      const mockAblyRest = this.getMockAblyRest();
+
+      if (mockAblyRest) {
+        // Wrap the mock in a Promise that resolves immediately
+        return mockAblyRest as unknown as Ably.Realtime;
+      }
+
+      this.error('No mock Ably client available in test mode');
+      return null;
+    }
+
     // If token is provided or API key is in environment, we can skip the ensureAppAndKey step
     if (!flags.token && !flags["api-key"] && !process.env.ABLY_API_KEY) {
       const appAndKey = await this.ensureAppAndKey(flags);

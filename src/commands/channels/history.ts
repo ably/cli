@@ -63,9 +63,8 @@ export default class ChannelsHistory extends AblyBaseCommand {
         return;
       }
 
-      // Create a REST client
-      const options: Ably.ClientOptions = this.getClientOptions(flags);
-      client = new Ably.Rest(options);
+      // Create a REST client using our test-enabled method
+      client = this.createAblyRestClient(flags);
 
       // Setup channel options
       const channelOptions: Ably.ChannelOptions = {};

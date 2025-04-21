@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "test/**/*.ts"
+  ],
+  "compilerOptions": {
+    "types": ["node", "mocha", "chai"],
+    "esModuleInterop": true,
+    "noImplicitAny": false,
+    "skipLibCheck": true
+  }
+}

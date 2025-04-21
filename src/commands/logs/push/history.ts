@@ -40,9 +40,9 @@ export default class LogsPushHistory extends AblyBaseCommand {
         return;
       }
 
-      // Create the Ably REST client
+      // Create a REST client
       const options: Ably.ClientOptions = this.getClientOptions(flags);
-      const client = new Ably.Rest(options);
+      const client = this.createAblyRestClient(options);
 
       const channelName = "[meta]log:push";
       const channel = client.channels.get(channelName);
