@@ -66,9 +66,16 @@ This document outlines the directory structure of the Ably CLI project.
 │       ├── json-formatter.ts # Utility for formatting JSON output.
 │       └── logo.ts         # Utility for displaying the Ably logo ASCII art.
 ├── test/                   # Automated tests.
-│   ├── commands/           # Tests for specific CLI commands (Currently empty).
+│   ├── commands/           # Tests for specific CLI commands.
+│   ├── e2e/                # End-to-end tests that run CLI commands in real environment.
+│   │   └── core/           # Core e2e tests for basic CLI functionality.
 │   ├── hooks/              # Tests for oclif hooks.
 │   │   └── command_not_found/ # Tests for the command_not_found hook.
+│   ├── integration/        # Integration tests for testing command flows.
+│   │   └── core/           # Core integration tests.
+│   ├── unit/               # Unit tests for internal components.
+│   │   ├── base/           # Tests for base command classes.
+│   │   └── services/       # Tests for service components.
 │   └── tsconfig.json       # TypeScript configuration specific to tests.
 ├── .cursor/                # Cursor AI configuration and rules.
 │   └── rules/
