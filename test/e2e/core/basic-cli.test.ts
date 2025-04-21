@@ -175,7 +175,7 @@ describe("Basic CLI E2E", function() {
       expect(result.exitCode).not.equal(0);
       // Check stderr for the 'command not found' and help suggestion
       expect(result.stderr).to.include("completelyunknowncommand not found");
-      expect(result.stderr).to.include("Run ably help");
+      expect(result.stderr).to.include("Run ably --help");
     });
 
     it("should show command not found for topic typo with subcommand", async function() {

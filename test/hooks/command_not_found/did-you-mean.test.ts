@@ -333,7 +333,7 @@ setupTestContext.it(
     // Check the error message format
     const errorArg = ctx.stubs.error.firstCall.args[0];
     expect(stripAnsi(String(errorArg))).to.include("xyzxyzxyz completely nonexistent command not found");
-    expect(stripAnsi(String(errorArg))).to.include("Run ably help for a list of available commands");
+    expect(stripAnsi(String(errorArg))).to.include("Run ably --help for a list of available commands");
   },
 );
 
@@ -364,7 +364,7 @@ setupTestContext.it(
     expect(ctx.stubs.error.calledOnce).to.be.true;
     const errorArg = ctx.stubs.error.firstCall.args[0];
     expect(stripAnsi(String(errorArg))).to.include("xyzxyzxyzabc not found");
-    expect(stripAnsi(String(errorArg))).to.include("Run ably help for a list of available commands");
+    expect(stripAnsi(String(errorArg))).to.include("Run ably --help for a list of available commands");
   },
 );
 

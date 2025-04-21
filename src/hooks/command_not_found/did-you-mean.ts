@@ -200,7 +200,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
     // No suggestion found - display generic error message for completely unknown command
     // Always preserve the original formatting in the error message
     const displayCommand = id.replaceAll(':', ' ');
-    this.error(`Command ${displayCommand} not found.\nRun ${config.bin} help for a list of available commands.`, { exit: 127 });
+    this.error(`Command ${displayCommand} not found.\nRun ${config.bin} --help for a list of available commands.`, { exit: 127 });
   }
 };
 
