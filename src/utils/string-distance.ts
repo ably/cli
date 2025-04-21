@@ -36,4 +36,8 @@ const closest = (target: string, possibilities: string[]): string => {
   return ""; // No suggestion found within threshold
 };
 
+// Add named export for compatibility
+export { closest };
+
+// Also add default export
 export default closest;
