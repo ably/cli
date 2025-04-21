@@ -1,7 +1,39 @@
 import { Hook } from '@oclif/core';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import closest from '../../utils/string-distance.js';
+import pkg from "fast-levenshtein";
+const { get: levenshteinDistance } = pkg;
+
+/**
+ * Internal implementation of closest command matching
+ * to avoid import issues between compiled and test code
+ */
+const findClosestCommand = (target: string, possibilities: string[]): string => {
+  if (possibilities.length === 0) return "";
+
+  // Normalize the target input to use colons for consistent comparison
+  const normalizedTarget = target.replaceAll(' ', ':');
+
+  const distances = possibilities.map((id) => ({
+    distance: levenshteinDistance(normalizedTarget, id, { useCollator: true }),
+    id,
+  }));
+
+  distances.sort((a, b) => a.distance - b.distance);
+
+  const closestMatch = distances[0];
+  if (!closestMatch) return "";
+
+  // Use threshold based on word length
+  const threshold = Math.max(1, Math.floor(normalizedTarget.length / 2));
+  const maxDistance = 3; // Maximum acceptable distance
+
+  if (closestMatch.distance <= Math.min(threshold, maxDistance)) {
+    return closestMatch.id;
+  }
+
+  return ""; // No suggestion found within threshold
+};
 
 /**
  * Hook that runs when a command is not found. Suggests similar commands
@@ -13,18 +45,47 @@ const hook: Hook<'command_not_found'> = async function (opts) {
   // Get all command IDs to compare against
   const commandIDs = config.commandIDs;
 
-  // Find the closest match
-  const suggestion = closest(id, commandIDs);
+  // In actual CLI usage, the id comes with colons as separators
+  // For example "channels:publis:foo:bar" for "ably channels publis foo bar"
+  // We need to split the command and try different combinations to find the closest match
+  const commandParts = id.split(':');
+
+  // Try to find a command match by considering progressively shorter prefixes
+  let suggestion = '';
+  let commandPartCount = 0;
+  let argumentsFromId: string[] = [];
+
+  // Try different command parts
+  for (let i = commandParts.length; i > 0; i--) {
+    const possibleCommandParts = commandParts.slice(0, i);
+    const possibleCommand = possibleCommandParts.join(':');
+
+    suggestion = findClosestCommand(possibleCommand, commandIDs);
+
+    if (suggestion) {
+      commandPartCount = i;
+      // Extract potential arguments from the ID (for CLI execution)
+      // These would be parts after the matched command parts
+      argumentsFromId = commandParts.slice(i);
+      break;
+    }
+  }
 
   // Format the input command for display (replace colons with spaces)
-  const displayOriginal = id.replaceAll(':', ' ');
+  const displayOriginal = commandPartCount > 0
+    ? commandParts.slice(0, commandPartCount).join(' ')
+    : id.replaceAll(':', ' ');
 
   if (suggestion) {
     // Format the suggestion for display (replace colons with spaces)
     const displaySuggestion = suggestion.replaceAll(':', ' ');
 
+    // Get all arguments - either from id split or from argv
+    // In tests, argv contains the arguments, but in CLI execution, we extract them from id
+    const allArgs = (argv || []).length > 0 ? (argv || []) : argumentsFromId;
+
     // Warn about command not found and suggest alternative with colored command names
-    this.warn(`${chalk.cyan(displayOriginal)} is not an ably command.`);
+    this.warn(`${chalk.cyan(displayOriginal.replaceAll(':', ' '))} is not an ably command.`);
 
     // Skip confirmation in tests
     const skipConfirmation = process.env.SKIP_CONFIRMATION === 'true';
@@ -48,8 +109,8 @@ const hook: Hook<'command_not_found'> = async function (opts) {
 
     if (confirmed) {
       try {
-        // Run the suggested command with original arguments
-        return await config.runCommand(suggestion, argv);
+        // Run the suggested command with all arguments
+        return await config.runCommand(suggestion, allArgs);
       } catch (error: unknown) {
         // Handle the error in the same way as direct command execution
         const err = error as { message?: string; oclif?: { exit?: number } };
@@ -137,7 +198,9 @@ const hook: Hook<'command_not_found'> = async function (opts) {
     }
   } else {
     // No suggestion found - display generic error message for completely unknown command
-    this.error(`Command ${displayOriginal} not found.\nRun ${config.bin} help for a list of available commands.`, { exit: 127 });
+    // Always preserve the original formatting in the error message
+    const displayCommand = id.replaceAll(':', ' ');
+    this.error(`Command ${displayCommand} not found.\nRun ${config.bin} help for a list of available commands.`, { exit: 127 });
   }
 };
 

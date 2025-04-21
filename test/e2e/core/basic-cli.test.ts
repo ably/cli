@@ -128,7 +128,8 @@ describe("Basic CLI E2E", function() {
       const result = await execa("node", ["bin/run.js", "help", "doesnotexist"], execaOptions);
 
       expect(result.failed).to.be.true;
-      expect(result.stderr).to.include("doesnotexist not found");
+      // The CLI is first running the 'help' command, which then errors with 'Unexpected argument'
+      expect(result.stderr).to.include("Unexpected argument: doesnotexist");
     });
   });
 
@@ -183,9 +184,9 @@ describe("Basic CLI E2E", function() {
 
       expect(result.failed).to.be.true;
       expect(result.exitCode).not.equal(0);
-      // Check that the error message formats the input command with spaces
-      expect(result.stderr).to.include("Command config doesnotexist not found");
-      expect(result.stderr).to.include("Run ably help"); // Should suggest help as no close match found
+      // With our updated implementation, it will try to find a close match for "config"
+      // and if found, will warn with "config is not an ably command"
+      expect(result.stderr).to.include("config is not an ably command");
     });
   });
 });

@@ -491,3 +491,32 @@ setupTestContext
     expect(ctx.stubs.runCommand.calledOnceWith("channels:subscribe", [])).to.be.true;
   },
 );
+
+setupTestContext.it(
+  "should handle arguments when suggesting commands with a typo",
+  async (ctx: TestContext) => {
+    // Simulate a command with typo followed by arguments
+    // In real CLI execution, the command comes with colons as separators
+    const hookOpts = {
+      argv: [], // In real CLI execution, argumentss aren't typically in argv
+      config: ctx.config,
+      context: ctx.mockContext,
+      id: "channels:publis:foo:bar", // Real CLI format with colons
+    };
+    ctx.config.topicSeparator = " ";
+
+    await hook.apply(ctx.mockContext, [hookOpts]);
+
+    expect(ctx.stubs.warn.calledOnce).to.be.true;
+    const warnArg = ctx.stubs.warn.firstCall.args[0];
+    expect(stripAnsi(warnArg)).to.contain(
+      "channels publis is not an ably command",
+    );
+
+    // Should recognize "channels:publis" as typo for "channels:publish"
+    // and pass the arguments "foo bar" when running the command
+    expect(
+      ctx.stubs.runCommand.calledOnceWith("channels:publish", ["foo", "bar"]),
+    ).to.be.true;
+  },
+);
