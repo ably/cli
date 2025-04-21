@@ -1,6 +1,4 @@
 import { Args, Flags } from "@oclif/core";
-import * as Ably from "ably";
-
 import { AblyBaseCommand } from "../../base-command.js";
 
 // Define interfaces for the batch-publish command
@@ -101,7 +99,7 @@ export default class ChannelsBatchPublish extends AblyBaseCommand {
     try {
       // Create REST client with the options
       const options = this.getClientOptions(flags);
-      const rest = new Ably.Rest(options);
+      const rest = this.createAblyRestClient(options);
 
       // Prepare the batch request content
       let batchContent: unknown;

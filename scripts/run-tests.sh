@@ -1,0 +1,59 @@
+#!/bin/bash
+# Script to run tests and forcefully terminate any hanging processes
+
+# Capture test pattern and timeout option
+TEST_PATTERN="$1"
+shift
+TIMEOUT_OPTION=""
+EXTRA_OPTIONS=""
+
+# Process remaining arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --timeout)
+      TIMEOUT_OPTION="$1 $2"
+      shift 2
+      ;;
+    *)
+      EXTRA_OPTIONS="$EXTRA_OPTIONS $1"
+      shift
+      ;;
+  esac
+done
+
+echo "Running tests with pattern: $TEST_PATTERN"
+echo "Timeout option: $TIMEOUT_OPTION"
+echo "Extra options: $EXTRA_OPTIONS"
+
+# Set an outer timeout (in seconds) - default 120s or 2 minutes
+OUTER_TIMEOUT=120
+
+# Run the tests with the specified pattern and timeout
+# Using shell process group to ensure all child processes are terminated
+CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS="--no-inspect --unhandled-rejections=strict" \
+  node --import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("ts-node/esm", pathToFileURL("./"), { project: "./tsconfig.test.json" });' \
+  ./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only $TEST_PATTERN $TIMEOUT_OPTION $EXTRA_OPTIONS --exit &
+
+TEST_PID=$!
+
+# Wait for the test to complete with timeout - compatible with macOS
+echo "Test process running with PID $TEST_PID"
+
+# Start a timer
+SECONDS=0
+
+# Check if process is still running in a loop
+while kill -0 $TEST_PID 2>/dev/null; do
+  if [ $SECONDS -gt $OUTER_TIMEOUT ]; then
+    echo "Tests did not complete within $OUTER_TIMEOUT seconds. Forcefully terminating."
+    kill -9 $TEST_PID 2>/dev/null || true
+    exit 1
+  fi
+  sleep 1
+done
+
+# Wait for the test process to retrieve its exit code
+wait $TEST_PID
+EXIT_CODE=$?
+echo "Tests exited with code $EXIT_CODE"
+exit $EXIT_CODE

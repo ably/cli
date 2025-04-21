@@ -168,6 +168,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
     published: number,
     errors: number,
     results: Array<Record<string, unknown>>,
+    args: Record<string, unknown>,
   ): void {
     const finalResult = {
       errors,
@@ -175,6 +176,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       results,
       success: errors === 0 && published === total,
       total,
+      channel: args.channel,
     };
     const eventType =
       total > 1 ? "multiPublishComplete" : "singlePublishComplete";
@@ -192,7 +194,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
           `${chalk.green("✓")} ${published}/${total} messages published successfully${errors > 0 ? ` (${chalk.red(errors)} errors)` : ""}.`,
         );
       } else if (errors === 0) {
-        this.log(`${chalk.green("✓")} Message published successfully.`);
+        this.log(`${chalk.green("✓")} Message published successfully to channel "${args.channel}".`);
       } else {
         // Error message already logged by publishMessages loop or prepareMessage
       }
@@ -308,15 +310,16 @@ export default class ChannelsPublish extends AblyBaseCommand {
           flags,
           "publish",
           "messagePublished",
-          `Message ${messageIndex} published successfully`,
-          { index: messageIndex, message },
+          `Message ${messageIndex} published successfully to channel "${args.channel}"`,
+          { index: messageIndex, message, channel: args.channel },
         );
         if (
           !this.shouldSuppressOutput(flags) &&
-          !this.shouldOutputJson(flags)
+          !this.shouldOutputJson(flags) &&
+          count > 1 // Only show individual success messages when publishing multiple messages
         ) {
           this.log(
-            `${chalk.green("✓")} Message ${messageIndex} published successfully.`,
+            `${chalk.green("✓")} Message ${messageIndex} published successfully to channel "${args.channel}".`,
           );
         }
       } catch (error) {
@@ -348,7 +351,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
     }
 
     this.clearProgressIndicator();
-    this.logFinalSummary(flags, count, publishedCount, errorCount, results);
+    this.logFinalSummary(flags, count, publishedCount, errorCount, results, args);
   }
 
   private async publishWithRealtime(
@@ -423,7 +426,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       await this.ensureAuthForRest(flags);
 
       const options = this.getClientOptions(flags);
-      const rest = new Ably.Rest(options);
+      const rest = this.createAblyRestClient(options);
       const channel = rest.channels.get(args.channel as string);
 
       this.logCliEvent(

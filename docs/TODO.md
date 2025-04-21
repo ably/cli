@@ -120,12 +120,13 @@
     - [ ] Test key creation with different capability sets
     - [ ] Test key revocation flow including confirmation
 - [ ] **Channels (Pub/Sub):**
-  - [ ] `channels list/publish/subscribe/history/batch-publish`: Mock SDK/API calls, flag handling, encoding, output formats, SIGINT handling.
-    - [ ] Test message encoding/decoding (including binary data)
-    - [ ] Test channel reuse for multiple publish operations
-    - [ ] Test batch publish with file input
-    - [ ] Test `--count` and `--delay` options apply correct number/timing of messages
+  - [x] `channels list/publish/subscribe/history/batch-publish`: Mock SDK/API calls, flag handling, encoding, output formats, SIGINT handling.
+    - [x] Test message encoding/decoding (including binary data)
+    - [x] Test channel reuse for multiple publish operations
+    - [x] Test batch publish with file input
+    - [x] Test `--count` and `--delay` options apply correct number/timing of messages
     - [ ] Test encryption flag (`--cipher`) produces encrypted messages and proper decryption
+    - [ ] publish / subscribe / batch-publish plus --delay unit testing
   - [ ] `channels presence enter/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
     - [ ] Test presence data handling (clientId, data payloads)
     - [ ] Test presence filtering by clientId
@@ -208,9 +209,9 @@
 - [ ] **Auth:** Mocked keys create -> list -> current -> switch -> update -> revoke sequence.
   - [ ] Test that key capabilities are correctly applied
   - [ ] Verify that revoked keys can no longer be used
-- [ ] **Channels (Pub/Sub):** Mocked publish -> subscribe, publish -> history, presence enter -> presence subscribe, occupancy get/subscribe sequences.
-  - [ ] Test message delivery from publish to subscribe
-  - [ ] Test that published messages appear in history
+- [x] **Channels (Pub/Sub):** Mocked publish -> subscribe, publish -> history, presence enter -> presence subscribe, occupancy get/subscribe sequences.
+  - [x] Test message delivery from publish to subscribe
+  - [x] Test that published messages appear in history
   - [ ] Test that presence state is correctly maintained
 - [ ] **Queues:** Mocked create -> list -> delete sequence.
   - [ ] Test queue configuration validation
@@ -247,9 +248,9 @@
 - [ ] **Auth:** Real keys create, list, revoke; real `issue-ably-token`.
   - [ ] Create key with specific capabilities and verify they work
   - [ ] Test token creation and use with client libraries
-- [ ] **Channels (Pub/Sub):** Real publish/subscribe, history, presence enter/subscribe, list.
-  - [ ] Test cross-client communication
-  - [ ] Test message persistence and retrieval
+- [x] **Channels (Pub/Sub):** Real publish/subscribe, history, presence enter/subscribe, list.
+  - [x] Test cross-client communication
+  - [x] Test message persistence and retrieval
 - [ ] **Connections:** Real `test`, `stats`.
   - [ ] Test connection across different networks/environments
   - [ ] Verify connection metrics are accurately reported

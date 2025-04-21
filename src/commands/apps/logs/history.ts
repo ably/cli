@@ -55,7 +55,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
 
       // Create a REST client
       const options: Ably.ClientOptions = this.getClientOptions(flags);
-      const client = new Ably.Rest(options);
+      const client = this.createAblyRestClient(options);
 
       // Get the channel
       const channel = client.channels.get("[meta]log:app");

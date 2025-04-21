@@ -1,9 +1,8 @@
- 
 import {
   McpServer,
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
- 
+
 import { StdioServerTransport as StdioConnection } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { URL } from "node:url";
@@ -555,6 +554,7 @@ export class AblyMcpServer {
       };
 
       // Create Ably REST client (not Realtime, to avoid connections)
+      // Note: We can't use createAblyRestClient here since this class doesn't extend AblyBaseCommand
       const client = new Ably.Rest(clientOptions);
 
       // Type assertion to ensure compatibility with our interface

@@ -1,8 +1,6 @@
 import { Flags } from "@oclif/core";
-import * as Ably from "ably";
+import { SpacesBaseCommand } from "../../spaces-base-command.js";
 import chalk from "chalk";
-
-import { ChatBaseCommand } from "../../chat-base-command.js";
 
 interface SpaceMetrics {
   connections?: number;
@@ -25,7 +23,7 @@ interface SpaceItem {
   [key: string]: unknown;
 }
 
-export default class SpacesList extends ChatBaseCommand {
+export default class SpacesList extends SpacesBaseCommand {
   static override description = "List active spaces";
 
   static override examples = [
@@ -37,7 +35,7 @@ export default class SpacesList extends ChatBaseCommand {
   ];
 
   static override flags = {
-    ...ChatBaseCommand.globalFlags,
+    ...SpacesBaseCommand.globalFlags,
     limit: Flags.integer({
       default: 100,
       description: "Maximum number of spaces to return",
@@ -57,7 +55,7 @@ export default class SpacesList extends ChatBaseCommand {
 
     try {
       // REST client for channel enumeration
-      const rest = new Ably.Rest(this.getClientOptions(flags));
+      const rest = this.createAblyRestClient(this.getClientOptions(flags));
 
       // Build params for channel listing
       // We request more channels than the limit to account for filtering
