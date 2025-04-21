@@ -1,15 +1,17 @@
-name: Run Tests
+name: E2E Tests
 
 on:
+  # Run on push to main branch
   push:
-    # Trigger on pushes to any branch
-    branches: ["**"]
+    branches: [main]
+  # Run on pull requests targeting main
   pull_request:
-    # Trigger on pull requests targeting any branch
-    branches: ["**"]
+    branches: [main]
+  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
-  test:
+  e2e-tests:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,18 +21,18 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 10 # Use pnpm version 10
+          version: 10
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.x" # Use Node.js 22.x
+          node-version: "22.x"
           cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run E2E tests
+        run: pnpm test:e2e
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
