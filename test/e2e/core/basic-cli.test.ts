@@ -1,5 +1,6 @@
 import { expect } from "chai";
 import { execa } from "execa";
+import stripAnsi from "strip-ansi";
 
 // Options for execa to prevent Node debugger attachment/output
 const execaOptions = {
@@ -9,10 +10,12 @@ const execaOptions = {
 
 // Helper function to extract JSON from potentially noisy stdout
 // Looks for the last occurrence of { or [ to handle potential prefixes
-const parseJsonFromOutput = (output: string): any => {
-  console.log("Attempting to parse JSON from:", output); // Log the raw output
-  const jsonStart = output.lastIndexOf('{');
-  const arrayStart = output.lastIndexOf('[');
+const _parseJsonFromOutput = (output: string): any => {
+  // Strip ANSI color codes first
+  const strippedOutput = stripAnsi(output);
+
+  const jsonStart = strippedOutput.lastIndexOf('{');
+  const arrayStart = strippedOutput.lastIndexOf('[');
   let startIndex = -1;
 
   if (jsonStart === -1 && arrayStart === -1) {
@@ -28,8 +31,7 @@ const parseJsonFromOutput = (output: string): any => {
     startIndex = jsonStart;
   }
 
-  const jsonString = output.slice(Math.max(0, startIndex));
-  console.log(`Attempting to parse substring (index ${startIndex}):`, jsonString);
+  const jsonString = strippedOutput.slice(Math.max(0, startIndex));
   try {
     return JSON.parse(jsonString);
   } catch (error) {
@@ -50,31 +52,43 @@ describe("Basic CLI E2E", function() {
   });
 
   describe("Global flags", function() {
-    // TODO: Investigate why oclif help command doesn't output JSON with --json flag
-    it.skip("should accept --json flag without error", async function() {
-      // Use a simple command that works without auth
-      const result = await execa("node", ["bin/run.js", "help", "--json"], execaOptions);
+    it("should accept --json flag without error", async function() {
+      // Test --version flag with --json
+      const result = await execa("node", ["bin/run.js", "--version", "--json"], execaOptions);
       expect(result.failed).to.be.false;
       expect(result.stderr).to.be.empty; // Ensure no errors
 
-      // Should return valid JSON
+      // Check for valid JSON output
       let jsonOutput;
       expect(() => {
-        jsonOutput = parseJsonFromOutput(result.stdout); // Call the helper
+        jsonOutput = JSON.parse(result.stdout);
       }).not.to.throw();
 
-      // JSON structure should include topics
-      expect(jsonOutput).to.have.property("topics").that.is.an("array");
+      // Validate the JSON structure
+      expect(jsonOutput).to.have.property("version").that.is.a("string");
+      expect(jsonOutput).to.have.property("name").that.equals("@ably/cli");
+      expect(jsonOutput).to.have.property("platform").that.equals(process.platform);
     });
 
-    // TODO: Investigate why oclif help command doesn't output JSON with --pretty-json flag
-    it.skip("should accept --pretty-json flag without error", async function() {
-      const result = await execa("node", ["bin/run.js", "help", "--pretty-json"], execaOptions);
+    it("should accept --pretty-json flag without error", async function() {
+      // Test --version flag with --pretty-json
+      const result = await execa("node", ["bin/run.js", "--version", "--pretty-json"], execaOptions);
       expect(result.failed).to.be.false;
       expect(result.stderr).to.be.empty; // Ensure no errors
 
-      // Should be valid JSON
-      expect(() => parseJsonFromOutput(result.stdout)).not.to.throw(); // Call the helper
+      // Pretty JSON should contain line breaks
+      expect(result.stdout).to.include("\n");
+
+      // Check for valid JSON output - use _parseJsonFromOutput helper to handle ANSI color codes
+      let jsonOutput;
+      expect(() => {
+        jsonOutput = _parseJsonFromOutput(result.stdout);
+      }).not.to.throw();
+
+      // Validate the JSON structure
+      expect(jsonOutput).to.have.property("version").that.is.a("string");
+      expect(jsonOutput).to.have.property("name").that.equals("@ably/cli");
+      expect(jsonOutput).to.have.property("platform").that.equals(process.platform);
     });
 
     it("should error when both --json and --pretty-json are used", async function() {
