@@ -39,7 +39,10 @@
       "./dist/src"
     ],
     "hooks": {
-      "init": "./dist/src/hooks/init/alias-command",
+      "init": [
+        "./dist/src/hooks/init/alias-command",
+        "./dist/src/hooks/init/version-flag"
+      ],
       "command_not_found": "./dist/src/hooks/command_not_found/did-you-mean"
     },
     "hidden": [
