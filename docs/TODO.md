@@ -62,6 +62,10 @@
 - [ ] We are using a PNPM workspace, but I am not convinced that's a good thing. We should consider not letting the examples or React component dependencies affect the core CLI packaging.
 - [ ] Publish Docker image to Github registry and use a path such as `ghcr.io/ably/ably-cli-sandbox` for the published artefact. Building and publishing should use the locally built Ably CLI binary as opposed to the latest version so that local changes can be tested locally.
 
+## Bugs
+
+- [ ] Running `pnpm test [filepath]` does not run the test file only, it runs all tests. The docs state this works so needs fixing.
+
 ## Test coverage
 
 ### Unit tests

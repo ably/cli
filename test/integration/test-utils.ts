@@ -26,7 +26,7 @@ interface TestMocks {
 
 // Define the global variable type
 declare global {
-   
+
   var __TEST_MOCKS__: TestMocks | undefined;
 }
 
