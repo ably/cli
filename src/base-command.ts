@@ -323,10 +323,12 @@ export abstract class AblyBaseCommand extends Command {
     // Start building the display string
     const displayParts: string[] = [];
 
-    // Always add account info
-    displayParts.push(
-      `${chalk.cyan("Account=")}${chalk.cyan.bold(accountName)}${accountId ? chalk.gray(` (${accountId})`) : ""}`,
-    );
+    // Only add account info if it shouldn't be hidden
+    if (!this.shouldHideAccountInfo(flags)) {
+      displayParts.push(
+        `${chalk.cyan("Account=")}${chalk.cyan.bold(accountName)}${accountId ? chalk.gray(` (${accountId})`) : ""}`,
+      );
+    }
 
     // For data plane commands, show app and auth info
     if (showAppInfo) {
@@ -368,11 +370,14 @@ export abstract class AblyBaseCommand extends Command {
       }
     }
 
-    // Display the info on a single line with separator bullets
-    this.log(
-      `${chalk.dim("Using:")} ${displayParts.join(` ${chalk.dim("•")} `)}`,
-    );
-    this.log(""); // Add blank line for readability
+    // Only display if we have parts to show
+    if (displayParts.length > 0) {
+      // Display the info on a single line with separator bullets
+      this.log(
+        `${chalk.dim("Using:")} ${displayParts.join(` ${chalk.dim("•")} `)}`,
+      );
+      this.log(""); // Add blank line for readability
+    }
   }
 
   /**
@@ -1002,6 +1007,31 @@ export abstract class AblyBaseCommand extends Command {
         }
       })();
     });
+  }
+
+  /**
+   * Check if account information should be hidden for this command execution
+   * This is the case when:
+   * 1. No account is configured
+   * 2. Explicit API key or token is provided
+   * 3. Explicit access token is provided
+   * 4. Environment variables are used for auth
+   */
+  protected shouldHideAccountInfo(flags: BaseFlags): boolean {
+    // Check if there's no account configured
+    const currentAccount = this.configManager.getCurrentAccount();
+    if (!currentAccount) {
+      return true;
+    }
+
+    // Hide account info if explicit auth credentials are provided
+    return (
+      Boolean(flags["api-key"]) ||
+      Boolean(flags.token) ||
+      Boolean(flags["access-token"]) ||
+      Boolean(process.env.ABLY_API_KEY) ||
+      Boolean(process.env.ABLY_ACCESS_TOKEN)
+    );
   }
 }
 export { BaseFlags } from "./types/cli.js";
