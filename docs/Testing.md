@@ -71,6 +71,21 @@ The CLI will use common folder structures for tests as follows:
 - test/integration contains broader tests of multiple commands or realistic user flows, but generally mocking out network.
 - test/e2e has real environment-dependent tests, possibly fewer in number, but ensuring real interactions.
 
+### E2E Test Organization for Channel Commands
+
+For end-to-end tests, especially for complex command groups like the `channels` commands, we use the following structure:
+
+- Root level commands (e.g., `channels list`, `channels publish`) are tested in a file named `[command-group]-e2e.test.ts` (e.g., `channels-e2e.test.ts`).
+- Sub-topic commands (e.g., `channels presence`, `channels occupancy`) are tested in dedicated files named `[command-group]-[sub-topic]-e2e.test.ts` (e.g., `channel-presence-e2e.test.ts`, `channel-occupancy-e2e.test.ts`).
+
+This organization:
+1. Makes it easier to find and maintain tests for specific features
+2. Separates concerns for better readability and debugging
+3. Allows for more efficient test execution (run only the tests related to a particular feature)
+4. Prevents test files from growing too large
+
+The e2e tests leverage shared helper functions from the `test/helpers/e2e-test-helper.js` file to reduce code duplication and ensure consistent test behavior.
+
 ## Testing coverage and considerations
 
 - Each command's code should be isolated code by stubbing out all network requests and external dependencies to ensure we have coverage over expected inputs and outputs
