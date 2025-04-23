@@ -2,7 +2,6 @@ import { expect, test } from "@oclif/test";
 import * as Ably from "ably";
 import { randomUUID } from "node:crypto";
 import Mocha from "mocha";
-import { exec } from "node:child_process";
 
 // Generate unique test channel names to avoid collisions
 function getUniqueChannelName(prefix: string): string {
@@ -174,40 +173,30 @@ if (shouldSkip) {
       const messageData = { data: "E2E Test Message" };
       const uniqueChannel = getUniqueChannelName("cli");
 
-      // Run the CLI command directly as a subprocess
-      const publishOutput = await new Promise<string>((resolve, reject) => {
-        exec(
-          `ABLY_API_KEY=${process.env.E2E_ABLY_API_KEY} bin/run.js channels publish ${uniqueChannel} '${JSON.stringify(messageData)}'`,
-          (error: Error | null, stdout: string, _stderr: string) => {
-            if (error) {
-              console.error(`Error running CLI publish: ${error.message}`);
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
-          }
-        );
-      });
+      // First publish the message using the test framework
+      await test
+        .timeout(30000)
+        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .stdout()
+        .command(["channels", "publish", uniqueChannel, JSON.stringify(messageData)])
+        .it('publishes a message to channel', async (ctx) => {
+          // Verify CLI output
+          expect(ctx.stdout).to.contain(`Message published successfully to channel "${uniqueChannel}"`);
+        });
 
-      // Verify CLI output
-      expect(publishOutput).to.contain(`Message published successfully to channel "${uniqueChannel}"`);
+      // Add a delay to ensure message is stored and available in history
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Now check history with the CLI
-      const historyOutput = await new Promise<string>((resolve, reject) => {
-        exec(
-          `ABLY_API_KEY=${process.env.E2E_ABLY_API_KEY} bin/run.js channels history ${uniqueChannel}`,
-          (error: Error | null, stdout: string) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
-          }
-        );
-      });
-
-      // Verify history output contains our message
-      expect(historyOutput).to.contain("E2E Test Message");
+      // Then check history with the test framework
+      await test
+        .timeout(30000)
+        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .stdout()
+        .command(["channels", "history", uniqueChannel])
+        .it('retrieves published message from history', async (ctx) => {
+          // Verify output contains our message
+          expect(ctx.stdout).to.contain("E2E Test Message");
+        });
     });
 
     // Test history with verification
@@ -269,40 +258,30 @@ if (shouldSkip) {
       const messageData = { data: "Batch Message 1" };
       const batchChannel = getUniqueChannelName("batch");
 
-      // Run the CLI command directly as a subprocess
-      const publishOutput = await new Promise<string>((resolve, reject) => {
-        exec(
-          `ABLY_API_KEY=${process.env.E2E_ABLY_API_KEY} bin/run.js channels batch-publish --channels ${batchChannel} '${JSON.stringify(messageData)}'`,
-          (error: Error | null, stdout: string, _stderr: string) => {
-            if (error) {
-              console.error(`Error running CLI batch publish: ${error.message}`);
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
-          }
-        );
-      });
+      // First batch publish the message using the test framework
+      await test
+        .timeout(30000)
+        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .stdout()
+        .command(["channels", "batch-publish", "--channels", batchChannel, JSON.stringify(messageData)])
+        .it('batch publishes a message to channel', async (ctx) => {
+          // Verify CLI output
+          expect(ctx.stdout).to.contain("Batch publish successful");
+        });
 
-      // Verify CLI output
-      expect(publishOutput).to.contain("Batch publish successful");
+      // Add a delay to ensure message is stored and available in history
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Now check history with the CLI
-      const historyOutput = await new Promise<string>((resolve, reject) => {
-        exec(
-          `ABLY_API_KEY=${process.env.E2E_ABLY_API_KEY} bin/run.js channels history ${batchChannel}`,
-          (error: Error | null, stdout: string) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
-          }
-        );
-      });
-
-      // Verify history output contains our message
-      expect(historyOutput).to.contain("Batch Message 1");
+      // Then check history with the test framework
+      await test
+        .timeout(30000)
+        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .stdout()
+        .command(["channels", "history", batchChannel])
+        .it('retrieves batch published message from history', async (ctx) => {
+          // Verify output contains our message
+          expect(ctx.stdout).to.contain("Batch Message 1");
+        });
     });
 
     // Test publishing multiple messages with count and verification
@@ -310,45 +289,35 @@ if (shouldSkip) {
       const expectedMessages = ["Message number 1", "Message number 2", "Message number 3"];
       const countChannel = getUniqueChannelName("count");
 
-      // Run the CLI command directly as a subprocess
-      const publishOutput = await new Promise<string>((resolve, reject) => {
-        exec(
-          `ABLY_API_KEY=${process.env.E2E_ABLY_API_KEY} bin/run.js channels publish ${countChannel} 'Message number {{.Count}}' --count 3`,
-          (error: Error | null, stdout: string, _stderr: string) => {
-            if (error) {
-              console.error(`Error running CLI count publish: ${error.message}`);
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
+      // First publish multiple messages using the test framework
+      await test
+        .timeout(30000)
+        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .stdout()
+        .command(["channels", "publish", countChannel, "Message number {{.Count}}", "--count", "3"])
+        .it('publishes multiple messages to channel', async (ctx) => {
+          // Verify CLI output
+          expect(ctx.stdout).to.contain("Message 1 published successfully");
+          expect(ctx.stdout).to.contain("Message 2 published successfully");
+          expect(ctx.stdout).to.contain("Message 3 published successfully");
+          expect(ctx.stdout).to.contain("3/3 messages published successfully");
+        });
+
+      // Add a delay to ensure messages are stored and available in history
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Then check history with the test framework
+      await test
+        .timeout(30000)
+        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .stdout()
+        .command(["channels", "history", countChannel])
+        .it('retrieves multiple published messages from history', async (ctx) => {
+          // Verify output contains our messages
+          for (const expectedMsg of expectedMessages) {
+            expect(ctx.stdout).to.contain(expectedMsg);
           }
-        );
-      });
-
-      // Verify CLI output
-      expect(publishOutput).to.contain("Message 1 published successfully");
-      expect(publishOutput).to.contain("Message 2 published successfully");
-      expect(publishOutput).to.contain("Message 3 published successfully");
-      expect(publishOutput).to.contain("3/3 messages published successfully");
-
-      // Now check history with the CLI
-      const historyOutput = await new Promise<string>((resolve, reject) => {
-        exec(
-          `ABLY_API_KEY=${process.env.E2E_ABLY_API_KEY} bin/run.js channels history ${countChannel}`,
-          (error: Error | null, stdout: string) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(stdout);
-            }
-          }
-        );
-      });
-
-      // Verify history output contains our messages
-      for (const expectedMsg of expectedMessages) {
-        expect(historyOutput).to.contain(expectedMsg);
-      }
+        });
     });
   });
 }
