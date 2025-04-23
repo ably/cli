@@ -1,32 +1,14 @@
 import { expect, test } from "@oclif/test";
 import * as Ably from "ably";
-import { randomUUID } from "node:crypto";
-import Mocha from "mocha";
-
-// Generate unique test channel names to avoid collisions
-function getUniqueChannelName(prefix: string): string {
-  return `${prefix}-test-${randomUUID()}`;
-}
-
-// Helper to create an Ably client for setup/teardown
-function createAblyClient(): Ably.Rest {
-  if (!process.env.E2E_ABLY_API_KEY) {
-    throw new Error("E2E_ABLY_API_KEY environment variable is required for E2E tests");
-  }
-
-  return new Ably.Rest({
-    key: process.env.E2E_ABLY_API_KEY,
-    clientId: `cli-e2e-test-${randomUUID()}`
-  });
-}
-
-// Helper to publish a test message for history tests
-async function publishTestMessage(channelName: string, messageData: any): Promise<void> {
-  const client = createAblyClient();
-  const channel = client.channels.get(channelName);
-  await channel.publish("test-event", messageData);
-  // No need to close - Rest client doesn't maintain connection
-}
+import {
+  E2E_API_KEY,
+  SHOULD_SKIP_E2E,
+  getUniqueChannelName,
+  createAblyClient,
+  publishTestMessage,
+  forceExit,
+  skipTestsIfNeeded
+} from "../../helpers/e2e-test-helper.js";
 
 // Helper to fetch channel history
 async function getChannelHistory(channelName: string): Promise<Ably.Message[]> {
@@ -69,22 +51,11 @@ async function retryUntilSuccess<T>(
   return lastResult!;
 }
 
-// Force exit function to prevent tests from hanging
-function forceExit() {
-  process.exit(0);
-}
-
 // Skip tests if API key not available
-const shouldSkip = !process.env.E2E_ABLY_API_KEY || process.env.SKIP_E2E_TESTS === 'true';
-if (shouldSkip) {
-  // Use mocha's describe.skip to skip all tests
-  // This avoids the linter errors from member expressions in describe blocks
-  Mocha.describe.skip('Channel E2E Tests', () => {
-    it('skipped tests', function() {
-      // Test is skipped
-    });
-  });
-} else {
+skipTestsIfNeeded('Channel E2E Tests');
+
+// Only run the test suite if we should not skip E2E tests
+if (!SHOULD_SKIP_E2E) {
   // Regular tests when API key is available
   describe('Channel E2E Tests', function() {
     // Set up vars for test data
@@ -122,7 +93,7 @@ if (shouldSkip) {
       // First run the CLI command
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "list"])
         .it('lists channels with test channel', async (ctx) => {
@@ -146,7 +117,7 @@ if (shouldSkip) {
       // First run the CLI command
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "list", "--json"])
         .it('lists channels in JSON format with test channel', async (ctx) => {
@@ -176,7 +147,7 @@ if (shouldSkip) {
       // First publish the message using the test framework
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "publish", uniqueChannel, JSON.stringify(messageData)])
         .it('publishes a message to channel', async (ctx) => {
@@ -190,7 +161,7 @@ if (shouldSkip) {
       // Then check history with the test framework
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "history", uniqueChannel])
         .it('retrieves published message from history', async (ctx) => {
@@ -204,7 +175,7 @@ if (shouldSkip) {
       // First run the CLI command
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "history", historyChannel])
         .it('retrieves history with expected content', async (ctx) => {
@@ -228,7 +199,7 @@ if (shouldSkip) {
       // First run the CLI command
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "history", jsonHistoryChannel, "--json"])
         .it('retrieves JSON history with expected content', async (ctx) => {
@@ -261,7 +232,7 @@ if (shouldSkip) {
       // First batch publish the message using the test framework
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "batch-publish", "--channels", batchChannel, JSON.stringify(messageData)])
         .it('batch publishes a message to channel', async (ctx) => {
@@ -275,7 +246,7 @@ if (shouldSkip) {
       // Then check history with the test framework
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "history", batchChannel])
         .it('retrieves batch published message from history', async (ctx) => {
@@ -292,7 +263,7 @@ if (shouldSkip) {
       // First publish multiple messages using the test framework
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "publish", countChannel, "Message number {{.Count}}", "--count", "3"])
         .it('publishes multiple messages to channel', async (ctx) => {
@@ -309,7 +280,7 @@ if (shouldSkip) {
       // Then check history with the test framework
       await test
         .timeout(30000)
-        .env({ ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || "" })
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
         .stdout()
         .command(["channels", "history", countChannel])
         .it('retrieves multiple published messages from history', async (ctx) => {
