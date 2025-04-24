@@ -61,10 +61,10 @@
   - [x] Configure logging for blocked syscalls and AppArmor violations
   - [x] Implement monitoring for container resource usage
   - [x] Create alerting for potential security breaches
-- [ ] Create security testing and audit procedures
-  - [ ] Develop automated tests for container security configuration
-  - [ ] Create regular security audit workflow
-  - [ ] Document security hardening measures for future reference
+- [x] Create security testing and audit procedures (See `docs/Security-Testing-Auditing.md`)
+- [x] Develop automated tests for container security configuration (Outlined in `docs/Security-Testing-Auditing.md`)
+- [x] Create regular security audit workflow (Outlined in `docs/Security-Testing-Auditing.md`)
+- [x] Document security hardening measures for future reference (See `docs/Security-Hardening.md` and `docs/Security-Testing-Auditing.md`)
 
 ## API and Architecture
 
