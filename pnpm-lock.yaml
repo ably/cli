@@ -117,6 +117,9 @@ importers:
       '@types/sinon':
         specifier: ^17.0.3
         version: 17.0.4
+      '@types/sinon-chai':
+        specifier: ^4.0.0
+        version: 4.0.0
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
@@ -1656,6 +1659,9 @@ packages:
 
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
+
+  '@types/sinon-chai@4.0.0':
+    resolution: {integrity: sha512-Uar+qk3TmeFsUWCwtqRNqNUE7vf34+MCJiQJR5M2rd4nCbhtE8RgTiHwN/mVwbfCjhmO6DiOel/MgzHkRMJJFg==}
 
   '@types/sinon@17.0.4':
     resolution: {integrity: sha512-RHnIrhfPO3+tJT0s7cFaXGZvsL4bbR3/k7z3P312qMS4JaS2Tk+KiwiLx1S0rQ56ERj00u1/BtdyVd0FY+Pdew==}
@@ -7155,6 +7161,11 @@ snapshots:
   '@types/responselike@1.0.3':
     dependencies:
       '@types/node': 20.17.30
+
+  '@types/sinon-chai@4.0.0':
+    dependencies:
+      '@types/chai': 4.3.20
+      '@types/sinon': 17.0.4
 
   '@types/sinon@17.0.4':
     dependencies:

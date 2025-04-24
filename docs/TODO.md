@@ -95,10 +95,13 @@
 - [ ] Now that we have .editorconfig, ensure all files adhere in one commit
 - [ ] We are using a PNPM workspace, but I am not convinced that's a good thing. We should consider not letting the examples or React component dependencies affect the core CLI packaging.
 - [ ] Publish Docker image to Github registry and use a path such as `ghcr.io/ably/ably-cli-sandbox` for the published artefact. Building and publishing should use the locally built Ably CLI binary as opposed to the latest version so that local changes can be tested locally.
+- [ ] Review the Cursor rules and Docs to ensure they are effective for prompting (use Claude's [prompt improver](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/prompt-improver))
+  - [ ] Ensure we have more specific rules around what is needed from test coverage based on what we've seen so far from LLMs. a) Linting and running tests is a must, b) docs and TODOs must be updated, c) output from tests should not be polluted with output from the CLI unless there are errors, d) have we learnt about unit tests being tricky/not adding enough value, so we should focos on integration & E2E test more, e) why are docs not being updated and linting always checked as a matter of course, f) frequently see erorrs like "Could not find file 'src/commands/channels/batch-publish.js' in the workspace" - should we recommend to LLMs to use .ts files, and also provide more guidance on how to run tests in verbose mode when executing directly and which commands to use, g) some prompts have tried to inject an API key as follows `ABLY_API_KEY=YOUR_KEY_HERE` into tests, but this is not necessary given API keys are in .env, tell the LLM where linting happens "Could not find file '.eslintrc.js' in the workspace.", h) working around linting issues by prefixing unused variables with a _ is a perfect example of the trying to solve the wrong problem. if a variable is not used and the linter is telling us that, then we should remove the varaible, not put a prefix on it so the acutal issue ignored.
 
 ## Bugs
 
 - [ ] Running `pnpm test [filepath]` does not run the test file only, it runs all tests. The docs state this works so needs fixing.
+- [ ] Running the tests in debug mode seem to indicate here is a loop of some sort causing slowness: `DEBUG=* pnpm test test/e2e/core/basic-cli.test.ts` to replicate this issue, see how man times `config loading plugins [ './dist/src' ]` is loadedx
 
 ## Test coverage
 
@@ -163,14 +166,14 @@
     - [x] Test channel reuse for multiple publish operations
     - [x] Test batch publish with file input
     - [x] Test `--count` and `--delay` options apply correct number/timing of messages
-    - [ ] Test encryption flag (`--cipher`) produces encrypted messages and proper decryption
-    - [ ] publish / subscribe / batch-publish plus --delay unit testing
-  - [ ] `channels presence enter/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
-    - [ ] Test presence data handling (clientId, data payloads)
-    - [ ] Test presence filtering by clientId
-  - [ ] `channels occupancy get/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
-    - [ ] Test occupancy metrics parsing and formatting
-    - [ ] Test live updates with simulated changes
+    - [x] Test encryption flag (`--cipher`) produces encrypted messages and proper decryption
+    - [x] Test publish / subscribe / batch-publish plus --delay unit testing
+  - [x] `channels presence enter/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
+    - [x] Test presence data handling (clientId, data payloads)
+    - [x] Test presence filtering by clientId
+  - [x] `channels occupancy get/subscribe`: Mock SDK, flag handling, output formats, SIGINT handling.
+    - [x] Test occupancy metrics parsing and formatting
+    - [x] Test live updates with simulated changes
 - [ ] **Channel Rules (Legacy):**
   - [ ] `channel-rule create/list/update/delete`: Mock Control API calls, flag handling, output formats. (Verify necessity).
 - [ ] **Connections:**
@@ -250,7 +253,8 @@
 - [x] **Channels (Pub/Sub):** Mocked publish -> subscribe, publish -> history, presence enter -> presence subscribe, occupancy get/subscribe sequences.
   - [x] Test message delivery from publish to subscribe
   - [x] Test that published messages appear in history
-  - [ ] Test that presence state is correctly maintained
+  - [x] Test that presence state is correctly maintained
+  - [x] Test occupancy metrics correctly reflect channel activity
 - [ ] **Queues:** Mocked create -> list -> delete sequence.
   - [ ] Test queue configuration validation
 - [ ] **Integrations:** Mocked create -> list -> get -> update -> delete sequence.
@@ -289,6 +293,9 @@
 - [x] **Channels (Pub/Sub):** Real publish/subscribe, history, presence enter/subscribe, list.
   - [x] Test cross-client communication
   - [x] Test message persistence and retrieval
+  - [x] Test presence enter/leave operations
+  - [x] Test occupancy metrics for active channels
+  - [x] Test subscribe functionality with real-time message delivery
 - [ ] **Connections:** Real `test`, `stats`.
   - [ ] Test connection across different networks/environments
   - [ ] Verify connection metrics are accurately reported

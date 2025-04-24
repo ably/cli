@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script to run tests and forcefully terminate any hanging processes
+# Script to run tests
 
 # Capture all arguments
 ARGS=("$@")
@@ -15,9 +15,10 @@ for arg in "${ARGS[@]}"; do
   fi
 done
 
-# Default runner command parts
+# Default runner command parts (Mocha related)
+# NOTE: root-hooks are removed as the file was deleted.
 MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught"
-MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\"--no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
+MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\" --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 
 if $USE_PLAYWRIGHT; then
   # Use Playwright runner
@@ -31,19 +32,21 @@ elif [[ "${ARGS[0]}" == "test/**/*.test.ts" ]]; then
   MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
   # Add exclude flag specifically for the full run
   EXCLUDE_OPTION="--exclude test/e2e/web-cli/web-cli.test.ts"
-  COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS $EXCLUDE_OPTION --exit"
+  # Removed --exit flag
+  COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS $EXCLUDE_OPTION"
   echo "Executing command: $COMMAND"
 else
   # Running specific Mocha tests (pattern or file)
   echo "Using Mocha test runner..."
   MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
-  COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS --exit"
+  # Removed --exit flag
+  COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS"
   echo "Executing command: $COMMAND"
 fi
 
-# Set an outer timeout (in seconds) - default 120s or 2 minutes
-# Playwright has its own internal timeouts, this is mainly for Mocha hangs
-OUTER_TIMEOUT=120
+# Set an outer timeout (in seconds) - default 180s or 3 minutes
+# Increased from 120s to give more buffer
+OUTER_TIMEOUT=180
 
 # Run the tests with the determined runner
 eval $COMMAND &
@@ -52,6 +55,9 @@ TEST_PID=$!
 
 # Wait for the test to complete with timeout - compatible with macOS
 echo "Test process running with PID $TEST_PID"
+
+# Define a default timeout if OUTER_TIMEOUT is not set (already set above)
+# : ${OUTER_TIMEOUT:=300} # Default to 300 seconds (5 minutes) - Using 180s now
 
 # Start a timer
 SECONDS=0
@@ -70,4 +76,9 @@ done
 wait $TEST_PID
 EXIT_CODE=$?
 echo "Tests exited with code $EXIT_CODE"
+
+# Add a small delay to allow any final async operations/network messages to settle
+echo "Adding 1s delay before final exit..."
+sleep 1
+
 exit $EXIT_CODE

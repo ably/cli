@@ -8,34 +8,46 @@ const execaOptions = {
   timeout: 5000 // 5 second timeout for commands
 };
 
-// Very simple tests to see if the CLI works at all
-describe("Minimal CLI E2E Tests", function() {
-  // Set a short timeout
-  this.timeout(15000);
+// Skip tests if we're in CI without API keys
+const SHOULD_SKIP_TESTS = process.env.SKIP_E2E_TESTS === 'true';
 
-  it("should output the version", async function() {
-    const result = await execa("node", ["bin/run.js", "--version"], execaOptions);
-
-    // Basic check for successful command
-    expect(result.failed).to.be.false;
-    expect(result.stdout).to.match(/^@ably\/cli\/[0-9]+\.[0-9]+\.[0-9]+/);
+if (SHOULD_SKIP_TESTS) {
+  // If tests should be skipped, create a simple describe with a skip
+  describe("Minimal CLI E2E Tests (skipped)", function() {
+    it("tests skipped due to missing API key", function() {
+      this.skip();
+    });
   });
+} else {
+  // Very simple tests to see if the CLI works at all
+  describe("Minimal CLI E2E Tests", function() {
+    // Set a short timeout
+    this.timeout(15000);
 
-  it("should output JSON version info", async function() {
-    const result = await execa("node", ["bin/run.js", "--version", "--json"], execaOptions);
+    it("should output the version", async function() {
+      const result = await execa("node", ["bin/run.js", "--version"], execaOptions);
 
-    // Basic JSON check
-    expect(result.failed).to.be.false;
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed).to.have.property("version");
+      // Basic check for successful command
+      expect(result.failed).to.be.false;
+      expect(result.stdout).to.match(/^@ably\/cli\/[0-9]+\.[0-9]+\.[0-9]+/);
+    });
+
+    it("should output JSON version info", async function() {
+      const result = await execa("node", ["bin/run.js", "--version", "--json"], execaOptions);
+
+      // Basic JSON check
+      expect(result.failed).to.be.false;
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed).to.have.property("version");
+    });
+
+    it("should show help text", async function() {
+      const result = await execa("node", ["bin/run.js", "help"], execaOptions);
+
+      // Basic help check
+      expect(result.failed).to.be.false;
+      expect(result.stdout).to.include("Ably help commands");
+      expect(result.stdout).to.include("ably help");
+    });
   });
-
-  it("should show help text", async function() {
-    const result = await execa("node", ["bin/run.js", "help"], execaOptions);
-
-    // Basic help check
-    expect(result.failed).to.be.false;
-    expect(result.stdout).to.include("Ably help commands");
-    expect(result.stdout).to.include("ably help");
-  });
-});
+}
