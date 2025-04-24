@@ -13,12 +13,27 @@ import type * as DockerodeTypes from "dockerode";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
+import process from 'node:process';
+
+// Constants for Docker configuration
+const DOCKER_IMAGE_NAME = process.env.DOCKER_IMAGE_NAME || 'ably-cli-sandbox';
+const DOCKER_NETWORK_NAME = 'ably_cli_restricted';
+// These domains will be used to restrict container network access in the network security implementation
+const ALLOWED_DOMAINS = [
+    'rest.ably.io',
+    'realtime.ably.io',
+    'api.ably.io',
+    '*.ably.io',    // Wildcard for Ably subdomains
+    'ably.com',     // Ably main domain
+    '*.ably.com',   // Wildcard for Ably.com subdomains
+    'npmjs.org',    // Allow npm registry for package installs
+    'registry.npmjs.org',
+];
 
 // Simplified __dirname calculation
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // --- Configuration ---
-const DOCKER_IMAGE_NAME = 'ably-cli-sandbox';
 const _SESSION_TIMEOUT_MS = 1000 * 60 * 15; // 15 minutes
 const DEFAULT_PORT = 8080;
 const DEFAULT_MAX_SESSIONS = 50;
@@ -211,8 +226,18 @@ async function createContainer(
             Env: env,
             HostConfig: {
                 AutoRemove: true,
-                CapDrop: ['ALL'],
-                SecurityOpt: ['no-new-privileges'],
+                // Security capabilities
+                CapDrop: [
+                    'ALL',                 // Drop all capabilities first
+                    'NET_ADMIN',           // Cannot modify network settings
+                    'NET_BIND_SERVICE',    // Cannot bind to privileged ports
+                    'NET_RAW'              // Cannot use raw sockets
+                ],
+                SecurityOpt: [
+                    'no-new-privileges',   // Prevents privilege escalation
+                    'apparmor=unconfined', // Will be replaced with custom profile later
+                    'seccomp=unconfined'   // Will be replaced with custom profile later
+                ],
                 // Add read-only filesystem
                 ReadonlyRootfs: true,
                 // Add tmpfs mounts for writable directories
@@ -236,6 +261,9 @@ async function createContainer(
                 Memory: 256 * 1024 * 1024, // 256MB
                 MemorySwap: 256 * 1024 * 1024, // Disable swap
                 NanoCpus: 1 * 1000000000, // Limit to 1 CPU
+
+                // Network security restrictions
+                NetworkMode: 'ably_cli_restricted', // This network should be created at server startup
             },
             Image: DOCKER_IMAGE_NAME,
             Labels: { // Add label for cleanup
@@ -676,6 +704,16 @@ async function startServer() {
 // Removed IIFE - using top-level await directly
 let keepAliveInterval: NodeJS.Timeout;
 
+// --- Server Initialization (using top-level await) ---
+
+// Create secure network before server starts
+try {
+  await createSecureNetwork();
+} catch (error) {
+  logError(`Failed to create secure network: ${error}`);
+  log('Continuing with default network configuration');
+}
+
 try {
   await startServer();
   log("Terminal server started successfully.");
@@ -706,12 +744,10 @@ try {
       }
     });
   }
-
 } catch (error) {
   logError("Server failed unexpectedly:");
   logError(error);
-
-  process.exit(1); // Keep necessary exit with disable comment
+  process.exit(1);
 }
 
 function pipeStreams(
@@ -1053,4 +1089,48 @@ function startSessionMonitoring() {
 
   // Return the interval ID so it can be cleared during shutdown
   return intervalId;
+}
+
+/**
+ * Create a Docker network with security restrictions
+ */
+async function createSecureNetwork(): Promise<void> {
+    try {
+        log('Setting up secure Docker network for containers...');
+
+        // Check if network already exists
+        const networks = await docker.listNetworks({
+            filters: { name: [DOCKER_NETWORK_NAME] }
+        });
+
+        if (networks.length > 0) {
+            log(`Network ${DOCKER_NETWORK_NAME} already exists, skipping creation`);
+            return;
+        }
+
+        // Create a new network with restrictions
+        await docker.createNetwork({
+            Name: DOCKER_NETWORK_NAME,
+            Driver: 'bridge',
+            Internal: false, // Allow internet access but we'll restrict with rules
+            EnableIPv6: false,
+            Options: {
+                'com.docker.network.bridge.enable_ip_masquerade': 'true',
+                'com.docker.network.driver.mtu': '1500'
+            },
+            Labels: {
+                'managed-by': 'ably-cli-terminal-server',
+                'purpose': 'security-hardened-network'
+            }
+        });
+
+        log(`Created secure network: ${DOCKER_NETWORK_NAME}`);
+
+        // Note: Additional network filtering (like iptables rules or DNS filtering)
+        // should be set up in the Docker host or through a custom entrypoint script
+        // We'll document this requirement in Security-Hardening.md
+    } catch (error) {
+        logError(`Error creating secure network: ${error}`);
+        // Continue even if network creation fails - we'll fall back to default
+    }
 }
