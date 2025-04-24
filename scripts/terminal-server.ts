@@ -166,21 +166,45 @@ async function cleanupStaleContainers(): Promise<void> {
 async function ensureDockerImage(): Promise<void> {
   log(`Ensuring Docker image ${DOCKER_IMAGE_NAME} exists...`);
   try {
+    // First check if the image exists
     const images = await docker.listImages({
       filters: { reference: [DOCKER_IMAGE_NAME] },
     });
+
     if (images.length === 0) {
-      log(`Image ${DOCKER_IMAGE_NAME} not found.`);
-      // Assume Dockerfile is in the root, two levels up from scripts/
+      log(`Image ${DOCKER_IMAGE_NAME} not found. Will attempt to build it.`);
+
+      // Get the location of the Dockerfile - should be in project root
       const dockerfilePath = path.resolve(__dirname, "../../", "Dockerfile");
-      log(`Attempting to build Docker image from ${dockerfilePath}...`);
-      // Note: Building via SDK requires careful stream handling for output
-      // This is a simplified example; a real implementation needs better error/output handling.
+
+      // Check if Dockerfile exists
+      if (!fs.existsSync(dockerfilePath)) {
+        throw new Error(`Dockerfile not found at ${dockerfilePath}`);
+      }
+
+      log(`Building Docker image ${DOCKER_IMAGE_NAME} from ${dockerfilePath}...`);
+
+      // Try building via Docker CLI first (more reliable than SDK)
       try {
+        log(`Building with docker command: docker build -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../")}`);
+        const output = execSync(`docker build -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../")}`, {
+          stdio: ['ignore', 'pipe', 'pipe']
+        }).toString();
+        log(`Docker build output: ${output.slice(0, 200)}...`);
+        log(`Docker image ${DOCKER_IMAGE_NAME} built successfully using CLI.`);
+        return;
+      } catch (cliError) {
+        log(`Failed to build using Docker CLI: ${cliError}. Falling back to Docker SDK.`);
+      }
+
+      // Fallback to Docker SDK if CLI approach fails
+      try {
+        log("Attempting to build image using Docker SDK...");
         const stream = await docker.buildImage(
           { context: path.resolve(__dirname, "../../"), src: ["Dockerfile"] },
           { t: DOCKER_IMAGE_NAME },
         );
+
         await new Promise((resolve, reject) => {
           docker.modem.followProgress(
             stream,
@@ -191,13 +215,12 @@ async function ensureDockerImage(): Promise<void> {
             },
           );
         });
-        log(`Docker image ${DOCKER_IMAGE_NAME} built successfully.`);
+
+        log(`Docker image ${DOCKER_IMAGE_NAME} built successfully using SDK.`);
       } catch (buildError) {
-        logError(
-          `Failed to build Docker image ${DOCKER_IMAGE_NAME}: ${buildError}`,
-        );
+        logError(`Failed to build Docker image ${DOCKER_IMAGE_NAME}: ${buildError}`);
         throw new Error(
-          `Failed to automatically build Docker image "${DOCKER_IMAGE_NAME}". Please build it manually using "docker build -t ${DOCKER_IMAGE_NAME} ." in the project root.`,
+          `Failed to build Docker image "${DOCKER_IMAGE_NAME}". Please build it manually using "docker build -t ${DOCKER_IMAGE_NAME} ." in the project root.`,
         );
       }
     } else {
