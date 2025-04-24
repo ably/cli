@@ -60,6 +60,8 @@ type ClientSession = {
   // Add activity tracking fields
   lastActivityTime: number;
   creationTime: number;
+  // Add flag to track if attachment is in progress
+  isAttaching: boolean;
 };
 
 // Variable to store AppArmor profile status - checked once on startup
@@ -300,7 +302,8 @@ async function createContainer(
             // Use the working directory of the non-root user
             WorkingDir: '/home/appuser',
             HostConfig: {
-                AutoRemove: true,
+                // Set to false to prevent container from being removed before we can attach
+                AutoRemove: false,
                 // Security capabilities
                 CapDrop: [
                     'ALL',                 // Drop all capabilities first
@@ -334,7 +337,8 @@ async function createContainer(
                 NanoCpus: 1 * 1000000000, // Limit to 1 CPU
 
                 // Network security restrictions
-                NetworkMode: 'ably_cli_restricted', // This network should be created at server startup
+                // Use default bridge network if the custom network doesn't exist
+                NetworkMode: await containerNetworkExists() ? DOCKER_NETWORK_NAME : 'bridge',
             },
             Image: DOCKER_IMAGE_NAME,
             Labels: { // Add label for cleanup
@@ -605,6 +609,7 @@ async function startServer() {
              authenticated: false,
              lastActivityTime: Date.now(),
              creationTime: Date.now(),
+             isAttaching: false,
         };
 
         // Store partial session - crucial for cleanup if auth fails
@@ -654,6 +659,11 @@ async function startServer() {
                    // Start the container before attempting to attach
                    await container.start();
                    log(`[${sessionId}] Container started successfully: ${container.id}`);
+
+                   // *** Add a significant delay here ***
+                   log(`[${sessionId}] Waiting for container to initialize before attaching...`);
+                   await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+
                 } catch (containerError) {
                     logError(`[${sessionId}] Failed to create or start container: ${containerError instanceof Error ? containerError.message : String(containerError)}`);
                     if (ws.readyState === WebSocket.OPEN) {
@@ -668,6 +678,7 @@ async function startServer() {
                 const fullSession: ClientSession = {
                     ...(initialSession as ClientSession), // Spread initial properties (ws, sessionId)
                     authenticated: true,
+                    isAttaching: false, // Will be set to true by attachToContainer
                     timeoutId: setTimeout(() => {}, 0), // Dummy timeout, immediately cleared
                     container: container,
                     // execInstance, stdinStream, stdoutStream added by attachToContainer
@@ -677,14 +688,20 @@ async function startServer() {
                 log(`[${sessionId}] Full session object created.`);
 
                 // --- Attachment Phase ---
-                await attachToContainer(fullSession, ws);
-                log(`[${sessionId}] Successfully attached to container.`);
+                try {
+                    // Wait for attachment to complete before setting up message handlers
+                    await attachToContainer(fullSession, ws);
+                    log(`[${sessionId}] Successfully attached to container.`);
 
-                // --- Set up Main Message Handler ---
-                // Only set this up *after* successful attachment
-                ws.on('message', (msg) => handleMessage(fullSession, msg as Buffer));
-                log(`[${sessionId}] Main message handler attached.`);
-
+                    // --- Set up Main Message Handler ---
+                    // Only set up *after* successful attachment
+                    ws.on('message', (msg) => handleMessage(fullSession, msg as Buffer));
+                    log(`[${sessionId}] Main message handler attached.`);
+                } catch (attachError) {
+                    // Attachment failed, but we'll let the error handling in attachToContainer handle it
+                    logError(`[${sessionId}] Attachment error: ${String(attachError)}`);
+                    // Don't attempt to cleanup here as attachToContainer will have done it already
+                }
             } catch (error) {
                 // Catch errors during the setup process (auth, container create, attach)
                 logError(`[${sessionId}] Error during connection setup: ${error instanceof Error ? error.message : String(error)}`);
@@ -886,6 +903,9 @@ function safeCloseWsStream(wsStream: Duplex) {
 // --- Container Attachment Logic ---
 
 async function attachToContainer(session: ClientSession, ws: WebSocket): Promise<void> {
+    // Mark that attachment is starting
+    session.isAttaching = true;
+
     const wsStream = createWebSocketStream(ws, {
         encoding: 'utf8',
         decodeStrings: false, // Don't convert strings to buffers
@@ -896,32 +916,34 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
     try {
         // Ensure container exists on session before proceeding
         if (!session.container) {
+            session.isAttaching = false; // Clear flag on error
             throw new Error('Container not associated with session during attach');
         }
 
-        // Check if the container is running before attempting to attach
-        try {
-            const containerInfo = await session.container.inspect();
-            if (!containerInfo.State.Running) {
-                // Container is not running, start it
-                log(`Container ${session.container.id} is not running, attempting to start it...`);
-                await session.container.start();
-                log(`Container ${session.container.id} started successfully.`);
-            }
-        } catch (inspectError) {
-            logError(`Error checking container state for ${session.container.id}: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
-            throw new Error(`Failed to verify container state: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
-        }
+        // Delay is now handled *before* calling this function
+        // log(`Waiting briefly for container ${session.container.id} to initialize...`);
+        // await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
 
         log(`Attaching to container ${session.container.id} for session ${session.sessionId}`);
+
+        // Check container state just before attaching
+        try {
+            const containerInfo = await session.container.inspect();
+            if (!containerInfo.State.Running && !containerInfo.State.Paused) {
+                session.isAttaching = false; // Clear flag on error
+                throw new Error(`Container ${session.container.id} is not in an attachable state (running/paused). State: ${containerInfo.State.Status}`);
+            }
+            log(`Container state confirmed as ${containerInfo.State.Status} before attach.`);
+        } catch (inspectError) {
+            session.isAttaching = false; // Clear flag on error
+            throw new Error(`Failed to inspect container state before attach: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
+        }
 
         const execOptions: DockerExecCreateOptions = {
             AttachStdin: true,
             AttachStdout: true,
             AttachStderr: true,
-            // Use the restricted shell script explicitly
             Cmd: ['/bin/bash', '/scripts/restricted-shell.sh'],
-            // Set critical environment variables for proper terminal behavior
             Env: [
                 'TERM=xterm-256color',
                 'COLORTERM=truecolor',
@@ -929,31 +951,30 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
                 'LC_ALL=en_US.UTF-8',
                 'LC_CTYPE=en_US.UTF-8',
                 'CLICOLOR=1',
-                'PS1=$ ', // Ensure prompt is set properly
+                'PS1=$ ',
                 'LC_TERMINAL=xterm-256color',
                 'LC_TERMINAL_VERSION=3.4.0'
             ],
             Tty: true,
         };
+
+        // Attempt to execute the command inside the container
         const exec = await session.container.exec(execOptions);
-        session.execInstance = exec; // Store exec instance
+        session.execInstance = exec;
 
         const streamOpts = { hijack: true, stdin: true };
         containerStream = await exec.start(streamOpts) as stream.Duplex;
 
-        // Assign streams to session *after* successful creation
         session.stdinStream = containerStream;
         session.stdoutStream = containerStream;
 
         log(`Attached stream to container ${session.container.id} for session ${session.sessionId}`);
+        session.isAttaching = false;
 
-        // Now pipe streams, containerStream is guaranteed to be Duplex here
         pipeStreams(ws, containerStream);
 
-        // WebSocket stream event handlers
         wsStream.on('close', () => {
             log(`WebSocket stream closed for session ${session.sessionId}`);
-            // containerStream is captured in this closure
             if (containerStream) safeCloseWsStream(containerStream);
             cleanupSession(session.sessionId);
         });
@@ -963,10 +984,9 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
             cleanupSession(session.sessionId);
         });
 
-        // Container stream event handlers
         containerStream.on('close', () => {
             log(`Container stream closed for session ${session.sessionId}`);
-            safeCloseWsStream(wsStream); // wsStream is captured
+            safeCloseWsStream(wsStream);
             cleanupSession(session.sessionId);
         });
         containerStream.on('error', (err) => {
@@ -976,10 +996,11 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         });
 
     } catch (error) {
+        session.isAttaching = false;
         logError(`Failed to attach to container for session ${session.sessionId}: ${error instanceof Error ? error.message : String(error)}`);
         safeCloseWsStream(wsStream);
         if (containerStream) {
-            safeCloseWsStream(containerStream); // Close if created before error
+            safeCloseWsStream(containerStream);
         }
         cleanupSession(session.sessionId);
         if (ws.readyState === WebSocket.OPEN) {
@@ -993,6 +1014,20 @@ async function cleanupSession(sessionId: string) {
   if (session) {
     log(`Cleaning up session ${sessionId}`);
     clearTimeout(session.timeoutId);
+
+    // If attachment is in progress, add a delay to avoid racing with it
+    if (session.isAttaching) {
+      log(`Session ${sessionId} is being attached, delaying cleanup to prevent race condition...`);
+      // Wait a bit to allow attachment to complete or fail
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      // Check if the session is still there after the delay
+      if (!sessions.has(sessionId)) {
+        log(`Session ${sessionId} was removed during delay, skipping cleanup.`);
+        return;
+      }
+    }
+
     if (
       session.ws.readyState === WebSocket.OPEN ||
       session.ws.readyState === WebSocket.CONNECTING
@@ -1008,24 +1043,29 @@ async function cleanupSession(sessionId: string) {
     // Stop the container if it exists
     if (session.container) {
       try {
-        const containerInfo = await session.container.inspect();
-        if (
-          containerInfo &&
-          (containerInfo.State.Running || containerInfo.State.Paused)
-        ) {
+        // Try to stop the container - be more tolerant of errors
+        try {
           log(`Attempting to stop container ${session.container.id}...`);
-          // Added specific catch for stop error
           await session.container.stop({ t: 2 }).catch((stopError: Error) => {
-            logError(
-              `Error stopping container ${session.container?.id}: ${stopError.message}. Relying on AutoRemove.`,
-            );
+            log(`Note: Error stopping container ${session.container?.id}: ${stopError.message}.`);
           });
-          log(`Container ${session.container.id} stopped or stop attempted.`);
+          log(`Container ${session.container.id} stopped.`);
+        } catch (stopError) {
+          log(`Note: Error during container stop: ${stopError}.`);
         }
-      } catch (inspectError: unknown) {
-        logError(
-          `Error inspecting container ${session.container?.id} before stop: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}. May already be stopped or removed.`,
-        );
+
+        // Now explicitly try to remove the container
+        try {
+          log(`Removing container ${session.container.id}...`);
+          await session.container.remove({ force: true }).catch((removeError: Error) => {
+            log(`Note: Error removing container ${session.container?.id}: ${removeError.message}.`);
+          });
+          log(`Container ${session.container.id} removed.`);
+        } catch (removeError) {
+          log(`Note: Error during container removal: ${removeError}.`);
+        }
+      } catch (containerError) {
+        log(`Note: Container cleanup produced errors: ${containerError}`);
       }
     }
 
@@ -1167,6 +1207,22 @@ function startSessionMonitoring() {
   }, 30 * 1000);
 
   return intervalId;
+}
+
+/**
+ * Check if the specified Docker network exists
+ */
+async function containerNetworkExists(): Promise<boolean> {
+    try {
+        log(`Checking if network ${DOCKER_NETWORK_NAME} exists...`);
+        const networks = await docker.listNetworks({
+            filters: { name: [DOCKER_NETWORK_NAME] }
+        });
+        return networks.length > 0;
+    } catch (error) {
+        logError(`Error checking network existence: ${error}`);
+        return false; // Fallback to default network on error
+    }
 }
 
 /**
