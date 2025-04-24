@@ -1,57 +1,52 @@
 #!/bin/bash
 # Script to run tests and forcefully terminate any hanging processes
 
-# Capture test pattern and timeout option
-TEST_PATTERN="$1"
-shift
-TIMEOUT_OPTION=""
-EXTRA_OPTIONS=""
+# Capture all arguments
+ARGS=("$@")
 
-# Process remaining arguments
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --timeout)
-      TIMEOUT_OPTION="$1 $2"
-      shift 2
-      ;;
-    *)
-      EXTRA_OPTIONS="$EXTRA_OPTIONS $1"
-      shift
-      ;;
-  esac
+# Check if any argument specifically targets the web-cli test file
+USE_PLAYWRIGHT=false
+PLAYWRIGHT_TEST_FILE=""
+for arg in "${ARGS[@]}"; do
+  if [[ "$arg" == *"web-cli.test.ts" ]]; then
+    USE_PLAYWRIGHT=true
+    PLAYWRIGHT_TEST_FILE="$arg"
+    break
+  fi
 done
 
-# Check if the test pattern matches a specific file
-if [[ "$TEST_PATTERN" == *".test.ts" && ! "$TEST_PATTERN" == *"*"* ]]; then
-  # When running a specific test file, just run that file
-  SELECTED_PATTERNS="$TEST_PATTERN"
-  echo "Running specific test file: $SELECTED_PATTERNS"
-elif [[ "$TEST_PATTERN" == "test/**/*.test.ts" && -z "$EXTRA_OPTIONS" ]]; then
-  # When running all tests, explicitly list each test directory and the specific integration tests
-  SELECTED_PATTERNS="test/unit/**/*.test.ts test/integration/docker-container-security.test.ts test/integration/terminal-server.test.ts test/e2e/**/*.test.ts"
-  echo "Running all test suites"
-  echo "- Unit tests"
-  echo "- Integration tests (Docker Security, Terminal Server)"
-  echo "- E2E tests"
-else
-  # For all other patterns, use what was provided
-  SELECTED_PATTERNS="$TEST_PATTERN"
-  echo "Running tests with pattern: $SELECTED_PATTERNS"
-fi
+# Default runner command parts
+MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught"
+MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\"--no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 
-echo "Timeout option: $TIMEOUT_OPTION"
-if [[ -n "$EXTRA_OPTIONS" ]]; then
-  echo "Extra options: $EXTRA_OPTIONS"
+if $USE_PLAYWRIGHT; then
+  # Use Playwright runner
+  echo "Using Playwright test runner for Web CLI tests..."
+  # Pass ONLY the specific web-cli test file to Playwright
+  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
+  echo "Executing command: $COMMAND"
+elif [[ "${ARGS[0]}" == "test/**/*.test.ts" ]]; then
+  # Running all tests (default pattern) - use Mocha, exclude web-cli
+  echo "Using Mocha test runner for all suites (excluding Web CLI E2E)..."
+  MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
+  # Add exclude flag specifically for the full run
+  EXCLUDE_OPTION="--exclude test/e2e/web-cli/web-cli.test.ts"
+  COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS $EXCLUDE_OPTION --exit"
+  echo "Executing command: $COMMAND"
+else
+  # Running specific Mocha tests (pattern or file)
+  echo "Using Mocha test runner..."
+  MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
+  COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS --exit"
+  echo "Executing command: $COMMAND"
 fi
 
 # Set an outer timeout (in seconds) - default 120s or 2 minutes
+# Playwright has its own internal timeouts, this is mainly for Mocha hangs
 OUTER_TIMEOUT=120
 
-# Run the tests with the specified patterns and timeout
-# Using shell process group to ensure all child processes are terminated
-CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS="--no-inspect --unhandled-rejections=strict" \
-  node --import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("ts-node/esm", pathToFileURL("./"), { project: "./tsconfig.test.json" });' \
-  ./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught $SELECTED_PATTERNS $TIMEOUT_OPTION $EXTRA_OPTIONS --exit &
+# Run the tests with the determined runner
+eval $COMMAND &
 
 TEST_PID=$!
 

@@ -44,8 +44,9 @@ function App() {
     if (!hasInitialCredentials) {
       // For demo purposes only - in production get these from a secure API
       console.log("Setting demo credentials");
-      setApiKey("fake.apiKey");
-      setAccessToken("fakeAccessToken");
+      setApiKey("dummy.key:secret"); // Use a realistic-looking key format
+      // Provide a structurally valid (but fake) JWT
+      setAccessToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c");
       setShouldConnect(true);
     }
   }, []);
