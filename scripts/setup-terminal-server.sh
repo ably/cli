@@ -8,16 +8,17 @@ set -e
 set -o pipefail
 
 # --- Configuration ---
-GITHUB_REPO_URL="https://github.com/ably/cli.git" # Replace with your actual repo URL if different
-PROJECT_BRANCH="main" # Or the branch/tag you want to deploy
+GITHUB_REPO_URL="https://github.com/ably/cli.git"
+# Default to main branch, but can be overridden by environment variable
+PROJECT_BRANCH="${BRANCH:-main}"
 INSTALL_DIR="/opt/ably-cli-terminal-server"
 SERVICE_USER="ablysrv"
 SERVICE_GROUP="ablysrv"
-NODE_SERVICE_NAME="ably-terminal-server" # Renamed for clarity
+NODE_SERVICE_NAME="ably-terminal-server"
 CADDY_SERVICE_NAME="caddy"
 ENV_CONFIG_DIR="/etc/ably-terminal-server"
 ENV_CONFIG_FILE="${ENV_CONFIG_DIR}/config.env"
-NODE_MAJOR_VERSION="22" # Use Node.js LTS version 22.x
+NODE_MAJOR_VERSION="22"
 
 # --- Helper Functions ---
 log() {
@@ -27,6 +28,20 @@ log() {
 log_error() {
   echo "[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $1" >&2
 }
+
+# --- Detect branch from installation URL ---
+if [ -n "$SCRIPT_URL" ]; then
+  # Extract branch from raw.githubusercontent.com URL
+  if [[ "$SCRIPT_URL" =~ raw\.githubusercontent\.com/ably/cli/([^/]+)/scripts/setup-terminal-server\.sh ]]; then
+    DETECTED_BRANCH="${BASH_REMATCH[1]}"
+    if [ "$DETECTED_BRANCH" != "main" ]; then
+      log "Detected branch from installation URL: $DETECTED_BRANCH"
+      PROJECT_BRANCH="$DETECTED_BRANCH"
+    fi
+  fi
+fi
+
+log "Using branch: $PROJECT_BRANCH"
 
 # --- Sanity Checks ---
 if [ "$(id -u)" -ne 0 ]; then
@@ -41,6 +56,12 @@ if ! grep -q -E 'VERSION_ID="(22\.04|24\.04)"' /etc/os-release; then
     log "Warning: Running on an untested Ubuntu version."
 fi
 
+# --- Check for existing installation ---
+if [ -d "${INSTALL_DIR}" ]; then
+  log "Existing installation found at ${INSTALL_DIR}"
+  log "This will be updated with the latest version from the ${PROJECT_BRANCH} branch"
+fi
+
 # --- Install Prerequisites ---
 log "Updating package lists..."
 apt-get update -y
@@ -49,54 +70,70 @@ log "Installing prerequisites: git, curl, ca-certificates, gnupg, apparmor-utils
 apt-get install -y git curl ca-certificates gnupg apparmor-utils ufw debian-keyring debian-archive-keyring apt-transport-https
 
 # --- Install Docker ---
-log "Setting up Docker repository..."
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-chmod a+r /etc/apt/keyrings/docker.gpg
+if ! command -v docker &> /dev/null; then
+  log "Setting up Docker repository..."
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
 
-# Add the repository to Apt sources:
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update -y
+  # Add the repository to Apt sources:
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+  apt-get update -y
 
-log "Installing Docker Engine..."
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  log "Installing Docker Engine..."
+  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-log "Verifying Docker installation..."
-if ! docker run hello-world; then
-    log_error "Docker installation failed or Docker daemon is not running."
-    exit 1
+  log "Verifying Docker installation..."
+  if ! docker run hello-world; then
+      log_error "Docker installation failed or Docker daemon is not running."
+      exit 1
+  fi
+  log "Docker installed successfully."
+else
+  log "Docker is already installed"
 fi
-log "Docker installed successfully."
 
 # --- Install Node.js using NodeSource ---
-log "Setting up NodeSource repository for Node.js v${NODE_MAJOR_VERSION}.x..."
-curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR_VERSION}.x | bash -
+if ! command -v node &> /dev/null; then
+  log "Setting up NodeSource repository for Node.js v${NODE_MAJOR_VERSION}.x..."
+  curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR_VERSION}.x | bash -
 
-log "Installing Node.js..."
-apt-get install -y nodejs
+  log "Installing Node.js..."
+  apt-get install -y nodejs
 
-log "Verifying Node.js installation..."
-node -v
-npm -v
+  log "Verifying Node.js installation..."
+  node -v
+  npm -v
+else
+  log "Node.js is already installed"
+fi
 
 # --- Install pnpm ---
-log "Installing pnpm globally via npm..."
-npm install -g pnpm
+if ! command -v pnpm &> /dev/null; then
+  log "Installing pnpm globally via npm..."
+  npm install -g pnpm
 
-log "Verifying pnpm installation..."
-pnpm -v
+  log "Verifying pnpm installation..."
+  pnpm -v
+else
+  log "pnpm is already installed"
+fi
 
 # --- Install Caddy ---
-log "Installing Caddy web server..."
-apt-get install -y curl gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt-get update -y
-apt-get install -y caddy
-log "Caddy installed successfully."
+if ! command -v caddy &> /dev/null; then
+  log "Installing Caddy web server..."
+  apt-get install -y curl gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+  apt-get update -y
+  apt-get install -y caddy
+  log "Caddy installed successfully."
+else
+  log "Caddy is already installed"
+fi
 
 # --- Create Service User and Group ---
 log "Creating service group '${SERVICE_GROUP}'..."
@@ -138,9 +175,6 @@ sudo -u "${SERVICE_USER}" -H pnpm install --frozen-lockfile --prod=false
 log "Building the project..."
 sudo -u "${SERVICE_USER}" -H pnpm prepare
 
-# Optional: Adjust permissions after build if needed
-# chmod -R 750 "${INSTALL_DIR}" # Tighten permissions after build
-
 # --- Install AppArmor Profile (Optional but Recommended) ---
 APPARMOR_PROFILE_SOURCE="${INSTALL_DIR}/docker/apparmor-profile.conf"
 APPARMOR_PROFILE_DEST="/etc/apparmor.d/docker-ably-cli-sandbox"
@@ -158,8 +192,10 @@ fi
 log "Creating environment configuration directory ${ENV_CONFIG_DIR}..."
 mkdir -p "${ENV_CONFIG_DIR}"
 
-log "Creating environment file ${ENV_CONFIG_FILE}..."
-cat << EOF > "${ENV_CONFIG_FILE}"
+# Only create the config file if it doesn't exist
+if [ ! -f "${ENV_CONFIG_FILE}" ]; then
+  log "Creating environment file ${ENV_CONFIG_FILE}..."
+  cat << EOF > "${ENV_CONFIG_FILE}"
 # Environment variables for Ably Terminal Server & Caddy
 # !!! IMPORTANT: Replace placeholder values below !!!
 
@@ -182,10 +218,14 @@ ADMIN_EMAIL=your-email@example.com
 # Enable debug logging if needed
 # DEBUG=true
 EOF
+else
+  log "Environment file ${ENV_CONFIG_FILE} already exists, preserving existing configuration"
+fi
 
 log "Setting permissions for environment file..."
+# Ensure the file is owned by root but readable by all users
 chown root:root "${ENV_CONFIG_FILE}"
-chmod 600 "${ENV_CONFIG_FILE}" # Restrict access to root only
+chmod 644 "${ENV_CONFIG_FILE}" # Make readable by all users
 
 # --- Create Node.js systemd Service File ---
 log "Creating systemd service file for Node.js server /etc/systemd/system/${NODE_SERVICE_NAME}.service..."
@@ -224,35 +264,34 @@ EOF
 
 # --- Create Caddyfile for Reverse Proxy ---
 log "Creating Caddyfile /etc/caddy/Caddyfile..."
-# Use environment variables within Caddyfile
+# Extract variables from config file
+if [ -f "${ENV_CONFIG_FILE}" ]; then
+    # Source the config to get the variables
+    SERVER_DOMAIN_VALUE=$(grep -E '^SERVER_DOMAIN=' ${ENV_CONFIG_FILE} | cut -d '=' -f2)
+    TERMINAL_SERVER_PORT_VALUE=$(grep -E '^TERMINAL_SERVER_PORT=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo "8080")
+    ADMIN_EMAIL_VALUE=$(grep -E '^ADMIN_EMAIL=' ${ENV_CONFIG_FILE} | cut -d '=' -f2)
+else
+    SERVER_DOMAIN_VALUE="your-domain.example.com"
+    TERMINAL_SERVER_PORT_VALUE="8080"
+    ADMIN_EMAIL_VALUE="your-email@example.com"
+fi
+
+# Create the Caddyfile with actual values
 cat << EOF > "/etc/caddy/Caddyfile"
 {
     # Email for ACME TLS certificates
-    email {$ADMIN_EMAIL}
-    # Optional: Increase TLS handshake timeout
-    # tls {
-    #    handshake_timeout 60s
-    # }
+    email ${ADMIN_EMAIL_VALUE}
 }
 
 # The domain Caddy will manage
-{$SERVER_DOMAIN} {
+${SERVER_DOMAIN_VALUE} {
     # Reverse proxy requests to the Node.js terminal server
-    reverse_proxy localhost:{$TERMINAL_SERVER_PORT} {
+    reverse_proxy localhost:${TERMINAL_SERVER_PORT_VALUE} {
         # Required for WebSocket connections
         header_up Host {host}
         header_up X-Real-IP {remote_ip}
         header_up X-Forwarded-For {remote_ip}
-        header_up X-Forwarded-Proto {scheme}
     }
-
-    # Optional: Add security headers
-    # header {
-    #    Strict-Transport-Security "max-age=31536000;"
-    #    X-Content-Type-Options "nosniff"
-    #    X-Frame-Options "DENY"
-    #    Referrer-Policy "strict-origin-when-cross-origin"
-    # }
 
     # Enable access logging
     log {
@@ -266,15 +305,43 @@ cat << EOF > "/etc/caddy/Caddyfile"
 }
 EOF
 
-# --- Configure Caddy Systemd Service ---
-log "Configuring Caddy systemd service to use environment variables..."
-# Create an override file to load environment variables for Caddy
-SYSTEMD_CADDY_OVERRIDE_DIR="/etc/systemd/system/${CADDY_SERVICE_NAME}.service.d"
-mkdir -p "${SYSTEMD_CADDY_OVERRIDE_DIR}"
-cat << EOF > "${SYSTEMD_CADDY_OVERRIDE_DIR}/override.conf"
+# Make sure the Caddy log directory exists and has proper permissions
+log "Creating Caddy log directory with proper permissions..."
+mkdir -p /var/log/caddy
+chown -R caddy:caddy /var/log/caddy
+
+# --- Create Systemd Service File for Caddy ---
+log "Creating systemd service file for Caddy /etc/systemd/system/${CADDY_SERVICE_NAME}.service..."
+cat << EOF > "/etc/systemd/system/${CADDY_SERVICE_NAME}.service"
+[Unit]
+Description=Caddy
+Documentation=https://caddyserver.com/docs/
+After=network.target network-online.target
+Requires=network-online.target
+
 [Service]
-EnvironmentFile=${ENV_CONFIG_FILE}
+Type=exec
+User=caddy
+Group=caddy
+ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+LimitNPROC=512
+PrivateTmp=true
+ProtectSystem=full
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
 EOF
+
+# No need for the drop-in file anymore since we're creating the whole service file
+log "Removing old Caddy systemd drop-in configuration if it exists..."
+SYSTEMD_CADDY_OVERRIDE_DIR="/etc/systemd/system/${CADDY_SERVICE_NAME}.service.d"
+if [ -d "${SYSTEMD_CADDY_OVERRIDE_DIR}" ]; then
+  rm -rf "${SYSTEMD_CADDY_OVERRIDE_DIR}"
+fi
 
 # --- Configure Firewall (UFW) ---
 log "Configuring firewall (UFW)..."
@@ -295,24 +362,27 @@ systemctl enable "${NODE_SERVICE_NAME}.service"
 log "Enabling ${CADDY_SERVICE_NAME} service to start on boot..."
 systemctl enable "${CADDY_SERVICE_NAME}.service"
 
-# Delay starting until configuration is done manually
-# log "Starting ${NODE_SERVICE_NAME} service..."
-# systemctl start "${NODE_SERVICE_NAME}.service"
-# log "Starting ${CADDY_SERVICE_NAME} service..."
-# systemctl start "${CADDY_SERVICE_NAME}.service"
-
 # --- Final Instructions ---
 log "-----------------------------------------------------"
 log "Setup Complete!"
 log ""
-log "IMPORTANT: You MUST edit the environment file to configure required settings:"
-log "  sudo nano ${ENV_CONFIG_FILE}"
-log "Set AT LEAST 'SERVER_DOMAIN' and 'ADMIN_EMAIL'. Ensure 'TERMINAL_SERVER_PORT' is correct."
-log "Ensure your domain's DNS A/AAAA record points to this server's public IP address."
-log ""
-log "After editing the file, START the services for the first time:"
-log "  sudo systemctl start ${NODE_SERVICE_NAME}"
-log "  sudo systemctl start ${CADDY_SERVICE_NAME}"
+if [ ! -f "${ENV_CONFIG_FILE}" ]; then
+  log "IMPORTANT: You MUST edit the environment file to configure required settings:"
+  log "  sudo nano ${ENV_CONFIG_FILE}"
+  log "Set AT LEAST 'SERVER_DOMAIN' and 'ADMIN_EMAIL'. Ensure 'TERMINAL_SERVER_PORT' is correct."
+  log "Ensure your domain's DNS A/AAAA record points to this server's public IP address."
+  log ""
+  log "After editing the file, START the services for the first time:"
+  log "  sudo systemctl start ${NODE_SERVICE_NAME}"
+  log "  sudo systemctl start ${CADDY_SERVICE_NAME}"
+else
+  log "Existing configuration preserved. If you need to update settings:"
+  log "  sudo nano ${ENV_CONFIG_FILE}"
+  log ""
+  log "To restart the services with new configuration:"
+  log "  sudo systemctl restart ${NODE_SERVICE_NAME}"
+  log "  sudo systemctl restart ${CADDY_SERVICE_NAME}"
+fi
 log ""
 log "To check the Node.js service status:"
 log "  sudo systemctl status ${NODE_SERVICE_NAME}"

@@ -16,11 +16,23 @@ This single command downloads the setup script from the GitHub repository and ex
 
 **Security Warning:** Always review scripts from the internet before running them with `sudo`.
 
+### Installing from the main branch:
 ```bash
-curl -sSL https://raw.githubusercontent.com/ably/cli/main/scripts/setup-terminal-server.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/ably/cli/main/scripts/setup-terminal-server.sh > /tmp/setup.sh && chmod +x /tmp/setup.sh && sudo -E /tmp/setup.sh
 ```
 
-*(Replace `https://raw.githubusercontent.com/ably/cli/main/scripts/setup-terminal-server.sh` with the correct raw URL if the script location changes)*
+### Installing from a custom branch:
+```bash
+# Replace 'your-branch-name' with the desired branch name
+BRANCH="your-branch-name" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/scripts/setup-terminal-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
+```
+
+For example, to install from a branch named `feature/container-hardening`:
+```bash
+BRANCH="feature/container-hardening" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/scripts/setup-terminal-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
+```
+
+The setup script will automatically use the specified branch when cloning the repository for installation.
 
 ## Post-Setup Configuration
 
