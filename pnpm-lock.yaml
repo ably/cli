@@ -103,7 +103,7 @@ importers:
         specifier: ^9.0.7
         version: 9.0.7
       '@types/jsonwebtoken':
-        specifier: ^9.0.7
+        specifier: ^9.0.9
         version: 9.0.9
       '@types/mocha':
         specifier: ^10.0.10
@@ -118,7 +118,7 @@ importers:
         specifier: ^17.0.3
         version: 17.0.4
       '@types/ws':
-        specifier: ^8.5.11
+        specifier: ^8.18.1
         version: 8.18.1
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.30.1

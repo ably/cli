@@ -44,9 +44,9 @@
   - [x] Implement maximum session duration limits
   - [x] Ensure proper notification to users before session termination
 - [ ] Enhance network security for containers
-  - [ ] Create a restricted network with controlled egress to Ably endpoints only
+  - [x] Create a restricted network with controlled egress to Ably endpoints only
   - [ ] Explicitly block raw socket access
-  - [ ] Verify that the container drops all unnecessary capabilities
+  - [x] Verify that the container drops all unnecessary capabilities
 - [ ] Implement Docker user namespace remapping for additional isolation
   - [ ] Configure Docker daemon for user namespace remapping
   - [ ] Ensure container runs with correct mapped user

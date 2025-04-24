@@ -1,159 +1,95 @@
-# Docker CLI Environment Security Hardening
+# Docker Container Security Hardening
 
-This document outlines the security measures implemented to harden the Docker container environment used for the Ably CLI web terminal.
+This document outlines the security measures implemented to harden the Docker containers used in the Ably CLI's web terminal feature.
 
-## Overview
+## Implemented Security Measures
 
-The Ably CLI web terminal allows users to interact with the Ably CLI through a browser interface. This is implemented by running the Ably CLI in a Docker container and connecting to it via a WebSocket server. To ensure a secure environment, several security measures have been implemented.
+### 1. Filesystem Security
 
-## Current Security Measures
+We've implemented a read-only filesystem approach with controlled write access:
 
-### Read-Only Filesystem
+- Set `ReadonlyRootfs: true` to make the container's root filesystem read-only
+- Added tmpfs mounts for necessary writable directories with `noexec` flag:
+  - `/tmp`: 64MB with `rw,noexec,nosuid` flags
+  - `/run`: 32MB with `rw,noexec,nosuid` flags
+- Created a dedicated volume for the `~/.ably` config directory using tmpfs with secure permissions (mode 0o700)
 
-The container's root filesystem is set to read-only to prevent any modifications to the system files, which helps mitigate the impact of potential attacks.
+### 2. Resource Limits
 
-```typescript
-// In terminal-server.ts - createContainer function
-ReadonlyRootfs: true,
-```
+To prevent resource exhaustion and abuse, we've implemented the following limits:
 
-### Controlled Write Access
+- Set process limits using `PidsLimit: 50` to prevent fork bombs
+- Memory limits:
+  - 256MB memory limit
+  - Disabled swap by setting `MemorySwap` equal to `Memory`
+- Limited CPU usage to 1 CPU using `NanoCpus: 1 * 1000000000`
 
-While the root filesystem is read-only, specific directories need to be writable for the CLI to function properly:
+### 3. Session Management
 
-1. **Temporary Files**: `/tmp` and `/run` are mounted as tmpfs volumes with the `noexec` flag to prevent execution of any files written there:
-   ```typescript
-   Tmpfs: {
-       '/tmp': 'rw,noexec,nosuid,size=64m',
-       '/run': 'rw,noexec,nosuid,size=32m'
-   }
-   ```
+Enhanced session management with proper timeout mechanisms:
 
-2. **Configuration Directory**: The `~/.ably` directory is mounted as a tmpfs volume with limited size and secure permissions:
-   ```typescript
-   Mounts: [
-       {
-           Type: 'tmpfs',
-           Target: '/home/appuser/.ably',
-           TmpfsOptions: {
-               SizeBytes: 10 * 1024 * 1024, // 10MB
-               Mode: 0o700 // Secure permissions
-           }
-       }
-   ]
-   ```
+- Implemented inactivity timeout (10 minutes) to terminate idle sessions
+- Added maximum session duration limit (30 minutes)
+- Added proper cleanup and notification to users before session termination
 
-### Resource Limits
+### 4. Network Security
 
-The container has strict resource limits to prevent resource exhaustion and potential denial of service:
-
-```typescript
-// Process limits
-PidsLimit: 50, // Limit to 50 processes
-
-// Memory limits
-Memory: 256 * 1024 * 1024, // 256MB
-MemorySwap: 256 * 1024 * 1024, // Disable swap
-
-// CPU limits
-NanoCpus: 1 * 1000000000, // Limit to 1 CPU
-```
-
-### Session Timeouts
-
-To prevent sessions from running indefinitely or being left idle, two types of timeouts are implemented:
-
-1. **Inactivity Timeout**: Sessions are terminated after 10 minutes of inactivity
-2. **Maximum Duration**: Sessions cannot run for more than 30 minutes regardless of activity
-
-```typescript
-// Constants for timeouts
-const MAX_IDLE_TIME_MS = 10 * 60 * 1000;      // 10 minutes of inactivity
-const MAX_SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes total
-
-// Session monitoring
-function startSessionMonitoring() {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [sessionId, session] of sessions.entries()) {
-      // Check for inactivity timeout
-      if (now - session.lastActivityTime > MAX_IDLE_TIME_MS) {
-        terminateSession(sessionId, "Session timed out due to inactivity");
-      }
-
-      // Check for max duration timeout
-      if (now - session.creationTime > MAX_SESSION_DURATION_MS) {
-        terminateSession(sessionId, "Maximum session duration reached");
-      }
-    }
-  }, 30 * 1000);
-}
-```
-
-### Non-Root User
-
-The container runs as a non-root user (`appuser`), which is defined in the Dockerfile:
-
-```dockerfile
-# Create a non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-# ...
-
-# Switch to the non-root user
-USER appuser
-```
-
-### Restricted Shell
-
-The Docker container uses a custom restricted shell script (`/scripts/restricted-shell.sh`) that only allows the `ably` command and `exit` to be executed. This helps prevent users from running arbitrary commands.
-
-### Capabilities
-
-All capabilities are dropped from the container, preventing it from performing privileged operations:
-
-```typescript
-CapDrop: ['ALL'],
-```
-
-### No New Privileges
-
-The container is configured to prevent any process from gaining new privileges, which blocks privilege escalation:
-
-```typescript
-SecurityOpt: ['no-new-privileges'],
-```
-
-### Auto-Removal
-
-Containers are automatically removed when they stop, which helps ensure no remnants of user sessions remain:
-
-```typescript
-AutoRemove: true,
-```
+- Created a dedicated Docker network (`ably_cli_restricted`) for containers
+- Dropped unnecessary network capabilities:
+  - `NET_ADMIN` - preventing modification of network settings
+  - `NET_BIND_SERVICE` - preventing binding to privileged ports
+  - `NET_RAW` - preventing use of raw sockets
 
 ## Planned Security Enhancements
 
-The following security measures are planned for future implementation:
+### 1. Network Access Control
 
-1. **Network Security**: Further restrict network access to only allow connections to Ably endpoints
-2. **User Namespace Remapping**: Enable Docker's user namespace remapping for additional isolation
-3. **Custom Seccomp Profile**: Create a tailored seccomp profile to restrict system calls
-4. **AppArmor Profile**: Implement an AppArmor profile for additional access control
-5. **Enhanced Logging and Monitoring**: Set up better logging and monitoring for security events
-6. **Security Testing**: Develop automated tests for the security configuration
+- Implement DNS or proxy-based filtering to restrict outbound connections to allowed domains
+- Block all raw socket access and limit connections to only necessary endpoints
+- Set up egress filtering rules to only allow traffic to defined Ably endpoints
 
-## Best Practices for Container Security
+### 2. User Namespace Remapping
 
-- Regularly update the Docker image and dependencies to address security vulnerabilities
-- Monitor and review logs for any suspicious activity
-- Periodically audit the security configuration against current best practices
-- Apply the principle of least privilege for all components
-- Follow defense in depth by implementing multiple layers of security
+- Configure Docker daemon for user namespace remapping
+- Map container root user to non-privileged user on the host
+- Document proper host configuration for user namespace remapping
+
+### 3. Seccomp Profile
+
+- Develop a custom seccomp profile that allows only necessary syscalls
+- Whitelist required operations while blocking potentially dangerous system calls
+- Test and verify the profile doesn't break required CLI functionality
+
+### 4. AppArmor Profile
+
+- Create an AppArmor profile with strict filesystem access controls
+- Limit executable paths to only required binaries
+- Implement mandatory access control for all container processes
+
+### 5. Enhanced Logging and Monitoring
+
+- Configure logging for blocked syscalls and AppArmor violations
+- Implement monitoring for container resource usage
+- Create alerting for potential security breaches
+
+## Implementation Plan
+
+The following steps outline our implementation approach for remaining security measures:
+
+1. Complete network security hardening with proper DNS filtering and egress rules
+2. Implement and test seccomp profile for syscall filtering
+3. Create and test AppArmor profile for access control
+4. Document security testing and audit procedures
+
+## Security Best Practices for Development
+
+- All code changes must follow security review procedures
+- Container configurations should be tested in isolation before deployment
+- Regular security audits should be conducted to identify and address potential vulnerabilities
 
 ## References
 
-- [Docker Security Documentation](https://docs.docker.com/engine/security/)
-- [Linux Capabilities](https://man7.org/linux/man-pages/man7/capabilities.7.html)
+- [Docker Security Best Practices](https://docs.docker.com/engine/security/)
+- [Linux Capabilities Documentation](https://man7.org/linux/man-pages/man7/capabilities.7.html)
 - [Seccomp Security Profiles](https://docs.docker.com/engine/security/seccomp/)
 - [AppArmor Profiles for Docker](https://docs.docker.com/engine/security/apparmor/)
