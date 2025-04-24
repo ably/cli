@@ -39,34 +39,42 @@ Enhanced session management with proper timeout mechanisms:
   - `NET_ADMIN` - preventing modification of network settings
   - `NET_BIND_SERVICE` - preventing binding to privileged ports
   - `NET_RAW` - preventing use of raw sockets
+- Implemented network filtering with iptables:
+  - Restricted outbound traffic to allowed domains
+  - Set up DNS filtering
+  - Blocked raw socket access
+- Added TCP wrappers (`hosts.allow` and `hosts.deny`) for additional network protection
+
+### 5. Command Injection Prevention
+
+- Implemented enhanced shell script that prevents command injection:
+  - Added validation for shell operators and special characters
+  - Replaced `eval` with direct argument passing
+  - Properly sanitizing input to prevent shell escapes
+
+### 6. System Call Filtering
+
+- Created a custom seccomp profile:
+  - Whitelisted only necessary syscalls
+  - Explicitly blocked dangerous syscalls
+  - Restricted socket syscalls to only TCP/IP (AF_INET) and local (AF_UNIX)
+  - Blocked process tracing and other potentially dangerous operations
 
 ## Planned Security Enhancements
 
-### 1. Network Access Control
-
-- Implement DNS or proxy-based filtering to restrict outbound connections to allowed domains
-- Block all raw socket access and limit connections to only necessary endpoints
-- Set up egress filtering rules to only allow traffic to defined Ably endpoints
-
-### 2. User Namespace Remapping
+### 1. User Namespace Remapping
 
 - Configure Docker daemon for user namespace remapping
 - Map container root user to non-privileged user on the host
 - Document proper host configuration for user namespace remapping
 
-### 3. Seccomp Profile
-
-- Develop a custom seccomp profile that allows only necessary syscalls
-- Whitelist required operations while blocking potentially dangerous system calls
-- Test and verify the profile doesn't break required CLI functionality
-
-### 4. AppArmor Profile
+### 2. AppArmor Profile
 
 - Create an AppArmor profile with strict filesystem access controls
 - Limit executable paths to only required binaries
 - Implement mandatory access control for all container processes
 
-### 5. Enhanced Logging and Monitoring
+### 3. Enhanced Logging and Monitoring
 
 - Configure logging for blocked syscalls and AppArmor violations
 - Implement monitoring for container resource usage
@@ -76,9 +84,9 @@ Enhanced session management with proper timeout mechanisms:
 
 The following steps outline our implementation approach for remaining security measures:
 
-1. Complete network security hardening with proper DNS filtering and egress rules
-2. Implement and test seccomp profile for syscall filtering
-3. Create and test AppArmor profile for access control
+1. Implement Docker user namespace remapping
+2. Create and test AppArmor profile for access control
+3. Set up enhanced logging and monitoring
 4. Document security testing and audit procedures
 
 ## Security Best Practices for Development

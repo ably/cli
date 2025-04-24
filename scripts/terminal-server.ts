@@ -18,17 +18,7 @@ import process from 'node:process';
 // Constants for Docker configuration
 const DOCKER_IMAGE_NAME = process.env.DOCKER_IMAGE_NAME || 'ably-cli-sandbox';
 const DOCKER_NETWORK_NAME = 'ably_cli_restricted';
-// These domains will be used to restrict container network access in the network security implementation
-const ALLOWED_DOMAINS = [
-    'rest.ably.io',
-    'realtime.ably.io',
-    'api.ably.io',
-    '*.ably.io',    // Wildcard for Ably subdomains
-    'ably.com',     // Ably main domain
-    '*.ably.com',   // Wildcard for Ably.com subdomains
-    'npmjs.org',    // Allow npm registry for package installs
-    'registry.npmjs.org',
-];
+// Note: Allowed domains are defined in docker/network-security.sh and applied at container runtime
 
 // Simplified __dirname calculation
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -219,6 +209,9 @@ async function createContainer(
             }
         }
 
+        // Path to seccomp profile - will be mounted in the container
+        const seccompProfilePath = path.resolve(__dirname, '../docker/seccomp-profile.json');
+
         const container = await docker.createContainer({
             AttachStderr: true,
             AttachStdin: true,
@@ -236,7 +229,7 @@ async function createContainer(
                 SecurityOpt: [
                     'no-new-privileges',   // Prevents privilege escalation
                     'apparmor=unconfined', // Will be replaced with custom profile later
-                    'seccomp=unconfined'   // Will be replaced with custom profile later
+                    `seccomp=${seccompProfilePath}` // Use our seccomp profile
                 ],
                 // Add read-only filesystem
                 ReadonlyRootfs: true,
@@ -254,6 +247,12 @@ async function createContainer(
                             SizeBytes: 10 * 1024 * 1024, // 10MB
                             Mode: 0o700 // Secure permissions
                         }
+                    },
+                    {
+                        Type: 'bind',
+                        Source: seccompProfilePath,
+                        Target: '/scripts/seccomp-profile.json',
+                        ReadOnly: true
                     }
                 ],
                 // Add resource limits
@@ -487,6 +486,11 @@ async function startServer() {
     // Start session monitoring
     const sessionMonitoringInterval = startSessionMonitoring();
 
+    // A keep-alive interval to prevent the process from exiting
+    const keepAliveInterval = setInterval(() => {
+        // No-op, just keeps the event loop active
+    }, 60000);
+
     wss.on("connection", (ws: WebSocket, _req: http.IncomingMessage) => {
         const sessionId = generateSessionId();
         log(`Client connected, assigned session ID: ${sessionId}`);
@@ -625,11 +629,6 @@ async function startServer() {
     // --- Graceful Shutdown ---
     let isShuttingDown = false;
 
-    // A keep-alive interval to prevent the process from exiting
-    const keepAliveInterval = setInterval(() => {
-        // No-op, just keeps the event loop active
-    }, 60000);
-
     const shutdown = async (signal: string) => {
         // Prevent multiple shutdown attempts
         if (isShuttingDown) {
@@ -701,9 +700,6 @@ async function startServer() {
     return server;
 }
 
-// Removed IIFE - using top-level await directly
-let keepAliveInterval: NodeJS.Timeout;
-
 // --- Server Initialization (using top-level await) ---
 
 // Create secure network before server starts
@@ -717,12 +713,6 @@ try {
 try {
   await startServer();
   log("Terminal server started successfully.");
-
-  // Keep the Node.js process alive
-  // This prevents the process from exiting after top-level code completes in ES modules
-  keepAliveInterval = setInterval(() => {
-    // No-op interval to keep event loop active
-  }, 60000);
 
   // Handle Node.js debugger disconnection
   // Use type assertion for Node.js internal properties
