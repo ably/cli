@@ -15,6 +15,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
 import process from 'node:process';
+import * as fs from "node:fs"; // Import fs
 
 // Constants for Docker configuration
 const DOCKER_IMAGE_NAME = process.env.DOCKER_IMAGE_NAME || 'ably-cli-sandbox';
@@ -60,8 +61,23 @@ type ClientSession = {
   creationTime: number;
 };
 
+// Variable to store AppArmor profile status - checked once on startup
+let isAppArmorProfileLoaded = false;
+
 const sessions = new Map<string, ClientSession>();
 const docker = new Dockerode();
+
+// Read seccomp profile content once on startup
+const seccompProfilePath = path.resolve(__dirname, '../../docker/seccomp-profile.json');
+let seccompProfileContent: string;
+try {
+  seccompProfileContent = fs.readFileSync(seccompProfilePath, 'utf8');
+  JSON.parse(seccompProfileContent); // Validate JSON structure
+  log("Seccomp profile loaded successfully.");
+} catch (error) {
+  logError(`Failed to load or parse seccomp profile at ${seccompProfilePath}: ${error}`);
+  seccompProfileContent = '{}'; // Use an empty valid JSON object as placeholder
+}
 
 function log(message: string): void {
     console.log(`[TerminalServer ${new Date().toISOString()}] ${message}`);
@@ -72,6 +88,26 @@ function logError(message: unknown): void {
     if (message instanceof Error && message.stack) {
         console.error(message.stack);
     }
+}
+
+// Function to check AppArmor profile status ONCE on startup
+function checkAppArmorProfileStatus(): void {
+  try {
+      log("Checking AppArmor profile status...");
+      // Check if our AppArmor profile exists in the standard location
+      const appArmorCheck = execSync('apparmor_parser -QT /etc/apparmor.d/docker-ably-cli-sandbox 2>/dev/null || echo "notfound"').toString().trim();
+
+      if (appArmorCheck === 'notfound') {
+          log('AppArmor profile not found or not loaded, will use unconfined.');
+          isAppArmorProfileLoaded = false;
+      } else {
+          log('AppArmor profile found and seems loaded.');
+          isAppArmorProfileLoaded = true;
+      }
+  } catch (appArmorError) {
+      log(`AppArmor check command failed, assuming profile not loaded: ${appArmorError instanceof Error ? appArmorError.message : String(appArmorError)}`);
+      isAppArmorProfileLoaded = false;
+  }
 }
 
 // Function to clean up stale containers on startup
@@ -210,32 +246,19 @@ async function createContainer(
             }
         }
 
-        // Path to seccomp profile - will be mounted in the container
-        const seccompProfilePath = path.resolve(__dirname, '../docker/seccomp-profile.json');
-
-        // Configure security options
+        // Configure security options using file content
         const securityOpt = [
-            'no-new-privileges',   // Prevents privilege escalation
-            `seccomp=${seccompProfilePath}` // Use our seccomp profile
+            'no-new-privileges',
+            `seccomp=${seccompProfileContent}` // Pass profile content directly
         ];
 
-        // Check if AppArmor profile is available by executing a command
-        let useAppArmor = false;
-        try {
-            // Check if our AppArmor profile exists in the standard location
-            const appArmorCheck = execSync('apparmor_parser -QT /etc/apparmor.d/docker-ably-cli-sandbox 2>/dev/null || echo "notfound"').toString().trim();
-
-            if (appArmorCheck === 'notfound') {
-                log('AppArmor profile not found or not loaded, using unconfined');
-                securityOpt.push('apparmor=unconfined'); // Fallback
-            } else {
-                log('AppArmor profile found and will be applied');
-                useAppArmor = true;
-                securityOpt.push('apparmor=ably-cli-sandbox-profile'); // Use our custom profile
-            }
-        } catch (appArmorError) {
-            log(`AppArmor check failed, using unconfined profile: ${appArmorError instanceof Error ? appArmorError.message : String(appArmorError)}`);
-            securityOpt.push('apparmor=unconfined'); // Fallback
+        // Use the pre-checked AppArmor status
+        if (isAppArmorProfileLoaded) {
+            log('Applying AppArmor profile: ably-cli-sandbox-profile');
+            securityOpt.push('apparmor=ably-cli-sandbox-profile');
+        } else {
+            log('Applying AppArmor profile: unconfined');
+            securityOpt.push('apparmor=unconfined');
         }
 
         const container = await docker.createContainer({
@@ -275,12 +298,6 @@ async function createContainer(
                             Mode: 0o700 // Secure permissions
                         }
                     },
-                    {
-                        Type: 'bind',
-                        Source: seccompProfilePath,
-                        Target: '/scripts/seccomp-profile.json',
-                        ReadOnly: true
-                    }
                 ],
                 // Add resource limits
                 PidsLimit: 50, // Limit to 50 processes
@@ -309,7 +326,7 @@ async function createContainer(
         log(`- Read-only filesystem: yes`);
         log(`- User namespace remapping compatibility: yes`);
         log(`- Seccomp filtering: yes`);
-        log(`- AppArmor profile: ${useAppArmor ? 'yes' : 'no'}`);
+        log(`- AppArmor profile: ${isAppArmorProfileLoaded ? 'yes' : 'no'}`);
 
         return container;
     } catch (error) {
@@ -488,6 +505,7 @@ async function startServer() {
     log('Starting WebSocket server...');
     await cleanupStaleContainers();
     await ensureDockerImage(); // Ensure image exists before starting
+    checkAppArmorProfileStatus(); // Check AppArmor status ONCE here
 
     const port = Number.parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
     const maxSessions = Number.parseInt(process.env.MAX_SESSIONS || String(DEFAULT_MAX_SESSIONS), 10);
