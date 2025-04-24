@@ -83,8 +83,6 @@ try {
 // Shared variables
 let terminalServerProcess: ChildProcess | undefined;
 let webServerProcess: ChildProcess | undefined;
-let terminalServerPort: number;
-let webServerPort: number;
 
 function log(message: string): void {
     console.log(`[TerminalServer ${new Date().toISOString()}] ${message}`);
