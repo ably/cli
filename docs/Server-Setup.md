@@ -1,17 +1,18 @@
-# Ably CLI Terminal Server Setup
+# Ably CLI Terminal Server Setup with Automatic HTTPS
 
-This document describes how to set up the Ably CLI Terminal Server as a systemd service on a fresh Ubuntu server (tested on 22.04 LTS and 24.04 LTS).
+This document describes how to set up the Ably CLI Terminal Server as a systemd service on a fresh Ubuntu server (tested on 22.04 LTS and 24.04 LTS), including **Caddy** as a reverse proxy for automatic HTTPS using Let's Encrypt.
 
 ## Prerequisites
 
 - A server running Ubuntu 22.04 LTS (Jammy Jellyfish) or 24.04 LTS (Noble Numbat).
 - `sudo` privileges on the server.
+- A registered **domain name** (e.g., `your-domain.example.com`) with **DNS A and/or AAAA records** pointing to the public IP address of your server.
 - Internet connectivity to download dependencies and clone the repository.
-- Docker installed and running (the script will install it if not present).
+- **Ports 80 and 443** open on your server's firewall (e.g., AWS Security Group) to allow incoming HTTP and HTTPS traffic for Let's Encrypt certificate validation and Caddy operation.
 
 ## Quick Setup
 
-This single command downloads the setup script from the GitHub repository and executes it. It handles installing dependencies (Node.js, pnpm, Docker), cloning the repository, building the project, creating a service user, and setting up the systemd service.
+This single command downloads the setup script from the GitHub repository and executes it. It handles installing dependencies (Node.js, pnpm, Docker, Caddy), cloning the repository, building the project, creating a service user, and setting up the systemd services for both the terminal server and Caddy.
 
 **Security Warning:** Always review scripts from the internet before running them with `sudo`.
 
@@ -23,7 +24,7 @@ curl -sSL https://raw.githubusercontent.com/ably/cli/main/scripts/setup-terminal
 
 ## Post-Setup Configuration
 
-After the script completes successfully, you **must** configure the environment variables for the service:
+After the script completes successfully, you **must** configure the environment variables:
 
 1.  **Edit the configuration file:**
     ```bash
@@ -31,65 +32,93 @@ After the script completes successfully, you **must** configure the environment 
     ```
 
 2.  **Set required variables:**
-    *   `PORT`: Ensure this is the desired port for the WebSocket server (default is `8080`).
-    *   Review other variables like `DOCKER_IMAGE_NAME` and `MAX_SESSIONS` if you need to override the defaults.
-    *   **Important:** If the terminal server *itself* requires specific Ably credentials (which is unlikely, as clients usually provide their own), uncomment and set `ABLY_API_KEY` and `ABLY_ACCESS_TOKEN`. Do not hardcode sensitive credentials directly if possible; consider using more secure methods if needed.
+    *   `SERVER_DOMAIN`: **REQUIRED.** Replace `your-domain.example.com` with the actual domain name pointing to your server. Caddy uses this for automatic HTTPS.
+    *   `ADMIN_EMAIL`: **REQUIRED.** Replace `your-email@example.com` with your email address. Let's Encrypt uses this for certificate expiration notices.
+    *   `TERMINAL_SERVER_PORT`: Ensure this is the desired internal port for the Node.js WebSocket server (default is `8080`). This port does **not** need to be exposed publicly; Caddy proxies traffic to it.
+    *   Review optional variables like `DOCKER_IMAGE_NAME` and `MAX_SESSIONS` if needed.
 
 3.  **Save and close** the file (Ctrl+X, then Y, then Enter in `nano`).
 
-## Starting and Managing the Service
+4.  **Verify DNS:** Double-check that your domain name's DNS records are correctly pointing to your server's public IP address. DNS changes can take time to propagate.
 
-Once configured, you can manage the service using `systemctl`:
+## Starting and Managing the Services
 
-*   **Start the service (first time):**
+Once configured, you can manage the services using `systemctl`:
+
+*   **Start the services (first time):**
     ```bash
+    # Start the backend Node.js server first
     sudo systemctl start ably-terminal-server
+    # Then start the Caddy reverse proxy
+    sudo systemctl start caddy
     ```
 
 *   **Check the status:**
     ```bash
+    # Check Node.js backend
     sudo systemctl status ably-terminal-server
+    # Check Caddy proxy (useful for HTTPS issues)
+    sudo systemctl status caddy
     ```
 
 *   **View live logs:**
     ```bash
+    # View Node.js backend logs
     sudo journalctl -f -u ably-terminal-server
+    # View Caddy logs (useful for HTTPS issues)
+    sudo journalctl -f -u caddy
     ```
 
-*   **Stop the service:**
+*   **Stop the services:**
     ```bash
+    sudo systemctl stop caddy
     sudo systemctl stop ably-terminal-server
     ```
 
-*   **Restart the service (after configuration changes):**
+*   **Restart the services (after configuration changes):**
     ```bash
     sudo systemctl restart ably-terminal-server
+    sudo systemctl restart caddy
     ```
 
-*   **Enable the service to start on boot (already done by the script):**
+*   **Enable the services to start on boot (already done by the script):**
     ```bash
     sudo systemctl enable ably-terminal-server
+    sudo systemctl enable caddy
     ```
 
-*   **Disable the service from starting on boot:**
+*   **Disable the services from starting on boot:**
     ```bash
+    sudo systemctl disable caddy
     sudo systemctl disable ably-terminal-server
     ```
+
+## Role of Caddy
+
+Caddy acts as a secure entry point to your terminal server:
+
+-   **Reverse Proxy:** It listens on standard HTTPS port 443 and forwards valid requests to the Node.js terminal server running internally (e.g., on `localhost:8080`).
+-   **Automatic HTTPS:** It automatically obtains and renews TLS certificates from Let's Encrypt for the configured `SERVER_DOMAIN`.
+-   **WebSocket Proxying:** The configuration includes necessary headers for WebSocket connections to function correctly through the proxy.
 
 ## Script Details (`scripts/setup-terminal-server.sh`)
 
 The setup script performs the following actions:
 
-1.  **System Checks:** Verifies root privileges and Ubuntu version.
-2.  **Install Prerequisites:** Installs `git`, `curl`, `gnupg`, `apparmor-utils`.
-3.  **Install Docker:** Adds the Docker repository and installs the Docker engine.
-4.  **Install Node.js & pnpm:** Installs Node.js (v22 LTS specified) and pnpm.
-5.  **Create Service User/Group:** Creates a dedicated system user (`ablysrv`) and group (`ablysrv`) to run the service.
-6.  **Clone Repository:** Clones the specified branch (`main` by default) of the Ably CLI repository into `/opt/ably-cli-terminal-server`.
-7.  **Set Permissions:** Sets appropriate ownership and permissions for the installation directory.
-8.  **Install Dependencies & Build:** Runs `pnpm install` and `pnpm prepare` as the service user.
-9.  **Install AppArmor Profile:** Copies the AppArmor profile (if found) to `/etc/apparmor.d/` and attempts to load it.
-10. **Create Configuration:** Creates the `/etc/ably-terminal-server/config.env` file for environment variables.
-11. **Create Systemd Service:** Creates the `/etc/systemd/system/ably-terminal-server.service` file.
-12. **Enable Service:** Reloads systemd and enables the service to start on boot.
-13. **Provides Instructions:** Outputs final steps for configuration and starting the service.
+1.  System Checks.
+2.  Install Prerequisites (incl. `ufw` for firewall).
+3.  Install Docker.
+4.  Install Node.js & pnpm.
+5.  **Install Caddy:** Installs the Caddy web server using its official repository.
+6.  Create Service User/Group (`ablysrv`).
+7.  Clone Repository.
+8.  Set Permissions.
+9.  Install Dependencies & Build.
+10. Install AppArmor Profile.
+11. **Create Configuration:** Creates `/etc/ably-terminal-server/config.env` with placeholders for domain, email, and ports.
+12. **Create Node.js Systemd Service:** Creates `/etc/systemd/system/ably-terminal-server.service`.
+13. **Create Caddyfile:** Creates `/etc/caddy/Caddyfile` with reverse proxy configuration using environment variables.
+14. **Configure Caddy Systemd Service:** Adds an override to load environment variables for Caddy.
+15. **Configure Firewall:** Allows SSH, HTTP (port 80), and HTTPS (port 443) through UFW.
+16. **Enable Services:** Reloads systemd and enables both `ably-terminal-server` and `caddy` services to start on boot.
+17. Provides Instructions.

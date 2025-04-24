@@ -13,7 +13,8 @@ PROJECT_BRANCH="main" # Or the branch/tag you want to deploy
 INSTALL_DIR="/opt/ably-cli-terminal-server"
 SERVICE_USER="ablysrv"
 SERVICE_GROUP="ablysrv"
-SERVICE_NAME="ably-terminal-server"
+NODE_SERVICE_NAME="ably-terminal-server" # Renamed for clarity
+CADDY_SERVICE_NAME="caddy"
 ENV_CONFIG_DIR="/etc/ably-terminal-server"
 ENV_CONFIG_FILE="${ENV_CONFIG_DIR}/config.env"
 NODE_MAJOR_VERSION="22" # Use Node.js LTS version 22.x
@@ -44,8 +45,8 @@ fi
 log "Updating package lists..."
 apt-get update -y
 
-log "Installing prerequisites: git, curl, ca-certificates, gnupg, apparmor-utils..."
-apt-get install -y git curl ca-certificates gnupg apparmor-utils
+log "Installing prerequisites: git, curl, ca-certificates, gnupg, apparmor-utils, ufw, debian-keyring, debian-archive-keyring, apt-transport-https..."
+apt-get install -y git curl ca-certificates gnupg apparmor-utils ufw debian-keyring debian-archive-keyring apt-transport-https
 
 # --- Install Docker ---
 log "Setting up Docker repository..."
@@ -87,6 +88,15 @@ npm install -g pnpm
 
 log "Verifying pnpm installation..."
 pnpm -v
+
+# --- Install Caddy ---
+log "Installing Caddy web server..."
+apt-get install -y curl gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt-get update -y
+apt-get install -y caddy
+log "Caddy installed successfully."
 
 # --- Create Service User and Group ---
 log "Creating service group '${SERVICE_GROUP}'..."
@@ -150,42 +160,40 @@ mkdir -p "${ENV_CONFIG_DIR}"
 
 log "Creating environment file ${ENV_CONFIG_FILE}..."
 cat << EOF > "${ENV_CONFIG_FILE}"
-# Environment variables for the Ably Terminal Server service
+# Environment variables for Ably Terminal Server & Caddy
 # !!! IMPORTANT: Replace placeholder values below !!!
 
-# The port the WebSocket server will listen on
-PORT=8080
+# == Terminal Server Settings ==
+# The port the Node.js WebSocket server will listen on (internal only)
+TERMINAL_SERVER_PORT=8080
 
-# Ably API Key for the terminal server itself (if needed for management/metrics)
-# ABLY_SERVER_API_KEY=your_ably_api_key
+# == Caddy Reverse Proxy Settings ==
+# The domain name Caddy will use for automatic HTTPS (REQUIRED)
+SERVER_DOMAIN=your-domain.example.com
 
-# You may not need ABLY_API_KEY and ABLY_ACCESS_TOKEN here,
-# as they seem to be passed by the client during connection.
-# If the server needs its own credentials, uncomment and set them.
-# ABLY_API_KEY=placeholder_api_key
-# ABLY_ACCESS_TOKEN=placeholder_access_token
+# The email address Caddy will use for Let's Encrypt registration (REQUIRED)
+ADMIN_EMAIL=your-email@example.com
 
+# == Optional Terminal Server Settings ==
 # Docker Image Name (defaults within the script if not set)
 # DOCKER_IMAGE_NAME=ably-cli-sandbox
-
 # Max concurrent sessions (defaults within the script if not set)
 # MAX_SESSIONS=50
-
 # Enable debug logging if needed
 # DEBUG=true
 EOF
 
 log "Setting permissions for environment file..."
-chown root:"${SERVICE_GROUP}" "${ENV_CONFIG_FILE}"
-chmod 640 "${ENV_CONFIG_FILE}" # Read access only for root and service group
+chown root:root "${ENV_CONFIG_FILE}"
+chmod 600 "${ENV_CONFIG_FILE}" # Restrict access to root only
 
-# --- Create systemd Service File ---
-log "Creating systemd service file /etc/systemd/system/${SERVICE_NAME}.service..."
+# --- Create Node.js systemd Service File ---
+log "Creating systemd service file for Node.js server /etc/systemd/system/${NODE_SERVICE_NAME}.service..."
 
-cat << EOF > "/etc/systemd/system/${SERVICE_NAME}.service"
+cat << EOF > "/etc/systemd/system/${NODE_SERVICE_NAME}.service"
 [Unit]
-Description=Ably CLI Terminal Server
-Documentation=https://github.com/ably/cli # Replace with your repo URL
+Description=Ably CLI Terminal Server (Node.js Backend)
+Documentation=${GITHUB_REPO_URL}
 After=network.target docker.service apparmor.service
 Requires=docker.service
 
@@ -195,45 +203,103 @@ User=${SERVICE_USER}
 Group=${SERVICE_GROUP}
 WorkingDirectory=${INSTALL_DIR}
 
-# Load environment variables from config file
-EnvironmentFile=${ENV_CONFIG_FILE}
+# Load ONLY the Terminal Server Port from the config file
+# Caddy will use its own environment loading mechanism if needed
+Environment="PORT=$(grep -E '^TERMINAL_SERVER_PORT=' ${ENV_CONFIG_FILE} | cut -d '=' -f2)"
+# Pass other optional env vars if they exist in the file
+Environment="DOCKER_IMAGE_NAME=$(grep -E '^DOCKER_IMAGE_NAME=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
+Environment="MAX_SESSIONS=$(grep -E '^MAX_SESSIONS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
+Environment="DEBUG=$(grep -E '^DEBUG=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
 
-# Command to start the server
-# Make sure the path to node and the script are correct
-# Using the compiled JS output in dist/
 ExecStart=$(command -v node) ${INSTALL_DIR}/dist/scripts/terminal-server.js
 
-# Restart policy
 Restart=always
 RestartSec=5
-
-# Standard output/error logging
 StandardOutput=journal
 StandardError=journal
-
-# Security settings
-# NoNewPrivileges=true # Consider enabling if compatible
-# PrivateTmp=true # Consider enabling if compatible
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# --- Enable and Start Service ---
+# --- Create Caddyfile for Reverse Proxy ---
+log "Creating Caddyfile /etc/caddy/Caddyfile..."
+# Use environment variables within Caddyfile
+cat << EOF > "/etc/caddy/Caddyfile"
+{
+    # Email for ACME TLS certificates
+    email {$ADMIN_EMAIL}
+    # Optional: Increase TLS handshake timeout
+    # tls {
+    #    handshake_timeout 60s
+    # }
+}
+
+# The domain Caddy will manage
+{$SERVER_DOMAIN} {
+    # Reverse proxy requests to the Node.js terminal server
+    reverse_proxy localhost:{$TERMINAL_SERVER_PORT} {
+        # Required for WebSocket connections
+        header_up Host {host}
+        header_up X-Real-IP {remote_ip}
+        header_up X-Forwarded-For {remote_ip}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Optional: Add security headers
+    # header {
+    #    Strict-Transport-Security "max-age=31536000;"
+    #    X-Content-Type-Options "nosniff"
+    #    X-Frame-Options "DENY"
+    #    Referrer-Policy "strict-origin-when-cross-origin"
+    # }
+
+    # Enable access logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+    }
+}
+EOF
+
+# --- Configure Caddy Systemd Service ---
+log "Configuring Caddy systemd service to use environment variables..."
+# Create an override file to load environment variables for Caddy
+SYSTEMD_CADDY_OVERRIDE_DIR="/etc/systemd/system/${CADDY_SERVICE_NAME}.service.d"
+mkdir -p "${SYSTEMD_CADDY_OVERRIDE_DIR}"
+cat << EOF > "${SYSTEMD_CADDY_OVERRIDE_DIR}/override.conf"
+[Service]
+EnvironmentFile=${ENV_CONFIG_FILE}
+EOF
+
+# --- Configure Firewall (UFW) ---
+log "Configuring firewall (UFW)..."
+ufw allow ssh # Ensure SSH access is allowed
+ufw allow http # Allow port 80 for ACME challenges
+ufw allow https # Allow port 443 for Caddy HTTPS
+ufw --force enable # Enable UFW (use --force to avoid prompt)
+log "Firewall configured. Status:"
+ufw status verbose
+
+# --- Enable and Start Services ---
 log "Reloading systemd daemon..."
 systemctl daemon-reload
 
-log "Enabling ${SERVICE_NAME} service to start on boot..."
-systemctl enable "${SERVICE_NAME}.service"
+log "Enabling ${NODE_SERVICE_NAME} service to start on boot..."
+systemctl enable "${NODE_SERVICE_NAME}.service"
+
+log "Enabling ${CADDY_SERVICE_NAME} service to start on boot..."
+systemctl enable "${CADDY_SERVICE_NAME}.service"
 
 # Delay starting until configuration is done manually
-# log "Starting ${SERVICE_NAME} service..."
-# systemctl start "${SERVICE_NAME}.service"
-
-# log "Checking service status..."
-# Give the service a moment to start
-# sleep 5
-# systemctl status "${SERVICE_NAME}.service" --no-pager || log_error "Service may have failed to start. Check logs with 'journalctl -u ${SERVICE_NAME}'"
+# log "Starting ${NODE_SERVICE_NAME} service..."
+# systemctl start "${NODE_SERVICE_NAME}.service"
+# log "Starting ${CADDY_SERVICE_NAME} service..."
+# systemctl start "${CADDY_SERVICE_NAME}.service"
 
 # --- Final Instructions ---
 log "-----------------------------------------------------"
@@ -241,16 +307,22 @@ log "Setup Complete!"
 log ""
 log "IMPORTANT: You MUST edit the environment file to configure required settings:"
 log "  sudo nano ${ENV_CONFIG_FILE}"
-log "Update at least the PORT if needed, and any necessary Ably credentials if the server requires them."
+log "Set AT LEAST 'SERVER_DOMAIN' and 'ADMIN_EMAIL'. Ensure 'TERMINAL_SERVER_PORT' is correct."
+log "Ensure your domain's DNS A/AAAA record points to this server's public IP address."
 log ""
-log "After editing the file, START the service for the first time:"
-log "  sudo systemctl start ${SERVICE_NAME}"
+log "After editing the file, START the services for the first time:"
+log "  sudo systemctl start ${NODE_SERVICE_NAME}"
+log "  sudo systemctl start ${CADDY_SERVICE_NAME}"
 log ""
-log "To check the service status:"
-log "  sudo systemctl status ${SERVICE_NAME}"
+log "To check the Node.js service status:"
+log "  sudo systemctl status ${NODE_SERVICE_NAME}"
+log "To view Node.js logs:"
+log "  sudo journalctl -f -u ${NODE_SERVICE_NAME}"
 log ""
-log "To view live logs:"
-log "  sudo journalctl -f -u ${SERVICE_NAME}"
+log "To check the Caddy service status (for HTTPS/proxy issues):"
+log "  sudo systemctl status ${CADDY_SERVICE_NAME}"
+log "To view Caddy logs:"
+log "  sudo journalctl -f -u ${CADDY_SERVICE_NAME}"
 log "-----------------------------------------------------"
 
 exit 0
