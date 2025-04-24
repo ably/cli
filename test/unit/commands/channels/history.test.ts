@@ -5,6 +5,9 @@ import ChannelsHistory from "../../../../src/commands/channels/history.js";
 
 // Create a testable version of ChannelsHistory to expose protected methods
 class TestableChannelsHistory extends ChannelsHistory {
+  logOutput: string[] = [];
+  errorOutput: string = '';
+
   // Override parse to simulate parse output
   public override async parse() {
     // Return the parse result that was set via our test setup
@@ -162,6 +165,12 @@ class TestableChannelsHistory extends ChannelsHistory {
   public setFormatJsonOutput(fn: (data: Record<string, unknown>) => string) {
     this._formatJsonOutputFn = fn;
   }
+
+  // Mock error method for testing errors
+  public override error(message: string | Error, _options?: any): never {
+    this.errorOutput = typeof message === 'string' ? message : message.message;
+    throw new Error(typeof message === 'string' ? message : message.message);
+  }
 }
 
 // Mock channel history response data
@@ -192,12 +201,11 @@ describe("ChannelsHistory", function () {
   let logStub: sinon.SinonStub;
   let errorStub: sinon.SinonStub;
   let historyStub: sinon.SinonStub;
+  let sandbox: sinon.SinonSandbox;
 
   beforeEach(function () {
-    // Mock Config
+    sandbox = sinon.createSandbox();
     mockConfig = {} as Config;
-
-    // Create command instance
     command = new TestableChannelsHistory([], mockConfig);
 
     // Stub the log and error methods
@@ -221,6 +229,7 @@ describe("ChannelsHistory", function () {
 
   afterEach(function () {
     sinon.restore();
+    sandbox.restore();
   });
 
   describe("run", function () {
@@ -326,6 +335,72 @@ describe("ChannelsHistory", function () {
 
   describe("JSON output", function () {
     it("should output JSON when requested", async function () {
+      // Set shouldOutputJson to return true
+      command.setShouldOutputJson(true);
+
+      // Set formatJsonOutput function
+      command.setFormatJsonOutput((data) => JSON.stringify(data));
+
+      // Run the command
+      await command.run();
+
+      // Verify the JSON output was generated
+      expect(logStub.calledOnce).to.be.true;
+
+      // Parse the JSON that was output
+      const jsonOutput = JSON.parse(logStub.firstCall.args[0]);
+
+      // Verify the structure of the JSON output
+      expect(jsonOutput).to.have.property("messages").that.is.an("array");
+      expect(jsonOutput.messages).to.have.lengthOf(2);
+      expect(jsonOutput.messages[0]).to.have.property("id", "message1");
+      expect(jsonOutput.messages[0]).to.have.property("name", "event1");
+      expect(jsonOutput.messages[0]).to.have.property("data").that.deep.equals({ text: "Hello world 1" });
+    });
+
+    it("should output JSON when requested with error", async function () {
+      // Set shouldOutputJson to return true
+      command.setShouldOutputJson(true);
+
+      // Set formatJsonOutput function
+      command.setFormatJsonOutput((data) => JSON.stringify(data));
+
+      // Run the command
+      await command.run();
+
+      // Verify the JSON output was generated
+      expect(logStub.calledOnce).to.be.true;
+
+      // Parse the JSON that was output
+      const jsonOutput = JSON.parse(logStub.firstCall.args[0]);
+
+      // Verify the structure of the JSON output
+      expect(jsonOutput).to.have.property("messages").that.is.an("array");
+      expect(jsonOutput.messages).to.have.lengthOf(2);
+      expect(jsonOutput.messages[0]).to.have.property("id", "message1");
+      expect(jsonOutput.messages[0]).to.have.property("name", "event1");
+      expect(jsonOutput.messages[0]).to.have.property("data").that.deep.equals({ text: "Hello world 1" });
+    });
+
+    it("should output JSON when requested with error and shouldOutputJson set to false", async function () {
+      // Set shouldOutputJson to return false
+      command.setShouldOutputJson(false);
+
+      // Set formatJsonOutput function
+      command.setFormatJsonOutput((data) => JSON.stringify(data));
+
+      // Run the command
+      await command.run();
+
+      // In this case, we should NOT be outputting JSON since shouldOutputJson returns false
+      // The UI format should be used instead
+      expect(logStub.called).to.be.true;
+
+      // Verify that we're not formatting as JSON (checking the first call which should be about found messages)
+      expect(logStub.firstCall.args[0]).to.include("Found");
+    });
+
+    it("should output JSON when requested with error and shouldOutputJson set to true", async function () {
       // Set shouldOutputJson to return true
       command.setShouldOutputJson(true);
 

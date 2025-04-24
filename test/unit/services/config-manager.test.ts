@@ -1,29 +1,25 @@
-import { expect } from "chai";
+/**
+ * ConfigManager unit tests
+ *
+ * Explicitly sets NODE_TEST_CONTEXT to isolate this test file
+ * from other tests that might be using Ably connections.
+ */
+
+// Set test isolation marker to prevent Ably connection conflicts
+process.env.NODE_TEST_CONTEXT = 'config-manager-only';
+
+import chai, { expect } from "chai";
 import fs from "node:fs";
-import _path from "node:path";
+import os from "node:os";
+import path from "node:path";
 import sinon from "sinon";
+import sinonChai from "sinon-chai";
 import { ConfigManager } from "../../../src/services/config-manager.js";
 
-describe("ConfigManager", function() {
-  let configManager: ConfigManager;
-  let _fsMock: sinon.SinonMock;
-  let fsExistsStub: sinon.SinonStub;
-  let fsMkdirStub: sinon.SinonStub;
-  let fsReadFileStub: sinon.SinonStub;
-  let fsWriteFileStub: sinon.SinonStub;
+chai.use(sinonChai);
 
-  beforeEach(function() {
-    // Create stubs for filesystem operations
-    fsExistsStub = sinon.stub(fs, "existsSync");
-    fsMkdirStub = sinon.stub(fs, "mkdirSync");
-    fsReadFileStub = sinon.stub(fs, "readFileSync");
-    fsWriteFileStub = sinon.stub(fs, "writeFileSync");
-
-    // Mock existence of config directory
-    fsExistsStub.returns(true);
-
-    // Mock empty config file content
-    fsReadFileStub.returns(`
+// Simple mock config content
+const DEFAULT_CONFIG = `
 [current]
 account = "default"
 
@@ -38,16 +34,132 @@ apiKey = "testappid.keyid:keysecret"
 appName = "Test App"
 keyId = "testappid.keyid"
 keyName = "Test Key"
-`);
+`;
+
+// Completely isolated test suite
+describe("ConfigManager", function() {
+  // Variables declared at top level for test scope
+  let configManager: ConfigManager;
+  let fsExistsStub: sinon.SinonStub;
+  let fsMkdirStub: sinon.SinonStub;
+  let fsReadFileStub: sinon.SinonStub;
+  let fsWriteFileStub: sinon.SinonStub;
+  let envBackup: Record<string, string | undefined>;
+
+  // Backup original env vars that might interfere with tests
+  let originalConfigDir: string | undefined;
+  let originalEnv: Record<string, string | undefined> = {};
+
+  // Store a fake temporary directory for test config
+  let testConfigDir: string;
+  let testConfigPath: string;
+
+  // Stubs for filesystem operations
+  let existsSyncStub: sinon.SinonStub;
+  let mkdirSyncStub: sinon.SinonStub;
+  let readFileSyncStub: sinon.SinonStub;
+  let writeFileSyncStub: sinon.SinonStub;
+
+  // Store environment variables before tests
+  before(function() {
+    // Backup environment
+    envBackup = {
+      ABLY_CLI_TEST_MODE: process.env.ABLY_CLI_TEST_MODE,
+      ABLY_API_KEY: process.env.ABLY_API_KEY,
+      ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN
+    };
+
+    // Back up any Ably-related env vars
+    const ablyEnvVars = Object.keys(process.env).filter(key => key.startsWith('ABLY_'));
+    ablyEnvVars.forEach(key => {
+      originalEnv[key] = process.env[key];
+    });
+    originalConfigDir = process.env.ABLY_CLI_CONFIG_DIR;
+
+    // Set up test environment
+    testConfigDir = path.join(os.tmpdir(), '.ably-test');
+    testConfigPath = path.join(testConfigDir, 'config');
+    process.env.ABLY_CLI_CONFIG_DIR = testConfigDir;
+
+    // Reset any Ably global state that might interfere with tests
+    process.env.ABLY_TLS = 'true';
+    process.env.ABLY_LOG_LEVEL = 'error';
+    delete process.env.ABLY_REST_HOST;
+    delete process.env.ABLY_REALTIME_HOST;
+  });
+
+  // Setup test environment for each test
+  beforeEach(function() {
+    // Ensure TEST_MODE is set
+    process.env.ABLY_CLI_TEST_MODE = 'true';
+
+    // Clean specific env vars that might affect tests
+    delete process.env.ABLY_API_KEY;
+    delete process.env.ABLY_ACCESS_TOKEN;
+
+    // Create fresh stubs for filesystem operations
+    fsExistsStub = sinon.stub(fs, "existsSync");
+    fsMkdirStub = sinon.stub(fs, "mkdirSync");
+    fsReadFileStub = sinon.stub(fs, "readFileSync");
+    fsWriteFileStub = sinon.stub(fs, "writeFileSync");
+
+    // Mock existence of config directory
+    fsExistsStub.returns(true);
+
+    // Mock config file content
+    fsReadFileStub.returns(DEFAULT_CONFIG);
 
     // Create new instance for each test
     configManager = new ConfigManager();
   });
 
+  // Clean up after each test
   afterEach(function() {
+    // Restore all sinon stubs
     sinon.restore();
   });
 
+  // Restore environment after all tests
+  after(function() {
+    // Restore environment from backup
+    if (envBackup.ABLY_CLI_TEST_MODE) {
+      process.env.ABLY_CLI_TEST_MODE = envBackup.ABLY_CLI_TEST_MODE;
+    } else {
+      delete process.env.ABLY_CLI_TEST_MODE;
+    }
+
+    if (envBackup.ABLY_API_KEY) {
+      process.env.ABLY_API_KEY = envBackup.ABLY_API_KEY;
+    } else {
+      delete process.env.ABLY_API_KEY;
+    }
+
+    if (envBackup.ABLY_ACCESS_TOKEN) {
+      process.env.ABLY_ACCESS_TOKEN = envBackup.ABLY_ACCESS_TOKEN;
+    } else {
+      delete process.env.ABLY_ACCESS_TOKEN;
+    }
+
+    // Restore original environment
+    Object.keys(originalEnv).forEach(key => {
+      if (originalEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalEnv[key];
+      }
+    });
+
+    if (originalConfigDir === undefined) {
+      delete process.env.ABLY_CLI_CONFIG_DIR;
+    } else {
+      process.env.ABLY_CLI_CONFIG_DIR = originalConfigDir;
+    }
+
+    // Reset test isolation marker
+    delete process.env.NODE_TEST_CONTEXT;
+  });
+
+  // Tests for constructor
   describe("#constructor", function() {
     it("should create config directory if it doesn't exist", function() {
       // Reset stubs
@@ -71,6 +183,7 @@ keyName = "Test Key"
     });
   });
 
+  // Tests for getCurrentAccountAlias
   describe("#getCurrentAccountAlias", function() {
     it("should return the current account alias", function() {
       expect(configManager.getCurrentAccountAlias()).to.equal("default");
@@ -83,7 +196,7 @@ keyName = "Test Key"
       fsReadFileStub = sinon.stub(fs, "readFileSync");
 
       fsExistsStub.returns(true);
-      fsReadFileStub.returns(""); // Empty config
+      fsReadFileStub.returns("[accounts]\n");
 
       const manager = new ConfigManager();
 
@@ -91,6 +204,7 @@ keyName = "Test Key"
     });
   });
 
+  // Tests for getCurrentAccount
   describe("#getCurrentAccount", function() {
     it("should return the current account", function() {
       const account = configManager.getCurrentAccount();
@@ -119,6 +233,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for getCurrentAppId
   describe("#getCurrentAppId", function() {
     it("should return the current app ID", function() {
       expect(configManager.getCurrentAppId()).to.equal("testappid");
@@ -131,7 +246,7 @@ accessToken = "testaccesstoken"
       fsReadFileStub = sinon.stub(fs, "readFileSync");
 
       fsExistsStub.returns(true);
-      fsReadFileStub.returns(""); // Empty config
+      fsReadFileStub.returns("[accounts]\n");
 
       const manager = new ConfigManager();
 
@@ -139,6 +254,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for getApiKey
   describe("#getApiKey", function() {
     it("should return the API key for the current app", function() {
       expect(configManager.getApiKey()).to.equal("testappid.keyid:keysecret");
@@ -153,6 +269,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for getAppName
   describe("#getAppName", function() {
     it("should return the app name for a specific app", function() {
       expect(configManager.getAppName("testappid")).to.equal("Test App");
@@ -163,6 +280,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for storeAccount
   describe("#storeAccount", function() {
     it("should store a new account", function() {
       configManager.storeAccount("newaccesstoken", "newaccount", {
@@ -190,7 +308,7 @@ accessToken = "testaccesstoken"
       fsWriteFileStub = sinon.stub(fs, "writeFileSync");
 
       fsExistsStub.returns(true);
-      fsReadFileStub.returns(""); // Empty config
+      fsReadFileStub.returns("");
 
       const manager = new ConfigManager();
 
@@ -201,6 +319,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for storeAppKey
   describe("#storeAppKey", function() {
     it("should store an API key for an app", function() {
       configManager.storeAppKey("newappid", "newappid.keyid:keysecret", {
@@ -241,6 +360,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for removeAccount
   describe("#removeAccount", function() {
     it("should remove an account and return true", function() {
       expect(configManager.removeAccount("default")).to.be.true;
@@ -266,6 +386,7 @@ accessToken = "testaccesstoken"
     });
   });
 
+  // Tests for switchAccount
   describe("#switchAccount", function() {
     it("should switch to another account and return true", function() {
       // First create another account

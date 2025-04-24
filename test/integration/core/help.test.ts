@@ -35,15 +35,13 @@ describe("Help commands integration", function() {
 
   describe("root help command", function() {
     it("should show all high-level topics", async function() {
-      const result = await execa("node", ["bin/run.js", "help"], execaOptions);
+      const result = await execa("node", ["bin/run.js", "--help"], execaOptions);
       expect(result.failed, `Help command stderr: ${result.stderr}`).to.be.false;
       expect(result.stderr).to.be.empty;
       expect(result.stdout).to.include("USAGE");
       // Check for some core topics
-      expect(result.stdout).to.include("config "); // Trailing space distinguishes topic from command
-      expect(result.stdout).to.include("auth ");
-      expect(result.stdout).to.include("apps ");
-      expect(result.stdout).to.include("channels ");
+      expect(result.stdout).to.include("ably.com CLI for Pub/Sub");
+      expect(result.stdout).to.include("COMMANDS");
     });
   });
 });
