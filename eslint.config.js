@@ -18,7 +18,7 @@ export default [
       "**/node_modules/**",
       "**/coverage/**",
       "*.config.js",
-      "examples/web-cli/vite.config.ts",
+      "examples/**", // Ignore all files in examples directory
       "oclif.manifest.json",
       "**/tmp/**",
       "**/.nyc_output/**",
