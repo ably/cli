@@ -101,3 +101,80 @@ Regular manual audits complement automated testing.
 ## Security Hardening Documentation Reference
 
 For a detailed overview of the implemented security measures, please refer to [docs/Security-Hardening.md](Security-Hardening.md).
+
+# Security Testing and Auditing
+
+This document outlines the testing and auditing procedures implemented to ensure the security of the Docker containers used in the Ably CLI's web terminal feature.
+
+## Automated Tests
+
+### Terminal Server Tests
+
+The terminal server integration tests in `test/integration/terminal-server.test.ts` verify that:
+
+1. The terminal server starts correctly and accepts WebSocket connections
+2. Authentication flows work properly and reject unauthorized connections
+3. Connection timeouts function correctly to prevent abandoned sessions
+4. Commands can be executed within the container
+5. Environment variables are properly passed to the container
+6. The terminal handles proper terminal sizing and ANSI color output
+
+These tests spin up a real terminal server instance during test execution and connect to it via WebSocket, simulating a real client connection. They test the entire flow from server startup to command execution.
+
+### Docker Container Security Tests
+
+The Docker container security tests in `test/integration/docker-container-security.test.ts` verify that:
+
+1. The container has a read-only root filesystem
+2. Process limits are set to prevent fork bombs and resource exhaustion
+3. Memory limits are set to prevent memory abuse
+4. Temporary filesystems are mounted with `noexec` and `nosuid` flags
+5. Unnecessary capabilities are dropped from the container
+6. The seccomp profile is properly applied
+7. The container runs as a non-root user
+8. The restricted network is properly configured
+9. The container can only execute allowed commands
+10. The container cannot modify unauthorized parts of the filesystem
+
+These tests create an actual Docker container and inspect its configuration to ensure security settings are applied correctly.
+
+## Running Security Tests
+
+The Docker container security tests can be run with:
+
+```bash
+pnpm test test/integration/docker-container-security.test.ts
+```
+
+The terminal server tests can be run with:
+
+```bash
+pnpm test test/integration/terminal-server.test.ts
+```
+
+Note that these tests require:
+- Docker to be installed and running
+- The `ably-cli-sandbox` Docker image to be built
+- Sufficient permissions to manage Docker containers
+
+## CI Integration
+
+The GitHub workflow in `.github/workflows/container-security-tests.yml` automatically runs these security tests on every pull request that changes Dockerfile or Docker-related files.
+
+## Manual Security Audits
+
+In addition to automated tests, periodic manual security audits should be performed to identify any potential vulnerabilities:
+
+1. **Container Escape Attempts**: Test if privileged operations or filesystem access can bypass security restrictions.
+
+2. **Network Security**: Verify that containers can only communicate with authorized endpoints.
+
+3. **Resource Limit Testing**: Verify that resource limits are enforced by attempting to exceed them.
+
+4. **Command Injection**: Test edge cases for command injection in the restricted shell.
+
+5. **External Vulnerability Scanning**: Run tools like Docker Bench Security, Clair, or Trivy against the container images.
+
+## Reporting Security Issues
+
+If you discover a security vulnerability, please follow the responsible disclosure procedure outlined in the main README. Do not post security vulnerabilities in public issues.
