@@ -1,0 +1,72 @@
+name: Container Security Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'docker/**'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  dockerfile-lint:
+    name: Lint Dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Lint Dockerfile with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+  shellcheck:
+    name: Lint Shell Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck on all shell scripts
+        run: |
+          find ./docker -type f -name "*.sh" -exec shellcheck {} \;
+
+  security-tests:
+    name: Docker Container Security Tests
+    runs-on: ubuntu-latest
+    needs: [dockerfile-lint, shellcheck]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: |
+          docker build -t ably-cli-sandbox:test .
+          echo "✅ Image built successfully"
+
+      - name: Run security tests
+        run: |
+          # Make script executable
+          chmod +x docker/test-security.sh
+
+          # Run the security test script
+          cd docker && ./test-security.sh
+
+      - name: Run vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ably-cli-sandbox-test:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
