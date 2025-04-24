@@ -31,6 +31,40 @@
 ## Security
 
 - [ ] The Docker web terminal restrictions on what commands can be run is pretty poor as you can use & or | operators to simply get around this. For example, running `$ ably > /dev/null | echo "Hello"` returns "Hello", showing that the user can run additional commands.
+- [ ] Implement read-only filesystem with controlled write access for Docker containers
+  - [ ] Make the root filesystem read-only using `ReadonlyRootfs: true`
+  - [ ] Add tmpfs mounts for necessary writable directories with noexec flag
+  - [ ] Create a dedicated volume for the `~/.ably` config directory
+- [ ] Add resource limits to Docker containers
+  - [ ] Set process limits using `PidsLimit`
+  - [ ] Configure memory limits to prevent resource exhaustion
+  - [ ] Add CPU quotas to prevent CPU abuse
+- [ ] Enhance network security for containers
+  - [ ] Create a restricted network with controlled egress to Ably endpoints only
+  - [ ] Explicitly block raw socket access
+  - [ ] Verify that the container drops all unnecessary capabilities
+- [ ] Implement Docker user namespace remapping for additional isolation
+  - [ ] Configure Docker daemon for user namespace remapping
+  - [ ] Ensure container runs with correct mapped user
+- [ ] Create and apply custom seccomp profile for system call filtering
+  - [ ] Develop a seccomp profile that allows only necessary syscalls
+  - [ ] Test and apply the profile to containers
+- [ ] Implement AppArmor profile for mandatory access control
+  - [ ] Develop an AppArmor profile with strict filesystem access controls
+  - [ ] Allow execution only of required binaries
+  - [ ] Test and apply the profile to containers
+- [ ] Enhance session management with timeouts
+  - [ ] Add inactivity timeout for terminal sessions
+  - [ ] Implement maximum session duration limits
+  - [ ] Ensure proper notification to users before session termination
+- [ ] Set up enhanced logging and monitoring for security events
+  - [ ] Configure logging for blocked syscalls and AppArmor violations
+  - [ ] Implement monitoring for container resource usage
+  - [ ] Create alerting for potential security breaches
+- [ ] Create security testing and audit procedures
+  - [ ] Develop automated tests for container security configuration
+  - [ ] Create regular security audit workflow
+  - [ ] Document security hardening measures for future reference
 
 ## API and Architecture
 
