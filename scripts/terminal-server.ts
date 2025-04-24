@@ -16,6 +16,7 @@ const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
 import process from 'node:process';
 import * as fs from "node:fs"; // Import fs
+import { ChildProcess } from "node:child_process";
 
 // Constants for Docker configuration
 const DOCKER_IMAGE_NAME = process.env.DOCKER_IMAGE_NAME || 'ably-cli-sandbox';
@@ -71,13 +72,19 @@ const docker = new Dockerode();
 const seccompProfilePath = path.resolve(__dirname, '../../docker/seccomp-profile.json');
 let seccompProfileContent: string;
 try {
-  seccompProfileContent = fs.readFileSync(seccompProfilePath, 'utf8');
-  JSON.parse(seccompProfileContent); // Validate JSON structure
+  const seccompProfileContentRaw = fs.readFileSync(seccompProfilePath, 'utf8');
+  seccompProfileContent = JSON.stringify(JSON.parse(seccompProfileContentRaw));
   log("Seccomp profile loaded successfully.");
 } catch (error) {
   logError(`Failed to load or parse seccomp profile at ${seccompProfilePath}: ${error}`);
-  seccompProfileContent = '{}'; // Use an empty valid JSON object as placeholder
+  seccompProfileContent = '{}';
 }
+
+// Shared variables
+let terminalServerProcess: ChildProcess | undefined;
+let webServerProcess: ChildProcess | undefined;
+let terminalServerPort: number;
+let webServerPort: number;
 
 function log(message: string): void {
     console.log(`[TerminalServer ${new Date().toISOString()}] ${message}`);
@@ -483,6 +490,14 @@ async function cleanupAllSessions(): Promise<void> {
     terminateSession(sessionId, "Server shutting down."),
   );
   await Promise.allSettled(cleanupPromises);
+
+  // Properly wait for processes to terminate
+  if (terminalServerProcess || webServerProcess) {
+    await Promise.allSettled([
+      new Promise(r => terminalServerProcess?.once('exit', r)),
+      new Promise(r => webServerProcess?.once('exit', r)),
+    ]);
+  }
   log("All session cleanup routines initiated.");
 }
 
@@ -1107,29 +1122,29 @@ function handleMessage(session: ClientSession, message: Buffer) {
 // Add session timeout monitoring
 function startSessionMonitoring() {
   log("Starting session monitoring for timeouts...");
-
   const intervalId = setInterval(() => {
     const now = Date.now();
+    const timedOutIds: string[] = [];
+
     for (const [sessionId, session] of sessions.entries()) {
-      // Skip sessions that aren't fully authenticated yet
       if (!session.authenticated) continue;
 
-      // Check for inactivity timeout
       if (now - session.lastActivityTime > MAX_IDLE_TIME_MS) {
-        log(`Session ${sessionId} has been inactive for over ${MAX_IDLE_TIME_MS/60000} minutes`);
-        terminateSession(sessionId, "Session timed out due to inactivity");
+        timedOutIds.push(sessionId);
         continue;
       }
 
-      // Check for max duration timeout
       if (now - session.creationTime > MAX_SESSION_DURATION_MS) {
-        log(`Session ${sessionId} has reached maximum duration of ${MAX_SESSION_DURATION_MS/60000} minutes`);
-        terminateSession(sessionId, "Maximum session duration reached");
+        timedOutIds.push(sessionId);
       }
     }
-  }, 30 * 1000); // Check every 30 seconds
 
-  // Return the interval ID so it can be cleared during shutdown
+    // Process timeouts after iteration
+    timedOutIds.forEach(sessionId => {
+      terminateSession(sessionId, "Session timed out");
+    });
+  }, 30 * 1000);
+
   return intervalId;
 }
 

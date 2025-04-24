@@ -185,13 +185,10 @@ while true; do
                 unset 'HISTORY_ARRAY[${#HISTORY_ARRAY[@]}-1]'
             fi
 
+            # Preserve quoted segments and avoid eval
+            IFS=' ' read -r -a args <<< "$rest_of_line"
             # Execute the ably command without eval - much safer!
             if [ -n "$rest_of_line" ]; then
-                # Split the rest of the line into an array to safely pass arguments
-                args=()
-                for arg in $rest_of_line; do
-                    args+=("$arg")
-                done
                 # Run ably with the array of arguments directly, not through shell evaluation
                 ably "${args[@]}"
             else
