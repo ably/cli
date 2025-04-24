@@ -21,18 +21,37 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "Running tests with pattern: $TEST_PATTERN"
+# Check if the test pattern matches a specific file
+if [[ "$TEST_PATTERN" == *".test.ts" && ! "$TEST_PATTERN" == *"*"* ]]; then
+  # When running a specific test file, just run that file
+  SELECTED_PATTERNS="$TEST_PATTERN"
+  echo "Running specific test file: $SELECTED_PATTERNS"
+elif [[ "$TEST_PATTERN" == "test/**/*.test.ts" && -z "$EXTRA_OPTIONS" ]]; then
+  # When running all tests, explicitly list each test directory and the specific integration tests
+  SELECTED_PATTERNS="test/unit/**/*.test.ts test/integration/docker-container-security.test.ts test/integration/terminal-server.test.ts test/e2e/**/*.test.ts"
+  echo "Running all test suites"
+  echo "- Unit tests"
+  echo "- Integration tests (Docker Security, Terminal Server)"
+  echo "- E2E tests"
+else
+  # For all other patterns, use what was provided
+  SELECTED_PATTERNS="$TEST_PATTERN"
+  echo "Running tests with pattern: $SELECTED_PATTERNS"
+fi
+
 echo "Timeout option: $TIMEOUT_OPTION"
-echo "Extra options: $EXTRA_OPTIONS"
+if [[ -n "$EXTRA_OPTIONS" ]]; then
+  echo "Extra options: $EXTRA_OPTIONS"
+fi
 
 # Set an outer timeout (in seconds) - default 120s or 2 minutes
 OUTER_TIMEOUT=120
 
-# Run the tests with the specified pattern and timeout
+# Run the tests with the specified patterns and timeout
 # Using shell process group to ensure all child processes are terminated
 CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS="--no-inspect --unhandled-rejections=strict" \
   node --import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("ts-node/esm", pathToFileURL("./"), { project: "./tsconfig.test.json" });' \
-  ./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only $TEST_PATTERN $TIMEOUT_OPTION $EXTRA_OPTIONS --exit &
+  ./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught $SELECTED_PATTERNS $TIMEOUT_OPTION $EXTRA_OPTIONS --exit &
 
 TEST_PID=$!
 

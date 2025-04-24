@@ -226,9 +226,9 @@
     - [ ] Test unsupported MCP methods return JSON-RPC "Method not found"
   - [ ] Test resource listing and operations
 - [ ] **Web CLI:** Test the terminal server with mocked Docker container.
-  - [ ] Test WebSocket connection handling
-  - [ ] Test command restriction enforcement
-  - [ ] Test environment variable passing
+  - [x] Test WebSocket connection handling
+  - [x] Test command restriction enforcement
+  - [x] Test environment variable passing
 - [ ] **Web CLI Restrictions:** For each restricted command, simulate `ABLY_WEB_CLI_MODE` and assert correct error message
 
 ### Integration tests
@@ -266,9 +266,9 @@
 - [ ] **MCP:** Local server start, mock client connection, basic request/response test.
   - [ ] Test resource listing and operations
 - [ ] **Web CLI:** Test the terminal server with mocked Docker container.
-  - [ ] Test WebSocket connection handling
-  - [ ] Test command restriction enforcement
-  - [ ] Test environment variable passing
+  - [x] Test WebSocket connection handling
+  - [x] Test command restriction enforcement
+  - [x] Test environment variable passing
 - [ ] **Web CLI Restrictions:** For each restricted command, simulate `ABLY_WEB_CLI_MODE` and assert correct error message
 
 ### End to End (e2e) tests
