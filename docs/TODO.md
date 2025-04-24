@@ -30,7 +30,7 @@
 
 ## Security
 
-- [ ] The Docker web terminal restrictions on what commands can be run is pretty poor as you can use & or | operators to simply get around this. For example, running `$ ably > /dev/null | echo "Hello"` returns "Hello", showing that the user can run additional commands.
+- [x] The Docker web terminal restrictions on what commands can be run is pretty poor as you can use & or | operators to simply get around this. For example, running `$ ably > /dev/null | echo "Hello"` returns "Hello", showing that the user can run additional commands.
 - [x] Implement read-only filesystem with controlled write access for Docker containers
   - [x] Make the root filesystem read-only using `ReadonlyRootfs: true`
   - [x] Add tmpfs mounts for necessary writable directories with noexec flag
@@ -43,16 +43,16 @@
   - [x] Add inactivity timeout for terminal sessions
   - [x] Implement maximum session duration limits
   - [x] Ensure proper notification to users before session termination
-- [ ] Enhance network security for containers
+- [x] Enhance network security for containers
   - [x] Create a restricted network with controlled egress to Ably endpoints only
-  - [ ] Explicitly block raw socket access
+  - [x] Explicitly block raw socket access
   - [x] Verify that the container drops all unnecessary capabilities
 - [ ] Implement Docker user namespace remapping for additional isolation
   - [ ] Configure Docker daemon for user namespace remapping
   - [ ] Ensure container runs with correct mapped user
-- [ ] Create and apply custom seccomp profile for system call filtering
-  - [ ] Develop a seccomp profile that allows only necessary syscalls
-  - [ ] Test and apply the profile to containers
+- [x] Create and apply custom seccomp profile for system call filtering
+  - [x] Develop a seccomp profile that allows only necessary syscalls
+  - [x] Test and apply the profile to containers
 - [ ] Implement AppArmor profile for mandatory access control
   - [ ] Develop an AppArmor profile with strict filesystem access controls
   - [ ] Allow execution only of required binaries
