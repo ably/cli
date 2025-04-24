@@ -47,20 +47,20 @@
   - [x] Create a restricted network with controlled egress to Ably endpoints only
   - [x] Explicitly block raw socket access
   - [x] Verify that the container drops all unnecessary capabilities
-- [ ] Implement Docker user namespace remapping for additional isolation
-  - [ ] Configure Docker daemon for user namespace remapping
-  - [ ] Ensure container runs with correct mapped user
+- [x] Implement Docker user namespace remapping for additional isolation
+  - [x] Configure Docker daemon for user namespace remapping
+  - [x] Ensure container runs with correct mapped user
 - [x] Create and apply custom seccomp profile for system call filtering
   - [x] Develop a seccomp profile that allows only necessary syscalls
   - [x] Test and apply the profile to containers
-- [ ] Implement AppArmor profile for mandatory access control
-  - [ ] Develop an AppArmor profile with strict filesystem access controls
-  - [ ] Allow execution only of required binaries
-  - [ ] Test and apply the profile to containers
-- [ ] Set up enhanced logging and monitoring for security events
-  - [ ] Configure logging for blocked syscalls and AppArmor violations
-  - [ ] Implement monitoring for container resource usage
-  - [ ] Create alerting for potential security breaches
+- [x] Implement AppArmor profile for mandatory access control
+  - [x] Develop an AppArmor profile with strict filesystem access controls
+  - [x] Allow execution only of required binaries
+  - [x] Test and apply the profile to containers
+- [x] Set up enhanced logging and monitoring for security events
+  - [x] Configure logging for blocked syscalls and AppArmor violations
+  - [x] Implement monitoring for container resource usage
+  - [x] Create alerting for potential security breaches
 - [ ] Create security testing and audit procedures
   - [ ] Develop automated tests for container security configuration
   - [ ] Create regular security audit workflow

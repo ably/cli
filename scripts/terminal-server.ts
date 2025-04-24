@@ -7,6 +7,7 @@ import * as stream from "node:stream";
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import * as jwt from "jsonwebtoken";
+import { execSync } from "node:child_process";
 // Import Dockerode with type import for type checking
 import type * as DockerodeTypes from "dockerode";
 // For ES Module compatibility
@@ -212,11 +213,41 @@ async function createContainer(
         // Path to seccomp profile - will be mounted in the container
         const seccompProfilePath = path.resolve(__dirname, '../docker/seccomp-profile.json');
 
+        // Configure security options
+        const securityOpt = [
+            'no-new-privileges',   // Prevents privilege escalation
+            `seccomp=${seccompProfilePath}` // Use our seccomp profile
+        ];
+
+        // Check if AppArmor profile is available by executing a command
+        let useAppArmor = false;
+        try {
+            // Check if our AppArmor profile exists in the standard location
+            const appArmorCheck = execSync('apparmor_parser -QT /etc/apparmor.d/docker-ably-cli-sandbox 2>/dev/null || echo "notfound"').toString().trim();
+
+            if (appArmorCheck === 'notfound') {
+                log('AppArmor profile not found or not loaded, using unconfined');
+                securityOpt.push('apparmor=unconfined'); // Fallback
+            } else {
+                log('AppArmor profile found and will be applied');
+                useAppArmor = true;
+                securityOpt.push('apparmor=ably-cli-sandbox-profile'); // Use our custom profile
+            }
+        } catch (appArmorError) {
+            log(`AppArmor check failed, using unconfined profile: ${appArmorError instanceof Error ? appArmorError.message : String(appArmorError)}`);
+            securityOpt.push('apparmor=unconfined'); // Fallback
+        }
+
         const container = await docker.createContainer({
             AttachStderr: true,
             AttachStdin: true,
             AttachStdout: true,
             Env: env,
+            // Explicitly set the user to non-root for security
+            // This works with user namespace remapping
+            User: 'appuser',
+            // Use the working directory of the non-root user
+            WorkingDir: '/home/appuser',
             HostConfig: {
                 AutoRemove: true,
                 // Security capabilities
@@ -226,11 +257,7 @@ async function createContainer(
                     'NET_BIND_SERVICE',    // Cannot bind to privileged ports
                     'NET_RAW'              // Cannot use raw sockets
                 ],
-                SecurityOpt: [
-                    'no-new-privileges',   // Prevents privilege escalation
-                    'apparmor=unconfined', // Will be replaced with custom profile later
-                    `seccomp=${seccompProfilePath}` // Use our seccomp profile
-                ],
+                SecurityOpt: securityOpt,
                 // Add read-only filesystem
                 ReadonlyRootfs: true,
                 // Add tmpfs mounts for writable directories
@@ -276,7 +303,14 @@ async function createContainer(
             // Explicitly set the command to run the restricted shell script
             Cmd: ["/bin/bash", "/scripts/restricted-shell.sh"]
         });
-        log(`Container ${container.id} created with security hardening.`);
+
+        // Log security features in use
+        log(`Container ${container.id} created with security hardening:`);
+        log(`- Read-only filesystem: yes`);
+        log(`- User namespace remapping compatibility: yes`);
+        log(`- Seccomp filtering: yes`);
+        log(`- AppArmor profile: ${useAppArmor ? 'yes' : 'no'}`);
+
         return container;
     } catch (error) {
         logError(`Error creating container: ${error}`);

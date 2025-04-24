@@ -64,29 +64,44 @@ Enhanced session management with proper timeout mechanisms:
 
 ### 1. User Namespace Remapping
 
-- Configure Docker daemon for user namespace remapping
-- Map container root user to non-privileged user on the host
-- Document proper host configuration for user namespace remapping
+✅ **Implemented**
+
+User namespace remapping provides enhanced security by mapping the container's root user to a non-privileged user on the host system:
+
+- Added explicit configuration for user namespace remapping in `docker/User-Namespace-Remapping.md`
+- Updated container creation to be fully compatible with user namespaces
+- Set proper file permissions for remapped container user
+- See detailed instructions in `docs/User-Namespace-Remapping.md`
 
 ### 2. AppArmor Profile
 
-- Create an AppArmor profile with strict filesystem access controls
-- Limit executable paths to only required binaries
-- Implement mandatory access control for all container processes
+✅ **Implemented**
+
+An AppArmor profile restricts the container's access to the filesystem and system resources:
+
+- Created a custom AppArmor profile in `docker/apparmor-profile.conf`
+- Implemented an AppArmor installation script in `docker/install-apparmor.sh`
+- Added dynamic AppArmor profile detection in container creation process
+- The profile limits executable binaries to only those required and restricts filesystem access
 
 ### 3. Enhanced Logging and Monitoring
 
-- Configure logging for blocked syscalls and AppArmor violations
-- Implement monitoring for container resource usage
-- Create alerting for potential security breaches
+✅ **Implemented**
+
+Comprehensive monitoring and logging for security events:
+
+- Created a security monitoring script in `docker/security-monitor.sh`
+- Implemented logging for:
+  - AppArmor violations and denied actions
+  - Seccomp blocked syscalls
+  - Container resource usage and potential abuse
+  - Security alerts based on threshold violations
+- All security logs are collected in `/var/log/ably-cli-security/`
 
 ## Implementation Plan
 
 The following steps outline our implementation approach for remaining security measures:
 
-1. Implement Docker user namespace remapping
-2. Create and test AppArmor profile for access control
-3. Set up enhanced logging and monitoring
 4. Document security testing and audit procedures
 
 ## Security Best Practices for Development

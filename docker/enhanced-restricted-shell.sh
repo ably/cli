@@ -67,6 +67,23 @@ handle_interrupt() {
   read -t 0.001 -n 1 >/dev/null 2>&1 || true
 }
 
+# Special double prompt for xterm.js compatibility
+# This creates a robust prompt display that works around race conditions
+show_robust_prompt() {
+  # Using sleep for up to 0.1 seconds to ensure terminal rendering catches up
+  sleep 0.1
+  # Reset cursor position, clear line, set prompt
+  printf "\033[G\033[K"
+  # First prompt - sets the color and displays $ prompt
+  printf "${GREEN}$ ${RESET}"
+  # Small delay to ensure the first prompt is registered
+  sleep 0.05
+  # Move cursor back to start of line to "refresh" the prompt
+  printf "\033[G"
+  # Redisplay the prompt to ensure it's visible
+  printf "${GREEN}$ ${RESET}"
+}
+
 # Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
 trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
 
@@ -86,23 +103,6 @@ if [ -f /etc/bash_completion ]; then
   . /etc/bash_completion
 fi
 
-# Special double prompt for xterm.js compatibility
-# This creates a robust prompt display that works around race conditions
-show_robust_prompt() {
-  # Using sleep for up to 0.1 seconds to ensure terminal rendering catches up
-  sleep 0.1
-  # Reset cursor position, clear line, set prompt
-  printf "\033[G\033[K"
-  # First prompt - sets the color and displays $ prompt
-  printf "${GREEN}$ ${RESET}"
-  # Small delay to ensure the first prompt is registered
-  sleep 0.05
-  # Move cursor back to start of line to "refresh" the prompt
-  printf "\033[G"
-  # Redisplay the prompt to ensure it's visible
-  printf "${GREEN}$ ${RESET}"
-}
-
 # Now that we're ready to accept user input, set up a clean history environment
 export HISTSIZE=1000
 export HISTFILE=$(mktemp -u)
@@ -119,7 +119,8 @@ stty intr '^C'
 check_injection() {
   local input="$1"
   # Check for common shell operators and injection patterns
-  if [[ "$input" =~ [&\|;><\$\(\)`] ]]; then
+  # Use grep instead of bash regex for better compatibility with Alpine
+  if echo "$input" | grep -q '[&|;><$()`]'; then
     return 1
   fi
   return 0
