@@ -38,10 +38,12 @@ describe('Docker Container Security Features', function() {
   it('should verify that the container image exists', async function() {
     const { stdout } = await execAsync('docker images ably-cli-sandbox --format "{{.Repository}}"');
 
-    // Skip tests if the image doesn't exist
+    // If the image doesn't exist, build it
     if (!stdout.includes('ably-cli-sandbox')) {
-      console.log('Docker image ably-cli-sandbox not found, skipping Docker security tests');
-      this.skip();
+      console.log('Docker image ably-cli-sandbox not found, building it...');
+      const dockerfilePath = path.resolve(__dirname, '../../Dockerfile');
+      await execAsync(`docker build -t ably-cli-sandbox ${path.dirname(dockerfilePath)}`);
+      console.log('Docker image built successfully');
     }
   });
 
