@@ -24,6 +24,9 @@ const DEFAULT_PORT = 8080;
 const DEFAULT_MAX_SESSIONS = 50;
 const AUTH_TIMEOUT_MS = 10_000; // 10 seconds
 const SHUTDOWN_GRACE_PERIOD_MS = 10_000; // 10 seconds for graceful shutdown
+// Add session timeout constants
+const MAX_IDLE_TIME_MS = 10 * 60 * 1000;      // 10 minutes of inactivity
+const MAX_SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes total
 
 // Type definitions for Docker objects
 type DockerContainer = DockerodeTypes.Container;
@@ -46,6 +49,9 @@ type ClientSession = {
   stdinStream?: stream.Duplex;
   stdoutStream?: stream.Duplex;
   sessionId: string;
+  // Add activity tracking fields
+  lastActivityTime: number;
+  creationTime: number;
 };
 
 const sessions = new Map<string, ClientSession>();
@@ -207,6 +213,29 @@ async function createContainer(
                 AutoRemove: true,
                 CapDrop: ['ALL'],
                 SecurityOpt: ['no-new-privileges'],
+                // Add read-only filesystem
+                ReadonlyRootfs: true,
+                // Add tmpfs mounts for writable directories
+                Tmpfs: {
+                    '/tmp': 'rw,noexec,nosuid,size=64m',
+                    '/run': 'rw,noexec,nosuid,size=32m'
+                },
+                // Mount a volume for the Ably config directory
+                Mounts: [
+                    {
+                        Type: 'tmpfs',
+                        Target: '/home/appuser/.ably',
+                        TmpfsOptions: {
+                            SizeBytes: 10 * 1024 * 1024, // 10MB
+                            Mode: 0o700 // Secure permissions
+                        }
+                    }
+                ],
+                // Add resource limits
+                PidsLimit: 50, // Limit to 50 processes
+                Memory: 256 * 1024 * 1024, // 256MB
+                MemorySwap: 256 * 1024 * 1024, // Disable swap
+                NanoCpus: 1 * 1000000000, // Limit to 1 CPU
             },
             Image: DOCKER_IMAGE_NAME,
             Labels: { // Add label for cleanup
@@ -220,7 +249,7 @@ async function createContainer(
             // Explicitly set the command to run the restricted shell script
             Cmd: ["/bin/bash", "/scripts/restricted-shell.sh"]
         });
-        log(`Container ${container.id} created.`);
+        log(`Container ${container.id} created with security hardening.`);
         return container;
     } catch (error) {
         logError(`Error creating container: ${error}`);
@@ -427,6 +456,9 @@ async function startServer() {
         });
     });
 
+    // Start session monitoring
+    const sessionMonitoringInterval = startSessionMonitoring();
+
     wss.on("connection", (ws: WebSocket, _req: http.IncomingMessage) => {
         const sessionId = generateSessionId();
         log(`Client connected, assigned session ID: ${sessionId}`);
@@ -451,6 +483,8 @@ async function startServer() {
              }, AUTH_TIMEOUT_MS),
              sessionId: sessionId,
              authenticated: false,
+             lastActivityTime: Date.now(),
+             creationTime: Date.now(),
         };
 
         // Store partial session - crucial for cleanup if auth fails
@@ -563,6 +597,11 @@ async function startServer() {
     // --- Graceful Shutdown ---
     let isShuttingDown = false;
 
+    // A keep-alive interval to prevent the process from exiting
+    const keepAliveInterval = setInterval(() => {
+        // No-op, just keeps the event loop active
+    }, 60000);
+
     const shutdown = async (signal: string) => {
         // Prevent multiple shutdown attempts
         if (isShuttingDown) {
@@ -573,9 +612,12 @@ async function startServer() {
         isShuttingDown = true;
         log(`Received ${signal}. Shutting down server...`);
 
-        // Clear the keep-alive interval
+        // Clear the intervals
         if (keepAliveInterval) {
             clearInterval(keepAliveInterval);
+        }
+        if (sessionMonitoringInterval) {
+            clearInterval(sessionMonitoringInterval);
         }
 
         await cleanupAllSessions();
@@ -904,6 +946,9 @@ function handleExecResize(
 }
 
 function handleMessage(session: ClientSession, message: Buffer) {
+    // Update last activity time
+    session.lastActivityTime = Date.now();
+
     // Special handling for control commands like resize
     try {
         // First attempt to parse as JSON for control messages (resize)
@@ -979,4 +1024,33 @@ function handleMessage(session: ClientSession, message: Buffer) {
             }
         }
     }
+}
+
+// Add session timeout monitoring
+function startSessionMonitoring() {
+  log("Starting session monitoring for timeouts...");
+
+  const intervalId = setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, session] of sessions.entries()) {
+      // Skip sessions that aren't fully authenticated yet
+      if (!session.authenticated) continue;
+
+      // Check for inactivity timeout
+      if (now - session.lastActivityTime > MAX_IDLE_TIME_MS) {
+        log(`Session ${sessionId} has been inactive for over ${MAX_IDLE_TIME_MS/60000} minutes`);
+        terminateSession(sessionId, "Session timed out due to inactivity");
+        continue;
+      }
+
+      // Check for max duration timeout
+      if (now - session.creationTime > MAX_SESSION_DURATION_MS) {
+        log(`Session ${sessionId} has reached maximum duration of ${MAX_SESSION_DURATION_MS/60000} minutes`);
+        terminateSession(sessionId, "Maximum session duration reached");
+      }
+    }
+  }, 30 * 1000); // Check every 30 seconds
+
+  // Return the interval ID so it can be cleared during shutdown
+  return intervalId;
 }
