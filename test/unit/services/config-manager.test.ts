@@ -40,146 +40,117 @@ keyName = "Test Key"
 describe("ConfigManager", function() {
   // Variables declared at top level for test scope
   let configManager: ConfigManager;
-  let fsExistsStub: sinon.SinonStub;
-  let fsMkdirStub: sinon.SinonStub;
-  let fsReadFileStub: sinon.SinonStub;
-  let fsWriteFileStub: sinon.SinonStub;
   let envBackup: Record<string, string | undefined>;
+  let sandbox: sinon.SinonSandbox;
 
   // Backup original env vars that might interfere with tests
-  let originalConfigDir: string | undefined;
-  let originalEnv: Record<string, string | undefined> = {};
+  let originalConfigDirEnvVar: string | undefined;
 
-  // Store a fake temporary directory for test config
-  let testConfigDir: string;
-  let testConfigPath: string;
+  // Store a unique temporary directory for test config for this file
+  let uniqueTestConfigDir: string;
 
-  // Stubs for filesystem operations
-  let existsSyncStub: sinon.SinonStub;
-  let mkdirSyncStub: sinon.SinonStub;
-  let readFileSyncStub: sinon.SinonStub;
-  let writeFileSyncStub: sinon.SinonStub;
-
-  // Store environment variables before tests
+  // Setup unique temp directory for this test file
   before(function() {
-    // Backup environment
+    // Create a unique temporary directory for this test suite
+    uniqueTestConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ably-cli-config-test-'));
+  });
+
+  // Setup test environment for each test
+  beforeEach(function() {
+    // Backup potentially interfering env vars
     envBackup = {
       ABLY_CLI_TEST_MODE: process.env.ABLY_CLI_TEST_MODE,
       ABLY_API_KEY: process.env.ABLY_API_KEY,
       ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN
     };
+    originalConfigDirEnvVar = process.env.ABLY_CLI_CONFIG_DIR;
 
-    // Back up any Ably-related env vars
-    const ablyEnvVars = Object.keys(process.env).filter(key => key.startsWith('ABLY_'));
-    ablyEnvVars.forEach(key => {
-      originalEnv[key] = process.env[key];
-    });
-    originalConfigDir = process.env.ABLY_CLI_CONFIG_DIR;
-
-    // Set up test environment
-    testConfigDir = path.join(os.tmpdir(), '.ably-test');
-    testConfigPath = path.join(testConfigDir, 'config');
-    process.env.ABLY_CLI_CONFIG_DIR = testConfigDir;
-
-    // Reset any Ably global state that might interfere with tests
-    process.env.ABLY_TLS = 'true';
-    process.env.ABLY_LOG_LEVEL = 'error';
-    delete process.env.ABLY_REST_HOST;
-    delete process.env.ABLY_REALTIME_HOST;
-  });
-
-  // Setup test environment for each test
-  beforeEach(function() {
-    // Ensure TEST_MODE is set
+    // Override config dir to use the unique temp dir
+    process.env.ABLY_CLI_CONFIG_DIR = uniqueTestConfigDir;
     process.env.ABLY_CLI_TEST_MODE = 'true';
-
-    // Clean specific env vars that might affect tests
     delete process.env.ABLY_API_KEY;
     delete process.env.ABLY_ACCESS_TOKEN;
 
-    // Create fresh stubs for filesystem operations
-    fsExistsStub = sinon.stub(fs, "existsSync");
-    fsMkdirStub = sinon.stub(fs, "mkdirSync");
-    fsReadFileStub = sinon.stub(fs, "readFileSync");
-    fsWriteFileStub = sinon.stub(fs, "writeFileSync");
+    // Create a sandbox for stubs
+    sandbox = sinon.createSandbox();
 
-    // Mock existence of config directory
-    fsExistsStub.returns(true);
+    // Stub filesystem operations within the sandbox
+    sandbox.stub(fs, "existsSync").returns(true);
+    sandbox.stub(fs, "mkdirSync"); // Allow mkdirSync to be called
+    sandbox.stub(fs, "readFileSync").returns(DEFAULT_CONFIG);
+    sandbox.stub(fs, "writeFileSync");
 
-    // Mock config file content
-    fsReadFileStub.returns(DEFAULT_CONFIG);
-
-    // Create new instance for each test
+    // Create new ConfigManager instance for each test
+    // It will now use the uniqueTestConfigDir via the env var
     configManager = new ConfigManager();
   });
 
   // Clean up after each test
   afterEach(function() {
     // Restore all sinon stubs
-    sinon.restore();
-  });
+    sandbox.restore();
 
-  // Restore environment after all tests
-  after(function() {
-    // Restore environment from backup
+    // Restore environment variables
     if (envBackup.ABLY_CLI_TEST_MODE) {
       process.env.ABLY_CLI_TEST_MODE = envBackup.ABLY_CLI_TEST_MODE;
     } else {
       delete process.env.ABLY_CLI_TEST_MODE;
     }
-
     if (envBackup.ABLY_API_KEY) {
       process.env.ABLY_API_KEY = envBackup.ABLY_API_KEY;
     } else {
       delete process.env.ABLY_API_KEY;
     }
-
     if (envBackup.ABLY_ACCESS_TOKEN) {
       process.env.ABLY_ACCESS_TOKEN = envBackup.ABLY_ACCESS_TOKEN;
     } else {
       delete process.env.ABLY_ACCESS_TOKEN;
     }
-
-    // Restore original environment
-    Object.keys(originalEnv).forEach(key => {
-      if (originalEnv[key] === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = originalEnv[key];
-      }
-    });
-
-    if (originalConfigDir === undefined) {
+    // Restore the original config dir env var
+    if (originalConfigDirEnvVar === undefined) {
       delete process.env.ABLY_CLI_CONFIG_DIR;
     } else {
-      process.env.ABLY_CLI_CONFIG_DIR = originalConfigDir;
+      process.env.ABLY_CLI_CONFIG_DIR = originalConfigDirEnvVar;
     }
+  });
 
-    // Reset test isolation marker
-    delete process.env.NODE_TEST_CONTEXT;
+  // Clean up the unique temporary directory after all tests in this file
+  after(function() {
+    if (uniqueTestConfigDir) {
+      fs.rmSync(uniqueTestConfigDir, { recursive: true, force: true });
+    }
+    // Restore any other env vars if needed (currently handled in afterEach)
   });
 
   // Tests for constructor
   describe("#constructor", function() {
-    it("should create config directory if it doesn't exist", function() {
-      // Reset stubs
-      sinon.restore();
-      fsExistsStub = sinon.stub(fs, "existsSync");
-      fsMkdirStub = sinon.stub(fs, "mkdirSync");
-      fsReadFileStub = sinon.stub(fs, "readFileSync");
+    it("should attempt to create config directory if it doesn't exist", function() {
+      // Need to reset the sandbox stubs for this specific test case
+      sandbox.restore();
+      sandbox = sinon.createSandbox();
+      const mkdirStub = sandbox.stub(fs, "mkdirSync");
+      const existsStub = sandbox.stub(fs, "existsSync");
+      sandbox.stub(fs, "readFileSync").returns(""); // Simulate no existing config
 
-      // Make config dir not exist
-      fsExistsStub.returns(false);
-      fsReadFileStub.returns("");
+      // Make config dir not exist initially
+      existsStub.returns(false);
 
-      // Create instance which should create dir
+      // Create instance which should trigger directory creation attempt
       const _manager = new ConfigManager();
 
-      expect(fsMkdirStub.calledOnce).to.be.true;
+      // ConfigManager constructor now uses getConfigDirPath() which relies on ABLY_CLI_CONFIG_DIR
+      // We expect mkdirSync to be called with the uniqueTestConfigDir
+      expect(mkdirStub.calledOnceWith(uniqueTestConfigDir)).to.be.true;
     });
 
     it("should load existing config file", function() {
-      expect(fsReadFileStub.calledOnce).to.be.true;
+      // The beforeEach setup already stubs readFileSync
+      // ConfigManager constructor calls loadConfig, which calls readFileSync
+      const readFileStub = fs.readFileSync as sinon.SinonStub;
+      expect(readFileStub?.calledOnce).to.be.true;
+      // Verify it tries to read the correct file within the temp dir
+      const expectedConfigPath = path.join(uniqueTestConfigDir, 'config');
+      expect(readFileStub?.calledOnceWith(expectedConfigPath)).to.be.true;
     });
   });
 
@@ -191,14 +162,13 @@ describe("ConfigManager", function() {
 
     it("should return undefined if no current account", function() {
       // Reset stubs and load empty config
-      sinon.restore();
-      fsExistsStub = sinon.stub(fs, "existsSync");
-      fsReadFileStub = sinon.stub(fs, "readFileSync");
+      sandbox.restore(); // Restore stubs from beforeEach
+      sandbox = sinon.createSandbox();
+      sandbox.stub(fs, "existsSync").returns(true);
+      sandbox.stub(fs, "readFileSync").returns("[accounts]\n"); // Empty accounts section
+      sandbox.stub(fs, "writeFileSync"); // Stub writeFileSync if needed
 
-      fsExistsStub.returns(true);
-      fsReadFileStub.returns("[accounts]\n");
-
-      const manager = new ConfigManager();
+      const manager = new ConfigManager(); // Create new instance with empty config
 
       expect(manager.getCurrentAccountAlias()).to.be.undefined;
     });
@@ -216,16 +186,15 @@ describe("ConfigManager", function() {
     });
 
     it("should return undefined if no current account alias", function() {
-      // Reset stubs and load config without current account
-      sinon.restore();
-      fsExistsStub = sinon.stub(fs, "existsSync");
-      fsReadFileStub = sinon.stub(fs, "readFileSync");
-
-      fsExistsStub.returns(true);
-      fsReadFileStub.returns(`
+      // Reset stubs and load config without current section
+      sandbox.restore();
+      sandbox = sinon.createSandbox();
+      sandbox.stub(fs, "existsSync").returns(true);
+      sandbox.stub(fs, "readFileSync").returns(`
 [accounts.default]
 accessToken = "testaccesstoken"
-`);
+`); // No [current] section
+      sandbox.stub(fs, "writeFileSync");
 
       const manager = new ConfigManager();
 
@@ -240,16 +209,14 @@ accessToken = "testaccesstoken"
     });
 
     it("should return undefined if no current account", function() {
-      // Reset stubs and load config without current account
-      sinon.restore();
-      fsExistsStub = sinon.stub(fs, "existsSync");
-      fsReadFileStub = sinon.stub(fs, "readFileSync");
-
-      fsExistsStub.returns(true);
-      fsReadFileStub.returns("[accounts]\n");
+       // Reset stubs and load config without current section
+      sandbox.restore();
+      sandbox = sinon.createSandbox();
+      sandbox.stub(fs, "existsSync").returns(true);
+      sandbox.stub(fs, "readFileSync").returns(`[accounts]`); // No [current] section or account details
+      sandbox.stub(fs, "writeFileSync");
 
       const manager = new ConfigManager();
-
       expect(manager.getCurrentAppId()).to.be.undefined;
     });
   });
@@ -283,12 +250,13 @@ accessToken = "testaccesstoken"
   // Tests for storeAccount
   describe("#storeAccount", function() {
     it("should store a new account", function() {
+      const writeFileStub = fs.writeFileSync as sinon.SinonStub;
       configManager.storeAccount("newaccesstoken", "newaccount", {
         accountId: "newaccountid",
         accountName: "New Account"
       });
 
-      expect(fsWriteFileStub.calledOnce).to.be.true;
+      expect(writeFileStub?.calledOnce).to.be.true;
 
       // Test that the internal state is updated
       const accounts = configManager.listAccounts();
@@ -302,19 +270,16 @@ accessToken = "testaccesstoken"
 
     it("should set as current if it's the first account", function() {
       // Reset stubs and load empty config
-      sinon.restore();
-      fsExistsStub = sinon.stub(fs, "existsSync");
-      fsReadFileStub = sinon.stub(fs, "readFileSync");
-      fsWriteFileStub = sinon.stub(fs, "writeFileSync");
-
-      fsExistsStub.returns(true);
-      fsReadFileStub.returns("");
+      sandbox.restore();
+      sandbox = sinon.createSandbox();
+      sandbox.stub(fs, "existsSync").returns(true);
+      sandbox.stub(fs, "readFileSync").returns(""); // Empty config
+      const writeFileStub = sandbox.stub(fs, "writeFileSync");
 
       const manager = new ConfigManager();
-
       manager.storeAccount("firstaccesstoken", "firstaccount");
 
-      expect(fsWriteFileStub.calledOnce).to.be.true;
+      expect(writeFileStub.calledOnce).to.be.true;
       expect(manager.getCurrentAccountAlias()).to.equal("firstaccount");
     });
   });
@@ -322,12 +287,13 @@ accessToken = "testaccesstoken"
   // Tests for storeAppKey
   describe("#storeAppKey", function() {
     it("should store an API key for an app", function() {
+      const writeFileStub = fs.writeFileSync as sinon.SinonStub;
       configManager.storeAppKey("newappid", "newappid.keyid:keysecret", {
         appName: "New App",
         keyName: "New Key"
       });
 
-      expect(fsWriteFileStub.calledOnce).to.be.true;
+      expect(writeFileStub?.calledOnce).to.be.true;
 
       // Check that the key was stored
       expect(configManager.getApiKey("newappid")).to.equal("newappid.keyid:keysecret");
@@ -336,6 +302,7 @@ accessToken = "testaccesstoken"
     });
 
     it("should store an API key for an app with a specific account", function() {
+      const writeFileStub = fs.writeFileSync as sinon.SinonStub;
       // First create a new account
       configManager.storeAccount("anotheraccesstoken", "anotheraccount");
 
@@ -351,6 +318,9 @@ accessToken = "testaccesstoken"
       expect(configManager.getApiKey("anotherappid")).to.equal("anotherappid.keyid:keysecret");
       expect(configManager.getAppName("anotherappid")).to.equal("Another App");
       expect(configManager.getKeyName("anotherappid")).to.equal("Another Key");
+
+      // Expect writeFileSync to have been called multiple times (storeAccount, storeAppKey, switchAccount)
+      expect(writeFileStub?.callCount).to.be.greaterThan(2);
     });
 
     it("should throw error if account doesn't exist", function() {
@@ -363,8 +333,9 @@ accessToken = "testaccesstoken"
   // Tests for removeAccount
   describe("#removeAccount", function() {
     it("should remove an account and return true", function() {
+      const writeFileStub = fs.writeFileSync as sinon.SinonStub;
       expect(configManager.removeAccount("default")).to.be.true;
-      expect(fsWriteFileStub.calledOnce).to.be.true;
+      expect(writeFileStub?.calledOnce).to.be.true;
 
       // The account should be gone from the list
       expect(configManager.listAccounts().some(a => a.alias === "default")).to.be.false;
@@ -375,6 +346,7 @@ accessToken = "testaccesstoken"
     });
 
     it("should clear current account if removing current account", function() {
+      const writeFileStub = fs.writeFileSync as sinon.SinonStub;
       // First confirm default is the current account
       expect(configManager.getCurrentAccountAlias()).to.equal("default");
 
@@ -383,17 +355,20 @@ accessToken = "testaccesstoken"
 
       // Current account should now be undefined
       expect(configManager.getCurrentAccountAlias()).to.be.undefined;
+      expect(writeFileStub?.calledOnce).to.be.true;
     });
   });
 
   // Tests for switchAccount
   describe("#switchAccount", function() {
     it("should switch to another account and return true", function() {
+      const writeFileStub = fs.writeFileSync as sinon.SinonStub;
       // First create another account
       configManager.storeAccount("anotheraccesstoken", "anotheraccount");
 
       expect(configManager.switchAccount("anotheraccount")).to.be.true;
-      expect(fsWriteFileStub.callCount).to.be.greaterThan(0);
+      // writeFileSync called for storeAccount and switchAccount
+      expect(writeFileStub?.callCount).to.equal(2);
 
       // Current account should be the new one
       expect(configManager.getCurrentAccountAlias()).to.equal("anotheraccount");

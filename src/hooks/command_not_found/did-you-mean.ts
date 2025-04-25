@@ -87,14 +87,15 @@ const hook: Hook<'command_not_found'> = async function (opts) {
     // Warn about command not found and suggest alternative with colored command names
     this.warn(`${chalk.cyan(displayOriginal.replaceAll(':', ' '))} is not an ably command.`);
 
-    // Skip confirmation in tests
-    const skipConfirmation = process.env.SKIP_CONFIRMATION === 'true';
+    // Skip confirmation in tests or non-interactive mode
+    const skipConfirmation = process.env.SKIP_CONFIRMATION === 'true' || process.env.ABLY_CLI_NON_INTERACTIVE === 'true';
 
     // Variable to hold confirmation state
     let confirmed = false;
 
     if (skipConfirmation) {
-      // Auto-confirm in test environment
+      // Auto-confirm in test/non-interactive environment
+      // Important: We still proceed to *try* running the command, but tests assert it *fails* correctly
       confirmed = true;
     } else {
       // Prompt user for confirmation in normal usage
@@ -197,8 +198,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       }
     }
   } else {
-    // No suggestion found - display generic error message for completely unknown command
-    // Always preserve the original formatting in the error message
+    // No suggestion found
     const displayCommand = id.replaceAll(':', ' ');
     this.error(`Command ${displayCommand} not found.\nRun ${config.bin} --help for a list of available commands.`, { exit: 127 });
   }

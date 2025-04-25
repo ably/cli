@@ -13,7 +13,7 @@
     "lint:fix": "eslint . --fix",
     "postpack": "rm -f oclif.manifest.json",
     "pretest": "pnpm build && chmod +x bin/run.js",
-    "test": "./scripts/run-tests.sh --timeout 30000",
+    "test": "./scripts/run-tests.sh \"test/**/*.test.ts\" --timeout 30000",
     "test:unit": "./scripts/run-tests.sh \"test/unit/**/*.test.ts\" --timeout 10000",
     "test:integration": "./scripts/run-tests.sh \"test/integration/**/*.test.ts\" --timeout 10000",
     "test:e2e": "./scripts/run-tests.sh \"test/e2e/**/*.test.ts\" --timeout 30000",

@@ -153,27 +153,29 @@ if (SHOULD_SKIP_TESTS) {
 
     describe("Command not found handling", function() {
       it("should suggest and run similar command for a typo (colon input)", async function() {
-        // Input uses colon, should still suggest correctly
-        const result = await execa("node", ["bin/run.js", "channels:pubish", "--non-interactive"], {
+        const result = await execa("node", ["bin/run.js", "channels:pubish"], {
           ...execaOptions,
-          timeout: 5000 // Shorter timeout for this specific test
+          env: { ...execaOptions.env, ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeout: 5000
         });
-
-        // In non-interactive mode, it shows a warning about the command not found
-        expect(result.stderr).to.include("channels pubish is not an ably command");
-        expect(result.failed).to.be.true;
+        // Expect specific warning format and failure
+        expect(result.stderr).to.include("Warning: channels pubish is not an ably command."); // Match actual warning
+        // Do not expect "Did you mean" in non-interactive output from the hook itself
+        expect(result.failed, `Expected command to fail. Exit code: ${result.exitCode}, stderr: ${result.stderr}`).to.be.true;
+        expect(result.exitCode).not.to.equal(0);
       });
 
       it("should suggest and run similar command for a typo (space input)", async function() {
-        // Input uses space
-        const result = await execa("node", ["bin/run.js", "channels pubish", "--non-interactive"], {
+        const result = await execa("node", ["bin/run.js", "channels", "pubish"], {
           ...execaOptions,
-          timeout: 5000 // Shorter timeout for this specific test
-        }); // Typo for 'channels publish'
-
-        // In non-interactive mode, it shows a warning about the command not found
-        expect(result.stderr).to.include("channels pubish is not an ably command");
-        expect(result.failed).to.be.true;
+          env: { ...execaOptions.env, ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeout: 5000
+        });
+        // Expect specific warning format and failure
+        expect(result.stderr).to.include("Warning: channels pubish is not an ably command."); // Match actual warning
+        // Do not expect "Did you mean" in non-interactive output from the hook itself
+        expect(result.failed, `Expected command to fail. Exit code: ${result.exitCode}, stderr: ${result.stderr}`).to.be.true;
+        expect(result.exitCode).not.to.equal(0);
       });
 
       it("should suggest help for completely unknown commands", async function() {
