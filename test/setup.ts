@@ -81,30 +81,72 @@ if (!process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
  * Utility to track an Ably client for cleanup
  */
 export function trackAblyClient(client: Ably.Rest | Ably.Realtime): void {
+  if (!activeClients.includes(client)) {
   activeClients.push(client);
+  }
 }
 
 // Global cleanup function to ensure all resources are released
 async function globalCleanup() {
-  console.log(`Cleaning up ${activeClients.length} active Ably clients and resources...`);
+  const cleanupPromises: Promise<void>[] = [];
+  const clientCount = activeClients.length;
+  console.log(`Cleaning up ${clientCount} active Ably clients and resources...`);
 
-  // Close all active clients
-  for (const client of activeClients) {
-    try {
-      // Only Realtime clients need explicit closing and connection checks
-      if (client instanceof Ably.Realtime && client.connection && client.connection.state !== 'closed') {
-          await new Promise<void>((resolve) => {
-            client.close();
-            client.connection.once('closed', () => resolve()); // Wait for close event
-          });
-        } // Rest clients don't need explicit closing
-    } catch (error) {
-      console.error('Error closing Ably client:', error);
+  while (activeClients.length > 0) {
+    const client = activeClients.shift();
+    if (!client) continue;
+
+    let clientId = 'N/A';
+    if (client instanceof Ably.Realtime && client.auth?.clientId) {
+        clientId = client.auth.clientId;
+    } else {
+        const clientWithOptions = client as Ably.Rest & { options?: { clientId?: string } };
+        if (clientWithOptions.options?.clientId) {
+             clientId = clientWithOptions.options.clientId;
+        }
     }
+
+    const cleanupPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          try {
+            if (client instanceof Ably.Realtime && client.connection) {
+              const currentState = client.connection.state;
+              console.log(`[Cleanup] Processing Realtime client (ID: ${clientId}, State: ${currentState})`);
+              try {
+                // Check state *before* attempting to remove listeners
+                if (currentState !== 'closed' && currentState !== 'failed' && currentState !== 'suspended') {
+                    client.connection.off(); // Remove all connection listeners
+                    console.log(`[Cleanup] Removed connection listeners for client (ID: ${clientId})`);
+                } else {
+                     console.log(`[Cleanup] Client (ID: ${clientId}) already in final state, skipping listener removal.`);
+                }
+              } catch (listenerError) {
+                  console.warn(`[Cleanup] Error removing listeners for client (ID: ${clientId}):`, listenerError);
+              }
+              resolve();
+            } else if (client instanceof Ably.Rest) {
+              console.log(`[Cleanup] Tracking REST client (ID: ${clientId}) - no action needed.`);
+              resolve();
+            } else {
+              console.warn(`[Cleanup] Unknown client type encountered.`);
+              resolve();
+            }
+          } catch (error) {
+            // Use the determined clientId, ensure it's safe if still N/A
+            const clientIdOnError = clientId; // Already determined above
+            console.error(`[Cleanup] Error during client processing (ID: ${clientIdOnError}):`, error);
+            resolve();
+          }
+        }, 5);
+    });
+    cleanupPromises.push(cleanupPromise);
   }
 
-  // Clear the active clients array
-  activeClients.length = 0;
+  await Promise.all(cleanupPromises);
+
+  console.log(`Finished cleaning up ${clientCount} clients.`);
+
+  // activeClients array should be empty now due to shift()
 
   // Clear all active timers
   for (const timer of activeTimers) {
@@ -154,11 +196,6 @@ try {
 
   // Handle unhandled promise rejections
   process.on('unhandledRejection', (reason) => {
-    // Completely suppress errors for ConfigManager tests
-    if (process.env.NODE_TEST_CONTEXT === 'config-manager-only') {
-      return; // Don't log anything for config-manager context
-    }
-
     // Only log unhandled rejections if not a known test-related issue
     if (reason instanceof Error) {
       // Don't log known Ably errors
@@ -167,7 +204,7 @@ try {
       );
 
       if (!isKnownAblyError && process.exitCode !== 0) {
-        console.error('Unhandled rejection:', reason);
+    console.error('Unhandled rejection:', reason);
       }
     } else if (process.exitCode !== 0) {
       console.error('Unhandled rejection (non-Error):', reason);
@@ -177,18 +214,13 @@ try {
 
   // Handle uncaught errors to ensure tests don't hang
   process.on('uncaughtException', (err) => {
-    // Completely suppress errors for ConfigManager tests
-    if (process.env.NODE_TEST_CONTEXT === 'config-manager-only') {
-      return; // Don't log anything for config-manager context
-    }
-
     // Only log uncaught exceptions if not a known test-related issue
     const isKnownAblyError = KNOWN_ABLY_ERRORS.some(errMsg =>
       err.message.includes(errMsg)
     );
 
     if (!isKnownAblyError && process.exitCode !== 0) {
-      console.error('Uncaught exception:', err);
+    console.error('Uncaught exception:', err);
     }
     // Don't exit, but log for debugging purposes
   });

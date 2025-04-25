@@ -3,14 +3,14 @@ import {
   SHOULD_SKIP_E2E,
   getUniqueChannelName,
   createTempOutputFile,
-  runBackgroundProcess,
+  runLongRunningBackgroundProcess,
   readProcessOutput,
   publishTestMessage,
   killProcess,
-  forceExit,
-  cleanupBackgroundProcesses,
-  skipTestsIfNeeded
+  skipTestsIfNeeded,
+  applyE2ETestSetup
 } from "../../helpers/e2e-test-helper.js";
+import { ChildProcess } from "node:child_process";
 
 // Skip tests if API key not available
 skipTestsIfNeeded('Channel Subscribe E2E Tests');
@@ -18,71 +18,73 @@ skipTestsIfNeeded('Channel Subscribe E2E Tests');
 // Only run the test suite if we should not skip E2E tests
 if (!SHOULD_SKIP_E2E) {
   describe('Channel Subscribe E2E Tests', function() {
-    // Set test timeout to accommodate background processes
-    this.timeout(30000);
-
-    before(async function() {
-      // Add handler for interrupt signal
-      process.on('SIGINT', forceExit);
+    // Apply standard E2E setup
+    before(function() {
+      applyE2ETestSetup();
     });
 
-    after(function() {
-      // Remove interrupt handler
-      process.removeListener('SIGINT', forceExit);
+    let subscribeChannel: string;
+    let outputPath: string;
+    let subscribeProcess: ChildProcess | null = null;
+    let subscribeProcessInfo: any;
+
+    beforeEach(async function(){
+      subscribeChannel = getUniqueChannelName("subscribe");
+      outputPath = await createTempOutputFile();
     });
 
-    // Clean up any background processes that might still be running
     afterEach(async function() {
-      await cleanupBackgroundProcesses();
+       // Cleanup is handled by applyE2ETestSetup's afterEach hook
+       // Kill specific process if necessary
+        if (subscribeProcess) {
+            killProcess(subscribeProcess);
+            subscribeProcess = null;
+        }
     });
 
     // Test subscribe functionality - subscribe in one process, publish in another
     it('should subscribe to a channel and receive messages', async function() {
-      const subscribeChannel = getUniqueChannelName("subscribe");
-      const testMessage = { text: "Subscribe E2E Test" };
+      const readySignal = "Subscribing to channel"; // Define the signal to wait for
 
-      // Create a temporary file to capture the output of the subscribe process
-      const outputPath = await createTempOutputFile();
-
-      // Start the subscribe process in the background
-      const subscribeProcess = await runBackgroundProcess(
+      // Start the subscribe process, waiting for the ready signal
+      subscribeProcessInfo = await runLongRunningBackgroundProcess(
         `bin/run.js channels subscribe ${subscribeChannel}`,
-        outputPath
+        outputPath,
+        { readySignal, timeoutMs: 15000 } // Pass signal and a 15s timeout
       );
+      // If the above promise resolved, the process is ready.
+      console.log(`[Test Subscribe] Background subscriber process ${subscribeProcessInfo.processId} ready.`);
 
       try {
-        // Wait for the subscribe process to be ready
-        // The subscribe command outputs "Subscribing to channel" when ready
-        let isReady = false;
-        for (let i = 0; i < 50; i++) {
-          const output = await readProcessOutput(outputPath);
-          if (output.includes("Subscribing to channel")) {
-            isReady = true;
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        expect(isReady, "Subscribe process should be ready").to.be.true;
-
         // Publish a message to the channel
+        console.log(`[Test Subscribe] Publishing message to ${subscribeChannel}...`);
+        const testMessage = { text: "Subscribe E2E Test" };
         await publishTestMessage(subscribeChannel, testMessage);
+        console.log(`[Test Subscribe] Message published.`);
 
         // Wait for the subscribe process to receive the message
+        console.log(`[Test Subscribe] Waiting for message in output file ${outputPath}...`);
         let messageReceived = false;
-        for (let i = 0; i < 50; i++) {
+        // Poll for a reasonable time after publishing
+        for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
           const output = await readProcessOutput(outputPath);
+           // console.log(`[Test Subscribe] Attempt ${i + 1}/50 (message): Reading output file. Content length: ${output.length}`);
           if (output.includes("Subscribe E2E Test")) {
+             console.log(`[Test Subscribe] Message received in output.`);
             messageReceived = true;
             break;
           }
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 150));
         }
-
+         if (!messageReceived) {
+            const finalOutput = await readProcessOutput(outputPath);
+            console.error(`[Test Subscribe] FAILED TO FIND MESSAGE. Final output:\n${finalOutput}`);
+        }
         expect(messageReceived, "Subscribe process should receive the message").to.be.true;
+
       } finally {
-        // Kill the subscribe process safely
-        killProcess(subscribeProcess);
+        // Cleanup is handled by applyE2ETestSetup's afterEach hook
+        console.log(`[Test Subscribe] Test finished, cleanup will handle process ${subscribeProcessInfo?.processId}`);
       }
     });
   });

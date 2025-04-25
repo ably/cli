@@ -4,13 +4,13 @@ import {
   SHOULD_SKIP_E2E,
   getUniqueChannelName,
   createTempOutputFile,
-  runBackgroundProcess,
+  runLongRunningBackgroundProcess,
   readProcessOutput,
   killProcess,
-  forceExit,
-  cleanupBackgroundProcesses,
-  skipTestsIfNeeded
+  skipTestsIfNeeded,
+  applyE2ETestSetup
 } from "../../helpers/e2e-test-helper.js";
+import { ChildProcess } from "node:child_process";
 
 // Skip tests if API key not available
 skipTestsIfNeeded('Channel Occupancy E2E Tests');
@@ -18,78 +18,63 @@ skipTestsIfNeeded('Channel Occupancy E2E Tests');
 // Only run the test suite if we should not skip E2E tests
 if (!SHOULD_SKIP_E2E) {
   describe('Channel Occupancy E2E Tests', function() {
-    // Set test timeout to accommodate background processes
-    this.timeout(30000);
-
-    before(async function() {
-      // Add handler for interrupt signal
-      process.on('SIGINT', forceExit);
+    // Apply standard E2E setup via a before hook
+    before(function() {
+      applyE2ETestSetup();
     });
 
-    after(function() {
-      // Remove interrupt handler
-      process.removeListener('SIGINT', forceExit);
+    let occupancyChannel: string;
+    let outputPath: string;
+    let subscribeProcessInfo: { process: ChildProcess; processId: string } | null = null;
+
+    beforeEach(async function(){
+      occupancyChannel = getUniqueChannelName("occupancy");
+      outputPath = await createTempOutputFile();
+      subscribeProcessInfo = null; // Reset before each test
     });
 
-    // Clean up any background processes that might still be running
-    afterEach(async function() {
-      await cleanupBackgroundProcesses();
-    });
+    // Cleanup is handled by applyE2ETestSetup's afterEach hook
 
-    // Test occupancy functionality - use direct CLI calls for simplicity
     it('should get channel occupancy', async function() {
-      // Create a unique channel name
-      const occupancyChannel = getUniqueChannelName("occupancy");
-      console.log(`Using occupancy channel: ${occupancyChannel}`);
-
-      // First, subscribe to the channel in a background process
-      const outputPath = await createTempOutputFile();
-      console.log(`Channel subscribe output will be logged to: ${outputPath}`);
-
-      const channelProcess = await runBackgroundProcess(
+      // Start a background subscriber process
+      subscribeProcessInfo = await runLongRunningBackgroundProcess(
         `bin/run.js channels subscribe ${occupancyChannel}`,
         outputPath
       );
+      console.log(`[Test Occupancy] Started background subscriber process ${subscribeProcessInfo.processId} (PID: ${subscribeProcessInfo.process.pid})`);
 
-      try {
-        // Wait for the channel subscribe to be ready
-        let channelIsReady = false;
-        for (let i = 0; i < 50; i++) {
-          const output = await readProcessOutput(outputPath);
-          if (output.includes("Subscribing to channel")) {
-            channelIsReady = true;
-            console.log("Channel subscribe process is ready");
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for the subscriber process to be ready
+      let isReady = false;
+      for (let i = 0; i < 50; i++) {
+        const output = await readProcessOutput(outputPath);
+        if (output.includes("Subscribing to channel")) {
+          isReady = true;
+          console.log(`[Test Occupancy] Background subscriber process ${subscribeProcessInfo.processId} ready.`);
+          break;
         }
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      expect(isReady, "Background subscriber process should be ready").to.be.true;
 
-        expect(channelIsReady, "Channel subscribe process should be ready").to.be.true;
+      // Add a small delay to ensure the subscriber is fully counted by Ably
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Give some time for the connection to be fully established
-        await new Promise(resolve => setTimeout(resolve, 3000));
+      // Run the occupancy get command IN THE FOREGROUND using oclif/test
+      await test
+        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
+        .stdout()
+        .command(["channels", "occupancy", "get", occupancyChannel])
+        .it('gets occupancy for a channel with active subscribers', (ctx) => {
+            console.log(`[Test Occupancy] Foreground 'get' command stdout:\n${ctx.stdout}`);
+            expect(ctx.stdout).to.include(occupancyChannel);
+            expect(ctx.stdout).to.match(/presenceMembers:\s*\d+/i);
+            expect(ctx.stdout).to.match(/Subscribers:\s*[1-9]\d*/i);
+        });
 
-        // Test occupancy get command
-        await test
-          .timeout(30000)
-          .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-          .stdout()
-          .command(["channels", "occupancy", "get", occupancyChannel])
-          .it('gets occupancy for a channel with active subscribers', (ctx) => {
-            console.log(`Occupancy get output: ${ctx.stdout}`);
-            expect(ctx.stdout).to.contain(occupancyChannel);
-
-            // Verify it shows some kind of occupancy data
-            expect(ctx.stdout).to.match(/connections|subscribers|publishers|presenceConnections|presenceSubscribers|presenceMembers/);
-
-            // Look for non-zero values to confirm actual occupancy
-            // At minimum, we should see 1 subscriber (our background process)
-            expect(ctx.stdout).to.match(/[1-9]\d*\s+subscribers/i);
-          });
-      } finally {
-        // Clean up the channel process
-        console.log("Cleaning up channel process");
-        killProcess(channelProcess);
+      // Explicitly kill the background process *after* the test logic completes
+      // The afterEach hook in applyE2ETestSetup will also attempt cleanup
+      if (subscribeProcessInfo) {
+        killProcess(subscribeProcessInfo.process);
       }
     });
   });

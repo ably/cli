@@ -44,9 +44,17 @@ class TestableChannelsSubscribe extends ChannelsSubscribe {
     this.createAblyClientSpy(flags);
 
     // Initialize the mock client with basic structure
+    const mockChannelInstance = {
+      name: 'mock-channel-from-create', // Add name for safety
+      subscribe: sinon.stub(),
+      attach: sinon.stub().resolves(),
+      on: sinon.stub(),
+      unsubscribe: sinon.stub(),
+      detach: sinon.stub().resolves()
+    };
     this.mockClient = {
         channels: {
-            get: sinon.stub(),
+            get: sinon.stub().returns(mockChannelInstance),
             release: sinon.stub(),
         },
         connection: {
@@ -124,291 +132,209 @@ describe("ChannelsSubscribe (Simplified)", function() {
     mockConfig = { runHook: sinon.stub() } as unknown as Config;
     command = new TestableChannelsSubscribe([], mockConfig);
 
-    // Set default parse result ensuring argv matches args.channels
+    // Setup mock client within beforeEach to ensure fresh state
+    const mockChannelInstance = {
+      name: 'test-channel',
+      subscribe: sandbox.stub(),
+      attach: sandbox.stub().resolves(),
+      on: sandbox.stub(), // Handles channel state changes ('attached', 'failed', etc.)
+      unsubscribe: sandbox.stub(),
+      detach: sandbox.stub().resolves()
+    };
+    command.mockClient = {
+      channels: {
+        get: sandbox.stub().returns(mockChannelInstance),
+        release: sandbox.stub(),
+      },
+      connection: {
+        once: sandbox.stub(), // Used for initial connection check
+        on: sandbox.stub(),   // Used for continuous state monitoring
+        close: sandbox.stub(),
+        state: 'initialized',
+      },
+      close: sandbox.stub(),
+    };
+
+    // Set default parse result
     command.setParseResult({
       flags: { delta: false, rewind: undefined, 'cipher-key': undefined },
       args: { channels: ['test-channel'] },
-      // argv will be set by setParseResult
       raw: [],
     });
+
+    // IMPORTANT: Stub createAblyClient directly on the instance IN beforeEach
+    // This ensures the command uses OUR mockClient setup here.
+    sandbox.stub(command, 'createAblyClient' as keyof TestableChannelsSubscribe)
+        .resolves(command.mockClient as unknown as Ably.Realtime);
   });
 
   afterEach(function() {
     sandbox.restore();
   });
 
-  it("should attempt to create an Ably client", async function() {
-    // Create a mock client to be returned by createAblyClient
-    command.mockClient = {
-      channels: {
-        get: sinon.stub(),
-        release: sinon.stub(),
-      },
-      connection: {
-        once: sinon.stub(),
-        on: sinon.stub(),
-        close: sinon.stub(),
-        state: 'connected',
-      },
-      close: sinon.stub(),
-    };
-
-    // Stub the createAblyClient method to return our mock
-    const createClientStub = sinon.stub(command, 'createAblyClient')
-      .resolves(command.mockClient as unknown as Ably.Realtime);
-
-    // Setup connection handler
-    command.mockClient.connection.on.callsFake((handler: (stateChange: any) => void) => {
-      if (typeof handler === 'function') {
-        setTimeout(() => handler({ current: 'connected' }), 10);
-      }
-    });
-
-    // Create a promise and controller for test timing
+  // Helper function to manage test run with timeout/abort
+  async function runCommandAndSimulateLifecycle(timeoutMs = 100) {
     const controller = new AbortController();
+    const signal = controller.signal;
 
-    // Start the command run
-    const _runPromise = command.run().catch(error => {
-      if (!controller.signal.aborted) {
-        throw error;
+    // Simulate connection shortly after run()
+    command.mockClient.connection.once.callsFake((event: string, callback: () => void) => {
+      if (event === 'connected') {
+        setTimeout(() => {
+          if (signal.aborted) return;
+          command.mockClient.connection.state = 'connected';
+          // Simulate the connection 'on' handler being called as well
+          if (command.mockClient.connection.on.called) {
+            const onConnectionArgs = command.mockClient.connection.on.args[0];
+            if (onConnectionArgs && typeof onConnectionArgs[0] === 'function') {
+               onConnectionArgs[0]({ current: 'connected' });
+            }
+          }
+          callback(); // Resolve the 'once' listener
+        }, 10);
       }
-      return null;
     });
 
-    // Wait for the test to process
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Simulate channel attach after connection
+    const originalGet = command.mockClient.channels.get;
+    command.mockClient.channels.get = sandbox.stub().callsFake((name, options) => {
+        const channelMock = originalGet(name, options); // Get the actual mock channel
+        if (channelMock && channelMock.on) {
+            // Simulate attach after a short delay, only if not aborted
+            setTimeout(() => {
+                if (signal.aborted) return;
+                // Find the handler for 'attached' state if it exists
+                 const onAttachArgs = channelMock.on.args.find((args: any[]) => args[0] === 'attached');
+                 if (onAttachArgs && typeof onAttachArgs[1] === 'function') {
+                      onAttachArgs[1]({ current: 'attached' });
+      }
+                 // Also simulate calling the subscribe callback immediately after attach
+                 // This assumes subscribe is called right after successful attach in the command
+                 if (channelMock.subscribe.called) {
+                     const subscribeCallback = channelMock.subscribe.getCall(0).args[0];
+                     if (typeof subscribeCallback === 'function') {
+                         // Simulate receiving a dummy message shortly after subscribing
+                         // setTimeout(() => {
+                         //     if (!signal.aborted) {
+                         //        subscribeCallback({ name: 'test-event', data: 'test-data' });
+                         //     }
+                         // }, 5);
+                     }
+                 }
+            }, 20);
+        }
+        return channelMock;
+    });
 
-    // Verify that createAblyClient was called
+    const runPromise = command.run();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      await Promise.race([
+        runPromise,
+        new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('Aborted'))))
+      ]);
+    } catch (error: any) {
+      if (error.name !== 'AbortError' && !error.message?.includes("Listening for messages")) {
+        // console.error("Caught unexpected error:", error);
+        // Decide whether to rethrow or just let the test check the state
+      }
+    } finally {
+      clearTimeout(timeout);
+      if (!signal.aborted) {
+        controller.abort(); // Ensure abort is called
+      }
+      await new Promise(resolve => setImmediate(resolve));
+    }
+  }
+
+  it("should attempt to create an Ably client", async function() {
+    const createClientStub = command.createAblyClient as sinon.SinonStub;
+    await runCommandAndSimulateLifecycle();
     expect(createClientStub.calledOnce).to.be.true;
-
-    // Abort the command run to end the test
-    controller.abort();
   });
 
   it("should attempt to get and subscribe to a single channel", async function() {
-    // Create channel mock with subscribe method
-    const channelMock = {
-      name: 'test-channel',
-      subscribe: sinon.stub(),
-      attach: sinon.stub().resolves(),
-      on: sinon.stub(),
-      detach: sinon.stub().resolves()
-    };
-
-    // Create a client mock before we start the test
-    command.mockClient = {
-      channels: {
-        get: sinon.stub().returns(channelMock),
-        release: sinon.stub(),
-      },
-      connection: {
-        once: sinon.stub(),
-        on: sinon.stub(),
-        close: sinon.stub(),
-        state: 'connected',
-      },
-      close: sinon.stub(),
-    };
-
-    // Stub the createAblyClient method to return our mock
-    sinon.stub(command, 'createAblyClient').resolves(command.mockClient as unknown as Ably.Realtime);
-
-    // Setup connection handler to simulate connected state
-    command.mockClient.connection.on.callsFake((handler: (stateChange: any) => void) => {
-      if (typeof handler === 'function') {
-        // Call the handler with a connected state
-        setTimeout(() => handler({ current: 'connected' }), 10);
-      }
-    });
-
-    // Create a promise and controller for test timing
-    const controller = new AbortController();
-
-    // Start the command run
-    const _runPromise = command.run().catch(error => {
-      if (!controller.signal.aborted) {
-        throw error;
-      }
-      return null;
-    });
-
-    // Wait for the test to process
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Verify the test
-    expect(command.mockClient.channels.get.called).to.be.true;
-    expect(channelMock.subscribe.called).to.be.true;
-
-    // Abort the command run to end the test
-    controller.abort();
+    const channelMock = command.mockClient.channels.get();
+    await runCommandAndSimulateLifecycle();
+    expect(command.mockClient.channels.get.calledOnceWith('test-channel')).to.be.true;
+    // Check subscribe was called *at least* once after attach simulation
+    expect(channelMock.subscribe.called).to.be.true; // Changed from calledOnce
   });
 
   it("should attempt to get and subscribe to multiple channels", async function() {
-    // Set up multiple channels
+    const channelsToTest = ['channel1', 'channel2', 'channel3'];
     command.setParseResult({
       flags: {},
-      args: { channels: ['channel1', 'channel2', 'channel3'] },
+      args: { channels: channelsToTest },
       raw: [],
     });
 
-    // Set up channel mocks
-    const channel1 = {
-      name: 'channel1',
-      subscribe: sinon.stub(),
-      attach: sinon.stub().resolves(),
-      on: sinon.stub(),
-      detach: sinon.stub().resolves()
+    const channelMocks: Record<string, any> = {};
+    channelsToTest.forEach(name => {
+      channelMocks[name] = {
+        name: name,
+        subscribe: sandbox.stub(),
+        attach: sandbox.stub().resolves(),
+        on: sandbox.stub(),
+        unsubscribe: sandbox.stub(),
+        detach: sandbox.stub().resolves()
     };
-
-    const channel2 = {
-      name: 'channel2',
-      subscribe: sinon.stub(),
-      attach: sinon.stub().resolves(),
-      on: sinon.stub(),
-      detach: sinon.stub().resolves()
-    };
-
-    const channel3 = {
-      name: 'channel3',
-      subscribe: sinon.stub(),
-      attach: sinon.stub().resolves(),
-      on: sinon.stub(),
-      detach: sinon.stub().resolves()
-    };
-
-    // Create a channels.get stub that returns the appropriate channel
-    const getStub = sinon.stub();
-    getStub.withArgs('channel1').returns(channel1);
-    getStub.withArgs('channel2').returns(channel2);
-    getStub.withArgs('channel3').returns(channel3);
-
-    // Create a client mock before we start the test
-    command.mockClient = {
-      channels: {
-        get: getStub,
-        release: sinon.stub(),
-      },
-      connection: {
-        once: sinon.stub(),
-        on: sinon.stub(),
-        close: sinon.stub(),
-        state: 'connected',
-      },
-      close: sinon.stub(),
-    };
-
-    // Stub the createAblyClient method to return our mock
-    sinon.stub(command, 'createAblyClient').resolves(command.mockClient as unknown as Ably.Realtime);
-
-    // Setup connection handler to simulate connected state
-    command.mockClient.connection.on.callsFake((handler: (stateChange: any) => void) => {
-      if (typeof handler === 'function') {
-        // Call the handler with a connected state
-        setTimeout(() => handler({ current: 'connected' }), 10);
-      }
     });
 
-    // Create a promise and controller for test timing
-    const controller = new AbortController();
+    // Use the original mock client's get stub setup in beforeEach, but make it return our specific mocks
+    (command.mockClient.channels.get as sinon.SinonStub).callsFake((name: string) => channelMocks[name]);
 
-    // Start the command run
-    const _runPromise = command.run().catch(error => {
-      if (!controller.signal.aborted) {
-        throw error;
-      }
-      return null;
+    await runCommandAndSimulateLifecycle(200);
+
+    // Verify get was called for each channel
+    expect(command.mockClient.channels.get.callCount).to.equal(channelsToTest.length);
+    channelsToTest.forEach(name => {
+      expect(command.mockClient.channels.get.calledWith(name)).to.be.true;
+      expect(channelMocks[name].subscribe.called).to.be.true; // Changed from calledOnce
     });
-
-    // Wait for the test to process
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Verify the test
-    expect(command.mockClient.channels.get.callCount).to.equal(3);
-
-    // Check each channel's subscribe was called
-    expect(channel1.subscribe.called).to.be.true;
-    expect(channel2.subscribe.called).to.be.true;
-    expect(channel3.subscribe.called).to.be.true;
-
-    // Abort the command run to end the test
-    controller.abort();
   });
 
   it("should pass channel options when flags are provided (rewind example)", async function() {
+    const channelName = 'rewind-channel';
     command.setParseResult({
       flags: { rewind: 5 },
-      args: { channels: ['rewind-channel'] },
+      args: { channels: [channelName] },
       raw: [],
     });
 
     const channelMock = {
-      name: 'rewind-channel',
-      subscribe: sinon.stub(),
-      attach: sinon.stub().resolves(),
-      on: sinon.stub(),
-      detach: sinon.stub().resolves()
+      name: channelName,
+      subscribe: sandbox.stub(),
+      attach: sandbox.stub().resolves(),
+      on: sandbox.stub(),
+      unsubscribe: sandbox.stub(),
+      detach: sandbox.stub().resolves()
     };
+    (command.mockClient.channels.get as sinon.SinonStub).returns(channelMock);
 
-    // Create a client mock before we start the test
-    command.mockClient = {
-      channels: {
-        get: sinon.stub().returns(channelMock),
-        release: sinon.stub(),
-      },
-      connection: {
-        once: sinon.stub(),
-        on: sinon.stub(),
-        close: sinon.stub(),
-        state: 'connected',
-      },
-      close: sinon.stub(),
-    };
+    await runCommandAndSimulateLifecycle();
 
-    // Stub the createAblyClient method to return our mock
-    sinon.stub(command, 'createAblyClient').resolves(command.mockClient as unknown as Ably.Realtime);
-
-    // Setup connection handler to simulate connected state
-    command.mockClient.connection.on.callsFake((handler: (stateChange: any) => void) => {
-      if (typeof handler === 'function') {
-        // Call the handler with a connected state
-        setTimeout(() => handler({ current: 'connected' }), 10);
-      }
-    });
-
-    // Create a promise and controller for test timing
-    const controller = new AbortController();
-
-    // Start the command run
-    const _runPromise = command.run().catch(error => {
-      if (!controller.signal.aborted) {
-        throw error;
-      }
-      return null;
-    });
-
-    // Wait for the test to process
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    // Verify the test
     expect(command.mockClient.channels.get.calledOnce).to.be.true;
-    const getArgs = command.mockClient.channels.get.getCall(0).args;
-    expect(getArgs[0]).to.equal('rewind-channel');
-
-    // Abort the command run to end the test
-    controller.abort();
+    const getCall = command.mockClient.channels.get.getCall(0);
+    expect(getCall.args[0]).to.equal(channelName);
+    expect(getCall.args[1]).to.deep.include({ params: { rewind: '5' } });
+    expect(channelMock.subscribe.called).to.be.true; // Changed from calledOnce
   });
 
   it("should throw error if no channel names provided", async function() {
     command.setParseResult({
        flags: {},
        args: { channels: [] },
-       argv: [],
+       argv: [], // Ensure argv is empty too
        raw: []
     });
     try {
+       // No need to abort here, it should exit quickly
        await command.run();
        expect.fail("Command should have thrown an error for missing channels");
     } catch {
+       // Check the error message stored by the overridden error method
        expect(command.errorOutput).to.contain("At least one channel name is required");
     }
   });
