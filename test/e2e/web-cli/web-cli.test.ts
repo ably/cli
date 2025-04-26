@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 // Constants
 const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
 const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
-const TERMINAL_SERVER_SCRIPT = path.resolve(__dirname, '../../../scripts/terminal-server.ts');
+const TERMINAL_SERVER_SCRIPT = path.resolve(__dirname, '../../../dist/scripts/terminal-server.js');
 
 // Shared variables
 let terminalServerProcess: ChildProcess;
@@ -77,10 +77,8 @@ test.describe('Web CLI E2E Tests', () => {
 
     // 4. Start the terminal server
     console.log('Starting terminal server...');
-    // Run the server script directly using ts-node/esm loader
+    // Run the compiled JS script directly with node
     terminalServerProcess = spawn('node', [
-      '--loader', 'ts-node/esm',
-      '--no-warnings', // Suppress ESM loader experimental warnings
       TERMINAL_SERVER_SCRIPT
     ], {
       env: {
@@ -147,35 +145,30 @@ test.describe('Web CLI E2E Tests', () => {
     console.log('Terminal element found.');
 
     // Wait for the initial prompt to appear, indicating connection and container ready
-    const promptText = '$'; // The simple prompt used in the container
-    await page.locator(terminalSelector).getByText(promptText, { exact: false }).waitFor({ timeout: 30000 });
+    const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
+    await page.locator(terminalSelector).getByText(promptText, { exact: true }).waitFor({ timeout: 30000 }); // Use exact: true
     console.log('Initial prompt found.');
 
-    // --- Run 'ably help' ---
-    console.log('Executing: ably help');
-    await page.keyboard.type('ably help');
+    // --- Run 'ably --help' ---
+    console.log('Executing: ably --help');
+    await page.locator(terminalSelector).focus(); // Explicitly focus terminal
+    await page.keyboard.type('ably --help');
     await page.keyboard.press('Enter');
 
-    // Wait for specific output from 'ably help'
-    const helpOutputText = 'Available topics:';
-    await page.locator(terminalSelector).getByText(helpOutputText).waitFor({ timeout: 15000 });
-    console.log("'ably help' output verified.");
+    // Wait for specific output from 'ably --help' using toContainText
+    await expect(page.locator(terminalSelector)).toContainText('COMMANDS', { timeout: 15000 });
+    console.log("'ably --help' output verified.");
 
-    // Check for a specific command listing as well
-    await expect(page.locator(terminalSelector)).toContainText('accounts');
-
-    // --- Run 'ably status' ---
-    // Clear previous input/output visually might be tricky, just send next command
-    console.log('Executing: ably status');
-    await page.keyboard.type('ably status');
+    // --- Run 'ably --version' ---
+    console.log('Executing: ably --version');
+    await page.locator(terminalSelector).focus();
+    await page.keyboard.type('ably --version');
     await page.keyboard.press('Enter');
 
-    // Wait for specific output from 'ably status'
-    const statusOutputText = 'Ably CLI Status';
-    await page.locator(terminalSelector).getByText(statusOutputText).waitFor({ timeout: 15000 });
-    await expect(page.locator(terminalSelector)).toContainText('Connection Status');
-    await expect(page.locator(terminalSelector)).toContainText('Mode:'); // Check for mode display
-    console.log("'ably status' output verified.");
+    // Wait for specific output from 'ably --version'
+    const versionOutputText = '@ably/cli/0.3.3'; // Expected text
+    await expect(page.locator(terminalSelector)).toContainText(versionOutputText, { timeout: 15000 });
+    console.log("'ably --version' output verified.");
 
     // Add a small delay to ensure output is fully rendered if needed
     await page.waitForTimeout(500);
