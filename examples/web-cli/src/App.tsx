@@ -8,20 +8,18 @@ const DEFAULT_WEBSOCKET_URL = "ws://localhost:8080";
 
 // Get WebSocket URL from Vite environment variables or query parameters
 const getWebSocketUrl = () => {
-  // Check URL parameters first
   const urlParams = new URLSearchParams(window.location.search);
   const serverParam = urlParams.get("serverUrl");
   if (serverParam) {
+    console.log(`[App.tsx] Found serverUrl param: ${serverParam}`);
     return serverParam;
   }
-
-  // Then check environment variables
   const envServerUrl = import.meta.env.VITE_TERMINAL_SERVER_URL;
   if (envServerUrl) {
+    console.log(`[App.tsx] Using env var VITE_TERMINAL_SERVER_URL: ${envServerUrl}`);
     return envServerUrl;
   }
-
-  // Fall back to default
+  console.log(`[App.tsx] Falling back to default URL: ${DEFAULT_WEBSOCKET_URL}`);
   return DEFAULT_WEBSOCKET_URL;
 };
 
@@ -40,7 +38,6 @@ function App() {
   const [accessToken, setAccessToken] = useState<string | undefined>(
     envAccessToken,
   );
-  const [websocketUrl] = useState<string>(getWebSocketUrl());
 
   // Remove state vars that cause remounting issues
   const [shouldConnect, setShouldConnect] = useState<boolean>(
@@ -71,6 +68,9 @@ function App() {
     }
   }, []);
 
+  // Get the URL *inside* the component body
+  const currentWebsocketUrl = getWebSocketUrl();
+
   return (
     <div className="App">
       <header className="App-header">
@@ -82,7 +82,7 @@ function App() {
           </span>
         </div>
         <div style={{ marginBottom: "10px", fontSize: "0.8em", color: "#888" }}>
-          Server: {websocketUrl}
+          Server: {currentWebsocketUrl}
         </div>
       </header>
       <main className="App-main">
@@ -98,7 +98,7 @@ function App() {
                   Restart Terminal
                 </button>
               )}
-              websocketUrl={websocketUrl}
+              websocketUrl={currentWebsocketUrl}
             />
           )}
         </div>

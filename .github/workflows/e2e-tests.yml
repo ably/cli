@@ -32,6 +32,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: Build Workspace Packages and Check Example Dist
+        run: |
+          echo "Building all workspace packages..."
+          pnpm -r build
+          echo "Building Web CLI example (potentially redundant)..."
+          pnpm --filter ably-web-cli-example build
+          echo "Checking contents of examples/web-cli/dist..."
+          ls -l examples/web-cli/dist
+          echo "Checking contents of examples/web-cli/dist/assets..."
+          ls -l examples/web-cli/dist/assets || echo "assets directory not found or empty"
+
       - name: Run Mocha E2E tests
         run: pnpm test:e2e
         env:

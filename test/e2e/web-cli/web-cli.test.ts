@@ -126,6 +126,10 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('should load the terminal, connect, and run basic commands', async ({ page }) => {
+    // Capture browser console messages
+    page.on('console', msg => console.log(`[Browser Console] ${msg.type()}: ${msg.text()}`));
+    page.on('pageerror', error => console.error(`[Browser Page Error]: ${error}`));
+
     // Skip test if Docker is not available (determined in beforeAll)
     if (process.env.DOCKER_UNAVAILABLE === 'true' || !terminalServerProcess) {
       console.log('Skipping test because Docker was not available');
@@ -133,8 +137,8 @@ test.describe('Web CLI E2E Tests', () => {
     }
 
     const wsUrl = `ws://localhost:${terminalServerPort}`;
-    // Go back to using the root path, serve should handle it
-    const pageUrl = `http://localhost:${webServerPort}?websocketUrl=${encodeURIComponent(wsUrl)}`;
+    // Use the correct query parameter name expected by the example app
+    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(wsUrl)}`;
     console.log(`Navigating to: ${pageUrl}`);
 
     await page.goto(pageUrl);
@@ -146,8 +150,22 @@ test.describe('Web CLI E2E Tests', () => {
 
     // Wait for the initial prompt to appear, indicating connection and container ready
     const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
-    await page.locator(terminalSelector).getByText(promptText, { exact: true }).waitFor({ timeout: 30000 }); // Use exact: true
-    console.log('Initial prompt found.');
+    console.log('Attempting to wait for initial prompt...'); // Log before wait
+    try {
+      await page.locator(terminalSelector).getByText(promptText, { exact: true }).waitFor({ timeout: 30000 }); // Use exact: true
+      console.log('Initial prompt found.');
+    } catch (error) {
+      console.error('Error waiting for initial prompt:', error);
+      console.log('--- Terminal Content on Prompt Timeout ---');
+      try {
+        const terminalContent = await page.locator(terminalSelector).textContent();
+        console.log(terminalContent);
+      } catch (logError) {
+        console.error('Could not get terminal content after timeout:', logError);
+      }
+      console.log('-----------------------------------------');
+      throw error; // Re-throw the error to fail the test
+    }
 
     // --- Run 'ably --help' ---
     console.log('Executing: ably --help');
