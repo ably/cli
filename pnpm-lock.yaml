@@ -201,6 +201,9 @@ importers:
       sinon:
         specifier: ^18.0.0
         version: 18.0.1
+      sinon-chai:
+        specifier: ^4.0.0
+        version: 4.0.0(chai@4.5.0)(sinon@18.0.1)
       strip-ansi:
         specifier: ^7.1.0
         version: 7.1.0
@@ -4590,6 +4593,12 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  sinon-chai@4.0.0:
+    resolution: {integrity: sha512-cWqO7O2I4XfJDWyWElAQ9D/dtdh5Mo0RHndsfiiYyjWnlPzBJdIvjCVURO4EjyYaC3BjV+ISNXCfTXPXTEIEWA==}
+    peerDependencies:
+      chai: ^5.0.0
+      sinon: '>=4.0.0'
 
   sinon@18.0.1:
     resolution: {integrity: sha512-a2N2TDY1uGviajJ6r4D1CyRAkzE9NNVlYOV1wX5xQDuAk0ONgzgRl0EjCQuRCPxOwp13ghsMwt9Gdldujs39qw==}
@@ -10522,6 +10531,11 @@ snapshots:
   signal-exit@3.0.7: {}
 
   signal-exit@4.1.0: {}
+
+  sinon-chai@4.0.0(chai@4.5.0)(sinon@18.0.1):
+    dependencies:
+      chai: 4.5.0
+      sinon: 18.0.1
 
   sinon@18.0.1:
     dependencies:
