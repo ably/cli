@@ -6,17 +6,12 @@ import * as sinon from "sinon";
 import { dirname } from "node:path";
 import * as _stringDistance from "../../../src/utils/string-distance.js";
 
-// Restore all sinon stubs after each test
-// eslint-disable-next-line mocha/no-top-level-hooks
-afterEach(function() {
-  sinon.restore();
-});
-
-// Set environment variable to skip confirmation in tests
-process.env.SKIP_CONFIRMATION = "true";
-
 // Import the compiled hook function
 import hook from "../../../src/hooks/command_not_found/did-you-mean.js";
+
+// Helper regex to strip ANSI codes for matching
+// eslint-disable-next-line no-control-regex
+const stripAnsi = (str: string) => str.replaceAll(/\u001B\[(?:\d*;)*\d*m/g, "");
 
 // Mock command load
 class MockCmdClass {
@@ -106,14 +101,11 @@ async function createTestConfig(): Promise<Config> {
   return config;
 }
 
-// Helper regex to strip ANSI codes for matching
-// eslint-disable-next-line no-control-regex
-const stripAnsi = (str: string) => str.replaceAll(/\u001B\[(?:\d*;)*\d*m/g, "");
-
 // Define custom context interface without extending base Context
 interface TestContext {
   config: Config;
   mockContext: any;
+  sandbox: sinon.SinonSandbox;
   stubs: {
     log: sinon.SinonStub;
     warn: sinon.SinonStub;
@@ -123,26 +115,30 @@ interface TestContext {
   };
 }
 
+// Define sandbox variable accessible to setup chains
+let sandbox: sinon.SinonSandbox;
+
 // Setup context for tests using the custom interface
 const setupTestContext = test
   .add("stubs", {}) // Initialize stubs object
-  .do(async (ctx: TestContext) => {
+  .add("sandbox", () => sandbox) // Make sandbox available in context
+  .do(async (ctx: TestContext & { sandbox: sinon.SinonSandbox }) => {
     ctx.config = await createTestConfig();
 
-    // Create and store stubs in context
+    // Create and store stubs in context using the sandbox
     ctx.stubs = {
-      log: sinon.stub(console, "log"),
-      warn: sinon.stub(console, "warn"),
-      error: sinon.stub(console, "error"),
-      exit: sinon.stub(process, "exit").returns(undefined as never),
-      runCommand: sinon.stub(Config.prototype, "runCommand").resolves(),
+      log: ctx.sandbox.stub(console, "log"),
+      warn: ctx.sandbox.stub(console, "warn"),
+      error: ctx.sandbox.stub(console, "error"),
+      exit: ctx.sandbox.stub(process, "exit").returns(undefined as never),
+      runCommand: ctx.sandbox.stub(Config.prototype, "runCommand").resolves(),
     };
   })
-  .do((ctx: TestContext) => {
+  .do((ctx: TestContext & { sandbox: sinon.SinonSandbox }) => {
     // Create mock context for the hook
     ctx.mockContext = {
       config: ctx.config,
-      debug: sinon.stub(),
+      debug: ctx.sandbox.stub(), // Use sandbox for debug stub
       error(
         input: Error | string,
         options: { code?: string; exit: false | number } = { exit: 1 },
@@ -164,33 +160,33 @@ const setupTestContext = test
       warn: (...args: any[]) => ctx.stubs.warn(...args),
     };
   });
-// No .finally here, use global afterEach
 
 // Use a separate test chain for the rejecting stub
 const setupRejectingTestContext = test
   .add("stubs", {}) // Initialize stubs object
-  .do(async (ctx: TestContext) => {
+  .add("sandbox", () => sandbox) // Make sandbox available in context
+  .do(async (ctx: TestContext & { sandbox: sinon.SinonSandbox }) => {
     ctx.config = await createTestConfig();
 
-    // Create and store stubs in context
+    // Create and store stubs in context using the sandbox
     ctx.stubs = {
-      log: sinon.stub(console, "log"),
-      warn: sinon.stub(console, "warn"),
-      error: sinon.stub(console, "error"),
-      exit: sinon.stub(process, "exit").returns(undefined as never),
+      log: ctx.sandbox.stub(console, "log"),
+      warn: ctx.sandbox.stub(console, "warn"),
+      error: ctx.sandbox.stub(console, "error"),
+      exit: ctx.sandbox.stub(process, "exit").returns(undefined as never),
       // This stub specifically rejects by default (for channels:subscribe)
       // REMOVE default rejection - configure rejection within specific tests
-      runCommand: sinon
+      runCommand: ctx.sandbox
         .stub(Config.prototype, "runCommand")
         // .withArgs("channels:subscribe", []) // Expect empty array now
         // .rejects(new Errors.CLIError("Missing 1 required arg: channel")),
     };
   })
-  .do((ctx: TestContext) => {
+  .do((ctx: TestContext & { sandbox: sinon.SinonSandbox }) => {
     // Create mock context for the hook
     ctx.mockContext = {
       config: ctx.config,
-      debug: sinon.stub(),
+      debug: ctx.sandbox.stub(), // Use sandbox for debug stub
       error(
         input: Error | string,
         options: { code?: string; exit: false | number } = { exit: 1 },
@@ -211,312 +207,332 @@ const setupRejectingTestContext = test
       warn: (...args: any[]) => ctx.stubs.warn(...args),
     };
   });
-// No .finally here, use global afterEach
 
-// --- Tests using the standard context setup ---
+describe('Command Not Found Hook', function() {
 
-setupTestContext.it(
-  "should warn with space separator and run the suggested command (colon input)",
-  async (ctx: TestContext) => {
-    const hookOpts = {
-      argv: [],
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "channels:pubish", // User typo with colon
-    };
-    ctx.config.topicSeparator = " ";
+  beforeEach(function() {
+      sandbox = sinon.createSandbox();
+      // Set environment variable to skip confirmation in tests
+      process.env.SKIP_CONFIRMATION = "true";
+  });
 
-    await hook.apply(ctx.mockContext, [hookOpts]);
+  afterEach(function() {
+    sandbox.restore();
+    delete process.env.SKIP_CONFIRMATION;
+  });
 
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    const warnArg = ctx.stubs.warn.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain(
-      "channels pubish is not an ably command",
-    );
-    // Expect runCommand called with empty argv array now
-    expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be
-      .true;
-  },
-);
+  // --- Tests using the standard context setup ---
 
-setupTestContext.it(
-  "should warn with space separator and run the suggested command (space input)",
-  async (ctx: TestContext) => {
-    const hookOpts = {
-      argv: [],
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "channels pubish", // User typo with space
-    };
-    ctx.config.topicSeparator = " ";
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should warn with space separator and run the suggested command (colon input)",
+    async (ctx: TestContext) => {
+      const hookOpts = {
+        argv: [],
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "channels:pubish", // User typo with colon
+      };
+      ctx.config.topicSeparator = " ";
 
-    await hook.apply(ctx.mockContext, [hookOpts]);
-
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    const warnArg = ctx.stubs.warn.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain(
-      "channels pubish is not an ably command",
-    );
-    // Expect runCommand called with empty argv array now
-    expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be
-      .true;
-  },
-);
-
-setupTestContext.it(
-  "should pass arguments when running suggested command (space input)",
-  async (ctx: TestContext) => {
-    // Simulate process.argv as oclif would see it (less critical now, but good practice)
-    const originalArgv = process.argv;
-    process.argv = [
-      "node",
-      "bin/run",
-      "channels",
-      "publsh", // Typo
-      "my-arg1", // Arg intended for corrected command
-      "--flag", // Flag intended for corrected command
-    ];
-    const hookOpts = {
-      argv: ["my-arg1", "--flag"], // This argv comes from oclif parsing the *original* input
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "channels publsh", // Typo with space
-    };
-    ctx.config.topicSeparator = " ";
-
-    await hook.apply(ctx.mockContext, [hookOpts]);
-
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    const warnArg = ctx.stubs.warn.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain(
-      "channels publsh is not an ably command",
-    );
-    // Hook calls runCommand with the argv derived from opts.argv
-    expect(
-      ctx.stubs.runCommand.calledOnceWith("channels:publish", [
-        "my-arg1",
-        "--flag",
-      ]),
-    ).to.be.true;
-
-    // Reset process.argv for other tests
-    process.argv = originalArgv;
-  },
-);
-
-// Turn the commented-out test into a proper test with a very different command
-setupTestContext.it(
-  "should error correctly for completely unknown command (space input)",
-  async (ctx: TestContext) => {
-    const hookOpts = {
-      argv: [],
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "xyzxyzxyz completely nonexistent command", // Something that won't match anything
-    };
-    ctx.config.topicSeparator = " ";
-
-    let errorCaught = false;
-    try {
       await hook.apply(ctx.mockContext, [hookOpts]);
-    } catch (error: unknown) {
-      errorCaught = true;
-      expect((error as Error).message).to.contain("Command xyzxyzxyz completely nonexistent command not found");
-    }
 
-    // Verify error was thrown and behavior was correct
-    expect(errorCaught).to.be.true;
-    expect(ctx.stubs.warn.called).to.be.false; // No warning as no suggestion
-    expect(ctx.stubs.runCommand.called).to.be.false; // No command run
-    expect(ctx.stubs.error.calledOnce).to.be.true;
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      const warnArg = ctx.stubs.warn.firstCall.args[0];
+      expect(stripAnsi(warnArg)).to.contain(
+        "channels pubish is not an ably command",
+      );
+      // Expect runCommand called with empty argv array now
+      expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be
+        .true;
+    },
+  );
 
-    // Check the error message format
-    const errorArg = ctx.stubs.error.firstCall.args[0];
-    expect(stripAnsi(String(errorArg))).to.include("xyzxyzxyz completely nonexistent command not found");
-    expect(stripAnsi(String(errorArg))).to.include("Run ably --help for a list of available commands");
-  },
-);
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should warn with space separator and run the suggested command (space input)",
+    async (ctx: TestContext) => {
+      const hookOpts = {
+        argv: [],
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "channels pubish", // User typo with space
+      };
+      ctx.config.topicSeparator = " ";
 
-// Also use a very different command for this test
-setupTestContext.it(
-  "should show generic help if no close command is found",
-  async (ctx: TestContext) => {
-    const hookOpts = {
-      argv: [],
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "xyzxyzxyzabc", // Something that won't match anything
-    };
-
-    let errorThrown = false;
-    try {
       await hook.apply(ctx.mockContext, [hookOpts]);
-    } catch {
-      errorThrown = true;
-    }
 
-    // Verify error was thrown
-    expect(errorThrown).to.be.true;
-    expect(ctx.stubs.warn.called).to.be.false;
-    expect(ctx.stubs.runCommand.called).to.be.false;
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      const warnArg = ctx.stubs.warn.firstCall.args[0];
+      expect(stripAnsi(warnArg)).to.contain(
+        "channels pubish is not an ably command",
+      );
+      // Expect runCommand called with empty argv array now
+      expect(ctx.stubs.runCommand.calledOnceWith("channels:publish", [])).to.be
+        .true;
+    },
+  );
 
-    // Verify error was properly logged
-    expect(ctx.stubs.error.calledOnce).to.be.true;
-    const errorArg = ctx.stubs.error.firstCall.args[0];
-    expect(stripAnsi(String(errorArg))).to.include("xyzxyzxyzabc not found");
-    expect(stripAnsi(String(errorArg))).to.include("Run ably --help for a list of available commands");
-  },
-);
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should pass arguments when running suggested command (space input)",
+    async (ctx: TestContext) => {
+      // Simulate process.argv as oclif would see it (less critical now, but good practice)
+      const originalArgv = process.argv;
+      process.argv = [
+        "node",
+        "bin/run",
+        "channels",
+        "publsh", // Typo
+        "my-arg1", // Arg intended for corrected command
+        "--flag", // Flag intended for corrected command
+      ];
+      const hookOpts = {
+        argv: ["my-arg1", "--flag"], // This argv comes from oclif parsing the *original* input
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "channels publsh", // Typo with space
+      };
+      ctx.config.topicSeparator = " ";
 
-setupRejectingTestContext.it(
-  "should show command help with full help command for missing required arguments",
-  async (ctx: TestContext) => {
-    // Create a typical error from missing required args
-    const missingArgsError = new Errors.CLIError("Missing 1 required arg: channel\nSee more help with --help");
-    missingArgsError.oclif = { exit: 1 };
-
-    // Configure the runCommand stub to reject with our error for this specific command
-    ctx.stubs.runCommand
-      .withArgs("channels:subscribe", [])
-      .rejects(missingArgsError);
-
-    const hookOpts = {
-      argv: [], // No args provided for channels:subscribe which requires one
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "channels subscrib", // Typo with space
-    };
-    ctx.config.topicSeparator = " ";
-
-    // The hook should catch the error and display formatted help
-    let errorCaught = false;
-    try {
       await hook.apply(ctx.mockContext, [hookOpts]);
-    } catch (error: unknown) {
-      errorCaught = true;
-      // Check that the error message contains the proper text
-      const errorMsg = (error as Error).message;
-      expect(errorMsg).to.include("Missing 1 required arg: channel");
 
-      // The hook replaces the default help text with a more specific one
-      expect(errorMsg).to.include("See more help with:");
-      expect(errorMsg).to.include("ably channels subscribe --help");
-      expect(errorMsg).not.to.include("See more help with --help");
-    }
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      const warnArg = ctx.stubs.warn.firstCall.args[0];
+      expect(stripAnsi(warnArg)).to.contain(
+        "channels publsh is not an ably command",
+      );
+      // Hook calls runCommand with the argv derived from opts.argv
+      expect(
+        ctx.stubs.runCommand.calledOnceWith("channels:publish", [
+          "my-arg1",
+          "--flag",
+        ]),
+      ).to.be.true;
 
-    // Verify our expectations
-    expect(errorCaught).to.be.true;
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    expect(ctx.stubs.runCommand.calledOnceWith("channels:subscribe", [])).to.be.true;
+      // Reset process.argv for other tests
+      process.argv = originalArgv;
+    },
+  );
 
-    // Verify usage information was displayed
-    expect(ctx.stubs.log.called).to.be.true;
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should error correctly for completely unknown command (space input)",
+    async (ctx: TestContext) => {
+      const hookOpts = {
+        argv: [],
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "xyzxyzxyz completely nonexistent command", // Something that won't match anything
+      };
+      ctx.config.topicSeparator = " ";
 
-    // Find the log call with USAGE
-    let usageCall = false;
-    let helpCall = false;
+      let errorCaught = false;
+      try {
+        await hook.apply(ctx.mockContext, [hookOpts]);
+      } catch (error: unknown) {
+        errorCaught = true;
+        expect((error as Error).message).to.contain("Command xyzxyzxyz completely nonexistent command not found");
+      }
 
-    for (let i = 0; i < ctx.stubs.log.callCount; i++) {
-      const callArg = ctx.stubs.log.getCall(i).args[0];
-      if (typeof callArg === 'string') {
-        if (callArg === '\nUSAGE') {
-          usageCall = true;
-        }
-        if (callArg.includes('See more help with:')) {
-          helpCall = true;
+      // Verify error was thrown and behavior was correct
+      expect(errorCaught).to.be.true;
+      expect(ctx.stubs.warn.called).to.be.false; // No warning as no suggestion
+      expect(ctx.stubs.runCommand.called).to.be.false; // No command run
+      expect(ctx.stubs.error.calledOnce).to.be.true;
+
+      // Check the error message format
+      const errorArg = ctx.stubs.error.firstCall.args[0];
+      expect(stripAnsi(String(errorArg))).to.include("xyzxyzxyz completely nonexistent command not found");
+      expect(stripAnsi(String(errorArg))).to.include("Run ably --help for a list of available commands");
+    },
+  );
+
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should show generic help if no close command is found",
+    async (ctx: TestContext) => {
+      const hookOpts = {
+        argv: [],
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "xyzxyzxyzabc", // Something that won't match anything
+      };
+
+      let errorThrown = false;
+      try {
+        await hook.apply(ctx.mockContext, [hookOpts]);
+      } catch {
+        errorThrown = true;
+      }
+
+      // Verify error was thrown
+      expect(errorThrown).to.be.true;
+      expect(ctx.stubs.warn.called).to.be.false;
+      expect(ctx.stubs.runCommand.called).to.be.false;
+
+      // Verify error was properly logged
+      expect(ctx.stubs.error.calledOnce).to.be.true;
+      const errorArg = ctx.stubs.error.firstCall.args[0];
+      expect(stripAnsi(String(errorArg))).to.include("xyzxyzxyzabc not found");
+      expect(stripAnsi(String(errorArg))).to.include("Run ably --help for a list of available commands");
+    },
+  );
+
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupRejectingTestContext.it(
+    "should show command help with full help command for missing required arguments",
+    async (ctx: TestContext) => {
+      // Create a typical error from missing required args
+      const missingArgsError = new Errors.CLIError("Missing 1 required arg: channel\nSee more help with --help");
+      missingArgsError.oclif = { exit: 1 };
+
+      // Configure the runCommand stub to reject with our error for this specific command
+      ctx.stubs.runCommand
+        .withArgs("channels:subscribe", [])
+        .rejects(missingArgsError);
+
+      const hookOpts = {
+        argv: [], // No args provided for channels:subscribe which requires one
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "channels subscrib", // Typo with space
+      };
+      ctx.config.topicSeparator = " ";
+
+      // The hook should catch the error and display formatted help
+      let errorCaught = false;
+      try {
+        await hook.apply(ctx.mockContext, [hookOpts]);
+      } catch (error: unknown) {
+        errorCaught = true;
+        // Check that the error message contains the proper text
+        const errorMsg = (error as Error).message;
+        expect(errorMsg).to.include("Missing 1 required arg: channel");
+
+        // The hook replaces the default help text with a more specific one
+        expect(errorMsg).to.include("See more help with:");
+        expect(errorMsg).to.include("ably channels subscribe --help");
+        expect(errorMsg).not.to.include("See more help with --help");
+      }
+
+      // Verify our expectations
+      expect(errorCaught).to.be.true;
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      expect(ctx.stubs.runCommand.calledOnceWith("channels:subscribe", [])).to.be.true;
+
+      // Verify usage information was displayed
+      expect(ctx.stubs.log.called).to.be.true;
+
+      // Find the log call with USAGE
+      let usageCall = false;
+      let helpCall = false;
+
+      for (let i = 0; i < ctx.stubs.log.callCount; i++) {
+        const callArg = ctx.stubs.log.getCall(i).args[0];
+        if (typeof callArg === 'string') {
+          if (callArg === '\nUSAGE') {
+            usageCall = true;
+          }
+          if (callArg.includes('See more help with:')) {
+            helpCall = true;
+          }
         }
       }
-    }
 
-    expect(usageCall).to.be.true;
-    expect(helpCall).to.be.true;
-  },
-);
+      expect(usageCall).to.be.true;
+      expect(helpCall).to.be.true;
+    },
+  );
 
-setupTestContext.it(
-  "should correctly suggest and run help for a command",
-  async (ctx: TestContext) => {
-    const hookOpts = {
-      argv: [],
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "hep", // Typo for "help"
-    };
-    await hook.apply(ctx.mockContext, [hookOpts]);
-
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    const warnArg = ctx.stubs.warn.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain("hep is not an ably command");
-    // Assert runCommand was called with "help" and an empty argv array
-    expect(ctx.stubs.runCommand.calledOnceWith("help", [])).to.be.true;
-  },
-);
-
-// --- Tests using the rejecting context setup ---
-
-setupTestContext
-  .it(
-  "should attempt suggested command and propagate its error (space input)",
-  async (ctx: TestContext) => {
-    // Create a typical error from missing required args
-    const missingArgsError = new Errors.CLIError("Missing 1 required arg: channel");
-    missingArgsError.oclif = { exit: 1 };
-
-    // Configure the runCommand stub to reject with our error for this specific command
-    ctx.stubs.runCommand
-      .withArgs("channels:subscribe", [])
-      .rejects(missingArgsError);
-
-    const hookOpts = {
-      argv: [], // No args provided for channels:subscribe which requires one
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "channels subscrib", // Typo with space
-    };
-    ctx.config.topicSeparator = " ";
-
-    // We expect the error to be thrown from the hook
-    let errorCaught = false;
-    try {
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should correctly suggest and run help for a command",
+    async (ctx: TestContext) => {
+      const hookOpts = {
+        argv: [],
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "hep", // Typo for "help"
+      };
       await hook.apply(ctx.mockContext, [hookOpts]);
-    } catch (error: unknown) {
-      errorCaught = true;
-      // Check the error is correctly propagated
-      expect((error as Error).message).to.equal("Missing 1 required arg: channel");
-    }
 
-    // Verify our expectations
-    expect(errorCaught).to.be.true;
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    expect(ctx.stubs.runCommand.calledOnceWith("channels:subscribe", [])).to.be.true;
-  },
-);
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      const warnArg = ctx.stubs.warn.firstCall.args[0];
+      expect(stripAnsi(warnArg)).to.contain("hep is not an ably command");
+      // Assert runCommand was called with "help" and an empty argv array
+      expect(ctx.stubs.runCommand.calledOnceWith("help", [])).to.be.true;
+    },
+  );
 
-setupTestContext.it(
-  "should handle arguments when suggesting commands with a typo",
-  async (ctx: TestContext) => {
-    // Simulate a command with typo followed by arguments
-    // In real CLI execution, the command comes with colons as separators
-    const hookOpts = {
-      argv: [], // In real CLI execution, argumentss aren't typically in argv
-      config: ctx.config,
-      context: ctx.mockContext,
-      id: "channels:publis:foo:bar", // Real CLI format with colons
-    };
-    ctx.config.topicSeparator = " ";
+  // --- Tests using the rejecting context setup (or standard if needed) ---
 
-    await hook.apply(ctx.mockContext, [hookOpts]);
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should attempt suggested command and propagate its error (space input)",
+    async (ctx: TestContext) => {
+      // Create a typical error from missing required args
+      const missingArgsError = new Errors.CLIError("Missing 1 required arg: channel");
+      missingArgsError.oclif = { exit: 1 };
 
-    expect(ctx.stubs.warn.calledOnce).to.be.true;
-    const warnArg = ctx.stubs.warn.firstCall.args[0];
-    expect(stripAnsi(warnArg)).to.contain(
-      "channels publis is not an ably command",
-    );
+      // Configure the runCommand stub to reject with our error for this specific command
+      ctx.stubs.runCommand
+        .withArgs("channels:subscribe", [])
+        .rejects(missingArgsError);
 
-    // Should recognize "channels:publis" as typo for "channels:publish"
-    // and pass the arguments "foo bar" when running the command
-    expect(
-      ctx.stubs.runCommand.calledOnceWith("channels:publish", ["foo", "bar"]),
-    ).to.be.true;
-  },
-);
+      const hookOpts = {
+        argv: [], // No args provided for channels:subscribe which requires one
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "channels subscrib", // Typo with space
+      };
+      ctx.config.topicSeparator = " ";
+
+      // We expect the error to be thrown from the hook
+      let errorCaught = false;
+      try {
+        await hook.apply(ctx.mockContext, [hookOpts]);
+      } catch (error: unknown) {
+        errorCaught = true;
+        // Check the error is correctly propagated
+        expect((error as Error).message).to.equal("Missing 1 required arg: channel");
+      }
+
+      // Verify our expectations
+      expect(errorCaught).to.be.true;
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      expect(ctx.stubs.runCommand.calledOnceWith("channels:subscribe", [])).to.be.true;
+    },
+  );
+
+  // eslint-disable-next-line mocha/no-setup-in-describe
+  setupTestContext.it(
+    "should handle arguments when suggesting commands with a typo",
+    async (ctx: TestContext) => {
+      // Simulate a command with typo followed by arguments
+      // In real CLI execution, the command comes with colons as separators
+      const hookOpts = {
+        argv: [], // In real CLI execution, argumentss aren't typically in argv
+        config: ctx.config,
+        context: ctx.mockContext,
+        id: "channels:publis:foo:bar", // Real CLI format with colons
+      };
+      ctx.config.topicSeparator = " ";
+
+      await hook.apply(ctx.mockContext, [hookOpts]);
+
+      expect(ctx.stubs.warn.calledOnce).to.be.true;
+      const warnArg = ctx.stubs.warn.firstCall.args[0];
+      expect(stripAnsi(warnArg)).to.contain(
+        "channels publis is not an ably command",
+      );
+
+      // Should recognize "channels:publis" as typo for "channels:publish"
+      // and pass the arguments "foo bar" when running the command
+      expect(
+        ctx.stubs.runCommand.calledOnceWith("channels:publish", ["foo", "bar"]),
+      ).to.be.true;
+    },
+  );
+
+});

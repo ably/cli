@@ -7,13 +7,13 @@ import * as Ably from 'ably';
 // Ensure we're in test mode for all tests
 process.env.ABLY_CLI_TEST_MODE = 'true';
 
-// Suppress known Ably errors that are expected in tests
-const KNOWN_ABLY_ERRORS = [
-  'unable to handle request; no application id found in request',
-  'Socket connection timed out',
-  'Unable to establish a socket connection',
-  'Connection failed'
-];
+// // Suppress known Ably errors that are expected in tests - REMOVED as handlers are commented out
+// const KNOWN_ABLY_ERRORS = [
+//   'unable to handle request; no application id found in request',
+//   'Socket connection timed out',
+//   'Unable to establish a socket connection',
+//   'Connection failed'
+// ];
 
 // Track active resources for cleanup
 const activeClients: (Ably.Rest | Ably.Realtime)[] = [];
@@ -23,9 +23,18 @@ const activeTimers: NodeJS.Timeout[] = [];
 // Instead, we'll use explicit tracking in our helper functions
 
 // Set Ably log level to only show errors
-if (!process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
+if (process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
+    // If output is shown, also make it verbose for debugging
+    // console.warn('ABLY_CLI_TEST_SHOW_OUTPUT is set, enabling Ably verbose logging...');
+    // (Ably.Realtime as unknown as { logLevel: number }).logLevel = 4;
+    // Keep default error level if showing output
+    (Ably.Realtime as unknown as { logLevel: number }).logLevel = 3;
+} else {
   // Set Ably log level to suppress non-error messages
   (Ably.Realtime as unknown as { logLevel: number }).logLevel = 3; // 3 corresponds to Ably.LogLevel.Error
+  // TEMPORARILY ENABLE VERBOSE LOGGING FOR DEBUGGING
+  // console.warn('TEMPORARILY enabling Ably verbose logging for debugging...');
+  // (Ably.Realtime as unknown as { logLevel: number }).logLevel = 4; // 4 corresponds to Ably.LogLevel.Verbose
 }
 
 // Suppress console output unless ABLY_CLI_TEST_SHOW_OUTPUT is set
@@ -82,7 +91,18 @@ if (!process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
  */
 export function trackAblyClient(client: Ably.Rest | Ably.Realtime): void {
   if (!activeClients.includes(client)) {
-  activeClients.push(client);
+    const clientType = client instanceof Ably.Realtime ? 'Realtime' : 'REST';
+    let clientId = 'N/A';
+    if (client instanceof Ably.Realtime && client.auth?.clientId) {
+        clientId = client.auth.clientId;
+    } else {
+        const clientWithOptions = client as Ably.Rest & { options?: { clientId?: string } };
+        if (clientWithOptions.options?.clientId) {
+             clientId = clientWithOptions.options.clientId;
+        }
+    }
+    console.log(`[Client Lifecycle] Tracking Ably ${clientType} client (ID: ${clientId}) at ${new Date().toISOString()}`);
+    activeClients.push(client);
   }
 }
 
@@ -106,45 +126,85 @@ async function globalCleanup() {
         }
     }
 
-    const cleanupPromise = new Promise<void>((resolve) => {
-        setTimeout(() => {
-          try {
+    const cleanupPromise = new Promise<void>((resolve, reject) => {
+        // Introduce a timeout for the entire close operation
+        const timeoutId = setTimeout(() => {
+            console.warn(`[Cleanup] Timeout closing client (ID: ${clientId}), forcing resolve.`);
+            reject(new Error(`Timeout closing client (ID: ${clientId})`));
+        }, 5000); // 5-second timeout
+
+        try {
             if (client instanceof Ably.Realtime && client.connection) {
-              const currentState = client.connection.state;
-              console.log(`[Cleanup] Processing Realtime client (ID: ${clientId}, State: ${currentState})`);
-              try {
-                // Check state *before* attempting to remove listeners
-                if (currentState !== 'closed' && currentState !== 'failed' && currentState !== 'suspended') {
-                    client.connection.off(); // Remove all connection listeners
-                    console.log(`[Cleanup] Removed connection listeners for client (ID: ${clientId})`);
+                const currentState = client.connection.state;
+                console.log(`[Cleanup] Processing Realtime client (ID: ${clientId}, State: ${currentState})`);
+
+                if (currentState === 'closed' || currentState === 'failed' || currentState === 'suspended') {
+                    console.log(`[Cleanup] Client (ID: ${clientId}) already in final state, skipping close.`);
+                    clearTimeout(timeoutId);
+                    resolve();
                 } else {
-                     console.log(`[Cleanup] Client (ID: ${clientId}) already in final state, skipping listener removal.`);
+                    // Add listeners for close and failed events
+                    const closeListener = () => {
+                        console.log(`[Cleanup] Client (ID: ${clientId}) closed successfully.`);
+                        clearTimeout(timeoutId);
+                        // Remove listeners to prevent memory leaks
+                        client.connection.off('closed', closeListener);
+                        client.connection.off('failed', failedListener);
+                        resolve();
+                    };
+
+                    const failedListener = (stateChange: Ably.ConnectionStateChange) => {
+                        const errorInfo = stateChange.reason || new Ably.ErrorInfo('Unknown error during close', 50000, 500); // Provide a default if reason is missing
+                        console.warn(`[Cleanup] Client (ID: ${clientId}) connection failed during close:`, errorInfo);
+                        clearTimeout(timeoutId);
+                         // Remove listeners to prevent memory leaks
+                        client.connection.off('closed', closeListener);
+                        client.connection.off('failed', failedListener);
+                        // Resolve anyway, as we attempted cleanup
+                        resolve();
+                    };
+
+                    client.connection.once('closed', closeListener);
+                    client.connection.once('failed', failedListener);
+
+                    // Initiate close
+                    client.close();
+                    console.log(`[Cleanup] Initiated close for client (ID: ${clientId})`);
                 }
-              } catch (listenerError) {
-                  console.warn(`[Cleanup] Error removing listeners for client (ID: ${clientId}):`, listenerError);
-              }
-              resolve();
             } else if (client instanceof Ably.Rest) {
-              console.log(`[Cleanup] Tracking REST client (ID: ${clientId}) - no action needed.`);
-              resolve();
+                console.log(`[Cleanup] Tracking REST client (ID: ${clientId}) - no action needed.`);
+                clearTimeout(timeoutId);
+                resolve();
             } else {
-              console.warn(`[Cleanup] Unknown client type encountered.`);
-              resolve();
+                console.warn(`[Cleanup] Unknown client type encountered.`);
+                clearTimeout(timeoutId);
+                resolve();
             }
-          } catch (error) {
-            // Use the determined clientId, ensure it's safe if still N/A
+        } catch (error) {
+            clearTimeout(timeoutId);
             const clientIdOnError = clientId; // Already determined above
-            console.error(`[Cleanup] Error during client processing (ID: ${clientIdOnError}):`, error);
+            console.error(`[Client Lifecycle] Error during client processing (ID: ${clientIdOnError}):`, error);
             resolve();
-          }
-        }, 5);
+        }
     });
-    cleanupPromises.push(cleanupPromise);
+
+    cleanupPromises.push(cleanupPromise.catch(error => {
+        // Catch potential promise rejections (e.g., from timeout)
+        // Log the error but don't prevent Promise.all from settling
+        // Use the clientId captured in the outer scope for logging
+        console.error(`[Client Lifecycle] Promise rejection during cleanup for client (ID: ${clientId}):`, error);
+    }));
   }
 
-  await Promise.all(cleanupPromises);
-
-  console.log(`Finished cleaning up ${clientCount} clients.`);
+  // Use Promise.allSettled to wait for all cleanup attempts
+  const results = await Promise.allSettled(cleanupPromises);
+  console.log(`[Client Lifecycle] Finished processing ${clientCount} client cleanup attempts at ${new Date().toISOString()}.`);
+  results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+          // Errors are already logged within the promise/catch block
+          console.warn(`[Client Lifecycle] Cleanup attempt ${index + 1} failed (see previous logs).`);
+      }
+  });
 
   // activeClients array should be empty now due to shift()
 
@@ -195,6 +255,7 @@ try {
   });
 
   // Handle unhandled promise rejections
+  /* // Temporarily disable for debugging _ErrorInfo
   process.on('unhandledRejection', (reason) => {
     // Only log unhandled rejections if not a known test-related issue
     if (reason instanceof Error) {
@@ -211,8 +272,10 @@ try {
     }
     // Don't exit, but log for debugging purposes
   });
+  */
 
   // Handle uncaught errors to ensure tests don't hang
+  /* // Temporarily disable for debugging _ErrorInfo
   process.on('uncaughtException', (err) => {
     // Only log uncaught exceptions if not a known test-related issue
     const isKnownAblyError = KNOWN_ABLY_ERRORS.some(errMsg =>
@@ -224,6 +287,7 @@ try {
     }
     // Don't exit, but log for debugging purposes
   });
+  */
 
   // Handle Node.js process errors
   process.on('exit', (code) => {
@@ -247,6 +311,7 @@ try {
   };
 
   // Run cleanup when tests finish
+  /* // Relying on Mocha root hook instead
   process.on('beforeExit', () => {
     globalCleanup().catch(error => {
       console.error('Error during global cleanup:', error);
@@ -256,6 +321,7 @@ try {
       globalThis.gc();
     }
   });
+  */
 
   // Load environment variables from .env
   const envPath = resolve(process.cwd(), '.env');

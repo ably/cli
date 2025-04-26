@@ -10,19 +10,21 @@ describe("InteractiveHelper", function() {
   let configManagerStub: sinon.SinonStubbedInstance<ConfigManager>;
   let promptStub: sinon.SinonStub;
   let consoleLogSpy: sinon.SinonSpy;
+  let sandbox: sinon.SinonSandbox;
 
   beforeEach(function() {
-    // Create stubs and spies
-    configManagerStub = sinon.createStubInstance(ConfigManager);
-    promptStub = sinon.stub(inquirer, "prompt");
-    consoleLogSpy = sinon.spy(console, "log");
+    sandbox = sinon.createSandbox();
+    // Create stubs and spies using sandbox
+    configManagerStub = sandbox.createStubInstance(ConfigManager);
+    promptStub = sandbox.stub(inquirer, "prompt");
+    consoleLogSpy = sandbox.spy(console, "log");
 
     // Create fresh instance for each test
     interactiveHelper = new InteractiveHelper(configManagerStub, { logErrors: false });
   });
 
   afterEach(function() {
-    sinon.restore();
+    sandbox.restore();
   });
 
   describe("#confirm", function() {
@@ -104,7 +106,7 @@ describe("InteractiveHelper", function() {
     let controlApiStub: sinon.SinonStubbedInstance<ControlApi>;
 
     beforeEach(function() {
-      controlApiStub = sinon.createStubInstance(ControlApi);
+      controlApiStub = sandbox.createStubInstance(ControlApi);
     });
 
     it("should return selected app", async function() {
@@ -164,7 +166,7 @@ describe("InteractiveHelper", function() {
     let controlApiStub: sinon.SinonStubbedInstance<ControlApi>;
 
     beforeEach(function() {
-      controlApiStub = sinon.createStubInstance(ControlApi);
+      controlApiStub = sandbox.createStubInstance(ControlApi);
     });
 
     it("should return selected key", async function() {

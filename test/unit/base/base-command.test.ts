@@ -65,29 +65,33 @@ describe("AblyBaseCommand", function() {
   let configManagerStub: sinon.SinonStubbedInstance<ConfigManager>;
   let interactiveHelperStub: sinon.SinonStubbedInstance<InteractiveHelper>;
   let _fsExistsStub: sinon.SinonStub;
+  let sandbox: sinon.SinonSandbox;
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(function() {
+    sandbox = sinon.createSandbox();
     // Store original env vars to restore after tests
     originalEnv = { ...process.env };
 
     // Reset env before each test
     process.env = { ...originalEnv };
 
-    // Stub fs.existsSync to prevent file system operations
-    _fsExistsStub = sinon.stub(fs, "existsSync").returns(true);
+    // Stub fs.existsSync to prevent file system operations using sandbox
+    _fsExistsStub = sandbox.stub(fs, "existsSync").returns(true);
 
-    // Also stub fs.readFileSync to prevent actual file access
-    sinon.stub(fs, "readFileSync").returns("");
+    // Also stub fs.readFileSync to prevent actual file access using sandbox
+    sandbox.stub(fs, "readFileSync").returns("");
 
-    // Create stubs for dependencies
-    configManagerStub = sinon.createStubInstance(ConfigManager);
+    // Create stubs for dependencies using sandbox
+    // Note: createStubInstance doesn't need sandbox explicitly, but we manage other stubs with it.
+    configManagerStub = sandbox.createStubInstance(ConfigManager);
 
-    // Instead of stubbing loadConfig which is private, we'll stub methods that might access the file system
-    sinon.stub(ConfigManager.prototype as any, "ensureConfigDirExists").callsFake(() => {});
-    sinon.stub(ConfigManager.prototype as any, "saveConfig").callsFake(() => {});
+    // Instead of stubbing loadConfig which is private, we'll stub methods that might access the file system using sandbox
+    sandbox.stub(ConfigManager.prototype as any, "ensureConfigDirExists").callsFake(() => {});
+    sandbox.stub(ConfigManager.prototype as any, "saveConfig").callsFake(() => {});
 
-    interactiveHelperStub = sinon.createStubInstance(InteractiveHelper);
+    // Note: createStubInstance doesn't need sandbox explicitly.
+    interactiveHelperStub = sandbox.createStubInstance(InteractiveHelper);
 
     // Mock a minimal config
     const mockConfig = {
@@ -103,8 +107,8 @@ describe("AblyBaseCommand", function() {
   });
 
   afterEach(function() {
-    // Clean up sinon stubs
-    sinon.restore();
+    // Clean up sinon stubs using the sandbox
+    sandbox.restore();
 
     // Restore original env
     process.env = originalEnv;

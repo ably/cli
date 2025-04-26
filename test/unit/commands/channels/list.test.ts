@@ -237,20 +237,22 @@ describe("ChannelsList", function () {
   let mockConfig: Config;
   let logStub: sinon.SinonStub;
   let errorStub: sinon.SinonStub;
+  let sandbox: sinon.SinonSandbox;
 
   beforeEach(function () {
+    sandbox = sinon.createSandbox();
     // Mock Config
     mockConfig = {} as Config;
 
     // Create command instance
     command = new TestableChannelsList([], mockConfig);
 
-    // Stub the log and error methods
-    logStub = sinon.stub(command, "log");
-    errorStub = sinon.stub(command, "error");
+    // Stub the log and error methods using the sandbox
+    logStub = sandbox.stub(command, "log");
+    errorStub = sandbox.stub(command, "error");
 
-    // Create request stub
-    requestStub = sinon.stub();
+    // Create request stub using the sandbox
+    requestStub = sandbox.stub();
 
     // Create mock REST client
     mockRest = {
@@ -260,8 +262,8 @@ describe("ChannelsList", function () {
     // Set the mock rest client
     command.setRestClient(mockRest);
 
-    // Create a stub for the client close method
-    closeStub = sinon.stub();
+    // Create a stub for the client close method using the sandbox
+    closeStub = sandbox.stub();
 
     // Set the mock Ably client
     command.setMockAblyClient({
@@ -278,7 +280,8 @@ describe("ChannelsList", function () {
   });
 
   afterEach(function () {
-    sinon.restore();
+    // Restore only the sandbox
+    sandbox.restore();
   });
 
   describe("run", function () {
