@@ -6,7 +6,7 @@
 - [ ] Support auto-update
 - [ ] Web example should tell the user to install the CLI locally if there are connection issues / CLI has not loaded
 - [ ] Web example should support non logged in mode (i.e. for docs for example) where commands that rely on the control API, or channel enumeration (surfacing other user activity) are disabled. The user should be told that this functionality is not available to anonymous users and they should sign up / login.
-- [ ] Connection handling of Web CLI no longer seems to show the connecting state and number of attempts correctly.
+- [ ] Connection handling of Web CLI no longer seems to show the connecting state and number of attempts correctly. Leaving the local web CLI running, I see "Connecting to Ably CLI... (Attempt 776/15)". Connections should also not auto-reconnect if the server is sending an error, such as invalid token, or session terminated when idle
 - [ ] When an API key or Access Token fails with a 40x error, it should show the error message without a stack trace, and should tell the user to reauth appropriately i.e. using `ably login` for access tokens, or `ably auth keys switch` for API keys. Here is the error message from an access token that failed:
   ```sh
   $ ably apps stats
