@@ -36,3 +36,6 @@ oclif.lock
 # Editor directories and files
 /.idea
 tsconfig.tsbuildinfo
+
+# Playwright test results
+/test-results/

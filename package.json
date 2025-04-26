@@ -18,6 +18,7 @@
     "test:unit": "./scripts/run-tests.sh \"test/unit/**/*.test.ts\" --timeout 10000",
     "test:integration": "./scripts/run-tests.sh \"test/integration/**/*.test.ts\" --timeout 10000",
     "test:e2e": "./scripts/run-tests.sh \"test/e2e/**/*.test.ts\" --timeout 30000",
+    "test:playwright": "./scripts/run-tests.sh test/e2e/web-cli/web-cli.test.ts --timeout 60000",
     "posttest": "./scripts/lint-test-paths.sh",
     "prepack": "pnpm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
     "prepare": "pnpm run build && pnpm run prepack",
