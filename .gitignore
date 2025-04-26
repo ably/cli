@@ -39,3 +39,6 @@ tsconfig.tsbuildinfo
 
 # Playwright test results
 /test-results/
+
+# SpecStory plugin to save chats
+.specstory/
