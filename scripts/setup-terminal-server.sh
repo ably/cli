@@ -251,7 +251,8 @@ Environment="DOCKER_IMAGE_NAME=$(grep -E '^DOCKER_IMAGE_NAME=' ${ENV_CONFIG_FILE
 Environment="MAX_SESSIONS=$(grep -E '^MAX_SESSIONS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
 Environment="DEBUG=$(grep -E '^DEBUG=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
 
-ExecStart=$(command -v node) ${INSTALL_DIR}/dist/scripts/terminal-server.js
+# Use ts-node/esm loader to run the TypeScript source directly
+ExecStart=$(command -v node) --loader ts-node/esm --no-warnings ${INSTALL_DIR}/scripts/terminal-server.ts
 
 Restart=always
 RestartSec=5

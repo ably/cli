@@ -1,6 +1,18 @@
-# Ably CLI Terminal Server Setup with Automatic HTTPS
+# Ably CLI Terminal Server Setup & Overview
 
-This document describes how to set up the Ably CLI Terminal Server as a systemd service on a fresh Ubuntu server (tested on 22.04 LTS and 24.04 LTS), including **Caddy** as a reverse proxy for automatic HTTPS using Let's Encrypt.
+This document describes the Ably CLI Terminal Server, its purpose, how it works, and how to set it up as a systemd service on a fresh Ubuntu server (tested on 22.04 LTS and 24.04 LTS), including **Caddy** as a reverse proxy for automatic HTTPS using Let's Encrypt.
+
+## Overview
+
+The Terminal Server is a WebSocket server that allows users to interact with the Ably CLI through a web interface (like the example in `examples/web-cli`). It creates a secure, containerized environment where CLI commands can be executed remotely.
+
+### How It Works
+
+1. The server runs a secure Docker container (`ably-cli-sandbox`) that encapsulates the Ably CLI and its dependencies.
+2. It establishes WebSocket connections (via WSS when using Caddy) to handle client requests.
+3. Authentication is performed using credentials passed by the client.
+4. Commands sent by authenticated clients are executed within the restricted container environment.
+5. Output from the commands is streamed back to the client in real-time.
 
 ## Prerequisites
 
@@ -17,17 +29,20 @@ This single command downloads the setup script from the GitHub repository and ex
 **Security Warning:** Always review scripts from the internet before running them with `sudo`.
 
 ### Installing from the main branch:
+
 ```bash
 curl -sSL https://raw.githubusercontent.com/ably/cli/main/scripts/setup-terminal-server.sh > /tmp/setup.sh && chmod +x /tmp/setup.sh && sudo -E /tmp/setup.sh
 ```
 
 ### Installing from a custom branch:
+
 ```bash
 # Replace 'your-branch-name' with the desired branch name
 BRANCH="your-branch-name" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/scripts/setup-terminal-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
 ```
 
 For example, to install from a branch named `feature/container-hardening`:
+
 ```bash
 BRANCH="feature/container-hardening" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/scripts/setup-terminal-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
 ```
@@ -105,6 +120,62 @@ Once configured, you can manage the services using `systemctl`:
     sudo systemctl disable ably-terminal-server
     ```
 
+## Diagnostics
+
+If you encounter issues with the CLI, the Web CLI example, or the terminal server, you can run diagnostic scripts to help identify the problem.
+
+### Container Diagnostics
+
+This script tests the `ably-cli-sandbox` Docker image itself, verifying its build process, internal permissions, and script execution independent of the running terminal server.
+
+To test the container:
+
+```bash
+cd /path/to/ably/cli
+
+# Run using pnpm
+pnpm diagnostics:container
+```
+
+*(Note: This script uses `sudo` internally if needed for Docker commands)*
+
+This script will:
+    - Build the `ably-cli-sandbox` image.
+    - Run basic checks inside the container (user, permissions).
+    - Attempt to execute the internal scripts (`network-security.sh`, `restricted-shell.sh`) in a test mode.
+    - Attempt to start the container with its default entrypoint, **providing dummy Ably credentials** for basic startup validation.
+    - Report success or failure at each step.
+
+Review the output of this script to diagnose container-specific issues.
+
+### Server Diagnostics
+
+This script tests the connection and basic functionality of a *running* terminal server instance. It connects to the server, sends dummy credentials, and attempts to run a simple command (`ably help`).
+
+**To test the default local server (ws://localhost:8080):**
+
+```bash
+# Navigate to the project root
+cd /path/to/ably/cli
+
+# Run the script
+pnpm diagnostics:server
+```
+
+**To test a remote or custom server:**
+
+```bash
+# Navigate to the project root
+cd /path/to/ably/cli
+
+# Set the URL environment variable OR pass as an argument
+TERMINAL_SERVER_URL="wss://your-server-domain.com" pnpm diagnostics:server
+# OR
+pnpm diagnostics:server wss://your-server-domain.com
+```
+
+This script helps verify if the terminal server is reachable, accepting connections, authenticating correctly (with dummy credentials), and responding to basic commands.
+
 ## Role of Caddy
 
 Caddy acts as a secure entry point to your terminal server:
@@ -117,15 +188,15 @@ Caddy acts as a secure entry point to your terminal server:
 
 The setup script performs the following actions:
 
-1.  System Checks.
-2.  Install Prerequisites (incl. `ufw` for firewall).
-3.  Install Docker.
-4.  Install Node.js & pnpm.
-5.  **Install Caddy:** Installs the Caddy web server using its official repository.
-6.  Create Service User/Group (`ablysrv`).
-7.  Clone Repository.
-8.  Set Permissions.
-9.  Install Dependencies & Build.
+1. System Checks.
+2. Install Prerequisites (incl. `ufw` for firewall).
+3. Install Docker.
+4. Install Node.js & pnpm.
+5. **Install Caddy:** Installs the Caddy web server using its official repository.
+6. Create Service User/Group (`ablysrv`).
+7. Clone Repository.
+8. Set Permissions.
+9. Install Dependencies & Build.
 10. Install AppArmor Profile.
 11. **Create Configuration:** Creates `/etc/ably-terminal-server/config.env` with placeholders for domain, email, and ports.
 12. **Create Node.js Systemd Service:** Creates `/etc/systemd/system/ably-terminal-server.service`.

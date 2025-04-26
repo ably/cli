@@ -37,6 +37,9 @@ RUN chmod +x /scripts/restricted-shell.sh && \
     chmod +x /scripts/install-apparmor.sh && \
     chmod +x /scripts/security-monitor.sh
 
+# Ensure scripts directory and contents are owned by appuser
+RUN chown -R appuser:appgroup /scripts
+
 # Create log directory with proper permissions
 RUN chown -R appuser:appgroup /var/log/ably-cli-security
 

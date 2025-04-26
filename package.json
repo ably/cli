@@ -25,9 +25,10 @@
     "version": "oclif readme && git add README.md",
     "cli": "bin/run.js",
     "terminal-server": "node dist/scripts/terminal-server.js",
-    "terminal-server:test-client": "node dist/scripts/terminal-test-client.js",
     "build:packages": "pnpm -r --filter './packages/*' build",
-    "build:examples": "pnpm -r --filter './examples/*' build"
+    "build:examples": "pnpm -r --filter './examples/*' build",
+    "diagnostics:container": "bash scripts/diagnostics-container.sh",
+    "diagnostics:server": "pnpm run build && node dist/scripts/diagnostics-server.js"
   },
   "author": "Ably <support@ably.com>",
   "license": "Apache-2.0",
