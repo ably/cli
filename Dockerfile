@@ -4,10 +4,17 @@ WORKDIR /usr/src/app
 
 # Install bash with readline support for better terminal interaction
 # Add security utilities for container hardening
-RUN apk add --no-cache bash coreutils iptables bc curl
+# Add jq to parse package.json
+RUN apk add --no-cache bash coreutils iptables bc curl jq
 
-# Install Ably CLI globally
-RUN npm install -g @ably/cli && \
+# Copy package.json to extract version
+COPY package.json .
+
+# Install Ably CLI globally using version from package.json
+RUN CLI_VERSION=$(jq -r .version package.json) && \
+    npm install -g @ably/cli@${CLI_VERSION} && \
+    # Remove package.json after use
+    rm package.json && \
     # Force npm to create package-lock.json which helps with module resolution
     npm init -y && \
     npm cache clean --force
