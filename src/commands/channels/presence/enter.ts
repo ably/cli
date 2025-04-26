@@ -141,6 +141,7 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
       `Attempting to enter presence on ${channel.name}`,
       { data: presenceData },
     );
+    await channel.presence.enter(presenceData);
     this.logCliEvent(
       flags,
       "presence",
@@ -149,8 +150,7 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
       { clientId: client.auth.clientId },
     );
 
-    // Add JSON output block if missing or enhance existing
-    if (this.shouldOutputJson(flags)) { // Use the original check
+    if (this.shouldOutputJson(flags)) {
       this.log(
         this.formatJsonOutput(
           {
@@ -165,14 +165,13 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
         ),
       );
     }
-    // Modify the existing non-JSON log block to be conditional
-    else { // Use the original check (implicitly !this.shouldOutputJson(flags))
+    else {
         this.log(
             `${chalk.green("✓")} Entered presence on channel ${chalk.cyan(channel.name)} as ${chalk.blue(client.auth.clientId)}`,
         );
     }
 
-    if (flags["show-others"]) { // Use the original check
+    if (flags["show-others"]) {
       await this.displayCurrentMembers(channel, client, flags);
       this.logCliEvent(
         flags,
