@@ -96,11 +96,23 @@ describe('Diagnostic Scripts E2E Tests', function() {
     }
   });
 
-  after(function() {
+  after(async function() {
+    const cleanupPromises: Promise<any>[] = [];
     if (terminalServerProcess) {
-      // console.log('Stopping diagnostic test terminal server...'); // Removed log
+      console.log('Stopping diagnostic test terminal server...');
       terminalServerProcess.kill('SIGTERM');
+      cleanupPromises.push(new Promise(resolve => terminalServerProcess?.once('exit', resolve)));
       terminalServerProcess = null;
+    }
+    // Add webServerProcess cleanup if it were used globally (it's not in this specific test file)
+    // if (webServerProcess) {
+    //    webServerProcess.kill('SIGTERM');
+    //    cleanupPromises.push(new Promise(resolve => webServerProcess?.once('exit', resolve)));
+    //    webServerProcess = null;
+    // }
+    if (cleanupPromises.length > 0) {
+      await Promise.allSettled(cleanupPromises);
+      console.log('Test server processes stopped.');
     }
   });
 
