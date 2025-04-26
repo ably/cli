@@ -53,10 +53,12 @@ describe("Auth Info Display", function() {
   let configManagerStub: sinon.SinonStubbedInstance<ConfigManager>;
   let logStub: sinon.SinonStub;
   let debugStub: sinon.SinonStub;
+  let sandbox: sinon.SinonSandbox;
 
   beforeEach(function() {
-    // Create stubs
-    configManagerStub = sinon.createStubInstance(ConfigManager);
+    sandbox = sinon.createSandbox();
+    // Create stubs using sandbox where applicable
+    configManagerStub = sandbox.createStubInstance(ConfigManager);
 
     // Initialize command with stubs
     command = new TestCommand([], {} as any);
@@ -71,9 +73,9 @@ describe("Auth Info Display", function() {
       accessToken: "test-token",
     });
 
-    // Stub log and debug methods
-    logStub = sinon.stub(command as any, 'log');
-    debugStub = sinon.stub(command as any, 'debug');
+    // Stub log and debug methods using sandbox
+    logStub = sandbox.stub(command as any, 'log');
+    debugStub = sandbox.stub(command as any, 'debug');
 
     // Make sure environment variables are clean
     delete process.env.ABLY_API_KEY;
@@ -81,7 +83,7 @@ describe("Auth Info Display", function() {
   });
 
   afterEach(function() {
-    sinon.restore();
+    sandbox.restore();
     delete process.env.ABLY_API_KEY;
     delete process.env.ABLY_ACCESS_TOKEN;
   });
@@ -123,9 +125,10 @@ describe("Auth Info Display", function() {
     let shouldHideAccountInfoStub: sinon.SinonStub;
 
     beforeEach(function() {
-      shouldHideAccountInfoStub = sinon.stub(command as any, 'shouldHideAccountInfo');
+      // Stub using the sandbox created in the parent describe
+      shouldHideAccountInfoStub = sandbox.stub(command as any, 'shouldHideAccountInfo');
 
-      // Set up stubs for app info
+      // Set up stubs for app info (already stubbed via configManagerStub in parent beforeEach)
       configManagerStub.getCurrentAppId.returns('test-app-id');
       configManagerStub.getAppName.returns('Test App');
       configManagerStub.getApiKey.returns('test-app-id.key:secret');
@@ -215,12 +218,12 @@ describe("Auth Info Display", function() {
     let shouldSuppressOutputStub: sinon.SinonStub;
 
     beforeEach(function() {
-      // Create stubs for all the methods called by showAuthInfoIfNeeded
-      displayDataPlaneInfoStub = sinon.stub(command as any, 'displayDataPlaneInfo');
-      displayControlPlaneInfoStub = sinon.stub(command as any, 'displayControlPlaneInfo');
-      shouldShowAuthInfoStub = sinon.stub(command as any, 'shouldShowAuthInfo');
-      shouldOutputJsonStub = sinon.stub(command as any, 'shouldOutputJson');
-      shouldSuppressOutputStub = sinon.stub(command as any, 'shouldSuppressOutput');
+      // Create stubs using the sandbox from the parent describe
+      displayDataPlaneInfoStub = sandbox.stub(command as any, 'displayDataPlaneInfo');
+      displayControlPlaneInfoStub = sandbox.stub(command as any, 'displayControlPlaneInfo');
+      shouldShowAuthInfoStub = sandbox.stub(command as any, 'shouldShowAuthInfo');
+      shouldOutputJsonStub = sandbox.stub(command as any, 'shouldOutputJson');
+      shouldSuppressOutputStub = sandbox.stub(command as any, 'shouldSuppressOutput');
 
       // Default behavior - will be overridden in specific tests
       shouldShowAuthInfoStub.returns(true);

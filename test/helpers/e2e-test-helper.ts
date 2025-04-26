@@ -38,9 +38,21 @@ export function createAblyClient(): Ably.Rest {
     throw new Error("E2E_ABLY_API_KEY environment variable is required for E2E tests");
   }
 
+  // Validate API Key structure
+  if (!E2E_API_KEY.includes('.') || !E2E_API_KEY.includes(':')) {
+      console.warn(`[Client Lifecycle] Potential Issue: E2E_ABLY_API_KEY "${E2E_API_KEY.slice(0, 10)}..." appears structurally invalid (missing '.' or ':'). Proceeding anyway.`);
+      // Decide whether to throw an error or just warn based on strictness needed
+      // throw new Error('Structurally invalid E2E_ABLY_API_KEY detected');
+  }
+
+  const clientId = getUniqueClientId();
+  const keyPrefix = E2E_API_KEY.split(':')[0]?.split('.')[0] || 'unknown-app';
+  const keyId = E2E_API_KEY.split(':')[0]?.split('.')[1]?.slice(0, 4) || 'unknown-key';
+  console.log(`[Client Lifecycle] Creating Ably REST client (App: ${keyPrefix}, Key Prefix: ${keyId}, ClientID: ${clientId}) at ${new Date().toISOString()}`);
+
   const client = new Ably.Rest({
     key: E2E_API_KEY,
-    clientId: getUniqueClientId()
+    clientId: clientId
   });
 
   // Track the created client
@@ -56,9 +68,21 @@ export function createAblyRealtimeClient(): Ably.Realtime {
     throw new Error("E2E_ABLY_API_KEY environment variable is required for E2E tests");
   }
 
+  // Validate API Key structure
+  if (!E2E_API_KEY.includes('.') || !E2E_API_KEY.includes(':')) {
+      console.warn(`[Client Lifecycle] Potential Issue: E2E_ABLY_API_KEY "${E2E_API_KEY.slice(0, 10)}..." appears structurally invalid (missing '.' or ':'). Proceeding anyway.`);
+      // Decide whether to throw an error or just warn based on strictness needed
+      // throw new Error('Structurally invalid E2E_ABLY_API_KEY detected');
+  }
+
+  const clientId = getUniqueClientId();
+  const keyPrefix = E2E_API_KEY.split(':')[0]?.split('.')[0] || 'unknown-app';
+  const keyId = E2E_API_KEY.split(':')[0]?.split('.')[1]?.slice(0, 4) || 'unknown-key';
+  console.log(`[Client Lifecycle] Creating Ably Realtime client (App: ${keyPrefix}, Key Prefix: ${keyId}, ClientID: ${clientId}) at ${new Date().toISOString()}`);
+
   const client = new Ably.Realtime({
     key: E2E_API_KEY,
-    clientId: getUniqueClientId()
+    clientId: clientId
   });
 
   // Track the created client

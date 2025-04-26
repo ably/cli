@@ -101,21 +101,28 @@ const publishFlowUniqueMessage = `Test message ${Date.now()}`;
 const presenceFlowUniqueChannel = `test-presence-${Date.now()}`;
 const presenceFlowUniqueClientId = `client-${Date.now()}`;
 
+let originalEnv: NodeJS.ProcessEnv;
+
 describe('Channels integration tests', function() {
-  before(function() {
+  beforeEach(function() {
+    // Store original env vars
+    originalEnv = { ...process.env };
+
     // Make the mock globally available
     globalThis.__TEST_MOCKS__ = {
       ablyRestMock: mockClient
     };
 
-    // Set environment variables
+    // Set environment variables for this test file
     process.env.ABLY_CLI_TEST_MODE = 'true';
-    process.env.ABLY_API_KEY = 'test.key:secret';
+    process.env.ABLY_API_KEY = 'test.key:secret'; // Using a consistent mock key for integration tests
   });
 
-  after(function() {
+  afterEach(function() {
+    // Clean up global mock
     delete globalThis.__TEST_MOCKS__;
-    delete process.env.ABLY_CLI_TEST_MODE;
+    // Restore original environment variables
+    process.env = originalEnv;
   });
 
   // Core channel operations
