@@ -71,7 +71,8 @@ const sessions = new Map<string, ClientSession>();
 const docker = new Dockerode();
 
 // Read seccomp profile content once on startup
-const seccompProfilePath = path.resolve(__dirname, '../../docker/seccomp-profile.json');
+const projectRoot = process.cwd(); // Get project root
+const seccompProfilePath = path.resolve(projectRoot, 'docker/seccomp-profile.json');
 let seccompProfileContent: string;
 try {
   const seccompProfileContentRaw = fs.readFileSync(seccompProfilePath, 'utf8');
@@ -660,10 +661,6 @@ async function startServer() {
                    await container.start();
                    log(`[${sessionId}] Container started successfully: ${container.id}`);
 
-                   // *** Add a significant delay here ***
-                   log(`[${sessionId}] Waiting for container to initialize before attaching...`);
-                   await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-
                 } catch (containerError) {
                     logError(`[${sessionId}] Failed to create or start container: ${containerError instanceof Error ? containerError.message : String(containerError)}`);
                     if (ws.readyState === WebSocket.OPEN) {
@@ -920,22 +917,21 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
             throw new Error('Container not associated with session during attach');
         }
 
-        // Delay is now handled *before* calling this function
-        // log(`Waiting briefly for container ${session.container.id} to initialize...`);
-        // await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        // Add a minimal delay just in case, but rely on container being started correctly
+        log(`Waiting briefly for container ${session.container.id}...`);
+        await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay
 
         log(`Attaching to container ${session.container.id} for session ${session.sessionId}`);
 
-        // Check container state just before attaching
+        // Optional: Final quick state check before exec
         try {
             const containerInfo = await session.container.inspect();
-            if (!containerInfo.State.Running && !containerInfo.State.Paused) {
-                session.isAttaching = false; // Clear flag on error
-                throw new Error(`Container ${session.container.id} is not in an attachable state (running/paused). State: ${containerInfo.State.Status}`);
+            if (!containerInfo.State.Running) { // Only check for Running now
+                session.isAttaching = false;
+                throw new Error(`Container ${session.container.id} is not Running. State: ${containerInfo.State.Status}`);
             }
-            log(`Container state confirmed as ${containerInfo.State.Status} before attach.`);
         } catch (inspectError) {
-            session.isAttaching = false; // Clear flag on error
+            session.isAttaching = false;
             throw new Error(`Failed to inspect container state before attach: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
         }
 

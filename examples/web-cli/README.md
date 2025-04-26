@@ -30,8 +30,10 @@ It connects to a local `terminal-server` (provided in the main CLI package) via 
      ```env
      VITE_ABLY_API_KEY=YOUR_ABLY_API_KEY
      VITE_ABLY_ACCESS_TOKEN=YOUR_ABLY_ACCESS_TOKEN
+     VITE_TERMINAL_SERVER_URL=ws://your-custom-server:8080
      ```
    - Replace `YOUR_ABLY_API_KEY` and `YOUR_ABLY_ACCESS_TOKEN` with your actual Ably credentials. You can obtain these from your [Ably dashboard](https://ably.com/dashboard).
+   - Optionally specify a custom terminal server URL with `VITE_TERMINAL_SERVER_URL` (defaults to `ws://localhost:8080` if not provided).
    - _Alternatively, you can skip this step and enter the credentials directly in the web UI when prompted._
 
 2. **Install Dependencies:**
@@ -57,6 +59,28 @@ It connects to a local `terminal-server` (provided in the main CLI package) via 
    - If you didn't provide credentials via `.env`, you will be prompted to enter them.
    - Once authenticated, the terminal should connect and display the `$ ` prompt.
    - You can now interact with the Ably CLI (e.g., try `ably --version`). Only `ably` and `exit` commands are permitted.
+
+## Customizing the Terminal Server URL
+
+You can customize the terminal server URL in several ways:
+
+1. **Environment Variable:**
+   - Set `VITE_TERMINAL_SERVER_URL` in your `.env` file:
+     ```
+     VITE_TERMINAL_SERVER_URL=ws://your-custom-server:8080
+     ```
+
+2. **Query Parameter:**
+   - Append the `serverUrl` parameter to the URL:
+     ```
+     http://localhost:5173?serverUrl=ws://your-custom-server:8080
+     ```
+   - This parameter takes precedence over the environment variable.
+
+3. **Default Behavior:**
+   - If neither option is provided, the application will default to `ws://localhost:8080`.
+
+This allows for flexible deployment scenarios, including connecting to remote terminal servers or using different ports.
 
 # Using the React Web CLI Component (`@ably/react-web-cli`)
 

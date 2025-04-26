@@ -6,6 +6,25 @@ import "./App.css";
 // Default WebSocket URL assuming the terminal-server is run locally from the repo root
 const DEFAULT_WEBSOCKET_URL = "ws://localhost:8080";
 
+// Get WebSocket URL from Vite environment variables or query parameters
+const getWebSocketUrl = () => {
+  // Check URL parameters first
+  const urlParams = new URLSearchParams(window.location.search);
+  const serverParam = urlParams.get("serverUrl");
+  if (serverParam) {
+    return serverParam;
+  }
+
+  // Then check environment variables
+  const envServerUrl = import.meta.env.VITE_TERMINAL_SERVER_URL;
+  if (envServerUrl) {
+    return envServerUrl;
+  }
+
+  // Fall back to default
+  return DEFAULT_WEBSOCKET_URL;
+};
+
 // Get credentials from Vite environment variables (prefixed with VITE_)
 const envApiKey = import.meta.env.VITE_ABLY_API_KEY;
 const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN;
@@ -21,6 +40,7 @@ function App() {
   const [accessToken, setAccessToken] = useState<string | undefined>(
     envAccessToken,
   );
+  const [websocketUrl] = useState<string>(getWebSocketUrl());
 
   // Remove state vars that cause remounting issues
   const [shouldConnect, setShouldConnect] = useState<boolean>(
@@ -61,6 +81,9 @@ function App() {
             {connectionStatus}
           </span>
         </div>
+        <div style={{ marginBottom: "10px", fontSize: "0.8em", color: "#888" }}>
+          Server: {websocketUrl}
+        </div>
       </header>
       <main className="App-main">
         <div className="Terminal-container">
@@ -75,7 +98,7 @@ function App() {
                   Restart Terminal
                 </button>
               )}
-              websocketUrl={DEFAULT_WEBSOCKET_URL}
+              websocketUrl={websocketUrl}
             />
           )}
         </div>
