@@ -20,23 +20,25 @@ done
 MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught"
 MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\" --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 
+# Common exclude option for Mocha runs that shouldn't include Playwright tests
+EXCLUDE_OPTION="--exclude test/e2e/web-cli/web-cli.test.ts"
+
 if $USE_PLAYWRIGHT; then
   # Use Playwright runner
   echo "Using Playwright test runner for Web CLI tests..."
   # Pass ONLY the specific web-cli test file to Playwright
   COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
   echo "Executing command: $COMMAND"
-elif [[ "${ARGS[0]}" == "test/**/*.test.ts" ]]; then
-  # Running all tests (default pattern) - use Mocha, exclude web-cli
-  echo "Using Mocha test runner for all suites (excluding Web CLI E2E)..."
+elif [[ "${ARGS[0]}" == "test/**/*.test.ts" ]] || [[ "${ARGS[0]}" == "test/e2e/**/*.test.ts" ]]; then
+  # Running all tests or all E2E tests - use Mocha, exclude web-cli
+  echo "Using Mocha test runner (excluding Web CLI E2E)..."
   MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
-  # Add exclude flag specifically for the full run
-  EXCLUDE_OPTION="--exclude test/e2e/web-cli/web-cli.test.ts"
+  # Add exclude flag
   # Removed --exit flag
   COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS $EXCLUDE_OPTION"
   echo "Executing command: $COMMAND"
 else
-  # Running specific Mocha tests (pattern or file)
+  # Running specific Mocha tests (e.g., unit, integration, or specific file excluding web-cli)
   echo "Using Mocha test runner..."
   MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
   # Removed --exit flag
