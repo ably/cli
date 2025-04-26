@@ -11,6 +11,7 @@
     "build": "rm -rf dist && rm -f tsconfig.tsbuildinfo && tsc",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:docker": "docker run --rm -i hadolint/hadolint < Dockerfile",
     "postpack": "rm -f oclif.manifest.json",
     "pretest": "pnpm build && chmod +x bin/run.js",
     "test": "./scripts/run-tests.sh \"test/**/*.test.ts\" --timeout 30000",
