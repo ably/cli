@@ -11,7 +11,7 @@ import { Config } from "@oclif/core";
 class TestCommand extends AblyBaseCommand {
   // Expose protected methods for testing
   public testCheckWebCliRestrictions(): void {
-    return this.checkWebCliRestrictions();
+    this.checkWebCliRestrictions();
   }
 
   public testIsAllowedInWebCliMode(command?: string): boolean {
