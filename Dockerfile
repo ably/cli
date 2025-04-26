@@ -5,14 +5,22 @@ WORKDIR /usr/src/app
 # Install bash with readline support for better terminal interaction
 # Add security utilities for container hardening
 # Add jq to parse package.json
-RUN apk add --no-cache bash coreutils iptables bc curl jq
+# Pin versions for reproducibility and to satisfy hadolint DL3018
+RUN apk add --no-cache \
+    bash=5.2.37-r0 \
+    coreutils=9.5-r2 \
+    iptables=1.8.11-r1 \
+    bc=1.07.1-r5 \
+    curl=8.12.1-r1 \
+    jq=1.7.1-r0
 
 # Copy package.json to extract version
 COPY package.json .
 
 # Install Ably CLI globally using version from package.json
+# Double quote variable to satisfy hadolint SC2086
 RUN CLI_VERSION=$(jq -r .version package.json) && \
-    npm install -g @ably/cli@${CLI_VERSION} && \
+    npm install -g "@ably/cli@${CLI_VERSION}" && \
     # Remove package.json after use
     rm package.json && \
     # Force npm to create package-lock.json which helps with module resolution
@@ -45,10 +53,12 @@ RUN chmod +x /scripts/restricted-shell.sh && \
     chmod +x /scripts/security-monitor.sh
 
 # Ensure scripts directory and contents are owned by appuser
-RUN chown -R appuser:appgroup /scripts
+# Consolidate chown commands to satisfy hadolint DL3059
+RUN chown -R appuser:appgroup /scripts /var/log/ably-cli-security
 
 # Create log directory with proper permissions
-RUN chown -R appuser:appgroup /var/log/ably-cli-security
+# This RUN command was removed as its action is now consolidated above.
+# RUN chown -R appuser:appgroup /var/log/ably-cli-security
 
 # Switch to the non-root user
 USER appuser
