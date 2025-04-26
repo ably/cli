@@ -16,6 +16,7 @@
 * [MCP Usage](#mcp-usage)
 * [Commands](#commands)
 * [MCP Server](#mcp-server)
+* [Terminal Server](#terminal-server)
 <!-- tocstop -->
 
 # CLI Usage
@@ -4738,3 +4739,7 @@ The MCP server also provides the following resources:
 - `channels` - List of active channels on the Ably platform
 - `channel_history` - Historical messages from a specific Ably channel
 - `channel_presence` - Current presence members on a specific Ably channel
+
+# Terminal Server
+
+This repository includes a terminal server that provides a bash environment over WebSockets for the web based CLI. See [Server-Setup.md](./docs/Server-Setup.md) for more info on how it works and how to deploy it.
