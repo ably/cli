@@ -97,7 +97,7 @@
 - [ ] Publish Docker image to Github registry and use a path such as `ghcr.io/ably/ably-cli-sandbox` for the published artefact. Building and publishing should use the locally built Ably CLI binary as opposed to the latest version so that local changes can be tested locally.
 - [x] Review the Cursor rules and Docs to ensure they are effective for prompting
   -   *Done: 2025-04-27*
-  -   *Summary: Refactored `.cursor/rules`, updated `docs/Testing.md`, added `docs/CONTRIBUTING.md` and `docs/DEBUGGING.md` based on analysis of `TODO.md`, recent `.specstory` history, and Anthropic best practices. Created `WORKFLOW.mdc` to centralize mandatory steps.*
+  -   *Summary: Refactored `.cursor/rules`, updated `docs/Testing.md`, added `CONTRIBUTING.md` and `docs/DEBUGGING.md` based on analysis of the `.specstory` files and Anthropic best practices. Added code examples, troubleshooting guide, and agent-agnostic AI assistance rules. Enhanced visual hierarchy and progressive disclosure in documentation. Created `WORKFLOW.mdc` to centralize mandatory steps.*
 
 ## Bugs
 
