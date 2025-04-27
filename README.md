@@ -4741,5 +4741,10 @@ The MCP server also provides the following resources:
 - `channel_presence` - Current presence members on a specific Ably channel
 
 # Terminal Server
+## Contributing
 
 This repository includes a terminal server that provides a bash environment over WebSockets for the web based CLI. See [Server-Setup.md](./docs/Server-Setup.md) for more info on how it works and how to deploy it.
+
+# Contributing
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.

@@ -1,0 +1,35 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Mandatory Development Workflow
+
+**IMPORTANT:** Before considering any task complete, you **MUST** perform and verify the following steps in order. Failure to complete these steps means the work is **not finished**.
+
+1.  **Run Build:**
+    *   Execute `pnpm prepare`.
+    *   **Purpose:** Ensures TypeScript compiles, `oclif.manifest.json` is updated, and `README.md` reflects command changes.
+    *   **Verification:** Check for build errors in the output. Ensure `oclif.manifest.json` and `README.md` changes (if any) are sensible.
+
+2.  **Run Linter:**
+    *   Execute `pnpm exec eslint .` (or `pnpm exec eslint -- [filepath]` for specific files).
+    *   **Purpose:** Ensures code adheres to project style and best practices. Catches potential errors.
+    *   **Verification:** Ensure the command exits with code 0 (no errors). **Do not** use workarounds like prefixing unused variables with `_`; address the root cause (e.g., remove unused code). See `development.mdc` for more details on linting philosophy.
+
+3.  **Run Tests:**
+    *   Execute relevant tests locally (e.g., `pnpm test:unit`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm test:playwright`, or specific file paths like `pnpm test test/unit/commands/some-command.test.ts`).
+    *   **Purpose:** Verifies changes haven't introduced regressions and that new features work as expected.
+    *   **Verification:** Ensure all executed tests pass. If tests fail, debug them (see `docs/DEBUGGING.md`). Add or update tests (Unit, Integration, E2E) as appropriate for your changes. Refer to `docs/Testing.md` for the testing strategy.
+
+4.  **Update Documentation & Rules:**
+    *   Review and update all relevant documentation and rule files based on your changes.
+    *   **Checklist:**
+        *   `README.md`: Especially the command list if commands were added/changed (often handled by `pnpm prepare`).
+        *   `docs/*.md`: Any file impacted by the changes (e.g., `Product-Requirements.md`, `Project-Structure.md`, `Testing.md`).
+        *   `.cursor/rules/*.mdc`: Any rule file impacted by changes to development practices, Ably usage, project structure, etc.
+        *   `docs/TODO.md`: Update any related tasks.
+    *   **Purpose:** Keeps project knowledge current for both humans and AI agents.
+    *   **Verification:** Manually confirm that documentation accurately reflects the implemented changes.
+
+**Only after successfully completing ALL four steps should you consider your task complete.**
