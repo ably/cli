@@ -1,0 +1,169 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# AI Assistance Guidelines
+
+This document provides guidance for AI assistants working with the Ably CLI codebase. These guidelines are agent-agnostic and designed to help any AI assistant provide high-quality contributions.
+
+## Approaching This Codebase
+
+### Understanding the Project
+
+1. **Start with Key Documentation**:
+   - [Product Requirements](mdc:docs/Product-Requirements.md)
+   - [Project Structure](mdc:docs/Project-Structure.md)
+   - [Testing Strategy](mdc:docs/Testing.md)
+   - [Mandatory Workflow](mdc:.cursor/rules/WORKFLOW.mdc)
+
+2. **Recognize Context Boundaries**:
+   - The CLI is focused on Ably services - do not suggest features outside this scope
+   - Always check if a feature already exists before suggesting implementation
+
+### Common Patterns
+
+1. **Command Structure**:
+   ```typescript
+   // Commands should follow the oclif structure
+   export default class MyCommand extends Command {
+     static description = 'Clear description of what the command does'
+
+     static examples = [
+       '<%= config.bin %> commandName',
+       '<%= config.bin %> commandName --some-flag',
+     ]
+
+     static flags = {
+       // Flag definitions
+     }
+
+     static args = {
+       // Argument definitions
+     }
+
+     async run() {
+       const {args, flags} = await this.parse(MyCommand)
+       // Implementation
+     }
+   }
+   ```
+
+2. **Authorization Pattern**:
+   ```typescript
+   // Command should support auth via the standard auth helper
+   import { getAuth } from '../../helpers/auth'
+
+   // Then in the run method:
+   const auth = await getAuth(flags)
+   const client = new Ably.Rest(auth)
+   ```
+
+3. **Error Handling**:
+   ```typescript
+   try {
+     // Operation that might fail
+   } catch (error) {
+     if (error.code === 40100) {
+       this.error('Authentication failed. Check your API key or token.')
+     } else {
+       this.error(`Failed: ${error.message}`)
+     }
+   }
+   ```
+
+### Anti-Patterns to Avoid
+
+1. **❌ Direct HTTP Requests for Data Plane APIs**
+   ```typescript
+   // WRONG: Using fetch directly for data plane operations
+   const response = await fetch('https://rest.ably.io/channels/...')
+   ```
+
+   **✅ Correct Approach**
+   ```typescript
+   // CORRECT: Using the Ably SDK
+   const client = new Ably.Rest(auth)
+   const channel = client.channels.get('channel-name')
+   ```
+
+2. **❌ Inconsistent Command Structure**
+   ```typescript
+   // WRONG: Non-standard command structure
+   export default class {
+     async execute(args) {
+       // Implementation
+     }
+   }
+   ```
+
+3. **❌ Hardcoded Endpoints**
+   ```typescript
+   // WRONG: Hardcoded endpoint URLs
+   const url = 'https://control.ably.net/v1/apps'
+   ```
+
+   **✅ Correct Approach**
+   ```typescript
+   // CORRECT: Using the config
+   const controlHost = flags.controlHost || config.controlHost || 'control.ably.net'
+   const url = `https://${controlHost}/v1/apps`
+   ```
+
+## Effective Testing
+
+1. **Mocking Ably SDK Example**:
+   ```typescript
+   // Example of proper Ably SDK mocking
+   import * as sinon from 'sinon'
+
+   describe('my command', () => {
+     let mockChannel: any
+     let mockClient: any
+
+     beforeEach(() => {
+       mockChannel = {
+         publish: sinon.stub().resolves(),
+         presence: {
+           get: sinon.stub().resolves([]),
+           enter: sinon.stub().resolves(),
+         },
+       }
+
+       mockClient = {
+         channels: {
+           get: sinon.stub().returns(mockChannel),
+         },
+         close: sinon.stub().resolves(),
+       }
+
+       // Important: stub the constructor, not just methods
+       sinon.stub(Ably, 'Rest').returns(mockClient)
+     })
+
+     afterEach(() => {
+       sinon.restore() // Don't forget cleanup!
+     })
+   })
+   ```
+
+2. **Testing Resource Cleanup**:
+   Always ensure resources are properly closed/cleaned up, especially in tests:
+   ```typescript
+   // Example of proper resource cleanup
+   afterEach(async () => {
+     await client.close()
+     sinon.restore()
+   })
+   ```
+
+## Contributing Workflow
+
+All contributions must follow the [Mandatory Workflow](mdc:.cursor/rules/WORKFLOW.mdc):
+
+1. **Build**: Run `pnpm prepare`
+2. **Lint**: Run `pnpm exec eslint .`
+3. **Test**: Run appropriate tests
+4. **Document**: Update relevant docs
+
+See [CONTRIBUTING.md](mdc:CONTRIBUTING.md) for details.

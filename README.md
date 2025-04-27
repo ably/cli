@@ -4747,4 +4747,4 @@ This repository includes a terminal server that provides a bash environment over
 
 # Contributing
 
-Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project, including our mandatory development workflow, testing requirements, and code quality standards.
