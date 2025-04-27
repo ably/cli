@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2024-04-28
+
+### Added
+
+- Comprehensive AI Assistance guidelines (`.cursor/rules/AI-Assistance.mdc`).
+- Mandatory development workflow definition (`.cursor/rules/Workflow.mdc`, `CONTRIBUTING.md`).
+- Detailed `Debugging.md` and `Troubleshooting.md` guides in `docs/`.
+- Formalized `CONTRIBUTING.md` in the root directory.
+
+### Changed
+
+- Significantly restructured and enhanced `docs/Testing.md` with clear strategies, examples, and folder structure.
+- Refactored `.cursor/rules/` for clarity, consistency, and improved AI guidance.
+- Updated `README.md` to link to new contribution and workflow documents.
+- Standardized documentation file naming (`Title-Case-With-Hyphens.md`).
+- Simplified `Product-Requirements.md`.
+
+### Fixed
+
+- Persistent failures in Web CLI Playwright E2E tests related to incorrect WebSocket URL usage (`examples/web-cli/src/App.tsx`).
+- Corrected inaccurate release dates in previous `CHANGELOG.md` entries.
+- Minor typos and formatting inconsistencies in documentation.
+
 ## [0.3.4] - 2025-04-20
 
 ### Added
@@ -139,107 +162,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Ensured `--control-host` argument works for all commands.
-- Replaced colons with spaces in `ably channels occupancy` and `ably channels presence` command examples/help.
-
-## [0.2.3] - 2025-03-25
-
-### Added
-
-- `ably spaces list` command.
-
-## [0.2.2] - 2025-03-25
-
-### Changed
-
-- Improved UX for Channel Rules commands.
-
-## [0.2.1] - 2025-03-25
-
-### Added
-
-- Remaining Control API commands (integrations, queues, app settings like APNS).
-
-## [0.2.0] - 2025-03-25
-
-### Added
-
-- Full Ably Spaces command support (`ably spaces members`, `locations`, `cursors`, `locks`).
-
-### Changed
-
-- Upgraded `ably-js` dependency.
-
-### Fixed
-
-- Graceful handling of subscriptions on termination.
-
-## [0.1.5] - 2025-03-24
-
-### Added
-
-- `ably channels batch-publish` command.
-- `ably rooms occupancy`, `presence`, and `reactions` commands.
-- Commands for issuing and revoking Ably Tokens and JWTs (`ably auth issue-ably-token`, `issue-jwt-token`, `revoke-token`).
-
-### Changed
-
-- Improved UX for `ably apps delete` and `ably apps create`.
-
-## [0.1.4] - 2025-03-24
-
-### Changed
-
-- Allowed singular topic names as aliases (e.g., `ably app list` works like `ably apps list`).
-- Improved live stats UI for subscribe commands.
-- Improved Cursor rules.
-
-### Fixed
-
-- Bug preventing non-alphanumeric characters in account aliases.
-
-## [0.1.3] - 2025-03-24
-
-### Added
-
-- Support for subscribing to all live and historical log streams (`ably logs ...`).
-
-### Fixed
-
-- Warning about installation issues due to `ably-js` typing problems (at the time).
-
-## [0.1.2] - 2025-03-24
-
-### Changed
-
-- Reduced minimum required Node.js version to 18+.
-
-## [0.1.1] - 2025-03-24
-
-### Changed
-
-- Updated `README.md` and added version badge.
-
-## [0.1.0] - 2025-03-24
-
-### Added
-
-- Initial release candidate for NPM.
-- Benchmarking commands (`ably bench publisher`, `subscriber`).
-- Multi-publish support (`--count`, `--delay`) for `ably channels publish`.
-- Initial Ably Chat Rooms commands (`ably rooms messages send/subscribe/get`).
-- Ably Pub/Sub Presence support (`ably channels presence enter/subscribe`).
-- Configuration management (`~/.ably/config`, `ably config` command).
-- Account management (`ably accounts login/list/logout/current/stats/switch`).
-- App management via Control API (`ably apps list/create/update/delete/stats/switch/current`, channel rules).
-- API Key management (`ably auth keys list/revoke/get/update/switch/current`).
-- Channel commands (`ably channels list/publish/subscribe/occupancy/history`).
-- Basic connection testing (`ably connections test`).
-- Initial project setup with oclif.
-- Basic documentation (`README.md`, `Product-Requirements.md`).
-- Cursor rules.
-
-### Fixed
-
-- Various initial bugs and build issues.
-- Ensured app and current key stored correctly in config.
-- Clean builds enforced.
+- Replaced colons with spaces in `ably channels occupancy` and `
