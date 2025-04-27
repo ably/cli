@@ -211,4 +211,4 @@ Property 'x' does not exist on type 'Y'
 
 If you find errors in documentation or rules, please update them using the proper workflow and submit a pull request.
 
-See [CONTRIBUTING.md](mdc:CONTRIBUTING.md) for more details on the development workflow.
+See documentation in `.cursor/rules/Workflow.mdc` for more details on the development workflow.
