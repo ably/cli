@@ -47,5 +47,7 @@ The security tests are also integrated into the CI pipeline using GitHub Actions
 
 For more information about the security hardening measures implemented, see:
 
+- [Container-Security.md](../docs/Container-Security.md)
 - [Security-Hardening.md](../docs/Security-Hardening.md)
 - [Security-Testing-Auditing.md](../docs/Security-Testing-Auditing.md)
+- [User-Namespace-Remapping.md](../docs/User-Namespace-Remapping.md)
