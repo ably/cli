@@ -5,9 +5,9 @@
 </div>
 
 > **💡 QUICK START:** Run `pnpm test` for all tests or `pnpm test:unit` for faster unit tests.
-> **📋 MANDATORY:** All code changes require related tests. See [WORKFLOW.mdc](mdc:.cursor/rules/WORKFLOW.mdc).
-> **🐛 DEBUGGING:** See [Debugging Guide](mdc:docs/DEBUGGING.md) for troubleshooting tips.
-> **🔍 TROUBLESHOOTING:** See [Troubleshooting Guide](mdc:docs/TROUBLESHOOTING.md) for common errors.
+> **📋 MANDATORY:** All code changes require related tests. See [Workflow.mdc](mdc:.cursor/rules/Workflow.mdc).
+> **🐛 DEBUGGING:** See [Debugging Guide](mdc:docs/Debugging.md) for troubleshooting tips.
+> **🔍 TROUBLESHOOTING:** See [Troubleshooting Guide](mdc:docs/Troubleshooting.md) for common errors.
 
 ---
 
@@ -23,7 +23,7 @@
 
 ## 🏃‍♂️ Running Tests
 
-Refer to [.cursor/rules/WORKFLOW.mdc](mdc:.cursor/rules/WORKFLOW.mdc) for the mandatory requirement to run tests.
+Refer to [.cursor/rules/Workflow.mdc](mdc:.cursor/rules/Workflow.mdc) for the mandatory requirement to run tests.
 
 | Test Type | Command | Description |
 |-----------|---------|-------------|
@@ -252,5 +252,5 @@ E2E tests are organized by feature/topic (e.g., `channels-e2e.test.ts`, `presenc
 ---
 
 <div align="center">
-🔍 For detailed troubleshooting help, see the <a href="mdc:docs/TROUBLESHOOTING.md">Troubleshooting Guide</a>.
+🔍 For detailed troubleshooting help, see the <a href="mdc:docs/Troubleshooting.md">Troubleshooting Guide</a>.
 </div>

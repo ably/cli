@@ -4,7 +4,7 @@ Thank you for your interest in contributing to the Ably CLI!
 
 ## Development Workflow
 
-All code changes, whether features or bug fixes, **MUST** follow the mandatory workflow outlined in [.cursor/rules/WORKFLOW.mdc](mdc:.cursor/rules/WORKFLOW.mdc).
+All code changes, whether features or bug fixes, **MUST** follow the mandatory workflow outlined in [.cursor/rules/Workflow.mdc](mdc:.cursor/rules/Workflow.mdc).
 
 In summary, this involves:
 

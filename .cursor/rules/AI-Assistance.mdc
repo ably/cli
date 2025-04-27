@@ -15,7 +15,7 @@ This document provides guidance for AI assistants working with the Ably CLI code
    - [Product Requirements](mdc:docs/Product-Requirements.md)
    - [Project Structure](mdc:docs/Project-Structure.md)
    - [Testing Strategy](mdc:docs/Testing.md)
-   - [Mandatory Workflow](mdc:.cursor/rules/WORKFLOW.mdc)
+   - [Mandatory Workflow](mdc:.cursor/rules/Workflow.mdc)
 
 2. **Recognize Context Boundaries**:
    - The CLI is focused on Ably services - do not suggest features outside this scope
@@ -159,11 +159,11 @@ This document provides guidance for AI assistants working with the Ably CLI code
 
 ## Contributing Workflow
 
-All contributions must follow the [Mandatory Workflow](mdc:.cursor/rules/WORKFLOW.mdc):
+All contributions must follow the [Mandatory Workflow](mdc:.cursor/rules/Workflow.mdc):
 
 1. **Build**: Run `pnpm prepare`
 2. **Lint**: Run `pnpm exec eslint .`
 3. **Test**: Run appropriate tests
 4. **Document**: Update relevant docs
 
-See [CONTRIBUTING.md](mdc:CONTRIBUTING.md) for details.
+See documentation in `.cursor/rules/Workflow.mdc` for details.
