@@ -17,6 +17,7 @@
 * [Commands](#commands)
 * [MCP Server](#mcp-server)
 * [Terminal Server](#terminal-server)
+* [Contributing](#contributing)
 <!-- tocstop -->
 
 # CLI Usage
@@ -4741,10 +4742,9 @@ The MCP server also provides the following resources:
 - `channel_presence` - Current presence members on a specific Ably channel
 
 # Terminal Server
-## Contributing
 
 This repository includes a terminal server that provides a bash environment over WebSockets for the web based CLI. See [Server-Setup.md](./docs/Server-Setup.md) for more info on how it works and how to deploy it.
 
 # Contributing
 
-Please see the documentation in `.cursor/rules/Workflow.mdc` for details on how to contribute to this project, including our mandatory development workflow, testing requirements, and code quality standards.
+Please see the documentation in [`.cursor/rules/Workflow.mdc`](.cursor/rules/Workflow.mdc) for details on how to contribute to this project, including our mandatory development workflow, testing requirements, and code quality standards.
