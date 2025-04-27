@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.4] - 2024-07-20
+## [0.3.4] - 2025-04-20
 
 ### Added
 
@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed dependency issues in `package.json`.
 - Various linting errors.
 
-## [0.3.3] - 2024-07-09
+## [0.3.3] - 2025-04-19
 
 ### Fixed
 
@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated oclif dependencies for consistency.
 
-## [0.3.2] - 2024-07-04
+## [0.3.2] - 2025-04-14
 
 ### Added
 
@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Formatting in `Product-Requirements.md`.
 
-## [0.3.1] - 2024-07-01
+## [0.3.1] - 2025-04-11
 
 ### Added
 
@@ -72,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in Control API access for MCP server.
 - Dependency update (vite 6.2.4 to 6.2.5).
 
-## [0.3.0] - 2024-07-01 (No tag found, inferred from commits)
+## [0.3.0] - 2025-04-11
 
 ### Added
 
@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Various bugs related to Web CLI (Ctrl-C handling, prompt behavior, history).
 - Prevented exit from terminal with Ctrl-C (SIGINT) in Web CLI server.
 
-## [0.2.6] - 2024-06-17
+## [0.2.6] - 2025-04-01
 
 ### Added
 
@@ -109,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added missing `switch` command to `ably apps` topic help.
 
-## [0.2.5] - 2024-06-17
+## [0.2.5] - 2025-04-01
 
 ### Added
 
@@ -123,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Ensured alias commands show errors for invalid requests.
 
-## [0.2.4] - 2024-06-17
+## [0.2.4] - 2025-03-31
 
 ### Added
 
@@ -141,25 +141,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensured `--control-host` argument works for all commands.
 - Replaced colons with spaces in `ably channels occupancy` and `ably channels presence` command examples/help.
 
-## [0.2.3] - 2024-06-06
+## [0.2.3] - 2025-03-25
 
 ### Added
 
 - `ably spaces list` command.
 
-## [0.2.2] - 2024-06-06
+## [0.2.2] - 2025-03-25
 
 ### Changed
 
 - Improved UX for Channel Rules commands.
 
-## [0.2.1] - 2024-06-06
+## [0.2.1] - 2025-03-25
 
 ### Added
 
 - Remaining Control API commands (integrations, queues, app settings like APNS).
 
-## [0.2.0] - 2024-06-06
+## [0.2.0] - 2025-03-25
 
 ### Added
 
@@ -173,7 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Graceful handling of subscriptions on termination.
 
-## [0.1.5] - 2024-06-06
+## [0.1.5] - 2025-03-24
 
 ### Added
 
@@ -185,7 +185,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved UX for `ably apps delete` and `ably apps create`.
 
-## [0.1.4] - 2024-06-06
+## [0.1.4] - 2025-03-24
 
 ### Changed
 
@@ -197,7 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bug preventing non-alphanumeric characters in account aliases.
 
-## [0.1.3] - 2024-06-06
+## [0.1.3] - 2025-03-24
 
 ### Added
 
@@ -207,19 +207,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Warning about installation issues due to `ably-js` typing problems (at the time).
 
-## [0.1.2] - 2024-06-06
+## [0.1.2] - 2025-03-24
 
 ### Changed
 
 - Reduced minimum required Node.js version to 18+.
 
-## [0.1.1] - 2024-06-06
+## [0.1.1] - 2025-03-24
 
 ### Changed
 
 - Updated `README.md` and added version badge.
 
-## [0.1.0] - 2024-06-06
+## [0.1.0] - 2025-03-24
 
 ### Added
 
