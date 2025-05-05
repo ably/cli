@@ -22,7 +22,7 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
     - Manual verification of drawer rendering and interaction in the example app.
     - Playwright test: Verify the drawer button exists, opens the drawer on click, closes on click, and basic resize works.
 - **Status:** `[x] Done`
-- **Summary:** Moved component to `examples/web-cli/src/components`, installed deps (`lucide-react`, `clsx`, `tailwind-merge`), created `lib/utils.ts`, fixed lint errors. Modified `App.tsx` for conditional rendering (fullscreen/drawer) with a toggle button, passing `AblyCliTerminal` to the drawer. Linting passes (ignoring TS module resolution error for `@ably/react-web-cli`).
+- **Summary:** Integrated `CliDrawer` into `examples/web-cli`, adding toggleable fullscreen/drawer views. Set up Tailwind CSS v4 using `@tailwindcss/vite` plugin and resolved CSS build/positioning issues. Styled drawer (backgrounds, handle, header, padding, TEST MODE badge) and internal `AblyCliTerminal` (bg, padding) to match design. Enhanced example UI with compact header, URL persistence for view mode, localStorage persistence for drawer state (open/height), and consistent padding in both modes.
 
 ### Step 1.2: Implement Connection Status & Basic Interaction
 - **Task:** Display connection status ("Connecting...", "Connected", "Disconnected") within the React component's terminal interface (using `xterm.js` APIs). Show connecting animation/indicator.

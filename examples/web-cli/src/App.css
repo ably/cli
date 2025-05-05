@@ -12,9 +12,14 @@
 }
 
 .App-header {
-  padding: 1rem 2rem;
+  padding: 0.5rem 1rem;
   flex-shrink: 0;
   border-bottom: 1px solid #444;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
 }
 
 .App-main {
@@ -24,6 +29,7 @@
   min-height: 0;
   overflow: hidden;
   padding: 1rem 2rem;
+  font-weight: 600;
 }
 
 .Terminal-container {
@@ -31,7 +37,7 @@
   display: flex;
   min-height: 0;
   border: 1px solid #555;
-  background-color: #1a1a1a;
+  background-color: #000000;
 }
 
 .logo {
@@ -68,4 +74,55 @@
 
 .read-the-docs {
   color: #888;
+}
+
+/* Style for the toggle button */
+.toggle-button {
+  /* Use existing button styles or customize */
+  /* Example: making it slightly smaller */
+  padding: 0.4em 0.8em;
+  font-size: 0.9em;
+}
+
+/* Styles for the segmented control */
+.toggle-group {
+  display: flex;
+  border-radius: 6px; /* Match button radius */
+  overflow: hidden; /* Clip corners */
+  border: 1px solid #444; /* Optional border around group */
+}
+
+.toggle-segment {
+  padding: 0.3em 0.6em;
+  font-size: 0.9em;
+  border: none; /* Remove individual button borders */
+  background-color: #333; /* Default inactive background */
+  color: #ccc;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-segment:not(:last-child) {
+  border-right: 1px solid #444; /* Separator line */
+}
+
+.toggle-segment:hover {
+  background-color: #444;
+}
+
+.toggle-segment.active {
+  background-color: #535bf2; /* Active background color */
+  color: white;
+  font-weight: 600;
+}
+
+/* Style for the info group (Original, update this one) */
+.header-info {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.8em;
+  color: #888;
+  flex-shrink: 1;
+  overflow: hidden;
+  white-space: nowrap;
 }
