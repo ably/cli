@@ -2,8 +2,6 @@
   padding: 0;
   text-align: left;
   height: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
 .App {

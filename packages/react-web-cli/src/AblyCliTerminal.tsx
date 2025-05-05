@@ -271,7 +271,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         convertEol: true,
         cursorBlink: true,
         fontSize: 14,
-        theme: { background: '#121212' },
+        theme: { background: '#000000' },
         scrollback: 5000,  // Set a larger scrollback buffer to ensure all content is maintained
         smoothScrollDuration: 300, // Enable smooth scrolling effect for 300ms duration
         // @ts-ignore: reflowCursorLine exists at runtime though missing in types
@@ -586,24 +586,23 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
-      overflow: 'hidden',          // Hide internal scrollbars
-      position: 'relative',       // Needed for overlays
+      overflow: 'hidden',
+      position: 'relative',
       width: '100%',
-      boxSizing: 'border-box',    // Include padding in width/height
+      boxSizing: 'border-box',
     }}>
       {/* Terminal container with overflow handling and proper padding */}
       <div
         onClick={handleTerminalClick}
         ref={terminalRef}
         style={{
-          flex: '1 1 auto',          // Grow/shrink vertically
-          height: '100%',            // Full height for FitAddon
-          minHeight: 0,              // Fix flex height issues
-          overflow: 'auto',          // Allow scroll when content overflows
-          padding: '10px',           // Side padding
-          position: 'relative',      // For child positioning
-          display: 'flex',           // Flex layout for terminal
-          flexDirection: 'column'    // Vertical stack
+          flex: '1 1 auto',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'auto',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       />
 
