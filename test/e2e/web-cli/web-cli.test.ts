@@ -5,6 +5,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import getPort from 'get-port';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 
 const execAsync = promisify(exec);
 
@@ -16,6 +17,8 @@ const __dirname = path.dirname(__filename);
 const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
 const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
 const TERMINAL_SERVER_SCRIPT = path.resolve(__dirname, '../../../dist/scripts/terminal-server.js');
+const DRAWER_OPEN_KEY = 'PLAYWRIGHT_DRAWER_OPEN';
+const DRAWER_HEIGHT_KEY = 'PLAYWRIGHT_DRAWER_HEIGHT';
 
 // Shared variables
 let terminalServerProcess: ChildProcess;
@@ -42,7 +45,7 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
 
 // --- Test Suite ---
 test.describe('Web CLI E2E Tests', () => {
-  test.setTimeout(120_000); // Increase timeout for E2E tests with server setup
+  test.setTimeout(120_000); // Overall test timeout
 
   test.beforeAll(async () => {
     console.log('Setting up Web CLI E2E tests...');
@@ -61,9 +64,17 @@ test.describe('Web CLI E2E Tests', () => {
     // 2. Build the example app
     console.log('Building Web CLI example app...');
     try {
-      // Use the correct package name from the example's package.json
-      await execAsync('pnpm --filter @ably/cli-web-cli-example build', { cwd: path.resolve(__dirname, '../../..') });
+      // Run build directly in the example directory
+      console.log(`Running build in: ${EXAMPLE_DIR}`);
+      await execAsync('pnpm build', { cwd: EXAMPLE_DIR });
       console.log('Web CLI example app built.');
+
+      // Check for dist dir
+      if (!fs.existsSync(WEB_CLI_DIST)) {
+        throw new Error(`Build finished but dist directory not found: ${WEB_CLI_DIST}`);
+      }
+      console.log(`Verified dist directory exists: ${WEB_CLI_DIST}`);
+
     } catch (error) {
       console.error('Failed to build Web CLI example app:', error);
       throw error; // Fail fast if build fails
@@ -100,11 +111,12 @@ test.describe('Web CLI E2E Tests', () => {
     await waitForServer(`http://localhost:${terminalServerPort}/health`);
     console.log('Terminal server started.');
 
-    // 5. Start a web server for the example app using 'serve'
-    console.log('Starting web server for example app with serve...');
-    webServerProcess = spawn('pnpm', ['exec', 'serve', WEB_CLI_DIST, '-l', webServerPort.toString(), '-n'], {
+    // 5. Start a web server for the example app using 'vite preview'
+    console.log('Starting web server for example app with vite preview...');
+    // Use npx vite preview directly
+    webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], { // Using npx vite preview
       stdio: 'pipe',
-      cwd: path.resolve(__dirname, '../../..') // Run pnpm from root
+      cwd: EXAMPLE_DIR // Run command within the example directory
     });
 
     webServerProcess.stdout?.on('data', (data) => console.log(`[Web Server]: ${data.toString().trim()}`));
@@ -191,4 +203,137 @@ test.describe('Web CLI E2E Tests', () => {
     // Add a small delay to ensure output is fully rendered if needed
     await page.waitForTimeout(500);
   });
-});
+
+  // --- NEW TESTS FOR DRAWER AND STATE ---
+
+  test.describe('Drawer Functionality and State Persistence', () => {
+    const drawerButtonSelector = 'button:has-text("Ably CLI")'; // Selector for the closed drawer button
+    const drawerSelector = 'div.fixed.bottom-0.left-0.right-0'; // Selector for the open drawer panel
+    const toggleGroupSelector = '.toggle-group';
+    const fullscreenButtonSelector = `${toggleGroupSelector} button:has-text("Fullscreen")`;
+    const drawerModeButtonSelector = `${toggleGroupSelector} button:has-text("Drawer")`;
+    const terminalSelector = '.xterm'; // Common terminal selector
+
+    test.beforeEach(async ({ page }) => {
+      // Ensure Docker is available (check set in outer beforeAll)
+      if (process.env.DOCKER_UNAVAILABLE === 'true' || !terminalServerProcess) {
+        console.log('Skipping drawer tests because Docker was not available');
+        test.skip(); // Skip this specific test if Docker unavailable
+        return;
+      }
+      // Start fresh for each test in this group
+      await page.goto(`http://localhost:${webServerPort}`);
+      await page.waitForSelector(fullscreenButtonSelector);
+      // Clear localStorage before each test
+      await page.evaluate(() => globalThis.localStorage.clear());
+      await page.reload();
+    });
+
+    // Test 1 & 5: View Mode Switching, URL Persistence, Basic Rendering
+    test('should switch between fullscreen and drawer modes, update URL, and render terminal correctly', async ({ page }) => {
+      const terminalFullscreenContainer = 'main.App-main > div.Terminal-container';
+      const terminalDrawerContainer = `${drawerSelector} div.flex-grow`; // Container inside drawer
+
+      // Initial state: Fullscreen
+      await expect(page).toHaveURL(/\?mode=fullscreen|\?$/); // Allow no query param or fullscreen
+      await expect(page.locator(terminalFullscreenContainer)).toBeVisible();
+      await expect(page.locator(terminalFullscreenContainer).locator(terminalSelector)).toBeVisible();
+      await expect(page.locator(drawerSelector)).not.toBeVisible();
+
+      // Switch to Drawer mode
+      await page.locator(drawerModeButtonSelector).click();
+      await expect(page).toHaveURL(/\?mode=drawer/);
+      await expect(page.locator(drawerButtonSelector)).toBeVisible(); // Tab button should show
+      await expect(page.locator(drawerSelector)).not.toBeVisible(); // Drawer panel still closed
+      await expect(page.locator(terminalFullscreenContainer)).not.toBeVisible();
+
+      // Open Drawer
+      await page.locator(drawerButtonSelector).click();
+      await expect(page.locator(drawerSelector)).toBeVisible();
+      await expect(page.locator(terminalDrawerContainer).locator(terminalSelector)).toBeVisible();
+      await expect(page.locator(drawerButtonSelector)).not.toBeVisible(); // Tab button hidden
+
+      // Switch back to Fullscreen mode
+      await page.locator(fullscreenButtonSelector).click();
+      await expect(page).toHaveURL(/\?mode=fullscreen/);
+      await expect(page.locator(terminalFullscreenContainer)).toBeVisible();
+      await expect(page.locator(terminalFullscreenContainer).locator(terminalSelector)).toBeVisible();
+      await expect(page.locator(drawerSelector)).not.toBeVisible();
+      await expect(page.locator(drawerButtonSelector)).not.toBeVisible(); // Tab button should not appear in fullscreen
+
+      // Test reload persistence (Fullscreen)
+      await page.reload();
+      await expect(page.locator(fullscreenButtonSelector)).toBeVisible(); // Wait for UI
+      await expect(page).toHaveURL(/\?mode=fullscreen/);
+      await expect(page.locator(terminalFullscreenContainer)).toBeVisible();
+      await expect(page.locator(drawerSelector)).not.toBeVisible();
+
+      // Test reload persistence (Drawer - closed)
+      await page.locator(drawerModeButtonSelector).click();
+      await page.evaluate((key) => globalThis.localStorage.removeItem(key), DRAWER_OPEN_KEY);
+      await page.reload();
+      await page.waitForURL(/\?mode=drawer/);
+      await expect(page.locator(toggleGroupSelector)).toBeVisible({ timeout: 10000 });
+
+      // Check that the drawer panel is NOT visible (more robust default state check)
+      await expect(page.locator(drawerSelector)).toHaveCount(0);
+
+      // Test reload persistence (Drawer - open)
+      await page.locator(drawerButtonSelector).click(); // Open it
+      await page.evaluate(() => { (globalThis as any).__PLAYWRIGHT_DRAWER_OPEN = true; });
+      await page.reload();
+      await expect(page.locator(drawerModeButtonSelector)).toBeVisible(); // Wait for UI
+      await expect(page).toHaveURL(/\?mode=drawer/);
+      await expect(page.locator(drawerSelector)).toBeVisible(); // Should be open due to localStorage
+      await expect(page.locator(drawerButtonSelector)).not.toBeVisible();
+    });
+
+    // Test 2 & 3: Drawer State Persistence (Open/Closed, Height) & Default Height
+    test('should persist drawer open/closed state and height via localStorage, defaulting height correctly', async ({ page }) => {
+      // Ensure starting in drawer mode
+      await page.locator(drawerModeButtonSelector).click();
+      await expect(page).toHaveURL(/\?mode=drawer/);
+
+      // 1. Test Default Height
+      await page.locator(drawerButtonSelector).click(); // Open drawer
+      const initialBoundingBox = await page.locator(drawerSelector).boundingBox();
+      const viewportHeight = await page.evaluate(() => globalThis.innerHeight);
+      expect(initialBoundingBox?.height).toBeCloseTo(viewportHeight * 0.4, 0); // Check initial height is approx 40%
+
+      // 2. Test Height Persistence
+      // const dragHandle = page.locator(`${drawerSelector} [data-testid="drag-handle"]`); // Removed unused variable
+      // Note: Playwright dragTo doesn't work well with restricted movement, simulate manually
+      const drawerBox = await page.locator(drawerSelector).boundingBox();
+      if (!drawerBox) throw new Error("Drawer bounding box not found");
+
+      const startY = drawerBox.y + 5; // Top edge of drawer + handle half-height
+      const targetY = startY - 100; // Drag up by 100px
+
+      await page.mouse.move(drawerBox.x + drawerBox.width / 2, startY);
+      await page.mouse.down();
+      await page.mouse.move(drawerBox.x + drawerBox.width / 2, targetY, { steps: 5 });
+      await page.mouse.up();
+
+      const newHeightBox = await page.locator(drawerSelector).boundingBox();
+      const newHeight = newHeightBox?.height;
+      expect(newHeight).toBeGreaterThan(initialBoundingBox?.height ?? 0);
+
+      await page.reload();
+      await expect(page.locator(drawerModeButtonSelector)).toBeVisible(); // Wait for UI
+      await expect(page.locator(drawerSelector)).toBeVisible(); // Should reopen automatically due to localStorage
+
+      const persistedHeightBox = await page.locator(drawerSelector).boundingBox();
+      const persistedHeight = persistedHeightBox?.height;
+      expect(persistedHeight).toBeCloseTo(newHeight ?? 0, 0); // Height should be persisted
+
+      // 3. Test Closed State Persistence
+      await page.locator(`${drawerSelector} button[aria-label="Close drawer"]`).click();
+      await expect(page.locator(drawerButtonSelector)).toBeVisible(); // Should be closed
+      await page.reload();
+      await expect(page.locator(drawerModeButtonSelector)).toBeVisible(); // Wait for UI
+      await expect(page.locator(drawerButtonSelector)).toBeVisible(); // Should remain closed
+      await expect(page.locator(drawerSelector)).not.toBeVisible();
+    });
+  });
+
+}); // End of main describe block

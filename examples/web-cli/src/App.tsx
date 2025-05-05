@@ -32,14 +32,15 @@ const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN;
 const hasInitialCredentials = Boolean(envApiKey && envAccessToken);
 
 function App() {
+  // Read initial mode from URL, default to fullscreen
+  const initialMode = new URLSearchParams(window.location.search).get("mode") as ("fullscreen" | "drawer") || "fullscreen";
+
   const [connectionStatus, setConnectionStatus] = useState<
     "connected" | "connecting" | "disconnected" | "error"
   >("disconnected");
   const [apiKey, setApiKey] = useState<string | undefined>(envApiKey);
-  const [accessToken, setAccessToken] = useState<string | undefined>(
-    envAccessToken,
-  );
-  const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">("fullscreen");
+  const [accessToken, setAccessToken] = useState<string | undefined>(envAccessToken);
+  const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">(initialMode);
 
   // Remove state vars that cause remounting issues
   const [shouldConnect, setShouldConnect] = useState<boolean>(
@@ -57,6 +58,15 @@ function App() {
   const handleSessionEnd = useCallback((reason: string) => {
     console.log("Session ended:", reason);
   }, []);
+
+  // Effect to update URL when displayMode changes
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("mode") !== displayMode) {
+      urlParams.set("mode", displayMode);
+      window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
+    }
+  }, [displayMode]);
 
   // Set up credentials once on mount and immediately connect
   useEffect(() => {
@@ -95,34 +105,37 @@ function App() {
     <div className="App fixed">
       {/* Restore header */}
       <header className="App-header">
-         <h1>Ably CLI Web Terminal</h1>
-         <div style={{ marginBottom: "10px" }}>
-           Status:{" "}
-           <span className={`status status-${connectionStatus}`}>
-             {connectionStatus}
-           </span>
-         </div>
-         <div style={{ marginBottom: "10px", fontSize: "0.8em", color: "#888" }}>
-           Server: {currentWebsocketUrl}
-         </div>
-         <button
-           onClick={() => setDisplayMode(prev => prev === 'fullscreen' ? 'drawer' : 'fullscreen')}
-           style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 100 }}
-         >
-           Toggle View ({displayMode})
-         </button>
-       </header>
+        <span className="font-semibold text-base">Ably Web CLI Terminal</span>
+        <div className="header-info">
+          <span>Status: <span className={`status status-${connectionStatus}`}>{connectionStatus}</span></span>
+          <span>Server: {currentWebsocketUrl}</span>
+        </div>
+        <div className="toggle-group">
+          <button
+            className={`toggle-segment ${displayMode === 'fullscreen' ? 'active' : ''}`}
+            onClick={() => setDisplayMode('fullscreen')}
+          >
+            Fullscreen
+          </button>
+          <button
+            className={`toggle-segment ${displayMode === 'drawer' ? 'active' : ''}`}
+            onClick={() => setDisplayMode('drawer')}
+          >
+            Drawer
+          </button>
+        </div>
+      </header>
 
       {/* Restore conditional rendering */}
       {displayMode === 'fullscreen' ? (
-         <main className="App-main">
-           <div className="Terminal-container">
-             <TerminalInstance />
-           </div>
-         </main>
-       ) : (
-         <CliDrawer TerminalComponent={displayMode === 'drawer' ? TerminalInstance : undefined} />
-       )}
+        <main className="App-main">
+          <div className="Terminal-container p-2.5">
+            <TerminalInstance />
+          </div>
+        </main>
+      ) : (
+        <CliDrawer TerminalComponent={TerminalInstance} />
+      )}
 
     </div>
   );
