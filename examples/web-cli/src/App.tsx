@@ -2,6 +2,7 @@ import { AblyCliTerminal } from "@ably/react-web-cli";
 import { useCallback, useEffect, useState } from "react";
 
 import "./App.css";
+import { CliDrawer } from "./components/CliDrawer";
 
 // Default WebSocket URL assuming the terminal-server is run locally from the repo root
 const DEFAULT_WEBSOCKET_URL = "ws://localhost:8080";
@@ -38,6 +39,7 @@ function App() {
   const [accessToken, setAccessToken] = useState<string | undefined>(
     envAccessToken,
   );
+  const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">("fullscreen");
 
   // Remove state vars that cause remounting issues
   const [shouldConnect, setShouldConnect] = useState<boolean>(
@@ -71,38 +73,57 @@ function App() {
   // Get the URL *inside* the component body
   const currentWebsocketUrl = getWebSocketUrl();
 
+  // Prepare the terminal component instance to pass it down
+  const TerminalInstance = useCallback(() => (
+    shouldConnect && apiKey && accessToken ? (
+      <AblyCliTerminal
+        ablyAccessToken={accessToken}
+        ablyApiKey={apiKey}
+        onConnectionStatusChange={handleConnectionChange}
+        onSessionEnd={handleSessionEnd}
+        renderRestartButton={(onRestart: () => void) => (
+          <button className="Restart-button" onClick={onRestart}>
+            Restart Terminal
+          </button>
+        )}
+        websocketUrl={currentWebsocketUrl}
+      />
+    ) : null
+  ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, currentWebsocketUrl]);
+
   return (
-    <div className="App">
+    <div className="App fixed">
+      {/* Restore header */}
       <header className="App-header">
-        <h1>Ably CLI Web Terminal</h1>
-        <div style={{ marginBottom: "10px" }}>
-          Status:{" "}
-          <span className={`status status-${connectionStatus}`}>
-            {connectionStatus}
-          </span>
-        </div>
-        <div style={{ marginBottom: "10px", fontSize: "0.8em", color: "#888" }}>
-          Server: {currentWebsocketUrl}
-        </div>
-      </header>
-      <main className="App-main">
-        <div className="Terminal-container">
-          {shouldConnect && apiKey && accessToken && (
-            <AblyCliTerminal
-              ablyAccessToken={accessToken}
-              ablyApiKey={apiKey}
-              onConnectionStatusChange={handleConnectionChange}
-              onSessionEnd={handleSessionEnd}
-              renderRestartButton={(onRestart) => (
-                <button className="Restart-button" onClick={onRestart}>
-                  Restart Terminal
-                </button>
-              )}
-              websocketUrl={currentWebsocketUrl}
-            />
-          )}
-        </div>
-      </main>
+         <h1>Ably CLI Web Terminal</h1>
+         <div style={{ marginBottom: "10px" }}>
+           Status:{" "}
+           <span className={`status status-${connectionStatus}`}>
+             {connectionStatus}
+           </span>
+         </div>
+         <div style={{ marginBottom: "10px", fontSize: "0.8em", color: "#888" }}>
+           Server: {currentWebsocketUrl}
+         </div>
+         <button
+           onClick={() => setDisplayMode(prev => prev === 'fullscreen' ? 'drawer' : 'fullscreen')}
+           style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 100 }}
+         >
+           Toggle View ({displayMode})
+         </button>
+       </header>
+
+      {/* Restore conditional rendering */}
+      {displayMode === 'fullscreen' ? (
+         <main className="App-main">
+           <div className="Terminal-container">
+             <TerminalInstance />
+           </div>
+         </main>
+       ) : (
+         <CliDrawer TerminalComponent={displayMode === 'drawer' ? TerminalInstance : undefined} />
+       )}
+
     </div>
   );
 }

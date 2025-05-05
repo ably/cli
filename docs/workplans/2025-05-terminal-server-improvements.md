@@ -21,8 +21,8 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 - **Testing:**
     - Manual verification of drawer rendering and interaction in the example app.
     - Playwright test: Verify the drawer button exists, opens the drawer on click, closes on click, and basic resize works.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Moved component to `examples/web-cli/src/components`, installed deps (`lucide-react`, `clsx`, `tailwind-merge`), created `lib/utils.ts`, fixed lint errors. Modified `App.tsx` for conditional rendering (fullscreen/drawer) with a toggle button, passing `AblyCliTerminal` to the drawer. Linting passes (ignoring TS module resolution error for `@ably/react-web-cli`).
 
 ### Step 1.2: Implement Connection Status & Basic Interaction
 - **Task:** Display connection status ("Connecting...", "Connected", "Disconnected") within the React component's terminal interface (using `xterm.js` APIs). Show connecting animation/indicator.
@@ -185,3 +185,10 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 ---
 
 **Completion:** Once all steps are marked as `Done`, have passed the mandatory workflow checks (build, lint, test, docs), **and the corresponding tasks in `docs/TODO.md` are marked complete, and all affected documentation and rules files (`/docs`, `.cursor/rules/`) have been updated,** this work plan is complete.
+
+## Phase 5: Fix bugs or feature advancements identified during this development process
+
+Tasks:
+
+- [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections.
+- [ ] Feature: The terminal server should expose key metrics via Promotheus
