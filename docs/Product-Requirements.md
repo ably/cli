@@ -111,7 +111,7 @@ The CLI uses topics (space-separated) to group related commands logically.
 - `$ ably rooms presence subscribe ROOMID`: Subscribes to room presence events. Runs until terminated.
 - `$ ably rooms reactions send ROOMID MESSAGEID EMOJI`: Sends a message reaction.
 - `$ ably rooms reactions subscribe ROOMID`: Subscribes to message reactions. Runs until terminated.
-- `$ ably rooms typing start ROOMID`: Starts sending typing indicators. Runs until terminated.
+- `$ ably rooms typing keystroke ROOMID`: Starts sending typing indicators. Runs until terminated.
 - `$ ably rooms typing subscribe ROOMID`: Subscribes to typing indicators. Runs until terminated.
 
 **Spaces (`ably spaces`)**

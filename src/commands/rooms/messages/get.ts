@@ -54,7 +54,7 @@ export default class MessagesGet extends ChatBaseCommand {
       }
 
       // Get the room
-      const room = await chatClient.rooms.get(args.roomId, {});
+      const room = await chatClient.rooms.get(args.roomId);
 
       // Attach to the room
       await room.attach();

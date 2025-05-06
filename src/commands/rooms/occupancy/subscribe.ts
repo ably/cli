@@ -112,7 +112,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         `Getting room handle for ${roomId}`,
       );
       const room = await chatClient.rooms.get(roomId, {
-        occupancy: {},
+        occupancy: { enableEvents: true },
       });
       this.logCliEvent(
         flags,

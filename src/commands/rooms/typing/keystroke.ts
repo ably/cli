@@ -17,10 +17,10 @@ export default class TypingStart extends ChatBaseCommand {
     "Start typing in an Ably Chat room (will remain typing until terminated)";
 
   static override examples = [
-    "$ ably rooms typing start my-room",
-    '$ ably rooms typing start --api-key "YOUR_API_KEY" my-room',
-    "$ ably rooms typing start my-room --json",
-    "$ ably rooms typing start my-room --pretty-json",
+    "$ ably rooms typing keystroke my-room",
+    '$ ably rooms typing keystroke --api-key "YOUR_API_KEY" my-room',
+    "$ ably rooms typing keystroke my-room --json",
+    "$ ably rooms typing keystroke my-room --pretty-json",
   ];
 
   static override flags = {
@@ -92,7 +92,7 @@ export default class TypingStart extends ChatBaseCommand {
         `Getting room handle for ${roomId}`,
       );
       const room = await this.chatClient.rooms.get(roomId, {
-        typing: { timeoutMs: 5000 }, // Default timeout is 5s, interval should be < 5s
+        typing: { heartbeatThrottleMs: 5000 }, // Default timeout is 5s
       });
       this.logCliEvent(
         flags,
@@ -139,7 +139,7 @@ export default class TypingStart extends ChatBaseCommand {
               "Attempting to start typing...",
             );
             room.typing
-              .start()
+              .keystroke()
               .then(() => {
                 this.logCliEvent(
                   flags,
@@ -154,10 +154,10 @@ export default class TypingStart extends ChatBaseCommand {
                   );
                 }
 
-                // Keep typing active by calling start() periodically
+                // Keep typing active by calling keystroke() periodically
                 if (this.typingIntervalId) clearInterval(this.typingIntervalId);
                 this.typingIntervalId = setInterval(() => {
-                  room.typing.start().catch((error: Error) => {
+                  room.typing.keystroke().catch((error: Error) => {
                     this.logCliEvent(
                       flags,
                       "typing",
@@ -172,7 +172,7 @@ export default class TypingStart extends ChatBaseCommand {
                     "refreshing",
                     "Refreshed typing state",
                   );
-                }, 4000); // Interval < timeoutMs
+                }, 6000); // Interval > heartbeatThrottleMs && Interval < heartbeatThrottleMs + grace period
               })
               .catch((error: Error) => {
                 this.logCliEvent(
