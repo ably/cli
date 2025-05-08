@@ -11,23 +11,19 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       description: "The room ID to send the reaction to",
       required: true,
     }),
-    messageId: Args.string({
-      description: "The message ID to react to",
-      required: true,
-    }),
     emoji: Args.string({
       description: "The emoji reaction to send (e.g. 👍, ❤️, 😂)",
       required: true,
     }),
   };
 
-  static override description = "Send a reaction to a message in a chat room";
+  static override description = "Send a reaction in a chat room";
 
   static override examples = [
-    "$ ably rooms reactions send my-room abc123 👍",
-    '$ ably rooms reactions send --api-key "YOUR_API_KEY" my-room abc123 🎉',
-    "$ ably rooms reactions send my-room abc123 ❤️ --json",
-    "$ ably rooms reactions send my-room abc123 😂 --pretty-json",
+    "$ ably rooms reactions send my-room 👍",
+    '$ ably rooms reactions send --api-key "YOUR_API_KEY" my-room 🎉',
+    "$ ably rooms reactions send my-room ❤️ --json",
+    "$ ably rooms reactions send my-room 😂 --pretty-json",
   ];
 
   static override flags = {
@@ -65,7 +61,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsReactionsSend);
-    const { roomId, messageId, emoji } = args;
+    const { roomId, emoji } = args;
 
     try {
       // Parse metadata if provided
@@ -84,12 +80,11 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
           this.logCliEvent(flags, "reaction", "metadataParseError", errorMsg, {
             error: errorMsg,
             roomId,
-            messageId,
           });
           if (this.shouldOutputJson(flags)) {
             this.log(
               this.formatJsonOutput(
-                { error: errorMsg, roomId, messageId, success: false },
+                { error: errorMsg, roomId, success: false },
                 flags,
               ),
             );
@@ -206,7 +201,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         flags,
         "reaction",
         "sending",
-        `Sending reaction ${emoji} to message ${messageId}`,
+        `Sending reaction ${emoji}`,
         { emoji, metadata: this.metadataObj || {} },
       );
       await room.reactions.send({
@@ -217,13 +212,12 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         flags,
         "reaction",
         "sent",
-        `Successfully sent reaction ${emoji} to message ${messageId}`,
+        `Successfully sent reaction ${emoji}`,
       );
 
       // Format the response
       const resultData = {
         emoji,
-        messageId,
         metadata: this.metadataObj,
         roomId,
         success: true,
@@ -233,7 +227,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         this.log(this.formatJsonOutput(resultData, flags));
       } else {
         this.log(
-          `${chalk.green("✓")} Sent reaction ${emoji} to message ${chalk.cyan(messageId)} in room ${chalk.cyan(roomId)}`,
+          `${chalk.green("✓")} Sent reaction ${emoji} in room ${chalk.cyan(roomId)}`,
         );
       }
 
@@ -262,7 +256,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         "reaction",
         "error",
         `Failed to send reaction: ${errorMsg}`,
-        { error: errorMsg, roomId, messageId, emoji },
+        { error: errorMsg, roomId, emoji },
       );
 
       // Close the connection in case of error
@@ -273,7 +267,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
-            { error: errorMsg, roomId, messageId, emoji, success: false },
+            { error: errorMsg, roomId, emoji, success: false },
             flags,
           ),
         );
