@@ -159,7 +159,7 @@ See [MCP Server section](#mcp-server) for more details on how to use the MCP Ser
 * [`ably rooms presence enter ROOMID`](#ably-rooms-presence-enter-roomid)
 * [`ably rooms presence subscribe ROOMID`](#ably-rooms-presence-subscribe-roomid)
 * [`ably rooms reactions`](#ably-rooms-reactions)
-* [`ably rooms reactions send ROOMID MESSAGEID EMOJI`](#ably-rooms-reactions-send-roomid-messageid-emoji)
+* [`ably rooms reactions send ROOMID EMOJI`](#ably-rooms-reactions-send-roomid-emoji)
 * [`ably rooms reactions subscribe ROOMID`](#ably-rooms-reactions-subscribe-roomid)
 * [`ably rooms typing`](#ably-rooms-typing)
 * [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
@@ -3871,20 +3871,19 @@ EXAMPLES
 
 _See code: [src/commands/rooms/reactions/index.ts](https://github.com/ably/cli/blob/v0.4.0/src/commands/rooms/reactions/index.ts)_
 
-## `ably rooms reactions send ROOMID MESSAGEID EMOJI`
+## `ably rooms reactions send ROOMID EMOJI`
 
-Send a reaction to a message in a chat room
+Send a reaction in a chat room
 
 ```
 USAGE
-  $ ably rooms reactions send ROOMID MESSAGEID EMOJI [--access-token <value>] [--api-key <value>] [--client-id <value>]
+  $ ably rooms reactions send ROOMID EMOJI [--access-token <value>] [--api-key <value>] [--client-id <value>]
     [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
     [--metadata <value>]
 
 ARGUMENTS
-  ROOMID     The room ID to send the reaction to
-  MESSAGEID  The message ID to react to
-  EMOJI      The emoji reaction to send (e.g. 👍, ❤️, 😂)
+  ROOMID  The room ID to send the reaction to
+  EMOJI   The emoji reaction to send (e.g. 👍, ❤️, 😂)
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3901,16 +3900,16 @@ FLAGS
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Send a reaction to a message in a chat room
+  Send a reaction in a chat room
 
 EXAMPLES
-  $ ably rooms reactions send my-room abc123 👍
+  $ ably rooms reactions send my-room 👍
 
-  $ ably rooms reactions send --api-key "YOUR_API_KEY" my-room abc123 🎉
+  $ ably rooms reactions send --api-key "YOUR_API_KEY" my-room 🎉
 
-  $ ably rooms reactions send my-room abc123 ❤️ --json
+  $ ably rooms reactions send my-room ❤️ --json
 
-  $ ably rooms reactions send my-room abc123 😂 --pretty-json
+  $ ably rooms reactions send my-room 😂 --pretty-json
 ```
 
 _See code: [src/commands/rooms/reactions/send.ts](https://github.com/ably/cli/blob/v0.4.0/src/commands/rooms/reactions/send.ts)_
