@@ -63,7 +63,7 @@ interface ReconnectOverlayProps {
 const ReconnectOverlay: React.FC<ReconnectOverlayProps> = ({ attemptMessage, countdownMessage }) => (
   <div 
     data-testid="reconnect-overlay"
-    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}
   >
     {attemptMessage && <div data-testid="reconnect-attempt-message" style={{ fontSize: '1.2em', marginBottom: '10px' }}>{attemptMessage}</div>}
     {countdownMessage && <div data-testid="reconnect-countdown-timer" style={{ fontSize: '1em' }}>{countdownMessage}</div>}
@@ -95,6 +95,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const ptyBuffer = useRef('');
   // Keep a ref in sync with the latest connection status so event handlers have up-to-date value
   const connectionStatusRef = useRef<ConnectionStatus>('initial');
+
+  // Ref to track manual reconnect prompt visibility inside stable event handlers
+  const showManualReconnectPromptRef = useRef<boolean>(false);
 
   const updateConnectionStatusAndExpose = useCallback((status: ConnectionStatus) => {
     console.log(`[AblyCLITerminal] updateConnectionStatusAndExpose called with: ${status}`);
@@ -138,6 +141,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       if (ptyBuffer.current.includes(TERMINAL_PROMPT_IDENTIFIER)) {
         console.log('[AblyCLITerminal] Terminal prompt detected. Session active.');
         setIsSessionActive(true);
+        // Full session confirmed – now reset global reconnect state
+        grResetState();
         updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
         if (term.current) term.current.focus();
         clearPtyBuffer();
@@ -196,11 +201,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   const handleWebSocketOpen = useCallback(() => {
     console.log('[AblyCLITerminal] WebSocket opened');
-    grResetState(); // Reset reconnection attempts on successful connection
-    clearAnimationMessages();
-    // Status becomes 'connected' once prompt is detected via PTY data (handlePtyData)
-    // For now, ensure any "reconnecting" visual cues are removed.
-    // updateConnectionStatusAndExpose('connected'); // This will be set by handlePtyData
+    // Do not reset reconnection attempts here; wait until terminal prompt confirms full session
     setShowManualReconnectPrompt(false);
     clearPtyBuffer(); // Clear buffer for new session prompt detection
 
@@ -269,6 +270,31 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     clearAnimationMessages();
     setIsSessionActive(false); // Session is no longer active
 
+    // --- Handle non-recoverable server-initiated disconnects ---
+    // These status codes indicate problems that automatic reconnection cannot fix
+    // and therefore require user intervention (e.g. invalid credentials or capacity issues)
+    const NON_RECOVERABLE_CLOSE_CODES = new Set<number>([
+      4001, // Invalid token / credentials
+      4008, // Policy violation / auth timeout / invalid message format
+      1013, // Try again later (server overloaded / capacity)
+    ]);
+
+    if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
+      // Ensure any global reconnection timers are cleared
+      grCancelReconnect();
+      grResetState();
+
+      updateConnectionStatusAndExpose('disconnected');
+
+      if (term.current) {
+        term.current.writeln(`\r\n--- Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''} ---`);
+        term.current.writeln('Press Enter to try reconnecting manually.');
+      }
+
+      setShowManualReconnectPrompt(true);
+      return; // Do NOT schedule automatic reconnection
+    }
+
     if (grIsCancelledState() || grIsMaxAttemptsReached()) {
       updateConnectionStatusAndExpose('disconnected');
       if (term.current) {
@@ -304,30 +330,43 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       term.current.loadAddon(fitAddon.current);
       
       term.current.onData((data: string) => {
+        // Special handling for Enter key
+        if (data === '\r') {
+          const latestStatus = connectionStatusRef.current;
+
+          // Manual prompt visible: attempt manual reconnect even if an old socket is open
+          if (showManualReconnectPromptRef.current) {
+            console.log('[AblyCLITerminal] Enter pressed for manual reconnect.');
+            showManualReconnectPromptRef.current = false;
+            setShowManualReconnectPrompt(false);
+            grResetState();
+            clearPtyBuffer();
+            connectWebSocket();
+            return;
+          }
+
+          // Cancel ongoing auto-reconnect
+          if (latestStatus === 'reconnecting' && !grIsCancelledState()) {
+            console.log('[AblyCLITerminal] Enter pressed during auto-reconnect: Cancelling.');
+            grCancelReconnect();
+            clearAnimationMessages();
+            if (term.current) {
+              term.current.writeln("\r\n\nReconnection attempts cancelled by user.");
+              term.current.writeln("Press Enter to try reconnecting manually.");
+            }
+            showManualReconnectPromptRef.current = true;
+            setShowManualReconnectPrompt(true);
+            updateConnectionStatusAndExpose('disconnected');
+            return;
+          }
+        }
+
+        // Default: forward data to server if socket open
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
           socketRef.current.send(data);
-        } else if (data === '\r') { // Enter key
-          const latestStatus = connectionStatusRef.current;
-          if (showManualReconnectPrompt || (latestStatus === 'reconnecting' && !grIsCancelledState())) {
-             // If showing manual prompt, or if in reconnecting state and not cancelled yet
-            if (latestStatus === 'reconnecting' && !grIsCancelledState()) {
-              console.log('[AblyCLITerminal] Enter pressed during auto-reconnect: Cancelling.');
-              grCancelReconnect();
-              clearAnimationMessages();
-              if (term.current) {
-                term.current.writeln("\r\n\nReconnection attempts cancelled by user.");
-                term.current.writeln("Press Enter to try reconnecting manually.");
-              }
-              setShowManualReconnectPrompt(true);
-              updateConnectionStatusAndExpose('disconnected'); // Explicitly disconnected
-            } else if (showManualReconnectPrompt) {
-              console.log('[AblyCLITerminal] Enter pressed for manual reconnect.');
-              setShowManualReconnectPrompt(false);
-              grResetState();
-              clearPtyBuffer();
-              connectWebSocket(); // This will set status to 'connecting' or 'reconnecting'
-            }
-          }
+        } else if (data === '\r') {
+          // If the connection is not open and none of the above special cases matched,
+          // do nothing (prevent accidental writes to closed socket).
         }
       });
 
