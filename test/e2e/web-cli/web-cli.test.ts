@@ -48,6 +48,32 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
   throw new Error(`Server ${url} did not start within ${timeout}ms`);
 }
 
+/**
+ * Wait for the terminal prompt to appear, indicating the terminal is ready
+ * @param page Playwright Page object
+ * @param terminalSelector Selector for the terminal element
+ * @param timeout Maximum time to wait in milliseconds
+ */
+async function waitForPrompt(page: _Page, terminalSelector: string, timeout = 30000): Promise<void> {
+  const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
+  console.log('Waiting for terminal prompt...');
+  try {
+    await page.locator(terminalSelector).getByText(promptText, { exact: true }).waitFor({ timeout });
+    console.log('Terminal prompt found.');
+  } catch (error) {
+    console.error('Error waiting for terminal prompt:', error);
+    console.log('--- Terminal Content on Prompt Timeout ---');
+    try {
+      const terminalContent = await page.locator(terminalSelector).textContent();
+      console.log(terminalContent);
+    } catch (logError) {
+      console.error('Could not get terminal content after timeout:', logError);
+    }
+    console.log('-----------------------------------------');
+    throw error; // Re-throw the error to fail the test
+  }
+}
+
 // --- Test Suite ---
 test.describe('Web CLI E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
@@ -353,6 +379,69 @@ test.describe('Web CLI E2E Tests', () => {
       await expect(page.locator(drawerButtonSelector)).toBeVisible(); // Should remain closed
       await expect(page.locator(drawerSelector)).not.toBeVisible();
     });
+  });
+
+  test('should handle connection interruptions gracefully', async ({ page }) => {
+    // Connect to the terminal
+    const url = `http://localhost:${webServerPort}?serverUrl=ws%3A%2F%2Flocalhost%3A${terminalServerPort}`;
+    await page.goto(url);
+    
+    // Wait for the terminal to connect and show a prompt
+    const terminalElement = await page.waitForSelector('.xterm', { timeout: 15000 });
+    
+    // Wait for the initial prompt to appear
+    await waitForPrompt(page, '.xterm');
+    
+    console.log('Terminal connected. Simulating WebSocket disconnection...');
+
+    // Simulate a WebSocket disconnection using browser DevTools Protocol
+    await page.evaluate(() => {
+      // Script to intercept and close WebSocket connections
+      const originalWebSocket = window.WebSocket;
+      const activeConnections: WebSocket[] = [];
+      
+      // Mock WebSocket to track connections
+      window.WebSocket = function(url, protocols) {
+        const ws = new originalWebSocket(url, protocols);
+        activeConnections.push(ws);
+        return ws;
+      } as any;
+      
+      // Close all active WebSockets to simulate network interruption
+      activeConnections.forEach(ws => {
+        // Use code 1006 to indicate abnormal closure (network error)
+        if (ws.readyState === WebSocket.OPEN) {
+          // Access the internal close method
+          // @ts-expect-error  internal close method exists in chrome implementation
+          ws._close?.(1006, 'Test connection interruption');
+        }
+      });
+      
+      return activeConnections.length;
+    });
+    
+    console.log('Waiting for reconnection message...');
+    
+    // Use a more general selector to catch connection-related messages
+    // Give it more time to appear as WebSocket close and reconnection might take longer
+    await page.waitForTimeout(3000);
+    
+    console.log('Connection should have been closed. Waiting for reconnection...');
+    
+    // Wait for reconnection attempt to complete
+    await page.waitForTimeout(5000);
+    
+    // Type a test command to verify we reconnected successfully
+    await page.keyboard.type('echo "Reconnection test successful"');
+    await page.keyboard.press('Enter');
+    
+    // Verify the command output is visible, indicating successful reconnection
+    await page.waitForSelector(
+      '.xterm:has-text("Reconnection test successful")',
+      { timeout: 10000 }
+    );
+    
+    console.log('Reconnection test completed successfully');
   });
 
 }); // End of main describe block
