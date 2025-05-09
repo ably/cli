@@ -19,6 +19,7 @@ export default [
       "**/coverage/**",
       "*.config.js",
       "examples/**", // Ignore all files in examples directory
+      "docs/workplans/resources/**", // Ignore resource TSX used for documentation
       "oclif.manifest.json",
       "**/tmp/**",
       "**/.nyc_output/**",

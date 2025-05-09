@@ -13,25 +13,6 @@ export HISTFILESIZE=0
 export HISTCONTROL=ignoreboth:erasedups
 history -c
 
-# Validate required environment variables
-if [[ -z "$ABLY_API_KEY" ]]; then
-  echo -e "\033[31mError: ABLY_API_KEY environment variable is not set.\033[0m"
-  echo "The ABLY_API_KEY must be provided in the format [APP_ID].[KEY_ID]:[KEY_SECRET]."
-  exit 1
-fi
-
-# Validate API key format
-if ! [[ "$ABLY_API_KEY" =~ ^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$ ]]; then
-  echo -e "\033[31mError: Invalid ABLY_API_KEY format.\033[0m"
-  echo "The ABLY_API_KEY must be provided in the format [APP_ID].[KEY_ID]:[KEY_SECRET]."
-  exit 1
-fi
-
-if [[ -z "$ABLY_ACCESS_TOKEN" ]]; then
-  echo -e "\033[31mError: ABLY_ACCESS_TOKEN environment variable is not set.\033[0m"
-  exit 1
-fi
-
 # Set critical environment variables for proper UTF-8 handling and terminal behavior
 export TERM=${TERM:-xterm-256color}
 export LANG=${LANG:-en_US.UTF-8}
@@ -131,6 +112,38 @@ check_injection() {
   fi
   return 0
 }
+
+# --- Credential validation ---
+# The Ably CLI can authenticate with EITHER an API key OR an access token.
+# Historically we required both env vars which prevented token-only sessions.
+# We now accept whichever credential is supplied and validate its format.
+
+# Helper to check API key format only when variable is non-empty
+validate_api_key() {
+  local key="$1"
+  if ! [[ "$key" =~ ^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$ ]]; then
+    echo -e "\033[31mError: Invalid ABLY_API_KEY format.\033[0m"
+    echo "The ABLY_API_KEY must be provided in the format [APP_ID].[KEY_ID]:[KEY_SECRET]."
+    exit 1
+  fi
+}
+
+# 1. Both credentials missing → hard error
+if [[ -z "$ABLY_API_KEY" && -z "$ABLY_ACCESS_TOKEN" ]]; then
+  echo -e "\033[31mError: Neither ABLY_API_KEY nor ABLY_ACCESS_TOKEN is set.\033[0m"
+  echo "Please provide at least one credential to use the Ably CLI."
+  exit 1
+fi
+
+# 2. API key provided → ensure format is valid
+if [[ -n "$ABLY_API_KEY" ]]; then
+  validate_api_key "$ABLY_API_KEY"
+fi
+
+# 3. Access token not provided (and no key) → warn but allow; some commands may require explicit --token flag
+if [[ -z "$ABLY_ACCESS_TOKEN" ]]; then
+  echo -e "\033[33mWarning: ABLY_ACCESS_TOKEN is not set; commands that require token-based auth may fail unless you provide --token flag.\033[0m"
+fi
 
 # Read commands in a loop with proper handling
 while true; do

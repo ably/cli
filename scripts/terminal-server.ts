@@ -177,12 +177,31 @@ async function cleanupStaleContainers(): Promise<void> {
 async function ensureDockerImage(): Promise<void> {
   log(`Ensuring Docker image ${DOCKER_IMAGE_NAME} exists...`);
   try {
+    const forceRebuild = process.env.FORCE_REBUILD_SANDBOX_IMAGE === 'true';
+
     // First check if the image exists
     const images = await docker.listImages({
       filters: { reference: [DOCKER_IMAGE_NAME] },
     });
 
-    if (images.length === 0) {
+    if (forceRebuild && images.length > 0) {
+      log(`FORCE_REBUILD_SANDBOX_IMAGE is set. Removing existing image ${DOCKER_IMAGE_NAME} to trigger rebuild.`);
+      try {
+        // Remove image by its ID (first match)
+        const imageId = images[0].Id;
+        await docker.getImage(imageId).remove({ force: true });
+        log(`Removed existing image ${imageId}.`);
+      } catch (error) {
+        logError(`Failed to remove image for rebuild: ${error}`);
+      }
+    }
+
+    // Re-query images after potential removal
+    const imagesPostCheck = await docker.listImages({
+      filters: { reference: [DOCKER_IMAGE_NAME] },
+    });
+
+    if (imagesPostCheck.length === 0) {
       log(`Image ${DOCKER_IMAGE_NAME} not found. Will attempt to build it.`);
 
       // Get the location of the Dockerfile - should be in project root
@@ -270,8 +289,9 @@ async function createContainer(
       'LC_ALL=en_US.UTF-8',
       'LC_CTYPE=en_US.UTF-8',
       'CLICOLOR=1',
-      `ABLY_API_KEY=${apiKey}`,
-      `ABLY_ACCESS_TOKEN=${accessToken}`,
+      // Only include credentials that have a non-empty value
+      ...(apiKey ? [`ABLY_API_KEY=${apiKey}`] : []),
+      ...(accessToken ? [`ABLY_ACCESS_TOKEN=${accessToken}`] : []),
       // Simple PS1 prompt at container level
       'PS1=$ ',
       // Enable history with reasonable defaults
@@ -619,7 +639,9 @@ async function startServer() {
 
         if (sessions.size >= maxSessions) {
             log("Max session limit reached. Rejecting new connection.");
-            ws.send("Server busy. Please try again later.\r\n");
+            // Send structured error status before closing so client can handle gracefully
+            const busyMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Server busy. Please try again later." };
+            try { ws.send(JSON.stringify(busyMsg)); } catch (error) { void error; /* Non-fatal: client likely disconnected */ }
             ws.close(1013, "Server busy");
             return;
         }
@@ -631,6 +653,8 @@ async function startServer() {
                  log(`Authentication timeout for session ${sessionId}.`);
                  // Ensure ws is still open before closing
                  if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                     const timeoutMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Authentication timeout" };
+                     try { ws.send(JSON.stringify(timeoutMsg)); } catch (error) { void error; /* ignore */ }
                      ws.close(4008, 'Authentication timeout');
                  }
                  cleanupSession(sessionId); // Cleanup based on ID
@@ -652,24 +676,38 @@ async function startServer() {
                 let authPayload: { apiKey?: string; accessToken?: string; environmentVariables?: Record<string, string> };
                 try {
                     authPayload = JSON.parse(message.toString());
-                } catch {
+                } catch (error) {
+                    void error;
                     logError(`[${sessionId}] Failed to parse auth message JSON.`);
-                     if (ws.readyState === WebSocket.OPEN) {
-                        ws.send('Invalid auth message format.\r\n');
-                        ws.close(4008, 'Invalid auth format');
-                    }
+                    const invalidAuthMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Invalid auth message format" };
+                    try { ws.send(JSON.stringify(invalidAuthMsg)); } catch (sendError) { void sendError; }
+                    ws.close(4008, 'Invalid auth format');
                     if (sessionId) cleanupSession(sessionId);
                     return;
                 }
 
-                // Combine token validation (placeholder) and credential check
-                if (!authPayload.apiKey || !authPayload.accessToken || !isValidToken(authPayload.accessToken)) {
-                    logError(`[${sessionId}] Invalid credentials or token received.`);
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send('Invalid token or credentials.\r\n');
-                        ws.close(4001, 'Invalid token/credentials');
-                    }
-                    if (sessionId) cleanupSession(sessionId); // Cleanup partial session
+                // --- Credential validation logic ---
+                const hasApiKey = typeof authPayload.apiKey === 'string' && authPayload.apiKey.trim().length > 0;
+                const hasAccessToken = typeof authPayload.accessToken === 'string' && authPayload.accessToken.trim().length > 0;
+
+                // If neither credential is supplied, reject
+                if (!hasApiKey && !hasAccessToken) {
+                    logError(`[${sessionId}] No credentials supplied.`);
+                    const missingCredMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "No API key or access token provided" };
+                    try { ws.send(JSON.stringify(missingCredMsg)); } catch (error) { void error; /* ignore */ }
+                    ws.close(4001, 'Missing credentials');
+                    if (sessionId) cleanupSession(sessionId);
+                    return;
+                }
+
+                // If an access token is supplied and *looks* like a JWT, run structural validation; otherwise accept as-is.
+                const accessTokenStr = hasAccessToken ? String(authPayload.accessToken) : null;
+                if (accessTokenStr && accessTokenStr.split('.').length === 3 && !isValidToken(accessTokenStr as string)) {
+                    logError(`[${sessionId}] Supplied JWT access token failed validation.`);
+                    const invalidTokenMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Invalid or expired access token" };
+                    try { ws.send(JSON.stringify(invalidTokenMsg)); } catch (error) { void error; /* ignore */ }
+                    ws.close(4001, 'Invalid token');
+                    if (sessionId) cleanupSession(sessionId);
                     return;
                 }
                 const { apiKey, accessToken, environmentVariables } = authPayload;
@@ -683,7 +721,7 @@ async function startServer() {
                 let container: DockerContainer;
                 try {
                    // Pass credentials to createContainer
-                   container = await createContainer(apiKey, accessToken, environmentVariables || {}, sessionId);
+                   container = await createContainer(apiKey ?? '', accessToken ?? '', environmentVariables || {}, sessionId);
                    log(`[${sessionId}] Container created successfully: ${container.id}`);
 
                    // Start the container before attempting to attach
@@ -692,10 +730,9 @@ async function startServer() {
 
                 } catch (containerError) {
                     logError(`[${sessionId}] Failed to create or start container: ${containerError instanceof Error ? containerError.message : String(containerError)}`);
-                    if (ws.readyState === WebSocket.OPEN) {
-                       ws.send('Failed to create session environment.\r\n');
-                       ws.close(1011, 'Container creation failed');
-                    }
+                    const containerErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Failed to create session environment" };
+                    try { ws.send(JSON.stringify(containerErrorMsg)); } catch (error) { void error; /* ignore */ }
+                    ws.close(1011, 'Container creation failed');
                     if (sessionId) cleanupSession(sessionId); // Cleanup partial session
                     return;
                 }
@@ -731,11 +768,10 @@ async function startServer() {
             } catch (error) {
                 // Catch errors during the setup process (auth, container create, attach)
                 logError(`[${sessionId}] Error during connection setup: ${error instanceof Error ? error.message : String(error)}`);
-                 if (ws.readyState === WebSocket.OPEN) {
-                     ws.send('Internal server error during setup.\r\n');
-                     ws.close(1011, 'Setup error');
-                 }
-                 if (sessionId) cleanupSession(sessionId); // Cleanup whatever state exists
+                const setupErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Internal server error during setup" };
+                try { ws.send(JSON.stringify(setupErrorMsg)); } catch (error) { void error; /* ignore */ }
+                ws.close(1011, 'Setup error');
+                if (sessionId) cleanupSession(sessionId); // Cleanup whatever state exists
             }
         });
 
@@ -860,8 +896,8 @@ try {
         if (nodeProcess._debugEnd) {
           nodeProcess._debugEnd();
         }
-      } catch {
-        // Ignore errors
+      } catch (error) {
+        void error; // Ignore debugger detachment errors – nothing we can do here
       }
     });
   }
@@ -973,11 +1009,44 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         // Optional: Final quick state check before exec
         try {
             const containerInfo = await session.container.inspect();
-            if (!containerInfo.State.Running) { // Only check for Running now
+            if (!containerInfo.State.Running) { // Only proceed if Running
                 session.isAttaching = false;
-                throw new Error(`Container ${session.container.id} is not Running. State: ${containerInfo.State.Status}`);
+
+                // Fetch the last ~200 lines of combined stdout/stderr to aid debugging
+                let recentLogs = '';
+                try {
+                    const logBuff = await session.container.logs({ stdout: true, stderr: true, tail: 200 });
+                    recentLogs = Buffer.isBuffer(logBuff) ? logBuff.toString('utf8') : String(logBuff);
+                } catch (error) {
+                    logError(`Unable to fetch container logs for session ${session.sessionId}: ${error}`);
+                }
+
+                const exitCode = containerInfo.State.ExitCode;
+                const stateMsg = `Container ${session.container.id} is not running (state: ${containerInfo.State.Status}, exitCode: ${exitCode}).`;
+
+                // Log detailed diagnostics server-side
+                logError(`${stateMsg}\nRecent container logs (truncated):\n${recentLogs}`);
+
+                // Notify client with structured error so UI can surface
+                try {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        const errPayload: ServerStatusMessage = {
+                            type: "status",
+                            payload: "error",
+                            reason: stateMsg,
+                            details: {
+                              exitCode,
+                              logs: recentLogs.slice(-2000) // cap payload size
+                            }
+                        };
+                        ws.send(JSON.stringify(errPayload));
+                    }
+                } catch (error) { void error; /* ignore */ }
+
+                throw new Error(stateMsg);
             }
         } catch (inspectError) {
+            // If the error was already re-thrown above with enriched context it will be caught below.
             session.isAttaching = false;
             throw new Error(`Failed to inspect container state before attach: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
         }
@@ -1070,6 +1139,15 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         if (containerStream) {
             safeCloseWsStream(containerStream);
         }
+
+        // Attempt to send final error status if not already sent
+        try {
+            if (ws.readyState === WebSocket.OPEN) {
+                const finalErr: ServerStatusMessage = { type: "status", payload: "error", reason: (error as Error).message };
+                ws.send(JSON.stringify(finalErr));
+            }
+        } catch (error) { void error; /* ignore */ }
+
         cleanupSession(session.sessionId);
         if (ws.readyState === WebSocket.OPEN) {
            ws.close(1011, 'Failed to attach to container');
@@ -1094,9 +1172,8 @@ async function cleanupSession(sessionId: string) {
       const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason: "Session cleanup initiated" };
       session.ws.send(JSON.stringify(statusMsg));
       log(`Sent 'disconnected' status during cleanup for session ${sessionId} (fallback)`);
-    } catch {
-      // logError(`Error sending 'disconnected' status during cleanup for ${sessionId}: ${sendError}`);
-      // Suppress error logging here to avoid noise if ws is closing.
+    } catch (error) {
+      void error; // Suppress error logging here to avoid noise if ws is closing.
     }
   }
 
@@ -1175,8 +1252,8 @@ function handleMessage(session: ClientSession, message: Buffer) {
                 } | null = null;
                 try {
                     parsed = JSON.parse(msgStr);
-                } catch {
-                    // Not JSON, continue with raw input handling
+                } catch (error) {
+                    void error; // Not JSON, continue with raw input handling
                 }
 
                 // Process JSON control messages (resize etc.)
@@ -1205,8 +1282,8 @@ function handleMessage(session: ClientSession, message: Buffer) {
                         }
                 }
             }
-        } catch {
-            // Not JSON, continue with raw input handling
+        } catch (error) {
+            void error; // Not JSON, continue with raw input handling
         }
 
         // Direct pass-through for raw input (both regular characters and control keys)
