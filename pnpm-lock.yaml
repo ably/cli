@@ -23,12 +23,6 @@ importers:
       '@oclif/core':
         specifier: ^4.2.10
         version: 4.2.10
-      '@types/react':
-        specifier: ^18.3.20
-        version: 18.3.20
-      '@types/react-dom':
-        specifier: ^18.3.5
-        version: 18.3.6(@types/react@18.3.20)
       '@xterm/addon-fit':
         specifier: ^0.10.0
         version: 0.10.0(@xterm/xterm@5.5.0)
@@ -114,6 +108,12 @@ importers:
       '@types/node-fetch':
         specifier: ^2.6.12
         version: 2.6.12
+      '@types/react':
+        specifier: ^18.3.20
+        version: 18.3.20
+      '@types/react-dom':
+        specifier: ^18.3.5
+        version: 18.3.6(@types/react@18.3.20)
       '@types/sinon':
         specifier: ^17.0.3
         version: 17.0.4

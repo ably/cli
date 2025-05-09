@@ -20,8 +20,8 @@ done
 MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught"
 MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\" --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 
-# Exclude all browser-based Playwright specs from Mocha runs (they will be executed with Playwright instead)
-EXCLUDE_OPTION="--exclude test/e2e/web-cli/*.test.ts"
+# Exclude any *.test.ts file directly inside or in subdirectories under web-cli/
+EXCLUDE_OPTION="--exclude 'test/e2e/web-cli/**/*.test.ts'"
 
 # Process arguments to determine test pattern and other flags
 TEST_PATTERN=""
@@ -83,12 +83,13 @@ elif [[ -n "$TEST_PATTERN" ]]; then
     OTHER_ARGS_STR+=" $arg"
   done
   
-  # If running a specific file, don't add the EXCLUDE_OPTION
-  if [[ "$TEST_PATTERN" == *.test.ts ]]; then
+  # Treat as a "specific file" only if the pattern does **not** contain any wildcard characters
+  # (i.e. "*" or "?"), otherwise it's a glob pattern and should have the EXCLUDE_OPTION appended.
+  if [[ "$TEST_PATTERN" == *.test.ts && "$TEST_PATTERN" != *\** && "$TEST_PATTERN" != *\?* ]]; then
     COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD $TEST_PATTERN$OTHER_ARGS_STR"
   else
-    # If running a pattern, exclude web-cli tests
-    COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD $TEST_PATTERN$OTHER_ARGS_STR $EXCLUDE_OPTION"
+    # Quote the pattern so that the shell does not expand it prematurely, allowing Mocha to handle the glob
+    COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD '$TEST_PATTERN'$OTHER_ARGS_STR $EXCLUDE_OPTION"
   fi
   
   echo "Executing command: $COMMAND"

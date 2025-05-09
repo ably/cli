@@ -1,3 +1,10 @@
+/*
+ * Declaring `window` ensures TypeScript does not error when this Playwright spec
+ * is parsed in a non-DOM environment (e.g. if Mocha accidentally attempts to
+ * compile it). This addresses TS2304: Cannot find name 'window'.
+ */
+declare const window: any;
+
 import { test, expect, type BrowserContext } from 'playwright/test';
 import { startWebServer, stopWebServer, startTerminalServer, stopTerminalServer } from './reconnection-utils';
 
