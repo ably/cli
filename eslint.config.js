@@ -19,6 +19,7 @@ export default [
       "**/coverage/**",
       "*.config.js",
       "examples/**", // Ignore all files in examples directory
+      "docs/workplans/resources/**", // Ignore resource TSX used for documentation
       "oclif.manifest.json",
       "**/tmp/**",
       "**/.nyc_output/**",
@@ -69,7 +70,7 @@ export default [
   },
   {
     // Configuration specific to TypeScript files
-    files: ["**/*.ts"],
+    files: ["**/*.ts", "**/*.tsx"],
     plugins: {
       "@typescript-eslint": tsPlugin, // Use the imported plugin object
     },
@@ -145,4 +146,21 @@ export default [
   },
   // Prettier config must be last
   eslintConfigPrettier,
+  {
+    // Playwright browser E2E tests – allow browser globals and silence node-specific rules
+    files: ["test/e2e/**/*.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+    rules: {
+      "unicorn/prefer-global-this": "off",
+      "no-undef": "off",
+      "unicorn/prefer-optional-catch-binding": "off",
+      "unicorn/catch-error-name": "off",
+      "n/no-missing-import": "off",
+    },
+  },
 ];

@@ -53,9 +53,13 @@ pnpm test test/integration/core/**/*.test.ts
 *   **Dependencies:** **MUST** stub/mock all external dependencies (Ably SDK calls, Control API requests, filesystem access, `ConfigManager`, etc.). Use libraries like `sinon` and `nock`.
 *   **Speed:** Very fast; no network or filesystem dependency.
 *   **Value:** Useful for testing complex parsing, conditional logic, and edge cases within a command, but **less effective** at verifying core interactions with Ably services compared to Integration/E2E tests.
-*   **Tools:** Mocha, `@oclif/test`, `sinon`.
 
-**Example:**
+**CLI Core and Commands:**
+*   **Tools:** Mocha, `@oclif/test`, `sinon`.
+*   **Location:** Primarily within the `test/unit/` directory, mirroring the `src/` structure.
+*   **Execution:** Run all unit tests with `pnpm test:unit` or target specific files, e.g., `pnpm test test/unit/commands/apps/create.test.ts`.
+
+**Example (Mocha/Sinon):**
 ```typescript
 // Example unit test with proper mocking
 import {expect} from '@oclif/test'
@@ -88,6 +92,31 @@ describe('MyCommand', () => {
 })
 ```
 
+**React Web CLI Components (`@ably/react-web-cli`):**
+*   **Frameworks:** [Vitest](https://vitest.dev/) and [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/). Vitest provides a Jest-compatible API for running tests, assertions, and mocking. React Testing Library is used to interact with components like a user would.
+*   **Location:** Test files are co-located with the components they test (e.g., `packages/react-web-cli/src/AblyCliTerminal.test.tsx`).
+*   **Execution:**
+    *   Run all tests for `@ably/react-web-cli`: `pnpm --filter @ably/react-web-cli test`.
+    *   Individual files via Vitest CLI: `pnpm exec vitest packages/react-web-cli/src/AblyCliTerminal.test.tsx`.
+*   **Mocking:** Dependencies (e.g., `@xterm/xterm`, WebSockets) are mocked using Vitest's capabilities (`vi.mock`, `vi.fn`).
+
+#### 🏗️ Testing Pyramid for React Web CLI Components
+
+While developing the browser-based **Web CLI** we have found that an "inverted" test pyramid (many end-to-end Playwright tests, few unit tests) quickly becomes brittle and slows the feedback loop.  We therefore adopt a **pyramid approach** for this part of the codebase:
+
+1.  **Unit tests (_broad base_) –** Exhaustive coverage of core logic that can execute **in isolation**:
+    * `global-reconnect` timing & state machine.
+    * React hooks and helpers inside `AblyCliTerminal` (without a real browser).
+    * Mock **all** browser APIs (`WebSocket`, `xterm.js`, timers).
+
+2.  **Focused E2E / Playwright tests (_narrow top_) –** Only verify **user-visible** flows:
+    * Automatic reconnect succeeds when the server is restarted.
+    * Users can cancel the reconnect countdown and later trigger a manual reconnect.
+
+Everything else (exact countdown rendering, every internal state transition, console noise) is left to the unit layer.  This greatly reduces flake due to timing variance and Docker start-up times.
+
+> **Tip for contributors:** If you find yourself mocking several browser APIs in a Playwright test, it probably belongs in a unit test instead.
+
 ### 🔄 Integration Tests (`test/integration`)
 
 *   **Primary Purpose:** Verify the interaction between multiple commands or components, including interactions with *mocked* Ably SDKs or Control API services. Test the CLI execution flow.
@@ -96,39 +125,7 @@ describe('MyCommand', () => {
 *   **Value:** Good for testing command sequences (e.g., `config set` then `config get`), authentication flow logic (with mocked credentials), and ensuring different parts of the CLI work together correctly without relying on live Ably infrastructure.
 *   **Tools:** Mocha, `@oclif/test`, `nock`, `sinon`, `execa` (to run the CLI as a subprocess).
 
-**Example:**
-```typescript
-// Example integration test with proper subprocess execution
-import {expect, test} from '@oclif/test'
-import * as nock from 'nock'
-
-describe('config commands', () => {
-  beforeEach(() => {
-    // Set up mocks
-    nock('https://control.ably.net')
-      .get('/v1/apps')
-      .reply(200, { apps: [{ id: 'app123', name: 'Test App' }] })
-  })
-
-  afterEach(() => {
-    nock.cleanAll()
-  })
-
-  test
-    .stdout()
-    .command(['config', 'set', 'apiKey', 'abc:def'])
-    .it('sets the API key', ctx => {
-      expect(ctx.stdout).to.contain('API key saved')
-    })
-
-  test
-    .stdout()
-    .command(['apps', 'list'])
-    .it('lists apps using the saved API key', ctx => {
-      expect(ctx.stdout).to.contain('Test App')
-    })
-})
-```
+Refer to the [Debugging Guide](mdc:docs/Debugging.md) for tips on debugging failed tests, including Playwright and Mocha tests.
 
 ### 🌐 End-to-End (E2E) Tests (`test/e2e`)
 

@@ -1,685 +1,464 @@
-import { FitAddon } from '@xterm/addon-fit';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Terminal } from '@xterm/xterm';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import {
+  getAttempts as grGetAttempts,
+  getMaxAttempts as grGetMaxAttempts,
+  isCancelledState as grIsCancelledState,
+  isMaxAttemptsReached as grIsMaxAttemptsReached,
+  resetState as grResetState,
+  increment as grIncrement,
+  cancelReconnect as grCancelReconnect,
+  scheduleReconnect as grScheduleReconnect,
+  setCountdownCallback as grSetCountdownCallback
+} from './global-reconnect';
 
-// Simple global reconnection state tracker
-// Not affected by React component lifecycle
-const globalState = {
-  attempts: 0,
-  getBackoffDelay(): number {
-    if (this.attempts === 0) return 0;
-    if (this.attempts === 1) return 1000;
+export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
-    // Exponential backoff: 2^(n-1) * 1000ms with max of 30 seconds
-    const baseDelay = Math.min(2 ** (this.attempts - 1) * 1000, 30_000);
+const MAX_PTY_BUFFER_LENGTH = 10000; // Max 10k chars in the buffer
 
-    // Add jitter to prevent reconnection storms
-    const jitter = 0.2; // 20% jitter
-    const randomFactor = 1 - jitter + Math.random() * jitter * 2;
-    const delay = Math.floor(baseDelay * randomFactor);
+// Prompts that indicate the terminal is ready for input
+const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Corrected prompt
 
-    console.log(
-      `[GlobalReconnect] Calculated delay of ${delay}ms for attempt ${this.attempts}`,
-    );
-    return delay;
-  },
-  increment() {
-    this.attempts++;
-    console.log(
-      `[GlobalReconnect] Attempt counter incremented to ${this.attempts}`,
-    );
-  },
-  maxAttempts: 15,
-  reset() {
-    console.log("[GlobalReconnect] Resetting state");
-    if (this.timer) clearTimeout(this.timer);
-    this.attempts = 0;
-    this.timer = null;
-  },
-  schedule(callback: () => void, delay: number) {
-    if (this.timer) clearTimeout(this.timer);
-
-    console.log(
-      `[GlobalReconnect] Scheduling attempt #${this.attempts + 1} in ${delay}ms`,
-    );
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      if (this.attempts < this.maxAttempts) {
-        callback();
-      }
-    }, delay);
-  },
-  timer: null as NodeJS.Timeout | null,
-};
-
-// Keep websocket connection attempts working even when component unmounts
-function getGlobalWebsocket(
-  url: string,
-  callbacks: {
-    onClose?: (event: CloseEvent) => void;
-    onError?: (event: ErrorEvent | Event) => void; // Allow ErrorEvent
-    onMessage?: (event: MessageEvent) => void;
-    onOpen?: (ws: WebSocket) => void;
-    onReconnect?: (attempt: number) => void;
-  },
-) {
-  try {
-    console.log(
-      `[GlobalReconnect] Attempting connection to ${url}, attempt #${globalState.attempts + 1}`,
-    );
-    callbacks.onReconnect?.(globalState.attempts + 1);
-
-    const socket = new WebSocket(url);
-
-    socket.addEventListener("open", (event) => {
-      console.log("[GlobalReconnect] Connection successful");
-      globalState.reset();
-      callbacks.onOpen?.(socket);
-    });
-
-    socket.onmessage = (event) => {
-      callbacks.onMessage?.(event);
-    };
-
-    socket.addEventListener("close", (event) => {
-      console.log(`[GlobalReconnect] Connection closed: ${event.code}`);
-      callbacks.onClose?.(event);
-
-      // Only reconnect for unexpected close events
-      if (event.code !== 1000 && event.code !== 1001) {
-        globalState.increment();
-        if (globalState.attempts < globalState.maxAttempts) {
-          const delay = globalState.getBackoffDelay();
-          console.log(`[GlobalReconnect] Will reconnect in ${delay}ms`);
-          globalState.schedule(() => {
-            getGlobalWebsocket(url, callbacks);
-          }, delay);
-        } else {
-          console.log("[GlobalReconnect] Max attempts reached");
-        }
-      }
-    });
-
-    socket.onerror = (event) => {
-      console.log("[GlobalReconnect] Connection error");
-      callbacks.onError?.(event);
-      // Don't handle reconnection here - onclose will be called after error
-    };
-
-    return socket;
-  } catch (error) {
-    console.error("[GlobalReconnect] Error creating WebSocket:", error);
-    callbacks.onError?.(new Event("error"));
-
-    // Schedule reconnection
-    globalState.increment();
-    if (globalState.attempts < globalState.maxAttempts) {
-      const delay = globalState.getBackoffDelay();
-      console.log(`[GlobalReconnect] Will reconnect in ${delay}ms after error`);
-      globalState.schedule(() => {
-        getGlobalWebsocket(url, callbacks);
-      }, delay);
-    } else {
-      console.log("[GlobalReconnect] Max attempts reached after error");
-    }
-
-    return null;
-  }
-}
-
-interface AblyCliTerminalProps {
+export interface AblyCliTerminalProps {
+  websocketUrl: string;
   ablyAccessToken?: string;
   ablyApiKey?: string;
-  onConnectionStatusChange?: (
-    status: "connected" | "connecting" | "disconnected" | "error",
-  ) => void;
+  initialCommand?: string;
+  onConnectionStatusChange?: (status: ConnectionStatus) => void;
   onSessionEnd?: (reason: string) => void;
-  renderRestartButton?: (onRestart: () => void) => React.ReactNode;
-  websocketUrl: string;
 }
 
-type SessionState = "active" | "connecting" | "ended" | "inactive";
-
-// Simple debounce function
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number,
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout | null = null;
-  return function executedFunction(...args: Parameters<T>) {
-    const later = () => {
-      timeout = null;
-      func(...args);
-    };
-
-    if (timeout) {
-      clearTimeout(timeout);
-    }
-
-    timeout = setTimeout(later, wait);
-  };
+interface ConnectionStatusHeaderProps {
+  connectionStatus: ConnectionStatus;
+  connectionHelpMessage: string;
+  isSessionActive: boolean;
 }
+const ConnectionStatusHeader: React.FC<ConnectionStatusHeaderProps> = ({ connectionStatus, connectionHelpMessage, isSessionActive }) => {
+  console.log(`[ConnectionStatusHeader RENDER] isSessionActive: ${isSessionActive}, connectionStatus: "${connectionStatus}", connectionHelpMessage: "${connectionHelpMessage}"`);
 
-// Debounced function to send resize messages
-const debouncedSendResize = debounce(
-  (socket: WebSocket | null, cols: number, rows: number) => {
-    if (socket?.readyState === WebSocket.OPEN) {
-      try {
-        socket.send(JSON.stringify({ cols, rows, type: "resize" }));
-        console.log(`[AblyCLITerminal] Sent resize: ${cols}x${rows}`);
-      } catch (error) {
-        console.error("[AblyCLITerminal] Error sending resize message:", error);
-      }
-    }
-  },
-  250,
-); // Debounce resize sending by 250ms
+  // Show help message only before full session becomes active (e.g., while connecting)
+  if (!isSessionActive && connectionHelpMessage) {
+    console.log('[ConnectionStatusHeader RENDER] Condition MET: !isSessionActive && connectionHelpMessage. Rendering help message.');
+    return <div data-testid="connection-help-message" style={{ fontSize: '0.8em', marginBottom: '4px', color: '#888' }}>{connectionHelpMessage}</div>;
+  }
+  
+  if (!isSessionActive && connectionStatus === 'reconnecting') {
+    console.log('[ConnectionStatusHeader RENDER] Condition MET: !isSessionActive && connectionStatus === "reconnecting". ReconnectOverlay should be active.');
+  }
 
-// Removed unused scrollbar gutter fix hooks
+  console.log('[ConnectionStatusHeader RENDER] No primary condition met. Rendering null.');
+  return null;
+};
+
+interface ReconnectOverlayProps {
+  attemptMessage: string;
+  countdownMessage: string;
+}
+const ReconnectOverlay: React.FC<ReconnectOverlayProps> = ({ attemptMessage, countdownMessage }) => (
+  <div 
+    data-testid="reconnect-overlay"
+    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', color: 'white', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}
+  >
+    {attemptMessage && <div data-testid="reconnect-attempt-message" style={{ fontSize: '1.2em', marginBottom: '10px' }}>{attemptMessage}</div>}
+    {countdownMessage && <div data-testid="reconnect-countdown-timer" style={{ fontSize: '1em' }}>{countdownMessage}</div>}
+    <div style={{ marginTop: '20px', fontSize: '0.9em' }}>(Press Enter to cancel reconnect attempts)</div>
+  </div>
+);
 
 export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
+  websocketUrl,
   ablyAccessToken,
   ablyApiKey,
+  initialCommand,
   onConnectionStatusChange,
   onSessionEnd,
-  renderRestartButton,
-  websocketUrl,
 }) => {
-  const terminalRef = useRef<HTMLDivElement>(null);
+  const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [connectionHelpMessage, setConnectionHelpMessage] = useState('');
+  const [reconnectAttemptMessage, setReconnectAttemptMessage] = useState('');
+  const [countdownMessage, setCountdownMessage] = useState('');
+
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [showManualReconnectPrompt, setShowManualReconnectPrompt] = useState(false);
+  
+  const rootRef = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
-  // Track previous cols/rows to only send backend resize on width changes
-  const prevSize = useRef({ cols: 0, rows: 0 });
+  const fitAddon = useRef<FitAddon>();
+  const lastWriteLine = useRef<string>('');
+  const ptyBuffer = useRef('');
+  // Keep a ref in sync with the latest connection status so event handlers have up-to-date value
+  const connectionStatusRef = useRef<ConnectionStatus>('initial');
 
-  const [sessionState, setSessionState] = useState<SessionState>('inactive');
-  const [sessionEndReason, setSessionEndReason] = useState<null | string>(null);
-  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  // Ref to track manual reconnect prompt visibility inside stable event handlers
+  const showManualReconnectPromptRef = useRef<boolean>(false);
 
-  // Use a ref for sessionState inside callbacks to avoid stale closures
-  const sessionStateRef = useRef(sessionState);
-  useEffect(() => { sessionStateRef.current = sessionState; }, [sessionState]);
+  const updateConnectionStatusAndExpose = useCallback((status: ConnectionStatus) => {
+    console.log(`[AblyCLITerminal] updateConnectionStatusAndExpose called with: ${status}`);
+    setComponentConnectionStatusState(status);
+    // (window as any).componentConnectionStatusForTest = status; // Keep for direct inspection if needed, but primary is below
+    // console.log(`[AblyCLITerminal] (window as any).componentConnectionStatusForTest SET TO: ${status}`);
+    
+    // Call playwright hook if it exists
+    if (typeof (window as any).setWindowTestFlagOnStatusChange === 'function') {
+      (window as any).setWindowTestFlagOnStatusChange(status);
+      console.log(`[AblyCLITerminal] Called (window as any).setWindowTestFlagOnStatusChange with ${status}`);
+    }
 
-  // Debounced backend resize: send resize 200ms after last event
-  const debouncedBackendResize = useRef(
-    debounce((cols: number, rows: number) => {
-      if (socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
-      }
-    }, 200)
-  ).current;
-
-  // Handlers defined before useEffects that use them
-  const handleSessionEnd = useCallback(
-    (reason: string) => {
-      console.log(`[AblyCLITerminal] Session ended: ${reason}`);
-      // Check if already ended to prevent loops
-      if (sessionStateRef.current === "ended") return; // Use ref here
-
-      setSessionEndReason(reason);
-      setSessionState("ended");
-      onConnectionStatusChange?.("disconnected");
-      onSessionEnd?.(reason);
-
-      term.current?.writeln(`\r\n\n--- Session Ended: ${reason} ---\r\n`);
-
-      // Close socket if it's still open
-      if (socketRef.current) {
-        console.log("[AblyCLITerminal] Closing socket on session end");
-        const socketToClose = socketRef.current;
-        socketRef.current = null;
-        socketToClose.onclose = null; // Prevent handleWsClose
-        socketToClose.onerror = null;
-        try {
-          if (socketToClose.readyState === WebSocket.OPEN) {
-            socketToClose.close(1000, "Session ended by server or error");
-          }
-        } catch (error) {
-          console.error(
-            "[AblyCLITerminal] Error closing socket on session end:",
-            error,
-          );
-        }
-      }
-    },
-    [onConnectionStatusChange, onSessionEnd],
-  );
-
-  const handleRestart = useCallback(() => {
-    console.log("[AblyCLITerminal] User initiated restart");
-    globalState.reset(); // Reset reconnection state
-    setReconnectAttempt(0);
-    setSessionEndReason(null);
-    term.current?.reset(); // Clear terminal content
-    onConnectionStatusChange?.("connecting"); // Set status immediately
-    setSessionState("inactive"); // This will trigger the connection useEffect
+    if (onConnectionStatusChange) {
+      onConnectionStatusChange(status);
+    }
   }, [onConnectionStatusChange]);
 
-  // Initialize terminal & setup ONLY window resize handling
   useEffect(() => {
-    let initialFitTimeoutId: NodeJS.Timeout | null = null;
-    let isMounted = true;
+    connectionStatusRef.current = componentConnectionStatus;
+  }, [componentConnectionStatus]);
 
-    // Use ResizeObserver on the terminal container to trigger fit
-    let resizeObserver: ResizeObserver | null = null;
-
-    if (terminalRef.current && !term.current) {
-      console.log("[AblyCLITerminal] Initializing Terminal");
-      const terminal = new Terminal({
-        allowTransparency: true,
-        convertEol: true,
-        cursorBlink: true,
-        fontSize: 14,
-        theme: { background: '#121212' },
-        scrollback: 5000,  // Set a larger scrollback buffer to ensure all content is maintained
-        smoothScrollDuration: 300, // Enable smooth scrolling effect for 300ms duration
-        // @ts-ignore: reflowCursorLine exists at runtime though missing in types
-        reflowCursorLine: true
-      });
-      const addon = new FitAddon();
-      terminal.loadAddon(addon);
-
-      term.current = terminal;
-      fitAddon.current = addon;
-
-      terminal.open(terminalRef.current);
-      // Initialize prevSize to initial terminal dimensions
-      prevSize.current = { cols: terminal.cols, rows: terminal.rows };
-
-      terminal.onData((data) => {
-        if (isMounted && socketRef.current?.readyState === WebSocket.OPEN) {
-          socketRef.current.send(data);
-        }
-      });
-
-      // Observe container resize to trigger fit and gutter fix
-      resizeObserver = new ResizeObserver(() => {
-        if (isMounted && fitAddon.current) {
-          console.log('[AblyCLITerminal] ResizeObserver triggered fit');
-          fitAddon.current.fit();
-        }
-      });
-      resizeObserver.observe(terminalRef.current);
-
-      // Initial fit and gutter fix
-      initialFitTimeoutId = setTimeout(() => {
-        if (!isMounted || !fitAddon.current) return;
-        console.log('[AblyCLITerminal] Initial delayed fit executing');
-        fitAddon.current.fit();
-        term.current?.focus();
-      }, 100);
-
-      // Scroll to bottom on any parsed write to keep last line visible
-      terminal.onWriteParsed(() => {
-        if (isMounted) {
-          terminal.scrollToBottom();
-        }
-      });
-
-      // Removed unused CSS injection
-    }
-
-    // Cleanup
-    return () => {
-      isMounted = false;
-      console.log("[AblyCLITerminal] Disposing Terminal");
-      if (initialFitTimeoutId) clearTimeout(initialFitTimeoutId);
-      if (resizeObserver) resizeObserver.disconnect();
-      term.current?.dispose();
-      term.current = null;
-      fitAddon.current = null;
-      socketRef.current?.close(1000, "Terminal component unmounting");
-    };
-  }, []); // IMPORTANT: Run only once on mount
-
-  // Start connection when credentials are available
   useEffect(() => {
-    if (
-      !ablyApiKey ||
-      !ablyAccessToken ||
-      !websocketUrl ||
-      sessionState !== "inactive"
-    ) {
-      return;
+    if (isSessionActive) {
+      setConnectionHelpMessage('Connected to Ably CLI terminal server');
+    } else {
+      setConnectionHelpMessage(''); // Clear help message when not active
+    }
+  }, [isSessionActive]);
+
+  const clearPtyBuffer = useCallback(() => {
+    ptyBuffer.current = '';
+  }, []);
+  
+  const handlePtyData = useCallback((data: string) => {
+    if (!isSessionActive) {
+      ptyBuffer.current += data;
+      if (ptyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
+        ptyBuffer.current = ptyBuffer.current.slice(ptyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
+      }
+      if (ptyBuffer.current.includes(TERMINAL_PROMPT_IDENTIFIER)) {
+        console.log('[AblyCLITerminal] Terminal prompt detected. Session active.');
+        setIsSessionActive(true);
+        // Full session confirmed – now reset global reconnect state
+        grResetState();
+        updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
+        if (term.current) term.current.focus();
+        clearPtyBuffer();
+      }
+    }
+  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer]);
+
+  const clearAnimationMessages = useCallback(() => {
+    setReconnectAttemptMessage('');
+    setCountdownMessage('');
+    if (term.current && lastWriteLine.current) {
+      term.current.write('\r\x1b[K'); // Clear line
+    }
+    lastWriteLine.current = '';
+  }, []);
+  
+  const startConnectingAnimation = useCallback((isRetry: boolean) => {
+    clearAnimationMessages();
+    if (term.current) {
+      const currentAttempts = grGetAttempts(); // Now 0-indexed for number of *past* failures
+      setReconnectAttemptMessage(isRetry ? `Attempt ${currentAttempts + 1}/${grGetMaxAttempts()}` : 'Connecting...');
+      // For retries we still log to console; do NOT print text inside the terminal anymore
+      if (isRetry) {
+        console.log(`[AblyCLITerminal] Displaying reconnect attempt: ${currentAttempts + 1}`);
+      }
+    }
+  }, [clearAnimationMessages]);
+
+  const connectWebSocket = useCallback(() => {
+    console.log('[AblyCLITerminal] connectWebSocket called.');
+    if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) {
+      console.log('[AblyCLITerminal] Closing existing socket before creating new one.');
+      socketRef.current.close();
     }
 
-    console.log("[AblyCLITerminal] Starting connection process");
-    setSessionState("connecting");
-    setReconnectAttempt(0); // Reset attempts when starting fresh
-    setSessionEndReason(null);
-    onConnectionStatusChange?.("connecting");
+    updateConnectionStatusAndExpose(grIsCancelledState() || grIsMaxAttemptsReached() ? 'disconnected' : (grGetAttempts() > 0 ? 'reconnecting' : 'connecting'));
+    startConnectingAnimation(grGetAttempts() > 0);
 
-    // Close existing socket if any (e.g., from a previous failed attempt)
-    if (socketRef.current) {
-      console.log("[AblyCLITerminal] Closing existing socket before reconnect");
-      socketRef.current.onclose = null; // Prevent close handler conflicts
-      socketRef.current.onerror = null;
-      try {
-        socketRef.current.close(1000, "Starting new connection");
-      } catch (error) {
-        console.error(
-          "[AblyCLITerminal] Error closing existing socket:",
-          error,
-        );
+    const newSocket = new WebSocket(websocketUrl);
+    (window as any).ablyCliSocket = newSocket; // For E2E tests
+    socketRef.current = newSocket; // Use ref for listeners
+    setSocket(newSocket); // Trigger effect to add listeners
+
+    console.log(`[AblyCLITerminal] New WebSocket created for ${websocketUrl}`);
+  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation]);
+
+  const socketRef = useRef<WebSocket | null>(null); // Ref to hold the current socket for cleanup
+
+  const handleWebSocketOpen = useCallback(() => {
+    console.log('[AblyCLITerminal] WebSocket opened');
+    // Do not reset reconnection attempts here; wait until terminal prompt confirms full session
+    setShowManualReconnectPrompt(false);
+    clearPtyBuffer(); // Clear buffer for new session prompt detection
+
+    if (term.current) {
+      term.current.focus();
+      if (initialCommand) {
+        setTimeout(() => { term.current?.write(`${initialCommand}\r`); }, 500);
       }
-
-      socketRef.current = null;
     }
+    const authPayload: any = { environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } };
+    if (ablyAccessToken) authPayload.accessToken = ablyAccessToken;
+    else if (ablyApiKey) authPayload.apiKey = ablyApiKey;
+    
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(authPayload));
+    }
+  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer]);
 
-    const url = websocketUrl.endsWith("/")
-      ? websocketUrl.slice(0, -1)
-      : websocketUrl;
-
-    // WebSocket Handlers using handleSessionEnd
-    const handleWsOpen = (socket: WebSocket) => {
-      console.log("[AblyCLITerminal] Connection opened");
-      socketRef.current = socket;
-      socket.binaryType = "arraybuffer";
-      try {
-        const authMessage = JSON.stringify({
-          accessToken: ablyAccessToken,
-          apiKey: ablyApiKey,
-          environmentVariables: {
-            COLORTERM: "truecolor",
-            LANG: "en_US.UTF-8",
-            LC_ALL: "en_US.UTF-8",
-            LC_CTYPE: "en_US.UTF-8",
-            PS1: "$ ",
-            TERM: "xterm-256color",
-          },
-          type: "auth",
-        });
-        socket.send(authMessage);
-        setSessionState("active");
-        onConnectionStatusChange?.("connected");
-      } catch (error) {
-        console.error("[AblyCLITerminal] Error sending auth:", error);
-        handleSessionEnd(
-          `Authentication failed: ${error instanceof Error ? error.message : String(error)}`,
-        ); // Use defined handler
-      }
-    };
-
-    const handleWsMessage = (event: MessageEvent) => {
-      if (!term.current) return;
-      try {
-        if (typeof event.data === "string") {
-          try {
-            const message = JSON.parse(event.data);
-            if (message.type === "session_end") {
-              handleSessionEnd(message.reason || "Server ended session");
-              return;
-            }
-
-            // If it was JSON but not session_end, maybe write it?
-            // For now, assuming only session_end is expected JSON.
-            // If other JSON messages are possible, handle them here.
-            console.log(
-              "[AblyCLITerminal] Received unexpected JSON message:",
-              message,
-            );
-          } catch {
-            // --- DEBUGGING: Log string data (less likely to be the issue) ---
-            // console.log(`[DEBUG WS_RECV_STR] String(${event.data.length}): ${event.data}`);
-            // --- END DEBUGGING ---
-            term.current.write(event.data);
-          }
-        } else if (event.data instanceof Blob) {
-          event.data.arrayBuffer().then((buffer) => {
-            const dataArray = new Uint8Array(buffer);
-            // --- DEBUGGING: Log received ArrayBuffer from Blob ---
-            // console.log(`[DEBUG WS_RECV_BLOB] Uint8Array(${dataArray.length}): ${Array.from(dataArray).map(b => b.toString(16).padStart(2, '0')).join('')}`);
-            // --- END DEBUGGING ---
-            term.current?.write(dataArray);
-          });
-        } else if (event.data instanceof ArrayBuffer) {
-          const dataArray = new Uint8Array(event.data);
-          // --- DEBUGGING: Log received ArrayBuffer directly ---
-          // console.log(`[DEBUG WS_RECV_ARRBUF] Uint8Array(${dataArray.length}): ${Array.from(dataArray).map(b => b.toString(16).padStart(2, '0')).join('')}`);
-          // --- END DEBUGGING ---
-          term.current.write(dataArray);
-        }
-      } catch (error) {
-        console.error("[AblyCLITerminal] Error processing message:", error);
-      }
-    };
-
-    const handleWsClose = (event: CloseEvent) => {
-      const currentSocket = socketRef.current; // Capture current ref value
-      socketRef.current = null;
-      if (sessionStateRef.current === "active") {
-        console.log(
-          `[AblyCLITerminal] Unexpected close (Code: ${event.code}), session ended.`,
-        );
-        handleSessionEnd(
-          `Connection closed unexpectedly (Code: ${event.code})`,
-        ); // Use defined handler
-      }
-    };
-
-    const handleWsError = (event: ErrorEvent | Event) => {
-      console.error("[AblyCLITerminal] WebSocket error:", event);
-      // No detailed error info from WebSocket error events typically
-      setSessionState("inactive");
-      onConnectionStatusChange?.("error");
-      if (term.current) {
-        term.current.writeln("\r\n\n--- WebSocket connection error ---\r\n");
-      }
-      // Socket will close after error, which will trigger handleWsClose
-    };
-
-    const handleReconnectAttempt = (attempt: number) => {
-      setReconnectAttempt(attempt);
-      onConnectionStatusChange?.("connecting");
-    };
-
-    // Initiate connection
-    getGlobalWebsocket(url, {
-      onClose: handleWsClose,
-      onError: handleWsError,
-      onMessage: handleWsMessage,
-      onOpen: handleWsOpen,
-      onReconnect: handleReconnectAttempt,
-    });
-
-    // Cleanup function for this effect
-    return () => {
-      console.log(
-        "[AblyCLITerminal] Connection effect cleanup. Current socket state:",
-        socketRef.current?.readyState,
-      );
-      if (
-        socketRef.current &&
-        (socketRef.current.readyState === WebSocket.OPEN ||
-          socketRef.current.readyState === WebSocket.CONNECTING)
-      ) {
-        console.log(
-          "[AblyCLITerminal] Closing socket during connection effect cleanup",
-        );
-        const socketToClose = socketRef.current;
-        socketRef.current = null;
-        socketToClose.onclose = null;
-        socketToClose.onerror = null;
+  const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
+    try {
+      if (typeof event.data === 'string') {
         try {
-          socketToClose.close(1000, "Component unmounting or deps changed");
-        } catch (error) {
-          console.error(
-            "[AblyCLITerminal] Error closing socket during cleanup:",
-            error,
-          );
-        }
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'status') {
+            console.log(`[AblyCLITerminal] Received server status message: ${msg.payload}`);
+            // Server-driven status might override client, or inform it.
+            // For now, client primarily drives its status based on WebSocket events and PTY.
+            if (msg.payload === 'error' || msg.payload === 'disconnected') {
+              const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
+              if (term.current) term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
+              if (onSessionEnd) onSessionEnd(reason);
+              updateConnectionStatusAndExpose(msg.payload); // Reflect server's final say
+              if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) socketRef.current.close();
+            }
+            return;
+          }
+        } catch (e) { /* Not JSON, likely PTY data */ }
       }
-      window.removeEventListener('resize', handleWindowResize);
+      
+      let dataStr: string;
+      if (typeof event.data === 'string') dataStr = event.data;
+      else if (event.data instanceof Blob) dataStr = await event.data.text();
+      else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
+      else dataStr = new TextDecoder().decode(event.data); // Should handle Uint8Array from server
+
+      if (term.current) term.current.write(dataStr);
+      handlePtyData(dataStr); // Pass PTY data for prompt detection
+
+    } catch (error) { console.error('[AblyCLITerminal] Error processing message:', error); }
+  }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose]);
+
+  const handleWebSocketError = useCallback((event: Event) => {
+    console.error('[AblyCLITerminal] WebSocket error event received:', event);
+    // Add more details if possible, though Event object is generic
+    if (event instanceof ErrorEvent) {
+      console.error(`[AblyCLITerminal] WebSocket ErrorEvent: message=${event.message}, filename=${event.filename}, lineno=${event.lineno}, colno=${event.colno}`);
+    }
+
+    if (!grIsCancelledState() && !grIsMaxAttemptsReached()) { // Avoid error state if we are already done trying
+      updateConnectionStatusAndExpose('error'); // Indicate error, close will follow
+    }
+  }, [updateConnectionStatusAndExpose]);
+
+  const handleWebSocketClose = useCallback((event: CloseEvent) => {
+    console.log(`[AblyCLITerminal] WebSocket closed. Code: ${event.code}, Reason: "${event.reason || 'N/A'}", WasClean: ${event.wasClean}`);
+    clearAnimationMessages();
+    setIsSessionActive(false); // Session is no longer active
+
+    // --- Handle non-recoverable server-initiated disconnects ---
+    // These status codes indicate problems that automatic reconnection cannot fix
+    // and therefore require user intervention (e.g. invalid credentials or capacity issues)
+    const NON_RECOVERABLE_CLOSE_CODES = new Set<number>([
+      4001, // Invalid token / credentials
+      4008, // Policy violation / auth timeout / invalid message format
+      1013, // Try again later (server overloaded / capacity)
+    ]);
+
+    if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
+      // Ensure any global reconnection timers are cleared
+      grCancelReconnect();
+      grResetState();
+
+      updateConnectionStatusAndExpose('disconnected');
+
+      if (term.current) {
+        term.current.writeln(`\r\n--- Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''} ---`);
+        term.current.writeln('Press Enter to try reconnecting manually.');
+      }
+
+      setShowManualReconnectPrompt(true);
+      return; // Do NOT schedule automatic reconnection
+    }
+
+    if (grIsCancelledState() || grIsMaxAttemptsReached()) {
+      updateConnectionStatusAndExpose('disconnected');
+      if (term.current) {
+        term.current.writeln(`\r\n--- Connection Closed (Code: ${event.code}, Reason: ${event.reason || 'N/A'}) ---`);
+        if (grIsMaxAttemptsReached()) {
+          term.current.writeln(`\r\nFailed to reconnect after ${grGetMaxAttempts()} attempts.`);
+        } else { // Cancelled
+          term.current.writeln(`\r\nReconnection attempts cancelled.`);
+        }
+        term.current.writeln("Press Enter to try reconnecting manually.");
+      }
+      setShowManualReconnectPrompt(true);
+    } else {
+      grIncrement(); // Increment attempts only if we are going to retry
+      console.log('[AblyCLITerminal handleWebSocketClose] PRE - Calling updateConnectionStatusAndExpose("reconnecting")');
+      updateConnectionStatusAndExpose('reconnecting');
+      console.log('[AblyCLITerminal handleWebSocketClose] POST - Called updateConnectionStatusAndExpose("reconnecting")');
+      grScheduleReconnect(connectWebSocket, websocketUrl);
+      setReconnectAttemptMessage(`Attempt ${grGetAttempts()}/${grGetMaxAttempts()}.`);
+    }
+  }, [clearAnimationMessages, connectWebSocket, updateConnectionStatusAndExpose]);
+
+  useEffect(() => {
+    // Setup terminal
+    if (!term.current && rootRef.current) {
+      console.log('[AblyCLITerminal] Initializing Terminal instance.');
+      term.current = new Terminal({
+        cursorBlink: true, cursorStyle: 'block', fontFamily: 'monospace', fontSize: 14,
+        theme: { background: '#000000', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
+        convertEol: true,
+      });
+      fitAddon.current = new FitAddon();
+      term.current.loadAddon(fitAddon.current);
+      
+      term.current.onData((data: string) => {
+        // Special handling for Enter key
+        if (data === '\r') {
+          const latestStatus = connectionStatusRef.current;
+
+          // Manual prompt visible: attempt manual reconnect even if an old socket is open
+          if (showManualReconnectPromptRef.current) {
+            console.log('[AblyCLITerminal] Enter pressed for manual reconnect.');
+            showManualReconnectPromptRef.current = false;
+            setShowManualReconnectPrompt(false);
+            grResetState();
+            clearPtyBuffer();
+            connectWebSocket();
+            return;
+          }
+
+          // Cancel ongoing auto-reconnect
+          if (latestStatus === 'reconnecting' && !grIsCancelledState()) {
+            console.log('[AblyCLITerminal] Enter pressed during auto-reconnect: Cancelling.');
+            grCancelReconnect();
+            clearAnimationMessages();
+            if (term.current) {
+              term.current.writeln("\r\n\nReconnection attempts cancelled by user.");
+              term.current.writeln("Press Enter to try reconnecting manually.");
+            }
+            showManualReconnectPromptRef.current = true;
+            setShowManualReconnectPrompt(true);
+            updateConnectionStatusAndExpose('disconnected');
+            return;
+          }
+        }
+
+        // Default: forward data to server if socket open
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          socketRef.current.send(data);
+        } else if (data === '\r') {
+          // If the connection is not open and none of the above special cases matched,
+          // do nothing (prevent accidental writes to closed socket).
+        }
+      });
+
+      term.current.open(rootRef.current);
+      try {
+        fitAddon.current.fit();
+        const resizeObserver = new ResizeObserver(() => {
+          try { fitAddon.current?.fit(); } catch (e) { console.warn("Error fitting addon on resize:", e); }
+        });
+        if (rootRef.current) resizeObserver.observe(rootRef.current);
+        setTimeout(() => { try { fitAddon.current?.fit(); } catch(e) { console.warn("Error fitting addon initial timeout:", e);}}, 100);
+      } catch (e) {
+        console.error("Error during initial terminal fit:", e);
+      }
+      
+      grSetCountdownCallback((remainingMs) => {
+        setCountdownMessage(`Next attempt in ${Math.ceil(remainingMs / 1000)}s...`);
+      });
+    }
+
+    // Initial connection
+    if (componentConnectionStatus === 'initial') {
+      console.log('[AblyCLITerminal] Initial effect: Starting connection.');
+      grResetState();
+      clearPtyBuffer();
+      connectWebSocket();
+    }
+
+    // Cleanup terminal on unmount
+    return () => {
+      if (term.current) {
+        console.log('[AblyCLITerminal] Disposing Terminal on unmount');
+        term.current.dispose();
+        term.current = null;
+      }
+      if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) {
+        console.log('[AblyCLITerminal] Closing WebSocket on unmount.');
+        socketRef.current.close();
+      }
+      grResetState(); // Ensure global state is clean
+    };
+  }, []);
+
+  useEffect(() => {
+    // Expose a debug function to get current component state for Playwright
+    (window as any).getAblyCliTerminalReactState = () => ({
+      componentConnectionStatus,
+      isSessionActive,
+      connectionHelpMessage,
+      reconnectAttemptMessage,
+      countdownMessage,
+      showManualReconnectPrompt,
+      grCurrentAttempts: grGetAttempts(),
+      grIsCancelled: grIsCancelledState(),
+      grIsMaxReached: grIsMaxAttemptsReached(),
+    });
+    return () => {
+      delete (window as any).getAblyCliTerminalReactState;
     };
   }, [
-    ablyApiKey,
-    ablyAccessToken,
-    websocketUrl,
-    sessionState === "inactive",
-    handleSessionEnd,
-    onConnectionStatusChange,
-  ]); // Add handleSessionEnd to deps
+    componentConnectionStatus, isSessionActive, connectionHelpMessage, 
+    reconnectAttemptMessage, countdownMessage, showManualReconnectPrompt
+  ]); // Update whenever these state variables change
 
-  // Ensure terminal is focused when session becomes active
   useEffect(() => {
-    if (sessionState === 'active' && term.current) {
-      console.log('[AblyCLITerminal] Session active - focusing terminal and triggering initial resize send');
-      console.log('[AblyCLITerminal] Session active - focusing terminal');
-      // Using setTimeout to ensure DOM is ready and FitAddon has likely run
-      setTimeout(() => {
-        term.current?.focus();
+    // Effect for managing WebSocket event listeners
+    if (socket) {
+      console.log('[AblyCLITerminal] New socket detected, attaching event listeners.');
+      socket.addEventListener('open', handleWebSocketOpen);
+      socket.addEventListener('message', handleWebSocketMessage);
+      socket.addEventListener('close', handleWebSocketClose);
+      socket.addEventListener('error', handleWebSocketError);
 
-        // Apply fit and send resize without manipulating rows
-        if (fitAddon.current && term.current) {
-          console.log('[AblyCLITerminal] Applying fit on session active');
-          fitAddon.current.fit();
-
-          // Get current dimensions for resize message
-          // REMOVED: Manual resize send is no longer needed here, terminal.onResize handles it
-          /*
-          const { cols, rows } = term.current;
-          console.log(`[AblyCLITerminal] Session active, terminal size: ${cols}x${rows}`);
-
-          // Send resize message with original dimensions
-          // FIX LINTER: Add null check for socketRef.current and readyState check
-          if (socketRef.current?.readyState === WebSocket.OPEN) {
-            socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
-          }
-          */
-          // NOTE: We no longer manually send resize from here.
-          // The terminal.onResize handler, triggered by fitAddon.fit(),
-          // will send the necessary update immediately.
-        }
-      }, 100);
+      return () => {
+        console.log('[AblyCLITerminal] Cleaning up WebSocket event listeners for old socket.');
+        socket.removeEventListener('open', handleWebSocketOpen);
+        socket.removeEventListener('message', handleWebSocketMessage);
+        socket.removeEventListener('close', handleWebSocketClose);
+        socket.removeEventListener('error', handleWebSocketError);
+      };
     }
-  }, [sessionState]);
+  }, [socket, handleWebSocketOpen, handleWebSocketMessage, handleWebSocketClose, handleWebSocketError]);
 
-  // Add an explicit focus handler
-  const handleTerminalClick = useCallback(() => {
-    if (term.current && sessionState === "active") {
-      console.log("[AblyCLITerminal] Focus requested by click");
-      term.current.focus();
-    }
-  }, [sessionState]);
-
-  // Handle window resize: fit terminal and optionally notify backend
-  const handleWindowResize = debounce(() => {
-    if (fitAddon.current && term.current) {
-      fitAddon.current.fit();
-      term.current.scrollToBottom();
-      const { cols, rows } = term.current;
-      // Only send resize to backend when width changes
-      if (sessionStateRef.current === 'active' && socketRef.current?.readyState === WebSocket.OPEN) {
-        if (cols !== prevSize.current.cols) {
-          socketRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
-        }
-      }
-      prevSize.current = { cols, rows };
-    }
-  }, 200);
-  window.addEventListener('resize', handleWindowResize);
-
-  // Render terminal with reconnection indicator
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      overflow: 'hidden',          // Hide internal scrollbars
-      position: 'relative',       // Needed for overlays
-      width: '100%',
-      boxSizing: 'border-box',    // Include padding in width/height
-    }}>
-      {/* Terminal container with overflow handling and proper padding */}
-      <div
-        onClick={handleTerminalClick}
-        ref={terminalRef}
-        style={{
-          flex: '1 1 auto',          // Grow/shrink vertically
-          height: '100%',            // Full height for FitAddon
-          minHeight: 0,              // Fix flex height issues
-          overflow: 'auto',          // Allow scroll when content overflows
-          padding: '10px',           // Side padding
-          position: 'relative',      // For child positioning
-          display: 'flex',           // Flex layout for terminal
-          flexDirection: 'column'    // Vertical stack
-        }}
+    <div 
+      ref={rootRef} 
+      data-testid="terminal-container" 
+      className="Terminal-container" 
+      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', padding: 0, boxSizing: 'border-box', backgroundColor: '#000000' }}
+    >
+      <ConnectionStatusHeader 
+        connectionStatus={componentConnectionStatus}
+        connectionHelpMessage={connectionHelpMessage}
+        isSessionActive={isSessionActive}
       />
-
-      {/* Overlays for status/reconnect/restart */}
-      {sessionState === "connecting" && (
-        <div
-          style={{
-            alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.7)",
-            bottom: 0,
-            color: "white",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-            justifyContent: "center",
-            left: 0,
-            position: "absolute",
-            right: 0,
-            top: 0,
-            zIndex: 10,
-          }}
-        >
-          <div>Connecting to Ably CLI...</div>
-          {reconnectAttempt > 0 && (
-            <div style={{ fontSize: "0.9em", opacity: 0.8 }}>
-              (Attempt {reconnectAttempt}/{globalState.maxAttempts})
-            </div>
-          )}
-        </div>
+      {componentConnectionStatus === 'reconnecting' && !grIsCancelledState() && (
+        <ReconnectOverlay
+          attemptMessage={reconnectAttemptMessage}
+          countdownMessage={countdownMessage}
+        />
       )}
-      {sessionState === "ended" && (
-        <div
-          style={{
-            alignItems: "center",
-            backgroundColor: "rgba(0,0,0,0.8)",
-            bottom: 0,
-            color: "white",
-            display: "flex",
-            flexDirection: "column",
-            gap: "15px",
-            justifyContent: "center",
-            left: 0,
-            padding: "20px",
-            position: "absolute",
-            right: 0,
-            textAlign: "center",
-            top: 0,
-            zIndex: 10,
-          }}
-        >
-          <div style={{ color: "#ff6b6b", fontSize: "1.2em" }}>
-            Session Ended
-          </div>
-          <div style={{ fontSize: "0.9em", opacity: 0.9 }}>
-            {sessionEndReason || "Connection closed"}
-          </div>
-          {renderRestartButton ? (
-            renderRestartButton(handleRestart)
-          ) : (
-            <button
-              onClick={handleRestart}
-              style={{
-                backgroundColor: "#4CAF50",
-                border: "none",
-                borderRadius: "4px",
-                color: "white",
-                cursor: "pointer",
-                marginTop: "10px",
-                padding: "8px 16px",
-              }}
-            >
-              Restart Session
-            </button>
-          )}
-        </div>
-      )}
+      {/* Terminal is mounted by term.current.open() */}
     </div>
   );
 };
+
+export default AblyCliTerminal;

@@ -4,11 +4,11 @@
 # Capture all arguments
 ARGS=("$@")
 
-# Check if any argument specifically targets the web-cli test file
+# Detect if we are about to run a Playwright browser test (any file inside test/e2e/web-cli/)
 USE_PLAYWRIGHT=false
 PLAYWRIGHT_TEST_FILE=""
 for arg in "${ARGS[@]}"; do
-  if [[ "$arg" == *"web-cli.test.ts" ]]; then
+  if [[ "$arg" == *"test/e2e/web-cli/"*".test.ts" ]]; then
     USE_PLAYWRIGHT=true
     PLAYWRIGHT_TEST_FILE="$arg"
     break
@@ -20,14 +20,78 @@ done
 MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught"
 MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\" --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 
-# Common exclude option for Mocha runs that shouldn't include Playwright tests
-EXCLUDE_OPTION="--exclude test/e2e/web-cli/web-cli.test.ts"
+# Exclude any *.test.ts file directly inside or in subdirectories under web-cli/
+EXCLUDE_OPTION="--exclude 'test/e2e/web-cli/**/*.test.ts'"
+
+# Process arguments to determine test pattern and other flags
+TEST_PATTERN=""
+OTHER_ARGS=()
+
+# First pass: Look for specific test files or patterns that aren't the default pattern
+for arg in "${ARGS[@]}"; do
+  # Check if this looks like a specific test file or non-default pattern
+  if [[ "$arg" != "test/**/*.test.ts" && "$arg" != -* && 
+        ("$arg" == *.test.ts || "$arg" == *test/**/* || "$arg" == */**/*.test.ts) ]]; then
+    TEST_PATTERN="$arg"
+    # If we found a specific test file/pattern, prioritize it
+    break
+  fi
+done
+
+# Second pass: collect all arguments that aren't test patterns
+if [[ -n "$TEST_PATTERN" ]]; then
+  # If we found a specific pattern, all other args are just flags
+  for arg in "${ARGS[@]}"; do
+    if [[ "$arg" != "$TEST_PATTERN" && "$arg" != "test/**/*.test.ts" ]]; then
+      OTHER_ARGS+=("$arg")
+    fi
+  done
+else
+  # No specific pattern found, check if we have the default pattern
+  for arg in "${ARGS[@]}"; do
+    if [[ "$arg" == "test/**/*.test.ts" ]]; then
+      TEST_PATTERN="$arg"
+    elif [[ "$arg" != -* && 
+           ("$arg" == *.test.ts || "$arg" == *test/**/* || "$arg" == */**/*.test.ts) ]]; then
+      # Found another test pattern
+      TEST_PATTERN="$arg"
+    else
+      # This is a regular argument (like --timeout)
+      OTHER_ARGS+=("$arg")
+    fi
+  done
+fi
 
 if $USE_PLAYWRIGHT; then
   # Use Playwright runner
+  # Ensure TypeScript has been compiled so the terminal server script exists for browser tests
+  if [ ! -f dist/scripts/terminal-server.js ]; then
+    echo "dist not found or terminal-server.js missing – running \"pnpm build\" first..."
+    pnpm build || { echo "Build failed, aborting Playwright run."; exit 1; }
+  fi
   echo "Using Playwright test runner for Web CLI tests..."
   # Pass ONLY the specific web-cli test file to Playwright
   COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
+  echo "Executing command: $COMMAND"
+elif [[ -n "$TEST_PATTERN" ]]; then
+  # Running a specific test file or pattern
+  echo "Using Mocha test runner for specific test pattern: $TEST_PATTERN"
+  
+  # Generate the other args string
+  OTHER_ARGS_STR=""
+  for arg in "${OTHER_ARGS[@]}"; do
+    OTHER_ARGS_STR+=" $arg"
+  done
+  
+  # Treat as a "specific file" only if the pattern does **not** contain any wildcard characters
+  # (i.e. "*" or "?"), otherwise it's a glob pattern and should have the EXCLUDE_OPTION appended.
+  if [[ "$TEST_PATTERN" == *.test.ts && "$TEST_PATTERN" != *\** && "$TEST_PATTERN" != *\?* ]]; then
+    COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD $TEST_PATTERN$OTHER_ARGS_STR"
+  else
+    # Quote the pattern so that the shell does not expand it prematurely, allowing Mocha to handle the glob
+    COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD '$TEST_PATTERN'$OTHER_ARGS_STR $EXCLUDE_OPTION"
+  fi
+  
   echo "Executing command: $COMMAND"
 elif [[ "${ARGS[0]}" == "test/**/*.test.ts" ]] || [[ "${ARGS[0]}" == "test/e2e/**/*.test.ts" ]]; then
   # Running all tests or all E2E tests - use Mocha, exclude web-cli
@@ -38,7 +102,7 @@ elif [[ "${ARGS[0]}" == "test/**/*.test.ts" ]] || [[ "${ARGS[0]}" == "test/e2e/*
   COMMAND="$MOCHA_NODE_SETUP $MOCHA_RUNNER_CMD$MOCHA_ARGS $EXCLUDE_OPTION"
   echo "Executing command: $COMMAND"
 else
-  # Running specific Mocha tests (e.g., unit, integration, or specific file excluding web-cli)
+  # Running with custom args but no specific pattern
   echo "Using Mocha test runner..."
   MOCHA_ARGS=$(printf " %q" "${ARGS[@]}")
   # Removed --exit flag
@@ -48,7 +112,7 @@ fi
 
 # Set an outer timeout (in seconds) - default 180s or 3 minutes
 # Increased from 120s to give more buffer
-OUTER_TIMEOUT=180
+OUTER_TIMEOUT=300
 
 # Run the tests with the determined runner
 eval $COMMAND &
