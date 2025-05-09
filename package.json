@@ -29,7 +29,9 @@
     "build:packages": "pnpm -r --filter './packages/*' build",
     "build:examples": "pnpm -r --filter './examples/*' build",
     "diagnostics:container": "bash scripts/diagnostics-container.sh",
-    "diagnostics:server": "pnpm run build && node dist/scripts/diagnostics-server.js"
+    "diagnostics:server": "pnpm run build && node dist/scripts/diagnostics-server.js",
+    "dev:terminal-server": "docker build . -t ably-cli-sandbox && pnpm build && pnpm terminal-server",
+    "dev:examples": "pnpm build:packages && pnpm build:examples && cd examples/web-cli && pnpm dev"
   },
   "author": "Ably <support@ably.com>",
   "license": "Apache-2.0",
