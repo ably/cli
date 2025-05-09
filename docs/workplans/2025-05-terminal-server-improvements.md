@@ -33,8 +33,8 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 - **Testing:**
     - Unit tests for React component state transitions.
     - Playwright tests: Verify connecting indicator shows, disappears on connection, and state props update correctly.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Implemented server-to-client status messages (connecting, connected, disconnected) in `scripts/terminal-server.ts`. Updated the `AblyCliTerminal.tsx` React component to handle these statuses, displaying an ASCII connecting animation in the terminal which is then cleared. Connection status is exposed via the `onConnectionStatusChange` prop. Added unit tests for the React component (`AblyCliTerminal.test.tsx`) and updated Playwright tests in `examples/web-cli/tests/drawer.spec.ts` to verify the new status display and animation. CI workflows (`test.yml`) were updated to execute these new unit tests.
 
 ### Step 1.3: Robust Reconnection Logic with Backoff
 - **Task:** Implement the specified automatic reconnection logic (up to 15 attempts with exponential backoff: 0s, 2s, 4s, 8s, 8s...) within the React component for network/server failures.

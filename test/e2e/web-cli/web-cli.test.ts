@@ -17,11 +17,10 @@ const __dirname = path.dirname(__filename);
 const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
 const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
 const TERMINAL_SERVER_SCRIPT = path.resolve(__dirname, '../../../dist/scripts/terminal-server.js');
-const DRAWER_OPEN_KEY = 'PLAYWRIGHT_DRAWER_OPEN';
-const DRAWER_HEIGHT_KEY = 'PLAYWRIGHT_DRAWER_HEIGHT';
+const DRAWER_OPEN_KEY = "ablyCliDrawerOpen";
 
 // Shared variables
-let terminalServerProcess: ChildProcess;
+let terminalServerProcess: ChildProcess | null = null;
 let terminalServerPort: number;
 let webServerProcess: ChildProcess;
 let webServerPort: number;
@@ -207,8 +206,9 @@ test.describe('Web CLI E2E Tests', () => {
   // --- NEW TESTS FOR DRAWER AND STATE ---
 
   test.describe('Drawer Functionality and State Persistence', () => {
-    const drawerButtonSelector = 'button:has-text("Ably CLI")'; // Selector for the closed drawer button
-    const drawerSelector = 'div.fixed.bottom-0.left-0.right-0'; // Selector for the open drawer panel
+    const drawerButtonSelector = 'button:has-text("Ably CLI")'; // Selector for the button that opens the drawer
+    // Make the selector more specific by adding another class
+    const drawerSelector = 'div.fixed.bottom-0.left-0.right-0.bg-zinc-900'; // Selector for the main drawer panel
     const toggleGroupSelector = '.toggle-group';
     const fullscreenButtonSelector = `${toggleGroupSelector} button:has-text("Fullscreen")`;
     const drawerModeButtonSelector = `${toggleGroupSelector} button:has-text("Drawer")`;
@@ -218,6 +218,7 @@ test.describe('Web CLI E2E Tests', () => {
       // Ensure Docker is available (check set in outer beforeAll)
       if (process.env.DOCKER_UNAVAILABLE === 'true' || !terminalServerProcess) {
         console.log('Skipping drawer tests because Docker was not available');
+        // eslint-disable-next-line mocha/no-skipped-tests
         test.skip(); // Skip this specific test if Docker unavailable
         return;
       }
@@ -280,7 +281,9 @@ test.describe('Web CLI E2E Tests', () => {
 
       // Test reload persistence (Drawer - open)
       await page.locator(drawerButtonSelector).click(); // Open it
-      await page.evaluate(() => { (globalThis as any).__PLAYWRIGHT_DRAWER_OPEN = true; });
+      await page.evaluate((key) => { 
+        globalThis.localStorage.setItem(key, JSON.stringify(true)); 
+      }, DRAWER_OPEN_KEY);
       await page.reload();
       await expect(page.locator(drawerModeButtonSelector)).toBeVisible(); // Wait for UI
       await expect(page).toHaveURL(/\?mode=drawer/);

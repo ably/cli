@@ -48,6 +48,14 @@ interface DockerEvent {
   [key: string]: unknown;
 }
 
+// Define the message structure for server-to-client status updates
+type ServerStatusMessage = {
+  type: "status";
+  payload: "connecting" | "connected" | "disconnected" | "error";
+  reason?: string;
+  details?: unknown;
+};
+
 type ClientSession = {
   ws: WebSocket;
   authenticated: boolean;
@@ -248,124 +256,127 @@ async function createContainer(
   apiKey: string,
   accessToken: string,
   environmentVariables: Record<string, string> = {},
+  sessionId: string, // Pass sessionId for logging
 ): Promise<DockerContainer> {
-    log('Creating Docker container (TTY Mode)...');
-    try {
-        // Create base environment variables with better defaults for terminal behavior
-        const env = [
-            // These environment variables are critical for proper terminal behavior
-            'TERM=xterm-256color',
-            'COLORTERM=truecolor',
-            'LANG=en_US.UTF-8',
-            'LC_ALL=en_US.UTF-8',
-            'LC_CTYPE=en_US.UTF-8',
-            'CLICOLOR=1',
-            `ABLY_API_KEY=${apiKey}`,
-            `ABLY_ACCESS_TOKEN=${accessToken}`,
-            // Simple PS1 prompt at container level
-            'PS1=$ ',
-            // Enable history with reasonable defaults
-            'HISTSIZE=1000',
-            'HISTFILE=/home/appuser/.bash_history'
-        ];
+  const containerName = `ably-cli-session-${sessionId}`; // Used for container naming
+  log('Creating Docker container (TTY Mode)...');
+  try {
+    // Create base environment variables with better defaults for terminal behavior
+    const env = [
+      // These environment variables are critical for proper terminal behavior
+      'TERM=xterm-256color',
+      'COLORTERM=truecolor',
+      'LANG=en_US.UTF-8',
+      'LC_ALL=en_US.UTF-8',
+      'LC_CTYPE=en_US.UTF-8',
+      'CLICOLOR=1',
+      `ABLY_API_KEY=${apiKey}`,
+      `ABLY_ACCESS_TOKEN=${accessToken}`,
+      // Simple PS1 prompt at container level
+      'PS1=$ ',
+      // Enable history with reasonable defaults
+      'HISTSIZE=1000',
+      'HISTFILE=/home/appuser/.bash_history'
+    ];
 
-        // Add any custom environment variables
-        for (const [key, value] of Object.entries(environmentVariables)) {
-            // Don't duplicate variables that are already set
-            if (!env.some(e => e.startsWith(`${key}=`))) {
-                env.push(`${key}=${value}`);
-            }
-        }
-
-        // Configure security options using file content
-        const securityOpt = [
-            'no-new-privileges',
-            `seccomp=${seccompProfileContent}` // Pass profile content directly
-        ];
-
-        // Use the pre-checked AppArmor status
-        if (isAppArmorProfileLoaded) {
-            log('Applying AppArmor profile: ably-cli-sandbox-profile');
-            securityOpt.push('apparmor=ably-cli-sandbox-profile');
-        } else {
-            log('Applying AppArmor profile: unconfined');
-            securityOpt.push('apparmor=unconfined');
-        }
-
-        const container = await docker.createContainer({
-            AttachStderr: true,
-            AttachStdin: true,
-            AttachStdout: true,
-            Env: env,
-            // Explicitly set the user to non-root for security
-            // This works with user namespace remapping
-            User: 'appuser',
-            // Use the working directory of the non-root user
-            WorkingDir: '/home/appuser',
-            HostConfig: {
-                // Set to false to prevent container from being removed before we can attach
-                AutoRemove: false,
-                // Security capabilities
-                CapDrop: [
-                    'ALL',                 // Drop all capabilities first
-                    'NET_ADMIN',           // Cannot modify network settings
-                    'NET_BIND_SERVICE',    // Cannot bind to privileged ports
-                    'NET_RAW'              // Cannot use raw sockets
-                ],
-                SecurityOpt: securityOpt,
-                // Add read-only filesystem
-                ReadonlyRootfs: true,
-                // Add tmpfs mounts for writable directories
-                Tmpfs: {
-                    '/tmp': 'rw,noexec,nosuid,size=64m',
-                    '/run': 'rw,noexec,nosuid,size=32m'
-                },
-                // Mount a volume for the Ably config directory
-                Mounts: [
-                    {
-                        Type: 'tmpfs',
-                        Target: '/home/appuser/.ably',
-                        TmpfsOptions: {
-                            SizeBytes: 10 * 1024 * 1024, // 10MB
-                            Mode: 0o700 // Secure permissions
-                        }
-                    },
-                ],
-                // Add resource limits
-                PidsLimit: 50, // Limit to 50 processes
-                Memory: 256 * 1024 * 1024, // 256MB
-                MemorySwap: 256 * 1024 * 1024, // Disable swap
-                NanoCpus: 1 * 1000000000, // Limit to 1 CPU
-
-                // Network security restrictions
-                // Use default bridge network if the custom network doesn't exist
-                NetworkMode: await containerNetworkExists() ? DOCKER_NETWORK_NAME : 'bridge',
-            },
-            Image: DOCKER_IMAGE_NAME,
-            Labels: { // Add label for cleanup
-                'managed-by': 'ably-cli-terminal-server'
-            },
-            OpenStdin: true,
-            StdinOnce: false,
-            StopSignal: 'SIGTERM',
-            StopTimeout: 5,
-            Tty: true,          // Enable TTY mode
-            // Explicitly set the command to run the restricted shell script
-            Cmd: ["/bin/bash", "/scripts/restricted-shell.sh"]
-        });
-
-        // Log security features in use
-        log(`Container ${container.id} created with security hardening:`);
-        log(`- Read-only filesystem: yes`);
-        log(`- User namespace remapping compatibility: yes`);
-        log(`- Seccomp filtering: yes`);
-        log(`- AppArmor profile: ${isAppArmorProfileLoaded ? 'yes' : 'no'}`);
-
-        return container;
-    } catch (error) {
-        logError(`Error creating container: ${error}`);
-        throw error;
+    // Add any custom environment variables
+    for (const [key, value] of Object.entries(environmentVariables)) {
+      // Don't duplicate variables that are already set
+      if (!env.some(e => e.startsWith(`${key}=`))) {
+        env.push(`${key}=${value}`);
+      }
     }
+
+    // Configure security options using file content
+    const securityOpt = [
+      'no-new-privileges',
+      `seccomp=${seccompProfileContent}` // Pass profile content directly
+    ];
+
+    // Use the pre-checked AppArmor status
+    if (isAppArmorProfileLoaded) {
+      log('Applying AppArmor profile: ably-cli-sandbox-profile');
+      securityOpt.push('apparmor=ably-cli-sandbox-profile');
+    } else {
+      log('Applying AppArmor profile: unconfined');
+      securityOpt.push('apparmor=unconfined');
+    }
+
+    const container = await docker.createContainer({
+      AttachStderr: true,
+      AttachStdin: true,
+      AttachStdout: true,
+      Env: env,
+      // Explicitly set the user to non-root for security
+      // This works with user namespace remapping
+      User: 'appuser',
+      // Use the working directory of the non-root user
+      WorkingDir: '/home/appuser',
+      HostConfig: {
+        // Set to false to prevent container from being removed before we can attach
+        AutoRemove: false,
+        // Security capabilities
+        CapDrop: [
+          'ALL',                 // Drop all capabilities first
+          'NET_ADMIN',           // Cannot modify network settings
+          'NET_BIND_SERVICE',    // Cannot bind to privileged ports
+          'NET_RAW'              // Cannot use raw sockets
+        ],
+        SecurityOpt: securityOpt,
+        // Add read-only filesystem
+        ReadonlyRootfs: true,
+        // Add tmpfs mounts for writable directories
+        Tmpfs: {
+          '/tmp': 'rw,noexec,nosuid,size=64m',
+          '/run': 'rw,noexec,nosuid,size=32m'
+        },
+        // Mount a volume for the Ably config directory
+        Mounts: [
+          {
+            Type: 'tmpfs',
+            Target: '/home/appuser/.ably',
+            TmpfsOptions: {
+              SizeBytes: 10 * 1024 * 1024, // 10MB
+              Mode: 0o700 // Secure permissions
+            }
+          },
+        ],
+        // Add resource limits
+        PidsLimit: 50, // Limit to 50 processes
+        Memory: 256 * 1024 * 1024, // 256MB
+        MemorySwap: 256 * 1024 * 1024, // Disable swap
+        NanoCpus: 1 * 1000000000, // Limit to 1 CPU
+
+        // Network security restrictions
+        // Use default bridge network if the custom network doesn't exist
+        NetworkMode: await containerNetworkExists() ? DOCKER_NETWORK_NAME : 'bridge',
+      },
+      Image: DOCKER_IMAGE_NAME,
+      Labels: { // Add label for cleanup
+        'managed-by': 'ably-cli-terminal-server'
+      },
+      OpenStdin: true,
+      StdinOnce: false,
+      StopSignal: 'SIGTERM',
+      StopTimeout: 5,
+      Tty: true,          // Enable TTY mode
+      // Explicitly set the command to run the restricted shell script
+      Cmd: ["/bin/bash", "/scripts/restricted-shell.sh"],
+      name: containerName, // Use the generated container name
+    });
+
+    // Log security features in use
+    log(`Container ${container.id} created with security hardening:`);
+    log(`- Read-only filesystem: yes`);
+    log(`- User namespace remapping compatibility: yes`);
+    log(`- Seccomp filtering: yes`);
+    log(`- AppArmor profile: ${isAppArmorProfileLoaded ? 'yes' : 'no'}`);
+
+    return container;
+  } catch (error) {
+    logError(`Error creating container: ${error}`);
+    throw error;
+  }
 }
 
 // --- Session Management Functions (Restored & Modified) ---
@@ -428,86 +439,91 @@ function isValidToken(token: string): boolean {
 async function terminateSession(
   sessionId: string,
   reason: string,
+  graceful = true,
+  code = 1000,
 ): Promise<void> {
-  log(`Terminating session ${sessionId} due to: ${reason}`);
   const session = sessions.get(sessionId);
   if (!session) {
-    log(`Session ${sessionId} not found in map, likely already terminated.`);
+    log(`Session ${sessionId} not found for termination.`);
     return;
   }
 
-  log(
-    `Terminating session ${sessionId}. Current session count: ${sessions.size}`,
-  );
+  log(`Terminating session ${sessionId}. Reason: ${reason}`);
   clearTimeout(session.timeoutId);
-  sessions.delete(sessionId);
-  log(
-    `Session ${sessionId} deleted from map. New session count: ${sessions.size}`,
-  );
 
-  // Send termination message before closing
-  try {
-    if (session.ws.readyState === WebSocket.OPEN) {
-      session.ws.send(JSON.stringify({ reason, type: "session_end" }));
-    }
-  } catch (sendError) {
-    logError(`Error sending session_end message to ${sessionId}: ${sendError}`);
-  }
-
-  // Close WebSocket
-  try {
-    session.ws.close(1001, `Session terminated: ${reason}`.slice(0, 123));
-  } catch (wsError) {
-    logError(`Error closing WebSocket for session ${sessionId}: ${wsError}`);
-  }
-
-  // End the Exec Stream associated with the session
-  if (session.stdinStream && !session.stdinStream.destroyed) {
-    log(`Ending stdin stream for session ${sessionId}...`);
-    session.stdinStream.end();
-    session.stdinStream.destroy(); // Force destroy
-  }
-
-  // Stop the main Container (check session.container)
-  if (session.container) {
-    const container = session.container;
+  // Send disconnected status message
+  if (session.ws && session.ws.readyState === WebSocket.OPEN) {
     try {
-      log(`Stopping container ${container.id}...`);
-      // Inspect might fail if already stopped/removed
-      const containerInfo = await container.inspect().catch(() => null);
-      if (
-        containerInfo &&
-        (containerInfo.State.Running || containerInfo.State.Paused)
-      ) {
-        await container.stop({ t: 2 }).catch((stopError: Error) => {
-          logError(
-            `Error stopping container ${container.id}: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
-          );
-        });
-        log(`Container ${container.id} stopped.`);
-      } else {
-        log(`Container ${container.id} already stopped or removed.`);
-      }
-    } catch (dockerError) {
-      // Ignore "no such container" errors as it might have auto-removed
+      const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason };
+      session.ws.send(JSON.stringify(statusMsg));
+      log(`Sent 'disconnected' status to session ${sessionId}`);
+    } catch (sendError) {
+      logError(`Error sending 'disconnected' status to ${sessionId}: ${sendError}`);
+    }
+  }
+
+  if (graceful && session.ws && session.ws.readyState === WebSocket.OPEN) {
+    session.ws.close(code, reason.slice(0, 120)); // Ensure reason is not too long
+  }
+
+  // Detach and cleanup streams
+  if (session.stdinStream) {
+    session.stdinStream.end();
+    session.stdinStream.destroy(); // Ensure stream is fully destroyed
+    log(`stdinStream for session ${sessionId} ended and destroyed.`);
+  }
+  if (session.stdoutStream) {
+    // session.stdoutStream.end(); // stdoutStream is readable, typically doesn't need end()
+    session.stdoutStream.destroy(); // Ensure stream is fully destroyed
+    log(`stdoutStream for session ${sessionId} destroyed.`);
+  }
+
+  // Stop and remove the container if it exists
+  if (session.container) {
+    log(`Stopping and removing container for session ${sessionId}...`);
+    try {
+      await session.container.stop({ t: 5 }); // Allow 5 seconds to stop
+      log(`Container for session ${sessionId} stopped.`);
+    } catch (stopError: unknown) {
+      // Ignore "container already stopped" or "no such container" errors
       if (
         !(
-          dockerError instanceof Error &&
-          /no such container/i.test(dockerError.message)
+          stopError instanceof Error &&
+          (/already stopped/i.test(stopError.message) ||
+            /no such container/i.test(stopError.message))
         )
       ) {
         logError(
-          `Error during container stop/cleanup for session ${sessionId}: ${dockerError}`,
+          `Error stopping container for session ${sessionId}: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
         );
       }
     }
-  } else {
-    log(
-      `No container associated with session ${sessionId} during termination.`,
-    );
+    try {
+      await session.container.remove();
+      log(`Container for session ${sessionId} removed.`);
+    } catch (removeError: unknown) {
+      // Ignore "no such container" errors
+      if (
+        !(
+          removeError instanceof Error &&
+          /no such container/i.test(removeError.message)
+        )
+      ) {
+        logError(
+          `Error removing container for session ${sessionId}: ${removeError instanceof Error ? removeError.message : String(removeError)}`,
+        );
+      }
+    }
   }
 
-  log(`Session ${sessionId} resources released.`);
+  sessions.delete(sessionId);
+  log(`Session ${sessionId} terminated and removed. Active sessions: ${sessions.size}`);
+
+  // If not a graceful shutdown (e.g., an error), ensure WebSocket is forcefully closed
+  if (!graceful && session.ws && session.ws.readyState !== WebSocket.CLOSED) {
+    session.ws.terminate();
+    log(`WebSocket connection for session ${sessionId} forcefully terminated.`);
+  }
 }
 
 async function cleanupAllSessions(): Promise<void> {
@@ -588,6 +604,19 @@ async function startServer() {
         const sessionId = generateSessionId();
         log(`Client connected, assigned session ID: ${sessionId}`);
 
+        // Immediately send a "connecting" status message
+        try {
+          const connectingMsg: ServerStatusMessage = { type: "status", payload: "connecting" };
+          ws.send(JSON.stringify(connectingMsg));
+          log(`Sent 'connecting' status to new session ${sessionId}`);
+        } catch (sendError) {
+          logError(`Error sending 'connecting' status to ${sessionId}: ${sendError}`);
+          // If we can't send 'connecting', close the connection
+          ws.close(1011, "Failed to send initial status");
+          // Note: No session object to cleanup here yet if this fails immediately.
+          return;
+        }
+
         if (sessions.size >= maxSessions) {
             log("Max session limit reached. Rejecting new connection.");
             ws.send("Server busy. Please try again later.\r\n");
@@ -654,7 +683,7 @@ async function startServer() {
                 let container: DockerContainer;
                 try {
                    // Pass credentials to createContainer
-                   container = await createContainer(apiKey, accessToken, environmentVariables || {});
+                   container = await createContainer(apiKey, accessToken, environmentVariables || {}, sessionId);
                    log(`[${sessionId}] Container created successfully: ${container.id}`);
 
                    // Start the container before attempting to attach
@@ -848,6 +877,7 @@ function pipeStreams(
 ): void {
   try {
     log('Setting up bidirectional piping between WebSocket and container stream');
+    let firstChunkReceived = false; // Flag to log only the first chunk
 
     // Set up data handling from container to WebSocket
     let processingBuffer = Buffer.alloc(0);
@@ -866,9 +896,16 @@ function pipeStreams(
 
         const payload = processingBuffer.slice(8, 8 + payloadSize);
 
+        if (!firstChunkReceived) {
+          // Keep first chunk logging as it's useful for debugging
+          log(`First chunk received from container (type ${streamType}, size ${payloadSize})`);
+          firstChunkReceived = true;
+        }
+
         if (streamType === 1 || streamType === 2) {
           try {
             if (ws.readyState === WebSocket.OPEN) {
+              // Remove verbose logging of every payload sent
               ws.send(payload);
             }
           } catch (error) {
@@ -900,6 +937,16 @@ function safeCloseWsStream(wsStream: Duplex) {
 // --- Container Attachment Logic ---
 
 async function attachToContainer(session: ClientSession, ws: WebSocket): Promise<void> {
+    if (!session.container) {
+        logError(`Container not found for session ${session.sessionId} during attach.`);
+        try {
+            const errorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Internal server error: Container not found" };
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(errorMsg));
+        } catch { logError('Failed to send error status for container not found'); }
+        await terminateSession(session.sessionId, "Container not found", false);
+        return;
+    }
+
     // Mark that attachment is starting
     session.isAttaching = true;
 
@@ -967,15 +1014,40 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         log(`Attached stream to container ${session.container.id} for session ${session.sessionId}`);
         session.isAttaching = false;
 
+        // Send "connected" status message AFTER streams are attached but BEFORE piping starts
+        try {
+            if (ws.readyState === WebSocket.OPEN) {
+                const connectedMsg: ServerStatusMessage = { type: "status", payload: "connected" };
+                log(`[attachToContainer] Sending 'connected' status to session ${session.sessionId}`); // Log before sending
+                ws.send(JSON.stringify(connectedMsg));
+            }
+        } catch (sendError) {
+            logError(`Error sending 'connected' status to ${session.sessionId}: ${sendError}`);
+            await terminateSession(session.sessionId, "Failed to confirm connection status", false);
+            return;
+        }
+        
+        // Add a small delay before piping to allow client to process "connected" status
+        await new Promise(resolve => setTimeout(resolve, 50)); 
+
+        // Now start piping after sending connected status and adding delay
         pipeStreams(ws, containerStream);
 
-        wsStream.on('close', () => {
-            log(`WebSocket stream closed for session ${session.sessionId}`);
-            if (containerStream) safeCloseWsStream(containerStream);
-            cleanupSession(session.sessionId);
+        ws.on("close", async (code, reason) => {
+            log(
+                `WebSocket closed for session ${session.sessionId}. Code: ${code}, Reason: ${reason && reason.length > 0 ? reason.toString() : "No reason given"}. isAttaching: ${session.isAttaching}`,
+            );
+            // If attachment was in progress and ws closed, it's an abrupt client disconnect
+            if (session.isAttaching) {
+                log(`Client ${session.sessionId} disconnected during attachment process.`);
+            }
+            // Ensure session is cleaned up. terminateSession handles sending 'disconnected' if ws is still open,
+            // but here ws is already closing/closed.
+            await cleanupSession(session.sessionId); // Changed from terminateSession to cleanupSession
         });
-        wsStream.on('error', (err) => {
-            logError(`WebSocket stream error for session ${session.sessionId}: ${err.message}`);
+
+        ws.on("error", async (error: Error) => {
+            logError(`WebSocket stream error for session ${session.sessionId}: ${error.message}`);
             if (containerStream) safeCloseWsStream(containerStream);
             cleanupSession(session.sessionId);
         });
@@ -1007,69 +1079,55 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
 
 async function cleanupSession(sessionId: string) {
   const session = sessions.get(sessionId);
-  if (session) {
-    log(`Cleaning up session ${sessionId}`);
-    clearTimeout(session.timeoutId);
-
-    // If attachment is in progress, add a delay to avoid racing with it
-    if (session.isAttaching) {
-      log(`Session ${sessionId} is being attached, delaying cleanup to prevent race condition...`);
-      // Wait a bit to allow attachment to complete or fail
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      // Check if the session is still there after the delay
-      if (!sessions.has(sessionId)) {
-        log(`Session ${sessionId} was removed during delay, skipping cleanup.`);
-        return;
-      }
-    }
-
-    if (
-      session.ws.readyState === WebSocket.OPEN ||
-      session.ws.readyState === WebSocket.CONNECTING
-    ) {
-      session.ws.close(1000, "Session cleanup");
-    }
-
-    // Close streams safely
-    if (session.stdinStream) safeCloseWsStream(session.stdinStream);
-    // stdoutStream is the same as stdinStream in TTY mode, but check just in case
-    // if (session.stdoutStream && session.stdoutStream !== session.stdinStream) safeCloseWsStream(session.stdoutStream);
-
-    // Stop the container if it exists
-    if (session.container) {
-      try {
-        // Try to stop the container - be more tolerant of errors
-        try {
-          log(`Attempting to stop container ${session.container.id}...`);
-          await session.container.stop({ t: 2 }).catch((stopError: Error) => {
-            log(`Note: Error stopping container ${session.container?.id}: ${stopError.message}.`);
-          });
-          log(`Container ${session.container.id} stopped.`);
-        } catch (stopError) {
-          log(`Note: Error during container stop: ${stopError}.`);
-        }
-
-        // Now explicitly try to remove the container
-        try {
-          log(`Removing container ${session.container.id}...`);
-          await session.container.remove({ force: true }).catch((removeError: Error) => {
-            log(`Note: Error removing container ${session.container?.id}: ${removeError.message}.`);
-          });
-          log(`Container ${session.container.id} removed.`);
-        } catch (removeError) {
-          log(`Note: Error during container removal: ${removeError}.`);
-        }
-      } catch (containerError) {
-        log(`Note: Container cleanup produced errors: ${containerError}`);
-      }
-    }
-
-    sessions.delete(sessionId);
-    log(`Session ${sessionId} removed. Active sessions: ${sessions.size}`);
-  } else {
-    log(`Attempted to clean up non-existent session ${sessionId}`);
+  if (!session) {
+    return;
   }
+  log(`Cleaning up session ${sessionId}...`);
+
+  // Attempt to send disconnected status if ws is open and not already handled by terminateSession
+  // This is more of a fallback. terminateSession is the primary place.
+  if (session.ws && session.ws.readyState === WebSocket.OPEN && !session.ws.CLOSING && !session.ws.CLOSED) {
+    // Check if terminateSession might have already sent it by checking if a close reason related to termination was set.
+    // This is heuristic. A more robust way would be a flag on the session object.
+    // For now, we err on sending potentially twice vs. not at all in cleanup path.
+    try {
+      const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason: "Session cleanup initiated" };
+      session.ws.send(JSON.stringify(statusMsg));
+      log(`Sent 'disconnected' status during cleanup for session ${sessionId} (fallback)`);
+    } catch {
+      // logError(`Error sending 'disconnected' status during cleanup for ${sessionId}: ${sendError}`);
+      // Suppress error logging here to avoid noise if ws is closing.
+    }
+  }
+
+  clearTimeout(session.timeoutId);
+
+  if (session.stdinStream) {
+    session.stdinStream.end();
+    session.stdinStream.destroy(); // Ensure stream is fully destroyed
+    log(`stdinStream for session ${sessionId} ended and destroyed.`);
+  }
+  if (session.stdoutStream) {
+    // session.stdoutStream.end(); // stdoutStream is readable, typically doesn't need end()
+    session.stdoutStream.destroy(); // Ensure stream is fully destroyed
+    log(`stdoutStream for session ${sessionId} destroyed during cleanup.`);
+  }
+
+  // Remove container if it exists and isn't already being removed
+  if (session.container) {
+    try {
+      log(`Removing container ${session.container.id}...`);
+      await session.container.remove({ force: true }).catch((removeError: Error) => {
+        log(`Note: Error removing container ${session.container?.id}: ${removeError.message}.`);
+      });
+      log(`Container ${session.container.id} removed.`);
+    } catch (removeError) {
+      log(`Note: Error during container removal: ${removeError}.`);
+    }
+  }
+
+  sessions.delete(sessionId);
+  log(`Session ${sessionId} removed. Active sessions: ${sessions.size}`);
 }
 
 // --- Message Handlers ---
@@ -1153,10 +1211,7 @@ function handleMessage(session: ClientSession, message: Buffer) {
 
         // Direct pass-through for raw input (both regular characters and control keys)
         if (session.stdinStream && !session.stdinStream.destroyed) {
-            log(
-                `Received data for session ${session.sessionId}, writing to stdinStream.`,
-            );
-            // Write the raw message data to the stream
+            // Remove verbose logging for every keystroke
             session.stdinStream.write(message);
         } else {
             // Only log if stream is not available (avoiding noise for normal keypresses)
@@ -1177,32 +1232,24 @@ function handleMessage(session: ClientSession, message: Buffer) {
 }
 
 // Add session timeout monitoring
-function startSessionMonitoring() {
-  log("Starting session monitoring for timeouts...");
-  const intervalId = setInterval(() => {
+function startSessionMonitoring(): NodeJS.Timeout {
+  return setInterval(() => {
     const now = Date.now();
-    const timedOutIds: string[] = [];
-
-    for (const [sessionId, session] of sessions.entries()) {
-      if (!session.authenticated) continue;
-
-      if (now - session.lastActivityTime > MAX_IDLE_TIME_MS) {
-        timedOutIds.push(sessionId);
-        continue;
-      }
-
+    sessions.forEach(async (session, sessionId) => {
+      // Check for max session duration
       if (now - session.creationTime > MAX_SESSION_DURATION_MS) {
-        timedOutIds.push(sessionId);
+        log(`Session ${sessionId} exceeded maximum duration. Terminating.`);
+        await terminateSession(sessionId, "Maximum session duration reached");
+        return; // Move to the next session
       }
-    }
 
-    // Process timeouts after iteration
-    timedOutIds.forEach(sessionId => {
-      terminateSession(sessionId, "Session timed out");
+      // Check for inactivity, only if not currently attaching
+      if (!session.isAttaching && (now - session.lastActivityTime > MAX_IDLE_TIME_MS)) {
+        log(`Session ${sessionId} timed out due to inactivity. Terminating.`);
+        await terminateSession(sessionId, "Session timed out due to inactivity");
+      }
     });
-  }, 30 * 1000);
-
-  return intervalId;
+  }, 60 * 1000); // Check every minute
 }
 
 /**
