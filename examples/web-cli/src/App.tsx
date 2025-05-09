@@ -35,9 +35,8 @@ function App() {
   // Read initial mode from URL, default to fullscreen
   const initialMode = new URLSearchParams(window.location.search).get("mode") as ("fullscreen" | "drawer") || "fullscreen";
 
-  const [connectionStatus, setConnectionStatus] = useState<
-    "connected" | "connecting" | "disconnected" | "error"
-  >("disconnected");
+  type TermStatus = 'initial' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
+  const [connectionStatus, setConnectionStatus] = useState<TermStatus>('disconnected');
   const [apiKey, setApiKey] = useState<string | undefined>(envApiKey);
   const [accessToken, setAccessToken] = useState<string | undefined>(envAccessToken);
   const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">(initialMode);
@@ -47,13 +46,10 @@ function App() {
     hasInitialCredentials,
   );
 
-  const handleConnectionChange = useCallback(
-    (status: "connected" | "connecting" | "disconnected" | "error") => {
-      console.log("Connection Status:", status);
-      setConnectionStatus(status);
-    },
-    [],
-  );
+  const handleConnectionChange = useCallback((status: TermStatus) => {
+    console.log("Connection Status:", status);
+    setConnectionStatus(status);
+  }, []);
 
   const handleSessionEnd = useCallback((reason: string) => {
     console.log("Session ended:", reason);
@@ -91,11 +87,6 @@ function App() {
         ablyApiKey={apiKey}
         onConnectionStatusChange={handleConnectionChange}
         onSessionEnd={handleSessionEnd}
-        renderRestartButton={(onRestart: () => void) => (
-          <button className="Restart-button" onClick={onRestart}>
-            Restart Terminal
-          </button>
-        )}
         websocketUrl={currentWebsocketUrl}
       />
     ) : null
@@ -128,8 +119,8 @@ function App() {
 
       {/* Restore conditional rendering */}
       {displayMode === 'fullscreen' ? (
-        <main className="App-main">
-          <div className="Terminal-container p-2.5">
+        <main className="App-main no-padding">
+          <div className="Terminal-container">
             <TerminalInstance />
           </div>
         </main>

@@ -38,16 +38,12 @@ interface ConnectionStatusHeaderProps {
 const ConnectionStatusHeader: React.FC<ConnectionStatusHeaderProps> = ({ connectionStatus, connectionHelpMessage, isSessionActive }) => {
   console.log(`[ConnectionStatusHeader RENDER] isSessionActive: ${isSessionActive}, connectionStatus: "${connectionStatus}", connectionHelpMessage: "${connectionHelpMessage}"`);
 
-  if (isSessionActive && connectionHelpMessage) {
-    console.log('[ConnectionStatusHeader RENDER] Condition MET: isSessionActive && connectionHelpMessage. Rendering help message.');
+  // Show help message only before full session becomes active (e.g., while connecting)
+  if (!isSessionActive && connectionHelpMessage) {
+    console.log('[ConnectionStatusHeader RENDER] Condition MET: !isSessionActive && connectionHelpMessage. Rendering help message.');
     return <div data-testid="connection-help-message" style={{ fontSize: '0.8em', marginBottom: '4px', color: '#888' }}>{connectionHelpMessage}</div>;
   }
   
-  if (!isSessionActive && connectionStatus === 'connecting') {
-    console.log('[ConnectionStatusHeader RENDER] Condition MET: !isSessionActive && connectionStatus === "connecting". Rendering "Connecting to Ably...".');
-    return <div style={{ fontSize: '0.8em', marginBottom: '4px', color: '#888' }}>Connecting to Ably...</div>;
-  }
-
   if (!isSessionActive && connectionStatus === 'reconnecting') {
     console.log('[ConnectionStatusHeader RENDER] Condition MET: !isSessionActive && connectionStatus === "reconnecting". ReconnectOverlay should be active.');
   }
@@ -163,18 +159,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     clearAnimationMessages();
     if (term.current) {
       const currentAttempts = grGetAttempts(); // Now 0-indexed for number of *past* failures
-      let baseText = isRetry ? 
-        `Connection lost. Attempting to reconnect... (Attempt ${currentAttempts + 1}/${grGetMaxAttempts()})` : 
-        'Connecting to Ably CLI terminal server...';
-      
       setReconnectAttemptMessage(isRetry ? `Attempt ${currentAttempts + 1}/${grGetMaxAttempts()}` : 'Connecting...');
-      
-      // Simplified animation, actual dots handled by ReconnectOverlay or just basic message
+      // For retries we still log to console; do NOT print text inside the terminal anymore
       if (isRetry) {
         console.log(`[AblyCLITerminal] Displaying reconnect attempt: ${currentAttempts + 1}`);
-      } else {
-        term.current.write('\r\x1b[K' + baseText);
-        lastWriteLine.current = baseText;
       }
     }
   }, [clearAnimationMessages]);
@@ -323,7 +311,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       console.log('[AblyCLITerminal] Initializing Terminal instance.');
       term.current = new Terminal({
         cursorBlink: true, cursorStyle: 'block', fontFamily: 'monospace', fontSize: 14,
-        theme: { background: '#282c34', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
+        theme: { background: '#000000', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
         convertEol: true,
       });
       fitAddon.current = new FitAddon();
@@ -455,7 +443,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       ref={rootRef} 
       data-testid="terminal-container" 
       className="Terminal-container" 
-      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', padding: '0.5rem', boxSizing: 'border-box' }}
+      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', padding: 0, boxSizing: 'border-box', backgroundColor: '#000000' }}
     >
       <ConnectionStatusHeader 
         connectionStatus={componentConnectionStatus}
