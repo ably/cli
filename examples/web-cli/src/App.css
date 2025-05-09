@@ -32,12 +32,19 @@
   font-weight: 600;
 }
 
+/* Variant without padding used in fullscreen terminal */
+.App-main.no-padding {
+  padding: 0;
+}
+
 .Terminal-container {
   flex-grow: 1;
   display: flex;
   min-height: 0;
-  border: 1px solid #555;
+  border: none; /* Removed inner border */
   background-color: #000000;
+  padding: 1rem; /* inner black padding */
+  box-sizing: border-box;
 }
 
 .logo {
