@@ -7,6 +7,12 @@ import getPort from 'get-port';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 
+// Type for browser context in evaluate() calls
+type BrowserContext = {
+  localStorage: Storage;
+  innerHeight: number;
+};
+
 const execAsync = promisify(exec);
 
 // For ESM compatibility
@@ -226,7 +232,10 @@ test.describe('Web CLI E2E Tests', () => {
       await page.goto(`http://localhost:${webServerPort}`);
       await page.waitForSelector(fullscreenButtonSelector);
       // Clear localStorage before each test
-      await page.evaluate(() => globalThis.localStorage.clear());
+      await page.evaluate(() => {
+        const ctx = window as unknown as BrowserContext;
+        ctx.localStorage.clear();
+      });
       await page.reload();
     });
 
@@ -271,7 +280,10 @@ test.describe('Web CLI E2E Tests', () => {
 
       // Test reload persistence (Drawer - closed)
       await page.locator(drawerModeButtonSelector).click();
-      await page.evaluate((key) => globalThis.localStorage.removeItem(key), DRAWER_OPEN_KEY);
+      await page.evaluate((key) => {
+        const ctx = window as unknown as BrowserContext;
+        ctx.localStorage.removeItem(key);
+      }, DRAWER_OPEN_KEY);
       await page.reload();
       await page.waitForURL(/\?mode=drawer/);
       await expect(page.locator(toggleGroupSelector)).toBeVisible({ timeout: 10000 });
@@ -282,7 +294,8 @@ test.describe('Web CLI E2E Tests', () => {
       // Test reload persistence (Drawer - open)
       await page.locator(drawerButtonSelector).click(); // Open it
       await page.evaluate((key) => { 
-        globalThis.localStorage.setItem(key, JSON.stringify(true)); 
+        const ctx = window as unknown as BrowserContext;
+        ctx.localStorage.setItem(key, JSON.stringify(true)); 
       }, DRAWER_OPEN_KEY);
       await page.reload();
       await expect(page.locator(drawerModeButtonSelector)).toBeVisible(); // Wait for UI
@@ -300,7 +313,10 @@ test.describe('Web CLI E2E Tests', () => {
       // 1. Test Default Height
       await page.locator(drawerButtonSelector).click(); // Open drawer
       const initialBoundingBox = await page.locator(drawerSelector).boundingBox();
-      const viewportHeight = await page.evaluate(() => globalThis.innerHeight);
+      const viewportHeight = await page.evaluate(() => {
+        const ctx = window as unknown as BrowserContext;
+        return ctx.innerHeight;
+      });
       expect(initialBoundingBox?.height).toBeCloseTo(viewportHeight * 0.4, 0); // Check initial height is approx 40%
 
       // 2. Test Height Persistence
