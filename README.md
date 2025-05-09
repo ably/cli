@@ -24,7 +24,7 @@
 
 <!-- usage -->
 ```sh-session
-$ pnpm install -g @ably/cli
+$ npm install -g @ably/cli
 $ ably COMMAND
 running command...
 $ ably (--version)

@@ -6,6 +6,8 @@
     "scripts/**/*", // Keep scripts included for linting too
     "packages/react-web-cli/src/index.ts", // Added specific file
     "packages/react-web-cli/src/AblyCliTerminal.tsx", // Also include the component file
+    "packages/react-web-cli/src/test-setup.ts", // Explicitly include the test setup file in src
+    "packages/react-web-cli/vitest.config.ts", // Added for Vitest config
     "*.config.js" // Include root config files if needed
   ],
   "exclude": ["node_modules", "dist"]
