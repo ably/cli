@@ -1,3 +1,12 @@
+/*
+ * The Playwright runner compiles this file in a Node environment that lacks DOM
+ * typings. We declare a global `window` to keep TypeScript happy when Mocha
+ * inadvertently tries to transpile this Playwright spec (e.g. when the Mocha
+ * runner receives the file path but execution is later excluded). This avoids
+ * TS2304: Cannot find name 'window'.
+ */
+declare const window: any;
+
 import { test, expect, type Page as _Page } from 'playwright/test';
 import { startWebServer, stopWebServer, startTerminalServer, stopTerminalServer } from './reconnection-utils';
 
