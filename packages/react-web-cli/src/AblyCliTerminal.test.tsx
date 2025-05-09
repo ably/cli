@@ -336,4 +336,65 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   test.skip('shows manual reconnect prompt after max attempts', async () => {/* skipped */});
 
   test.skip('can manually reconnect after max attempts', async () => {/* skipped */});
+
+  test('does NOT auto-reconnect when server closes with non-recoverable code (4001)', async () => {
+    renderTerminal();
+
+    // Wait for initial WebSocket open so component state is settled
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Clear reconnect related mocks to capture fresh calls for this close event
+    vi.mocked(GlobalReconnect.increment).mockClear();
+    vi.mocked(GlobalReconnect.scheduleReconnect).mockClear();
+    onConnectionStatusChangeMock.mockClear();
+
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('close', { code: 4001, reason: 'Invalid token', wasClean: false });
+    });
+
+    // Automatic reconnection SHOULD NOT be scheduled
+    expect(GlobalReconnect.scheduleReconnect).not.toHaveBeenCalled();
+    expect(GlobalReconnect.increment).not.toHaveBeenCalled();
+
+    // Component should signal disconnected status (prompting manual reconnect)
+    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('disconnected');
+  });
+
+  test('manual reconnect works after user cancels auto-reconnect', async () => {
+    vi.useFakeTimers();
+    renderTerminal();
+
+    // Simulate abnormal close to start auto-reconnect
+    act(() => {
+      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'lost' });
+    });
+
+    // Retrieve onData handler registered by component
+    const onDataHandler = mockOnData.mock.calls[0][0] as (data: string) => void;
+
+    // Press Enter BEFORE timers elapse to cancel scheduled auto reconnect
+    act(() => {
+      onDataHandler('\r');
+    });
+
+    // Fast-forward time to process scheduled callbacks and confirm cancellation
+    vi.runAllTimers();
+
+    // scheduleReconnect should have been cancelled
+    vi.mocked(GlobalReconnect.cancelReconnect).mockClear();
+
+    // Second Enter should trigger manual reconnect
+    vi.mocked((global as any).WebSocket).mockClear();
+    act(() => { onDataHandler('\r'); });
+
+    vi.runAllTimers(); // Flush any immediate timers triggered by reconnect
+
+    expect(vi.mocked((global as any).WebSocket)).toHaveBeenCalledTimes(1);
+    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connecting');
+
+    vi.useRealTimers();
+  }, 10000);
 }); 
