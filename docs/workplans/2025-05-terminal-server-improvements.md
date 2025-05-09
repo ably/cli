@@ -62,14 +62,14 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 - **Summary:**
 
 ### Step 1.5: Session Resumption (Client & Server)
-- **Task:** Implement session resumption on abrupt disconnects using a session ID. Handle page reloads optionally.
+- **Task:** Implement session resumption on abrupt disconnects ad page reloeads using a session ID
 - **Details:**
-    - **Server:** Issue a unique session ID on initial connection. Store terminal state associated with the ID. On reconnect with a valid session ID (within ~60s), restore the state and send it to the client.
-    - **Client (React Component):** Receive and store the session ID. On abrupt disconnect, attempt reconnect using the session ID. Add an optional prop (`resumeOnReload`) to enable storing the session ID in `localStorage` on `unload` and attempting resumption on load. Expose the session ID as a component prop.
+    - **Server:** Issue a unique session ID on initial connection and emit this session ID in the logs for debugging. Ensure that a Docker exec session outlives the Websocket connection lifecycle, that is if the Websocket connection is disconnected, the Docker exec session will remain active for up to 60 seconds. If any new Websocket connection is made with a session ID within 60 seconds, the server will send a buffer of the last say 1000k lines, and allow the Websocket client to continue to operate STDIN and STDOUT with that session. Note that any session reconnection will only be accepted if the previously used access token and API key matches the new connection request exactly, otherwise the connection is rejected. In addition, if a new connection attempt is received for an active connectin, then existing connection will be dropped by the server in favour of the new one, ensuring that abruptly disconnected connections that are immediately reopened client-side, that may still be perceived to be active on the server, will take over the session.
+    - **Client (React Component):** Receive and store the session ID and emit this session ID the logs. On an abrupt disconnect, the client will reconnect automatically using the session ID for all reconnection attempts. In addition, the React CLI component will have a prop (`resumeOnReload`) that, when enabled, will store the session ID in `localStorage` on `unload` and use this session ID automatically when the page is reloaded if `resumeOnUnload` is true.Expose the session ID as a component prop and ensure this is `true` for the example.
 - **Testing:**
     - Unit/Integration tests for server-side session handling.
     - Unit tests for client-side session ID storage and reload logic.
-    - Playwright tests: Simulate abrupt disconnects and verify session resumption. Test page reload resumption when enabled.
+    - Integration or End to End Test: Simulate abrupt disconnects and verify session resumption. This should cover both an abrupt disconnection and automatic reconnection from the client, as well as a page reload where the session ID is stored and retrieved on reload, ensuring the session state is retained. The terminal session could run a command such as `ably --version` on the first run, then check that the session contains this, then upon reconnection, ensure further commands can be sent and responses received.
 - **Status:** `[ ] Not Started`
 - **Summary:**
 
