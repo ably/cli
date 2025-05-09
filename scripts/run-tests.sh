@@ -4,11 +4,11 @@
 # Capture all arguments
 ARGS=("$@")
 
-# Check if any argument specifically targets the web-cli test file
+# Detect if we are about to run a Playwright browser test (any file inside test/e2e/web-cli/)
 USE_PLAYWRIGHT=false
 PLAYWRIGHT_TEST_FILE=""
 for arg in "${ARGS[@]}"; do
-  if [[ "$arg" == *"web-cli.test.ts" ]]; then
+  if [[ "$arg" == *"test/e2e/web-cli/"*".test.ts" ]]; then
     USE_PLAYWRIGHT=true
     PLAYWRIGHT_TEST_FILE="$arg"
     break
@@ -20,8 +20,8 @@ done
 MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught"
 MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\" --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 
-# Common exclude option for Mocha runs that shouldn't include Playwright tests
-EXCLUDE_OPTION="--exclude test/e2e/web-cli/web-cli.test.ts"
+# Exclude all browser-based Playwright specs from Mocha runs (they will be executed with Playwright instead)
+EXCLUDE_OPTION="--exclude test/e2e/web-cli/*.test.ts"
 
 # Process arguments to determine test pattern and other flags
 TEST_PATTERN=""
@@ -64,6 +64,11 @@ fi
 
 if $USE_PLAYWRIGHT; then
   # Use Playwright runner
+  # Ensure TypeScript has been compiled so the terminal server script exists for browser tests
+  if [ ! -f dist/scripts/terminal-server.js ]; then
+    echo "dist not found or terminal-server.js missing – running \"pnpm build\" first..."
+    pnpm build || { echo "Build failed, aborting Playwright run."; exit 1; }
+  fi
   echo "Using Playwright test runner for Web CLI tests..."
   # Pass ONLY the specific web-cli test file to Playwright
   COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
@@ -106,7 +111,7 @@ fi
 
 # Set an outer timeout (in seconds) - default 180s or 3 minutes
 # Increased from 120s to give more buffer
-OUTER_TIMEOUT=180
+OUTER_TIMEOUT=300
 
 # Run the tests with the determined runner
 eval $COMMAND &

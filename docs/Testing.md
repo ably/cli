@@ -100,6 +100,23 @@ describe('MyCommand', () => {
     *   Individual files via Vitest CLI: `pnpm exec vitest packages/react-web-cli/src/AblyCliTerminal.test.tsx`.
 *   **Mocking:** Dependencies (e.g., `@xterm/xterm`, WebSockets) are mocked using Vitest's capabilities (`vi.mock`, `vi.fn`).
 
+#### 🏗️ Testing Pyramid for React Web CLI Components
+
+While developing the browser-based **Web CLI** we have found that an "inverted" test pyramid (many end-to-end Playwright tests, few unit tests) quickly becomes brittle and slows the feedback loop.  We therefore adopt a **pyramid approach** for this part of the codebase:
+
+1.  **Unit tests (_broad base_) –** Exhaustive coverage of core logic that can execute **in isolation**:
+    * `global-reconnect` timing & state machine.
+    * React hooks and helpers inside `AblyCliTerminal` (without a real browser).
+    * Mock **all** browser APIs (`WebSocket`, `xterm.js`, timers).
+
+2.  **Focused E2E / Playwright tests (_narrow top_) –** Only verify **user-visible** flows:
+    * Automatic reconnect succeeds when the server is restarted.
+    * Users can cancel the reconnect countdown and later trigger a manual reconnect.
+
+Everything else (exact countdown rendering, every internal state transition, console noise) is left to the unit layer.  This greatly reduces flake due to timing variance and Docker start-up times.
+
+> **Tip for contributors:** If you find yourself mocking several browser APIs in a Playwright test, it probably belongs in a unit test instead.
+
 ### 🔄 Integration Tests (`test/integration`)
 
 *   **Primary Purpose:** Verify the interaction between multiple commands or components, including interactions with *mocked* Ably SDKs or Control API services. Test the CLI execution flow.
