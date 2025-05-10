@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import net from 'node:net';
 
 // For ESM compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -73,14 +74,52 @@ export async function startWebServer(port: number): Promise<ChildProcess> {
   return webServerProcess;
 }
 
-export async function stopTerminalServer(process: ChildProcess): Promise<void> {
-  if (process) {
-    process.kill('SIGTERM');
+async function waitForPortFree(port: number, timeout = 10000): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    if (Date.now() - start > timeout) {
+      throw new Error(`Port ${port} did not free within ${timeout}ms`);
+    }
+
+    const isFree = await new Promise<boolean>((resolve) => {
+      const tester = net
+        .createServer()
+        .once('error', () => resolve(false))
+        .once('listening', () => {
+          tester.close();
+          resolve(true);
+        })
+        .listen(port, '127.0.0.1');
+    });
+
+    if (isFree) return;
+    await new Promise((r) => setTimeout(r, 200));
   }
 }
 
-export async function stopWebServer(process: ChildProcess): Promise<void> {
-  if (process) {
-    process.kill('SIGTERM');
+async function waitForProcessExit(proc: ChildProcess, timeout = 15000): Promise<void> {
+  if (proc.exitCode !== null) return; // already exited
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch { /* ignore error if already dead */ }
+      resolve();
+    }, timeout);
+    proc.once('exit', () => { clearTimeout(timer); resolve(); });
+  });
+}
+
+export async function stopTerminalServer(proc: ChildProcess | null, port?: number): Promise<void> {
+  if (!proc) return;
+  try { proc.kill('SIGTERM'); } catch { /* ignore if process already exited */ }
+  await waitForProcessExit(proc);
+
+  if (port) {
+    try { await waitForPortFree(port, 10000); } catch { /* ignore */ }
   }
+}
+
+export async function stopWebServer(proc: ChildProcess | null): Promise<void> {
+  if (!proc) return;
+  try { proc.kill('SIGTERM'); } catch { /* ignore if process already exited */ }
+  await waitForProcessExit(proc);
 } 

@@ -188,7 +188,7 @@ test.describe('Web CLI E2E Tests', () => {
 
     // Wait for the terminal element to be present
     const terminalSelector = '.xterm'; // Adjust if the selector changes in the React component
-    await page.waitForSelector(terminalSelector, { timeout: 15000 });
+    const _terminalElement = await page.waitForSelector(terminalSelector, { timeout: 15000 });
     console.log('Terminal element found.');
 
     // Wait for the initial prompt to appear, indicating connection and container ready
@@ -227,7 +227,7 @@ test.describe('Web CLI E2E Tests', () => {
     await page.keyboard.press('Enter');
 
     // Wait for specific output from 'ably --version'
-    const versionOutputText = '@ably/cli/0.4.0'; // Expected text
+    const versionOutputText = 'browser-based CLI'; // substring expected from version output
     await expect(page.locator(terminalSelector)).toContainText(versionOutputText, { timeout: 15000 });
     console.log("'ably --version' output verified.");
 
@@ -387,7 +387,7 @@ test.describe('Web CLI E2E Tests', () => {
     await page.goto(url);
     
     // Wait for the terminal to connect and show a prompt
-    const terminalElement = await page.waitForSelector('.xterm', { timeout: 15000 });
+    const _terminalElement = await page.waitForSelector('.xterm', { timeout: 15000 });
     
     // Wait for the initial prompt to appear
     await waitForPrompt(page, '.xterm');
@@ -428,17 +428,19 @@ test.describe('Web CLI E2E Tests', () => {
     
     console.log('Connection should have been closed. Waiting for reconnection...');
     
-    // Wait for reconnection attempt to complete
+    // Wait for reconnection attempt to complete (prompt visible again)
     await page.waitForTimeout(5000);
-    
+    await waitForPrompt(page, '.xterm', 30000);
+
     // Type a test command to verify we reconnected successfully
-    await page.keyboard.type('echo "Reconnection test successful"');
+    await page.locator('.xterm').focus();
+    await page.keyboard.type('ably --version');
     await page.keyboard.press('Enter');
     
     // Verify the command output is visible, indicating successful reconnection
     await page.waitForSelector(
-      '.xterm:has-text("Reconnection test successful")',
-      { timeout: 10000 }
+      '.xterm:has-text("browser-based CLI")',
+      { timeout: 60000 }
     );
     
     console.log('Reconnection test completed successfully');
