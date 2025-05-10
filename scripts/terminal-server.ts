@@ -1,5 +1,4 @@
-import { WebSocketServer, WebSocket } from "ws";
-import { createWebSocketStream } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Duplex } from "node:stream";
@@ -9,14 +8,15 @@ import * as http from "node:http";
 import * as jwt from "jsonwebtoken";
 import { execSync } from "node:child_process";
 // Import Dockerode with type import for type checking
-import type * as DockerodeTypes from "dockerode";
-// For ES Module compatibility
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
 import process from 'node:process';
 import * as fs from "node:fs"; // Import fs
 import { ChildProcess } from "node:child_process";
+import { computeCredentialHash } from './session-utils.js';
+import { pathToFileURL } from 'node:url';
+import type * as DockerodeTypes from "dockerode";
 
 // Constants for Docker configuration
 const DOCKER_IMAGE_NAME = process.env.DOCKER_IMAGE_NAME || 'ably-cli-sandbox';
@@ -35,11 +35,14 @@ const SHUTDOWN_GRACE_PERIOD_MS = 10_000; // 10 seconds for graceful shutdown
 // Add session timeout constants
 const MAX_IDLE_TIME_MS = 10 * 60 * 1000;      // 10 minutes of inactivity
 const MAX_SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes total
+// Max lines of recent output retained per session for reconnection resumes
+const OUTPUT_BUFFER_MAX_LINES = 1000;
+// Time window during which a disconnected session may be resumed (ms)
+const RESUME_GRACE_MS = 60_000;
 
 // Type definitions for Docker objects
 type DockerContainer = DockerodeTypes.Container;
 type DockerExec = DockerodeTypes.Exec;
-type DockerExecCreateOptions = DockerodeTypes.ExecCreateOptions;
 
 // Type for Docker event
 interface DockerEvent {
@@ -70,6 +73,14 @@ type ClientSession = {
   creationTime: number;
   // Add flag to track if attachment is in progress
   isAttaching: boolean;
+  // SHA-256 hash of apiKey|accessToken captured at first auth, used to validate resume attempts
+  credentialHash?: string;
+  // Ring buffer of recent stdout/stderr lines for resume support
+  outputBuffer?: string[];
+  // timer started when ws disconnects; if it fires the session is cleaned
+  orphanTimer?: NodeJS.Timeout;
+  // Debugging flag for incoming client keystrokes
+  _debugLoggedFirstKey?: boolean;
 };
 
 // Variable to store AppArmor profile status - checked once on startup
@@ -144,9 +155,17 @@ async function cleanupStaleContainers(): Promise<void> {
 
     log(`Found ${containers.length} stale container(s). Attempting removal...`);
     const removalPromises = containers.map(async (containerInfo: DockerodeTypes.ContainerInfo) => {
+      // Skip containers that are still running so that live sessions can be
+      // resumed after a server restart (e.g. during CI E2E tests).
+      // We consider a container "stale" only if it is *not* running.
+      if (containerInfo.State === 'running') {
+        log(`Skipping running container ${containerInfo.Id}; may belong to an active session.`);
+        return;
+      }
+
       try {
         const container = docker.getContainer(containerInfo.Id);
-        log(`Removing stale container ${containerInfo.Id}...`);
+        log(`Removing stale container ${containerInfo.Id} (state: ${containerInfo.State}) ...`);
         await container.remove({ force: true }); // Force remove
         log(`Removed stale container ${containerInfo.Id}.`);
       } catch (removeError: unknown) {
@@ -673,7 +692,7 @@ async function startServer() {
         ws.once('message', async (message: Buffer) => {
             // --- Authentication Phase ---
             try {
-                let authPayload: { apiKey?: string; accessToken?: string; environmentVariables?: Record<string, string> };
+                let authPayload: { apiKey?: string; accessToken?: string; environmentVariables?: Record<string, string>; sessionId?: string };
                 try {
                     authPayload = JSON.parse(message.toString());
                 } catch (error) {
@@ -686,7 +705,80 @@ async function startServer() {
                     return;
                 }
 
-                // --- Credential validation logic ---
+                // --- Credential validation logic & (optional) resume handshake ---
+
+                const resumeAttemptId = authPayload.sessionId && typeof authPayload.sessionId === 'string' ? authPayload.sessionId : null;
+
+                // Compute credential hash early (used in both fresh & resume flows)
+                const incomingCredentialHash = computeCredentialHash(authPayload.apiKey, authPayload.accessToken);
+
+                if (resumeAttemptId) {
+                    // First attempt in-memory resume
+                    if (sessions.has(resumeAttemptId)) {
+                        const existing = sessions.get(resumeAttemptId)!;
+                        log(`[${sessionId}] Resume requested for session ${resumeAttemptId}`);
+
+                        if (existing.credentialHash !== incomingCredentialHash) {
+                            logError(`[${sessionId}] Resume rejected: credential mismatch`);
+                            try {
+                              const errMsg: ServerStatusMessage = { type: 'status', payload: 'error', reason: 'Credentials do not match original session' };
+                              ws.send(JSON.stringify(errMsg));
+                            } catch { /* ignore */ }
+                            ws.close(4001, 'Credential mismatch');
+                            return;
+                        }
+
+                        // Take over existing session socket
+                        takeoverSession(existing, ws);
+
+                        // We must now clean up the *placeholder* session object that was
+                        // created for this connection (identified by `sessionId`). Leaving
+                        // it in the sessions map would allow its AUTH_TIMEOUT_MS timer to
+                        // fire 10 s later, closing the very WebSocket we've just attached.
+                        if (sessionId !== resumeAttemptId && sessions.has(sessionId)) {
+                          const placeholder = sessions.get(sessionId)!;
+                          clearTimeout(placeholder.timeoutId);
+                          sessions.delete(sessionId);
+                        }
+
+                        // Send buffered output prior to new piping
+                        if (existing.outputBuffer && existing.outputBuffer.length > 0) {
+                           for (const line of existing.outputBuffer) {
+                              try { ws.send(line); } catch { /* ignore send errors */ }
+                           }
+                        }
+
+                        // Attach streams (new exec) so input/output resumes
+                        try {
+                           await attachToContainer(existing, ws);
+                           ws.on('message', (msg) => handleMessage(existing, msg as Buffer));
+                           log(`[${sessionId}] Successfully resumed session ${resumeAttemptId} (handler re-attached)`);
+                        } catch (error) {
+                           logError(`[${sessionId}] Error during resume attach: ${error}`);
+                           terminateSession(existing.sessionId, 'Failed to resume');
+                        }
+                        return; // In-memory resume handled
+                    }
+
+                    // Fallback: try to restore session by locating existing container
+                    const restored = await attemptCrossProcessResume(resumeAttemptId, incomingCredentialHash, ws);
+                    if (restored) {
+                        log(`[${sessionId}] Cross-process resume successful for ${resumeAttemptId}`);
+
+                        // Clean up the placeholder session for this connection just as we do in the
+                        // in-memory resume path.
+                        if (sessionId !== resumeAttemptId && sessions.has(sessionId)) {
+                          const placeholder = sessions.get(sessionId)!;
+                          clearTimeout(placeholder.timeoutId);
+                          sessions.delete(sessionId);
+                        }
+
+                        return; // Resume handled
+                    }
+                    // If restoration failed we will continue creating a fresh session below.
+                }
+
+                // --- Credential validation logic for fresh session ---
                 const hasApiKey = typeof authPayload.apiKey === 'string' && authPayload.apiKey.trim().length > 0;
                 const hasAccessToken = typeof authPayload.accessToken === 'string' && authPayload.accessToken.trim().length > 0;
 
@@ -737,6 +829,10 @@ async function startServer() {
                     return;
                 }
 
+                // Compute credential hash for later resume validation
+                const credentialHash = computeCredentialHash(apiKey, accessToken);
+                log(`[${sessionId}] credentialHash=${credentialHash.slice(0, 8)}...`);
+
                 // --- Create Full Session Object ---
                 const fullSession: ClientSession = {
                     ...(initialSession as ClientSession), // Spread initial properties (ws, sessionId)
@@ -744,6 +840,7 @@ async function startServer() {
                     isAttaching: false, // Will be set to true by attachToContainer
                     timeoutId: setTimeout(() => {}, 0), // Dummy timeout, immediately cleared
                     container: container,
+                    credentialHash,
                     // execInstance, stdinStream, stdoutStream added by attachToContainer
                 };
                 clearTimeout(fullSession.timeoutId); // Clear the dummy timeout
@@ -776,15 +873,32 @@ async function startServer() {
         });
 
         // Handle top-level WebSocket close/error (covers cases before/during auth)
-        ws.on('close', (code, reason) => {
-            log(
-                `[${sessionId}] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`,
-            );
-            cleanupSession(sessionId);
-        });
+        // For connections that have completed authentication we do **not** destroy
+        // the session immediately – instead we schedule orphan cleanup so the
+        // container can be resumed within the RESUME_GRACE_MS window.
+        const topLevelCloseHandler = (code: number, reason: Buffer) => {
+            log(`[${sessionId}] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+
+            const existing = sessions.get(sessionId);
+            if (existing && existing.authenticated) {
+                // Authenticated session ⇒ keep it around for possible resume
+                scheduleOrphanCleanup(existing);
+            } else {
+                // Not yet authenticated ⇒ safe to purge immediately
+                cleanupSession(sessionId);
+            }
+        };
+
+        ws.on('close', topLevelCloseHandler);
+
         ws.on('error', (err) => {
             logError(`[${sessionId}] WebSocket error: ${err.message}`);
-            cleanupSession(sessionId); // Close and cleanup on error
+            const existing = sessions.get(sessionId);
+            if (existing && existing.authenticated) {
+                scheduleOrphanCleanup(existing);
+            } else {
+                cleanupSession(sessionId);
+            }
         });
     });
 
@@ -867,92 +981,125 @@ async function startServer() {
     return server;
 }
 
+// Determine if this file is being executed directly via `node scripts/terminal-server.js` (or compiled variant)
+// versus being imported as a library (e.g. from unit tests). When imported we must NOT automatically
+// start a WebSocket server, otherwise tests will spawn background processes that occupy port 8080
+// and prevent the Mocha runner from exiting within its watchdog timeout.
+const __isDirectRun = import.meta.url === (process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined);
+
 // --- Server Initialization (using top-level await) ---
 
-// Create secure network before server starts
-try {
-  await createSecureNetwork();
-} catch (error) {
-  logError(`Failed to create secure network: ${error}`);
-  log('Continuing with default network configuration');
-}
-
-try {
-  await startServer();
-  log("Terminal server started successfully.");
-
-  // Handle Node.js debugger disconnection
-  // Use type assertion for Node.js internal properties
-  const nodeProcess = process as unknown as {
-    _debugProcess?: (pid: number) => void;
-    _debugEnd?: () => void;
-    pid?: number;
-  };
-
-  if (nodeProcess._debugProcess && nodeProcess.pid) {
-    process.on('SIGINT', () => {
-      try {
-        // Disable the debugger on first SIGINT to allow clean exit
-        if (nodeProcess._debugEnd) {
-          nodeProcess._debugEnd();
-        }
-      } catch (error) {
-        void error; // Ignore debugger detachment errors – nothing we can do here
-      }
-    });
+if (__isDirectRun) {
+  // Create secure network before server starts
+  try {
+    await createSecureNetwork();
+  } catch (error) {
+    logError(`Failed to create secure network: ${error}`);
+    log('Continuing with default network configuration');
   }
-} catch (error) {
-  logError("Server failed unexpectedly:");
-  logError(error);
-  process.exit(1);
+
+  try {
+    await startServer();
+    log("Terminal server started successfully.");
+
+    // Handle Node.js debugger disconnection
+    // Use type assertion for Node.js internal properties
+    const nodeProcess = process as unknown as {
+      _debugProcess?: (pid: number) => void;
+      _debugEnd?: () => void;
+      pid?: number;
+    };
+
+    if (nodeProcess._debugProcess && nodeProcess.pid) {
+      process.on('SIGINT', () => {
+        try {
+          // Disable the debugger on first SIGINT to allow clean exit
+          if (nodeProcess._debugEnd) {
+            nodeProcess._debugEnd();
+          }
+        } catch (error) {
+          void error; // Ignore debugger detachment errors – nothing we can do here
+        }
+      });
+    }
+  } catch (error) {
+    logError("Server failed unexpectedly:");
+    logError(error);
+    process.exit(1);
+  }
 }
 
 function pipeStreams(
   ws: WebSocket,
-  containerStream: Duplex
+  containerStream: Duplex,
+  session?: ClientSession,
+  isRawTty = false,
 ): void {
   try {
     log('Setting up bidirectional piping between WebSocket and container stream');
     let firstChunkReceived = false; // Flag to log only the first chunk
 
-    // Set up data handling from container to WebSocket
-    let processingBuffer = Buffer.alloc(0);
-
-    containerStream.on('data', (chunk: Buffer) => {
-      processingBuffer = Buffer.concat([processingBuffer, chunk]);
-
-      // Process complete frames
-      while (processingBuffer.length >= 8) {
-        const streamType = processingBuffer[0]; // 1=stdout, 2=stderr
-        const payloadSize = processingBuffer.readUInt32BE(4);
-
-        if (processingBuffer.length < 8 + payloadSize) {
-          break; // Wait for more data
-        }
-
-        const payload = processingBuffer.slice(8, 8 + payloadSize);
-
+    if (isRawTty) {
+      // For TTY=true the stream is raw – pipe chunks straight through.
+      containerStream.on('data', (chunk: Buffer) => {
         if (!firstChunkReceived) {
-          // Keep first chunk logging as it's useful for debugging
-          log(`First chunk received from container (type ${streamType}, size ${payloadSize})`);
+          log(`First chunk received from container (raw, size ${chunk.length})`);
           firstChunkReceived = true;
         }
 
-        if (streamType === 1 || streamType === 2) {
-          try {
-            if (ws.readyState === WebSocket.OPEN) {
-              // Remove verbose logging of every payload sent
-              ws.send(payload);
-            }
-          } catch (error) {
-            logError(`Failed to send data: ${error instanceof Error ? error.message : String(error)}`);
-            return;
-          }
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(chunk);
         }
 
-        processingBuffer = processingBuffer.slice(8 + payloadSize);
-      }
-    });
+        if (session) {
+          const text = chunk.toString('utf8');
+          if (!session.outputBuffer) session.outputBuffer = [];
+          session.outputBuffer.push(text);
+          if (session.outputBuffer.length > OUTPUT_BUFFER_MAX_LINES) {
+            session.outputBuffer.splice(0, session.outputBuffer.length - OUTPUT_BUFFER_MAX_LINES);
+          }
+        }
+      });
+    } else {
+      // Demultiplexed stream (non-TTY exec)
+      let processingBuffer = Buffer.alloc(0);
+
+      containerStream.on('data', (chunk: Buffer) => {
+        processingBuffer = Buffer.concat([processingBuffer, chunk]);
+
+        // Process complete frames
+        while (processingBuffer.length >= 8) {
+          const streamType = processingBuffer[0]; // 1=stdout, 2=stderr
+          const payloadSize = processingBuffer.readUInt32BE(4);
+
+          if (processingBuffer.length < 8 + payloadSize) {
+            break; // Wait for more data
+          }
+
+          const payload = processingBuffer.slice(8, 8 + payloadSize);
+
+          if (!firstChunkReceived) {
+            log(`First chunk received from container (type ${streamType}, size ${payloadSize})`);
+            firstChunkReceived = true;
+          }
+
+          if (streamType === 1 || streamType === 2) {
+            if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+
+            if (session) {
+              const text = payload.toString('utf8');
+              if (!session.outputBuffer) session.outputBuffer = [];
+              session.outputBuffer.push(text);
+              if (session.outputBuffer.length > OUTPUT_BUFFER_MAX_LINES) {
+                session.outputBuffer.splice(0, session.outputBuffer.length - OUTPUT_BUFFER_MAX_LINES);
+              }
+            }
+          }
+
+          processingBuffer = processingBuffer.slice(8 + payloadSize);
+        }
+      });
+    }
 
     // NOTE: We no longer set up WebSocket message handling here
     // This is now handled by the main message handler to avoid duplication
@@ -986,173 +1133,108 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
     // Mark that attachment is starting
     session.isAttaching = true;
 
-    const wsStream = createWebSocketStream(ws, {
-        encoding: 'utf8',
-        decodeStrings: false, // Don't convert strings to buffers
-        defaultEncoding: 'utf8'
-    });
-    let containerStream: stream.Duplex | null = null;
-
-    try {
-        // Ensure container exists on session before proceeding
-        if (!session.container) {
-            session.isAttaching = false; // Clear flag on error
-            throw new Error('Container not associated with session during attach');
-        }
-
-        // Add a minimal delay just in case, but rely on container being started correctly
-        log(`Waiting briefly for container ${session.container.id}...`);
-        await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay
-
-        log(`Attaching to container ${session.container.id} for session ${session.sessionId}`);
-
-        // Optional: Final quick state check before exec
-        try {
-            const containerInfo = await session.container.inspect();
-            if (!containerInfo.State.Running) { // Only proceed if Running
-                session.isAttaching = false;
-
-                // Fetch the last ~200 lines of combined stdout/stderr to aid debugging
-                let recentLogs = '';
-                try {
-                    const logBuff = await session.container.logs({ stdout: true, stderr: true, tail: 200 });
-                    recentLogs = Buffer.isBuffer(logBuff) ? logBuff.toString('utf8') : String(logBuff);
-                } catch (error) {
-                    logError(`Unable to fetch container logs for session ${session.sessionId}: ${error}`);
-                }
-
-                const exitCode = containerInfo.State.ExitCode;
-                const stateMsg = `Container ${session.container.id} is not running (state: ${containerInfo.State.Status}, exitCode: ${exitCode}).`;
-
-                // Log detailed diagnostics server-side
-                logError(`${stateMsg}\nRecent container logs (truncated):\n${recentLogs}`);
-
-                // Notify client with structured error so UI can surface
-                try {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        const errPayload: ServerStatusMessage = {
-                            type: "status",
-                            payload: "error",
-                            reason: stateMsg,
-                            details: {
-                              exitCode,
-                              logs: recentLogs.slice(-2000) // cap payload size
-                            }
-                        };
-                        ws.send(JSON.stringify(errPayload));
-                    }
-                } catch (error) { void error; /* ignore */ }
-
-                throw new Error(stateMsg);
-            }
-        } catch (inspectError) {
-            // If the error was already re-thrown above with enriched context it will be caught below.
-            session.isAttaching = false;
-            throw new Error(`Failed to inspect container state before attach: ${inspectError instanceof Error ? inspectError.message : String(inspectError)}`);
-        }
-
-        const execOptions: DockerExecCreateOptions = {
-            AttachStdin: true,
-            AttachStdout: true,
-            AttachStderr: true,
-            Cmd: ['/bin/bash', '/scripts/restricted-shell.sh'],
-            Env: [
-                'TERM=xterm-256color',
-                'COLORTERM=truecolor',
-                'LANG=en_US.UTF-8',
-                'LC_ALL=en_US.UTF-8',
-                'LC_CTYPE=en_US.UTF-8',
-                'CLICOLOR=1',
-                'PS1=$ ',
-                'LC_TERMINAL=xterm-256color',
-                'LC_TERMINAL_VERSION=3.4.0'
-            ],
-            Tty: true,
-        };
-
-        // Attempt to execute the command inside the container
-        const exec = await session.container.exec(execOptions);
-        session.execInstance = exec;
-
-        const streamOpts = { hijack: true, stdin: true };
-        containerStream = await exec.start(streamOpts) as stream.Duplex;
-
-        session.stdinStream = containerStream;
-        session.stdoutStream = containerStream;
-
-        log(`Attached stream to container ${session.container.id} for session ${session.sessionId}`);
-        session.isAttaching = false;
-
-        // Send "connected" status message AFTER streams are attached but BEFORE piping starts
-        try {
-            if (ws.readyState === WebSocket.OPEN) {
-                const connectedMsg: ServerStatusMessage = { type: "status", payload: "connected" };
-                log(`[attachToContainer] Sending 'connected' status to session ${session.sessionId}`); // Log before sending
-                ws.send(JSON.stringify(connectedMsg));
-            }
-        } catch (sendError) {
-            logError(`Error sending 'connected' status to ${session.sessionId}: ${sendError}`);
-            await terminateSession(session.sessionId, "Failed to confirm connection status", false);
-            return;
-        }
-        
-        // Add a small delay before piping to allow client to process "connected" status
-        await new Promise(resolve => setTimeout(resolve, 50)); 
-
-        // Now start piping after sending connected status and adding delay
-        pipeStreams(ws, containerStream);
-
-        ws.on("close", async (code, reason) => {
-            log(
-                `WebSocket closed for session ${session.sessionId}. Code: ${code}, Reason: ${reason && reason.length > 0 ? reason.toString() : "No reason given"}. isAttaching: ${session.isAttaching}`,
-            );
-            // If attachment was in progress and ws closed, it's an abrupt client disconnect
-            if (session.isAttaching) {
-                log(`Client ${session.sessionId} disconnected during attachment process.`);
-            }
-            // Ensure session is cleaned up. terminateSession handles sending 'disconnected' if ws is still open,
-            // but here ws is already closing/closed.
-            await cleanupSession(session.sessionId); // Changed from terminateSession to cleanupSession
-        });
-
-        ws.on("error", async (error: Error) => {
-            logError(`WebSocket stream error for session ${session.sessionId}: ${error.message}`);
-            if (containerStream) safeCloseWsStream(containerStream);
-            cleanupSession(session.sessionId);
-        });
-
-        containerStream.on('close', () => {
-            log(`Container stream closed for session ${session.sessionId}`);
-            safeCloseWsStream(wsStream);
-            cleanupSession(session.sessionId);
-        });
-        containerStream.on('error', (err) => {
-            logError(`Container stream error for session ${session.sessionId}: ${err.message}`);
-            safeCloseWsStream(wsStream);
-            cleanupSession(session.sessionId);
-        });
-
-    } catch (error) {
-        session.isAttaching = false;
-        logError(`Failed to attach to container for session ${session.sessionId}: ${error instanceof Error ? error.message : String(error)}`);
-        safeCloseWsStream(wsStream);
-        if (containerStream) {
-            safeCloseWsStream(containerStream);
-        }
-
-        // Attempt to send final error status if not already sent
-        try {
-            if (ws.readyState === WebSocket.OPEN) {
-                const finalErr: ServerStatusMessage = { type: "status", payload: "error", reason: (error as Error).message };
-                ws.send(JSON.stringify(finalErr));
-            }
-        } catch (error) { void error; /* ignore */ }
-
-        cleanupSession(session.sessionId);
-        if (ws.readyState === WebSocket.OPEN) {
-           ws.close(1011, 'Failed to attach to container');
-        }
+    // If we're re-attaching during a session resume we must close the old
+    // streams first; otherwise Docker will keep the previous hijacked
+    // connection open which steals STDIN and leaves the new attachment
+    // read-only.
+    if (session.stdinStream && !session.stdinStream.destroyed) {
+      safeCloseWsStream(session.stdinStream);
     }
+    if (session.stdoutStream && session.stdoutStream !== session.stdinStream && !session.stdoutStream.destroyed) {
+      safeCloseWsStream(session.stdoutStream as unknown as Duplex);
+    }
+
+    // Attach directly to the container's main TTY so that the same shell
+    // process stays alive across WebSocket reconnects. Docker allows
+    // multiple attachments to a running container provided TTY=true.
+
+    let containerStream = await session.container.attach({
+        stream: true,
+        stdin: true,
+        stdout: true,
+        stderr: true,
+        hijack: true,
+    }) as stream.Duplex;
+
+    session.stdinStream = containerStream;
+    session.stdoutStream = containerStream;
+    // We are no longer using per-resume exec instances
+    session.execInstance = undefined;
+    // Reset per-attach debug flag so we can log the first keystroke again
+    session._debugLoggedFirstKey = false;
+
+    log(`Attached stream to container ${session.container.id} for session ${session.sessionId}`);
+    session.isAttaching = false;
+
+    // Send "connected" status message AFTER streams are attached but BEFORE piping starts
+    try {
+        if (ws.readyState === WebSocket.OPEN) {
+            const connectedMsg: ServerStatusMessage = { type: "status", payload: "connected" };
+            log(`[attachToContainer] Sending 'connected' status to session ${session.sessionId}`);
+            ws.send(JSON.stringify(connectedMsg));
+
+            // Immediately follow with a hello that contains the sessionId for the client to log/store
+            const helloMsg = { type: "hello", sessionId: session.sessionId };
+            ws.send(JSON.stringify(helloMsg));
+        }
+    } catch (sendError) {
+        logError(`Error sending 'connected' status to ${session.sessionId}: ${sendError}`);
+        await terminateSession(session.sessionId, "Failed to confirm connection status", false);
+        return;
+    }
+    
+    // Add a small delay before piping to allow client to process "connected" status
+    await new Promise(resolve => setTimeout(resolve, 50)); 
+
+    // Now start piping after sending connected status and adding delay
+    pipeStreams(ws, containerStream, session, true);
+
+    // NOTE: We no longer inject an extra "\n" after attach because it caused
+    // double prompts both on first load and on every resume. The restricted
+    // shell prints its banner and prompt unconditionally, so an extra newline
+    // is unnecessary and confusing.
+
+    ws.on("close", async (code, reason) => {
+        log(
+            `WebSocket closed for session ${session.sessionId}. Code: ${code}, Reason: ${reason && reason.length > 0 ? reason.toString() : "No reason given"}. isAttaching: ${session.isAttaching}`,
+        );
+        // If attachment was in progress and ws closed, it's an abrupt client disconnect
+        if (session.isAttaching) {
+            log(`Client ${session.sessionId} disconnected during attachment process.`);
+        }
+        // Ensure session is cleaned up. terminateSession handles sending 'disconnected' if ws is still open,
+        // but here ws is already closing/closed.
+        scheduleOrphanCleanup(session);
+    });
+
+    ws.on("error", async (error: Error) => {
+        logError(`WebSocket stream error for session ${session.sessionId}: ${error.message}`);
+        if (containerStream) safeCloseWsStream(containerStream);
+        if (session.authenticated) {
+            scheduleOrphanCleanup(session);
+        } else {
+            cleanupSession(session.sessionId);
+        }
+    });
+
+    containerStream.on('close', () => {
+        log(`Container stream closed for session ${session.sessionId}`);
+        safeCloseWsStream(containerStream);
+        if (session.authenticated) {
+            scheduleOrphanCleanup(session);
+        } else {
+            cleanupSession(session.sessionId);
+        }
+    });
+    containerStream.on('error', (err) => {
+        logError(`Container stream error for session ${session.sessionId}: ${err.message}`);
+        safeCloseWsStream(containerStream);
+        if (session.authenticated) {
+            scheduleOrphanCleanup(session);
+        } else {
+            cleanupSession(session.sessionId);
+        }
+    });
 }
 
 async function cleanupSession(sessionId: string) {
@@ -1207,26 +1289,39 @@ async function cleanupSession(sessionId: string) {
   log(`Session ${sessionId} removed. Active sessions: ${sessions.size}`);
 }
 
+/**
+ * Start a timer that will fully terminate the session after RESUME_GRACE_MS
+ * unless the session is resumed. If a timer already exists it is cleared.
+ */
+function scheduleOrphanCleanup(session: ClientSession): void {
+  if (session.orphanTimer) clearTimeout(session.orphanTimer);
+  session.orphanTimer = setTimeout(() => {
+    log(`Orphan timer fired – cleaning session ${session.sessionId}`);
+    terminateSession(session.sessionId, 'Session resume window expired');
+  }, RESUME_GRACE_MS);
+  log(`Scheduled orphan cleanup for session ${session.sessionId} in ${RESUME_GRACE_MS}ms`);
+}
+
 // --- Message Handlers ---
 
 function handleExecResize(
   session: ClientSession,
   data: { cols: number; rows: number },
 ): void {
+  const { cols, rows } = data;
+  log(`Resizing TTY for session ${session.sessionId} to ${cols}x${rows}`);
   if (session.execInstance) {
-    const { cols, rows } = data;
-    log(`Resizing TTY for session ${session.sessionId} to ${cols}x${rows}`);
     session.execInstance
       .resize({ h: rows, w: cols })
-      .catch((resizeError: Error) => {
-        logError(
-          `Error resizing TTY for session ${session.sessionId}: ${resizeError.message}`,
-        );
+      .catch((error: Error) => {
+        logError(`Error resizing exec TTY for session ${session.sessionId}: ${error.message}`);
       });
-  } else {
-    logError(
-      `Cannot resize TTY: execInstance not found for session ${session.sessionId}`,
-    );
+  } else if (session.container) {
+    session.container
+      .resize({ h: rows, w: cols })
+      .catch((error: Error) => {
+        logError(`Container resize failed for session ${session.sessionId}: ${error.message}`);
+      });
   }
 }
 
@@ -1288,7 +1383,17 @@ function handleMessage(session: ClientSession, message: Buffer) {
 
         // Direct pass-through for raw input (both regular characters and control keys)
         if (session.stdinStream && !session.stdinStream.destroyed) {
-            // Remove verbose logging for every keystroke
+            // Debug: log the very first keystroke we receive after an attach to
+            // confirm that STDIN is reaching the server side. We store a flag
+            // on the session so we only log once per attachment.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (!(session as any)._debugLoggedFirstKey) {
+              const preview = message.subarray(0, 20).toString('utf8');
+              log(`First client input after attach for session ${session.sessionId}: ${JSON.stringify(preview)}`);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (session as any)._debugLoggedFirstKey = true;
+            }
+
             session.stdinStream.write(message);
         } else {
             // Only log if stream is not available (avoiding noise for normal keypresses)
@@ -1387,4 +1492,144 @@ async function createSecureNetwork(): Promise<void> {
         logError(`Error creating secure network: ${error}`);
         // Continue even if network creation fails - we'll fall back to default
     }
+}
+
+/**
+ * Helper to replace the WebSocket on an existing session when a valid resume
+ * request arrives. Closes the old socket, clears orphan timer, reassigns ws.
+ */
+function takeoverSession(existing: ClientSession, newWs: WebSocket): void {
+  if (existing.ws && existing.ws.readyState === WebSocket.OPEN) {
+    existing.ws.terminate();
+  }
+  if (existing.orphanTimer) {
+    clearTimeout(existing.orphanTimer);
+    existing.orphanTimer = undefined;
+  }
+  existing.ws = newWs;
+  existing.lastActivityTime = Date.now();
+}
+
+function canResumeSession(resumeId: string | null, credentialHash: string): boolean {
+  if (!resumeId || !sessions.has(resumeId)) return false;
+  return sessions.get(resumeId)!.credentialHash === credentialHash;
+}
+
+/**
+ * Attempt to resume a session that was created by a previous server process
+ * by locating a container whose name encodes the sessionId. If successful the
+ * function will create a new ClientSession entry, replay recent logs to the
+ * client WebSocket, attach a fresh exec and return true. If it fails to find a
+ * suitable container or credentials do not match it returns false so that the
+ * caller can continue with the normal new-session flow.
+ */
+async function attemptCrossProcessResume(resumeId: string, incomingCredentialHash: string, ws: WebSocket): Promise<boolean> {
+  try {
+    const containerName = `ably-cli-session-${resumeId}`;
+
+    // Look for a container whose name matches exactly (running or stopped)
+    const containers = await docker.listContainers({
+      all: true,
+      filters: JSON.stringify({ name: [containerName] }),
+    });
+
+    if (containers.length === 0) {
+      return false; // No container to resume
+    }
+
+    const containerInfo = containers[0];
+    const container = docker.getContainer(containerInfo.Id);
+
+    // Inspect to get environment for credential validation & timestamps
+    const inspect = await container.inspect();
+    const envArray: string[] = inspect.Config?.Env ?? [];
+
+    const envMap: Record<string, string> = {};
+    for (const kv of envArray) {
+      const idx = kv.indexOf('=');
+      if (idx !== -1) {
+        envMap[kv.slice(0, idx)] = kv.slice(idx + 1);
+      }
+    }
+
+    const storedApiKey = envMap['ABLY_API_KEY'] ?? '';
+    const storedAccessToken = envMap['ABLY_ACCESS_TOKEN'] ?? '';
+    const containerCredentialHash = computeCredentialHash(storedApiKey, storedAccessToken);
+
+    if (containerCredentialHash !== incomingCredentialHash) {
+      logError(`[${resumeId}] Cross-process resume rejected: credential mismatch`);
+      try {
+        const errMsg: ServerStatusMessage = { type: 'status', payload: 'error', reason: 'Credentials do not match original session' };
+        ws.send(JSON.stringify(errMsg));
+      } catch { /* ignore */ }
+      ws.close(4001, 'Credential mismatch');
+      return true; // We handled the request (rejected)
+    }
+
+    // Build new session object
+    const newSession: ClientSession = {
+      ws,
+      authenticated: true,
+      timeoutId: setTimeout(() => {}, 0),
+      container,
+      execInstance: undefined,
+      stdinStream: undefined,
+      stdoutStream: undefined,
+      sessionId: resumeId,
+      lastActivityTime: Date.now(),
+      // Use container creation time as session creation time fallback
+      creationTime: new Date(inspect.Created).getTime() || Date.now(),
+      isAttaching: false,
+      credentialHash: containerCredentialHash,
+      outputBuffer: [],
+      orphanTimer: undefined,
+    };
+    clearTimeout(newSession.timeoutId);
+
+    sessions.set(resumeId, newSession);
+
+    // Replay recent logs as best-effort (tail OUTPUT_BUFFER_MAX_LINES)
+    try {
+      const logBuff = await container.logs({ stdout: true, stderr: true, tail: OUTPUT_BUFFER_MAX_LINES });
+      const logStr = Buffer.isBuffer(logBuff) ? logBuff.toString('utf8') : String(logBuff);
+      const lines = logStr.split(/\r?\n/);
+      for (const line of lines) {
+        if (line.length === 0) continue;
+        try { ws.send(line); } catch { /* ignore */ }
+        newSession.outputBuffer!.push(line);
+      }
+    } catch (error) {
+      logError(`[${resumeId}] Failed to fetch logs for replay: ${error}`);
+    }
+
+    // Attach a fresh exec so that stdin/stdout continue
+    try {
+      await attachToContainer(newSession, ws);
+      ws.on('message', (msg) => handleMessage(newSession, msg as Buffer));
+      log(`[${resumeId}] Message handler attached after cross-process resume`);
+    } catch (error) {
+      logError(`[${resumeId}] attachToContainer failed during cross-process resume: ${error}`);
+      await terminateSession(resumeId, 'Failed cross-process resume');
+      return true; // handled (but failed)
+    }
+
+    return true;
+  } catch (error) {
+    logError(`[${resumeId}] Error during cross-process resume attempt: ${error}`);
+    return false; // Fall back to fresh session
+  }
+}
+
+export const __testHooks = { scheduleOrphanCleanup, sessions, takeoverSession, canResumeSession };
+
+// Additional helper ONLY for unit tests – allows tests to safely delete a
+// session entry from the map (e.g. placeholder) without performing any socket
+// or container cleanup logic.
+// Not used in production code.
+export function __deleteSessionForTest(id: string): void {
+  if (sessions.has(id)) {
+    const s = sessions.get(id)!;
+    clearTimeout(s.timeoutId);
+    sessions.delete(id);
+  }
 }

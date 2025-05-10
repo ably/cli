@@ -46,6 +46,12 @@ function App() {
     hasInitialCredentials,
   );
 
+  // Store the latest sessionId globally for E2E tests / debugging
+  const handleSessionId = useCallback((id: string) => {
+    console.log(`[App] Received sessionId: ${id}`);
+    (window as any)._sessionId = id; // Expose for Playwright
+  }, []);
+
   const handleConnectionChange = useCallback((status: TermStatus) => {
     console.log("Connection Status:", status);
     setConnectionStatus(status);
@@ -87,10 +93,12 @@ function App() {
         ablyApiKey={apiKey}
         onConnectionStatusChange={handleConnectionChange}
         onSessionEnd={handleSessionEnd}
+        onSessionId={handleSessionId}
         websocketUrl={currentWebsocketUrl}
+        resumeOnReload={true}
       />
     ) : null
-  ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, currentWebsocketUrl]);
+  ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
 
   return (
     <div className="App fixed">

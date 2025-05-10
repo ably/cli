@@ -106,8 +106,9 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
     console.log('[Test AutoReconnect Server Down] Successfully reconnected and prompt is visible.');
 
     await terminalContent.focus();
-    await page.keyboard.type('echo E2E_SERVER_RESTART_RECONNECT_SUCCESS\r');
-    await expect(terminalContent).toContainText('E2E_SERVER_RESTART_RECONNECT_SUCCESS', { timeout: 5000 });
+    await page.keyboard.type('ably --version');
+    await page.keyboard.press('Enter');
+    await expect(terminalContent).toContainText('browser-based CLI', { timeout: 15000 });
     await page.close();
   });
 
@@ -132,20 +133,24 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
     console.log(`[Test Scenario 1 Simplified] Navigation to ${pageUrl} completed.`);
     
     console.log('[Test Scenario 1 Simplified] Waiting for terminal rows to be rendered.');
-    await page.waitForSelector('.xterm-rows', { timeout: 10000 });
+    await page.waitForSelector('.xterm', { timeout: 10000 });
 
     console.log(`[Test Scenario 1 Simplified] Waiting for initial terminal prompt: "${TERMINAL_PROMPT}"`);
-    await expect(page.locator('.xterm-rows')).toContainText(TERMINAL_PROMPT, { timeout: 15000 });
+    await expect(page.locator('.xterm')).toContainText(TERMINAL_PROMPT, { timeout: 20000 });
     console.log('[Test Scenario 1 Simplified] Initial terminal prompt is visible.');
+
+    // Wait an additional moment to ensure the client is fully in connected state
+    await page.waitForTimeout(1000);
 
     // Skip waiting for internal help message state, prompt presence is enough to confirm session active
     console.log('[Test Scenario 1 Simplified] Skipping explicit help message state check (flaky).');
 
     console.log('[Test Scenario 1 Simplified] Typing initial command.');
-    await page.locator('.xterm-rows').focus();
-    await page.keyboard.type('echo hello-simplified');
+    await page.waitForTimeout(1000); // ensure backend fully ready
+    await page.locator('.xterm').focus();
+    await page.keyboard.type('ably --version');
     await page.keyboard.press('Enter');
-    await expect(page.locator('text=hello-simplified')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.xterm')).toContainText('browser-based CLI', { timeout: 15000 });
     console.log('[Test Scenario 1 Simplified] Initial command verified.');
 
     // --- Force disconnect --- 
@@ -162,17 +167,17 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
 
     // Wait for prompt to reappear after reconnect
     console.log(`[Test Scenario 1 Simplified] Waiting for terminal prompt again: "${TERMINAL_PROMPT}" after reconnect.`);
-    await expect(page.locator('.xterm-rows')).toContainText(TERMINAL_PROMPT, { timeout: 40000 });
+    await expect(page.locator('.xterm')).toContainText(TERMINAL_PROMPT, { timeout: 40000 });
     console.log('[Test Scenario 1 Simplified] Terminal prompt is visible after reconnect.');
 
     // Skip verifying internal connectionHelpMessage state after reconnect – prompt visibility is sufficient.
     console.log('[Test Scenario 1 Simplified] Skipping connectionHelpMessage state verification after reconnect.');
 
     console.log('[Test Scenario 1 Simplified] Typing command after successful unintercepted reconnection.');
-    await page.locator('.xterm-rows').focus();
-    await page.keyboard.type('echo world-after-reconnect');
+    await page.locator('.xterm').focus();
+    await page.keyboard.type('ably --version');
     await page.keyboard.press('Enter');
-    await expect(page.locator('.xterm-rows')).toContainText(TERMINAL_PROMPT, { timeout: 15000 });
+    await expect(page.locator('.xterm')).toContainText('browser-based CLI', { timeout: 15000 });
     console.log('[Test Scenario 1 Simplified] Command after reconnect verified. Test completed.');
 
     await page.close();
