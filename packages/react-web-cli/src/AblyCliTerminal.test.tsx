@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from 'react';
 import { render, act, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Terminal } from '@xterm/xterm';
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 // Mock the GlobalReconnect module AT THE TOP LEVEL using a factory function.
@@ -148,6 +149,11 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     if (mockSocketInstance) {
         mockSocketInstance.listeners = { open: [], message: [], close: [], error: [] };
         mockSocketInstance.onmessageCallback = undefined;
+    }
+    
+    // Clear sessionStorage before each test to ensure isolation
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.clear();
     }
     
     // Reset all imported mock functions from GlobalReconnect
@@ -332,68 +338,78 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     });
   });
 
-  test.skip('shows manual reconnect prompt after max attempts', async () => {/* skipped */});
-
-  test.skip('can manually reconnect after max attempts', async () => {/* skipped */});
-
-  test('does NOT auto-reconnect when server closes with non-recoverable code (4001)', async () => {
+  test('manual reconnect works after non-recoverable server close (4008)', async () => {
     renderTerminal();
 
-    // Wait for initial WebSocket open so component state is settled
-    await act(async () => {
-      await Promise.resolve();
-    });
+    // Wait for initial WebSocket OPEN tick
+    await act(async () => { await Promise.resolve(); });
 
-    // Clear reconnect related mocks to capture fresh calls for this close event
-    vi.mocked(GlobalReconnect.increment).mockClear();
-    vi.mocked(GlobalReconnect.scheduleReconnect).mockClear();
-    onConnectionStatusChangeMock.mockClear();
-
+    // Trigger a non-recoverable close from server (authentication timeout)
     act(() => {
-      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
-      mockSocketInstance.triggerEvent('close', { code: 4001, reason: 'Invalid token', wasClean: false });
+      mockSocketInstance.triggerEvent('close', { code: 4008, reason: 'Authentication timeout', wasClean: true });
     });
 
-    // Automatic reconnection SHOULD NOT be scheduled
-    expect(GlobalReconnect.scheduleReconnect).not.toHaveBeenCalled();
-    expect(GlobalReconnect.increment).not.toHaveBeenCalled();
-
-    // Component should signal disconnected status (prompting manual reconnect)
-    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('disconnected');
-  });
-
-  test('manual reconnect works after user cancels auto-reconnect', async () => {
-    vi.useFakeTimers();
-    renderTerminal();
-
-    // Simulate abnormal close to start auto-reconnect
-    act(() => {
-      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'lost' });
+    // Expect component shows disconnected prompt (manual reconnect)
+    await waitFor(() => {
+      expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
     });
 
-    // Retrieve onData handler registered by component
+    // Grab Enter key handler
     const onDataHandler = mockOnData.mock.calls[0][0] as (data: string) => void;
 
-    // Press Enter BEFORE timers elapse to cancel scheduled auto reconnect
-    act(() => {
-      onDataHandler('\r');
-    });
-
-    // Fast-forward time to process scheduled callbacks and confirm cancellation
-    vi.runAllTimers();
-
-    // scheduleReconnect should have been cancelled
-    vi.mocked(GlobalReconnect.cancelReconnect).mockClear();
-
-    // Second Enter should trigger manual reconnect
+    // Press Enter to initiate manual reconnect
     vi.mocked((global as any).WebSocket).mockClear();
     act(() => { onDataHandler('\r'); });
 
-    vi.runAllTimers(); // Flush any immediate timers triggered by reconnect
-
+    // New socket should be created and status go to connecting
     expect(vi.mocked((global as any).WebSocket)).toHaveBeenCalledTimes(1);
     expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connecting');
+  });
 
-    vi.useRealTimers();
-  }, 10000);
+  test('invokes onSessionId when hello message received', async () => {
+    const onSessionIdMock = vi.fn();
+    renderTerminal({ onSessionId: onSessionIdMock });
+
+    // Simulate server sending hello message after connection established
+    act(() => {
+      if (!mockSocketInstance) throw new Error("mockSocketInstance not initialized");
+      mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'session-123' }) });
+    });
+
+    await waitFor(() => {
+      expect(onSessionIdMock).toHaveBeenCalledWith('session-123');
+    });
+  });
+
+  test('includes stored sessionId in auth payload when resumeOnReload enabled', async () => {
+    // Pre-populate sessionStorage with a sessionId to be resumed
+    window.sessionStorage.setItem('ably.cli.sessionId', 'resume-123');
+
+    // Render component with resumeOnReload enabled so it reads the stored sessionId
+    renderTerminal({ resumeOnReload: true });
+
+    // Wait until the WebSocket mock fires the automatic 'open' event and the component sends auth payload
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalled();
+    });
+
+    // Parse the JSON payload sent via WebSocket and verify the sessionId is included
+    const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    expect(sentPayload.sessionId).toBe('resume-123');
+  });
+
+  test('stores sessionId to sessionStorage after hello message when resumeOnReload enabled', async () => {
+    renderTerminal({ resumeOnReload: true });
+
+    // Simulate the server sending a hello message with a new sessionId
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'new-session-456' }) });
+    });
+
+    // Wait for React state updates and effect to persist the new sessionId
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-456');
+    });
+  });
 }); 

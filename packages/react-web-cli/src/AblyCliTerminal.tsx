@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -28,6 +29,16 @@ export interface AblyCliTerminalProps {
   initialCommand?: string;
   onConnectionStatusChange?: (status: ConnectionStatus) => void;
   onSessionEnd?: (reason: string) => void;
+  /**
+   * Called once when the server sends the initial "hello" message containing the sessionId.
+   * This is useful for embedding apps that want to display or persist the current session.
+   */
+  onSessionId?: (sessionId: string) => void;
+  /**
+   * When true, the component stores the current sessionId in localStorage on
+   * page unload and attempts to resume that session on the next mount.
+   */
+  resumeOnReload?: boolean;
 }
 
 interface ConnectionStatusHeaderProps {
@@ -74,12 +85,24 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   initialCommand,
   onConnectionStatusChange,
   onSessionEnd,
+  onSessionId,
+  resumeOnReload,
 }) => {
   const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [connectionHelpMessage, setConnectionHelpMessage] = useState('');
   const [reconnectAttemptMessage, setReconnectAttemptMessage] = useState('');
   const [countdownMessage, setCountdownMessage] = useState('');
+
+  // Track the current sessionId received from the server (if any)
+  const [sessionId, setSessionId] = useState<string | null>(
+    () => {
+      if (resumeOnReload && typeof window !== 'undefined') {
+        return window.sessionStorage.getItem('ably.cli.sessionId');
+      }
+      return null;
+    }
+  );
 
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [showManualReconnectPrompt, setShowManualReconnectPrompt] = useState(false);
@@ -94,6 +117,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   // Ref to track manual reconnect prompt visibility inside stable event handlers
   const showManualReconnectPromptRef = useRef<boolean>(false);
+
+  // Keep the ref in sync with React state so key handlers can rely on it
+  useEffect(() => {
+    showManualReconnectPromptRef.current = showManualReconnectPrompt;
+  }, [showManualReconnectPrompt]);
 
   const updateConnectionStatusAndExpose = useCallback((status: ConnectionStatus) => {
     console.log(`[AblyCLITerminal] updateConnectionStatusAndExpose called with: ${status}`);
@@ -199,20 +227,30 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         setTimeout(() => { term.current?.write(`${initialCommand}\r`); }, 500);
       }
     }
-    const authPayload: any = { environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } };
-    if (ablyAccessToken) authPayload.accessToken = ablyAccessToken;
-    else if (ablyApiKey) authPayload.apiKey = ablyApiKey;
+    const payload: any = {
+      environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } };
+    if (ablyAccessToken) payload.accessToken = ablyAccessToken;
+    else if (ablyApiKey) payload.apiKey = ablyApiKey;
+    if (sessionId) payload.sessionId = sessionId;
     
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(authPayload));
+      socketRef.current.send(JSON.stringify(payload));
     }
-  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer]);
+
+    // persistence handled by dedicated useEffect
+  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
       if (typeof event.data === 'string') {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
+            console.log(`[AblyCLITerminal] Received hello. sessionId=${msg.sessionId}`);
+            setSessionId(msg.sessionId);
+            if (onSessionId) onSessionId(msg.sessionId);
+            return;
+          }
           if (msg.type === 'status') {
             console.log(`[AblyCLITerminal] Received server status message: ${msg.payload}`);
             // Server-driven status might override client, or inform it.
@@ -226,7 +264,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             }
             return;
           }
-        } catch (e) { /* Not JSON, likely PTY data */ }
+        } catch (_e) { /* Not JSON, likely PTY data */ }
       }
       
       let dataStr: string;
@@ -238,7 +276,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       if (term.current) term.current.write(dataStr);
       handlePtyData(dataStr); // Pass PTY data for prompt detection
 
-    } catch (error) { console.error('[AblyCLITerminal] Error processing message:', error); }
+    } catch (_e) { console.error('[AblyCLITerminal] Error processing message:', _e); }
   }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose]);
 
   const handleWebSocketError = useCallback((event: Event) => {
@@ -437,6 +475,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       };
     }
   }, [socket, handleWebSocketOpen, handleWebSocketMessage, handleWebSocketClose, handleWebSocketError]);
+
+  // Persist sessionId to localStorage whenever it changes (if enabled)
+  useEffect(() => {
+    if (!resumeOnReload || typeof window === 'undefined') return;
+    if (sessionId) {
+      window.sessionStorage.setItem('ably.cli.sessionId', sessionId);
+    } else {
+      window.sessionStorage.removeItem('ably.cli.sessionId');
+    }
+  }, [sessionId, resumeOnReload]);
 
   return (
     <div 

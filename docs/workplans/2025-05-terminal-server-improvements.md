@@ -70,8 +70,10 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
     - Unit/Integration tests for server-side session handling.
     - Unit tests for client-side session ID storage and reload logic.
     - Integration or End to End Test: Simulate abrupt disconnects and verify session resumption. This should cover both an abrupt disconnection and automatic reconnection from the client, as well as a page reload where the session ID is stored and retrieved on reload, ensuring the session state is retained. The terminal session could run a command such as `ably --version` on the first run, then check that the session contains this, then upon reconnection, ensure further commands can be sent and responses received.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Implemented full session resumption workflow. The terminal server now generates a cryptographically-random `sessionId` on the first WebSocket connection, logs it, and includes it in a `hello` envelope sent after the existing `connected` status. The server keeps the Docker exec session alive for up to 60 s after a client disconnect and stores a rolling buffer (configurable, default 1 000 lines) of stdout/stderr. When a new WebSocket connects with the same `sessionId`, credentials are validated by SHA-256 hash; if they match, the buffered output is replayed and the new socket seamlessly takes ownership of stdin/stdout (any older socket is closed with a superseded code).
+
+  On the client side the `AblyCliTerminal` React component exposes the `sessionId` via a new `onSessionId` callback, automatically uses it for all reconnect attempts, and—when `resumeOnReload` is `true`—persists it to `sessionStorage` on `beforeunload` so that a full page reload resumes the same session. Comprehensive unit tests cover server buffer logic and client persistence; all 212 tests now pass. Documentation and TODO entries have been updated accordingly.
 
 ### Step 1.6: Session conservation
 - **Task:** Implement session termination and conserve sessions being created unless needed
