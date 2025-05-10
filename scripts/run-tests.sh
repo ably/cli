@@ -27,6 +27,31 @@ EXCLUDE_OPTION="--exclude 'test/e2e/web-cli/**/*.test.ts'"
 TEST_PATTERN=""
 OTHER_ARGS=()
 
+# Support --filter <pattern> as an alias for Mocha --grep <pattern>
+GREP_PATTERN=""
+
+# Scan for --filter flag and capture its value, remove from ARGS
+PROCESSED_ARGS=()
+skip_next=false
+for arg in "${ARGS[@]}"; do
+  if $skip_next; then
+    GREP_PATTERN="$arg"
+    skip_next=false
+    continue
+  fi
+
+  if [[ "$arg" == "--filter" ]]; then
+    skip_next=true
+    continue
+  fi
+  PROCESSED_ARGS+=("$arg")
+done
+
+# Replace original ARGS with processed ones (without --filter)
+ARGS=("${PROCESSED_ARGS[@]}")
+
+# If GREP_PATTERN set, append to OTHER_ARGS later as --grep
+
 # First pass: Look for specific test files or patterns that aren't the default pattern
 for arg in "${ARGS[@]}"; do
   # Check if this looks like a specific test file or non-default pattern
@@ -60,6 +85,16 @@ else
       OTHER_ARGS+=("$arg")
     fi
   done
+fi
+
+# If a --filter was provided, convert to Mocha --grep flag
+if [[ -n "$GREP_PATTERN" ]]; then
+  OTHER_ARGS+=("--grep" "$GREP_PATTERN")
+fi
+
+# If no explicit TEST_PATTERN selected, default to all tests pattern
+if [[ -z "$TEST_PATTERN" ]]; then
+  TEST_PATTERN="test/**/*.test.ts"
 fi
 
 if $USE_PLAYWRIGHT; then
