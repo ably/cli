@@ -24,13 +24,18 @@ vi.mock('./global-reconnect', () => ({
   setCountdownCallback: vi.fn(),
 }));
 
-// Mock terminal-box
-const mockDrawBox = vi.fn();
-const mockClearBox = vi.fn();
-const mockUpdateLine = vi.fn();
-const mockUpdateSpinner = vi.fn(); // Though not directly tested by plan, good to have if used by box
+// --- Mock terminal-box -------------------------------------------------
+// Because `vi.mock` calls are hoisted, we must **declare** our stub variables
+// first (with `let`) and *assign* them inside the factory. Otherwise the
+// factory executes before the `const` initialisation and we hit a TDZ error.
+
+let mockDrawBox: ReturnType<typeof vi.fn>;
+let mockClearBox: ReturnType<typeof vi.fn>;
+let mockUpdateLine: ReturnType<typeof vi.fn>;
+let mockUpdateSpinner: ReturnType<typeof vi.fn>;
+
 const mockBoxColour = {
-  reset: '\x1b[0m', // Use actual values if they affect logic, otherwise empty strings are fine
+  reset: '\x1b[0m',
   bold: '\x1b[1m',
   dim: '\x1b[2m',
   red: '\x1b[31m',
@@ -39,17 +44,23 @@ const mockBoxColour = {
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
   cyan: '\x1b[36m',
-};
+} as const;
 
 vi.mock('./terminal-box', async (importOriginal) => {
+  // Assign the stubs *inside* the factory to avoid hoisting issues.
+  mockDrawBox = vi.fn();
+  mockClearBox = vi.fn();
+  mockUpdateLine = vi.fn();
+  mockUpdateSpinner = vi.fn();
+
   const actual = await importOriginal() as any;
   return {
-    ...actual, // Preserve other exports like BOX if they exist and are used by other tests (unlikely here)
+    ...actual,
     drawBox: mockDrawBox,
     clearBox: mockClearBox,
     updateLine: mockUpdateLine,
     updateSpinner: mockUpdateSpinner,
-    colour: mockBoxColour, // Export our mock colours
+    colour: mockBoxColour,
   };
 });
 
