@@ -560,4 +560,17 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-456');
     });
   });
+
+  test('includes both apiKey and accessToken in auth payload when both provided', async () => {
+    renderTerminal({ ablyApiKey: 'key123', ablyAccessToken: 'tokenXYZ' });
+
+    // Wait until the WebSocket mock fires the automatic 'open' event and the component sends auth payload
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalled();
+    });
+
+    const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    expect(sentPayload.apiKey).toBe('key123');
+    expect(sentPayload.accessToken).toBe('tokenXYZ');
+  });
 }); 

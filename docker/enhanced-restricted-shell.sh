@@ -114,9 +114,10 @@ check_injection() {
 }
 
 # --- Credential validation ---
-# The Ably CLI can authenticate with EITHER an API key OR an access token.
-# Historically we required both env vars which prevented token-only sessions.
-# We now accept whichever credential is supplied and validate its format.
+# The Ably CLI requires an **API key** for data-plane operations. A Control-API
+# **Access Token** is optional and only needed for commands that interact with the
+# Control plane (e.g. accounts, apps, keys).  Anonymous access is **not**
+# supported in the production terminal.
 
 # Helper to check API key format only when variable is non-empty
 validate_api_key() {
@@ -128,21 +129,19 @@ validate_api_key() {
   fi
 }
 
-# 1. Both credentials missing → hard error
-if [[ -z "$ABLY_API_KEY" && -z "$ABLY_ACCESS_TOKEN" ]]; then
-  echo -e "\033[31mError: Neither ABLY_API_KEY nor ABLY_ACCESS_TOKEN is set.\033[0m"
-  echo "Please provide at least one credential to use the Ably CLI."
+# 1. API key missing → hard error
+if [[ -z "$ABLY_API_KEY" ]]; then
+  echo -e "\033[31mError: ABLY_API_KEY is not set.\033[0m"
+  echo "An Ably API key is required for the web terminal."
   exit 1
 fi
 
-# 2. API key provided → ensure format is valid
-if [[ -n "$ABLY_API_KEY" ]]; then
-  validate_api_key "$ABLY_API_KEY"
-fi
+# 2. Validate API key format
+validate_api_key "$ABLY_API_KEY"
 
-# 3. Access token not provided (and no key) → warn but allow; some commands may require explicit --token flag
+# 3. Access token missing → just warn; some Control-API commands will fail without it
 if [[ -z "$ABLY_ACCESS_TOKEN" ]]; then
-  echo -e "\033[33mWarning: ABLY_ACCESS_TOKEN is not set; commands that require token-based auth may fail unless you provide --token flag.\033[0m"
+  echo -e "\033[33mWarning: ABLY_ACCESS_TOKEN is not set; Control-API commands may fail unless you provide one.\033[0m"
 fi
 
 # Read commands in a loop with proper handling
@@ -219,12 +218,21 @@ while true; do
             printf "Exiting Ably CLI shell.\n"
             break
             ;;
+        clear)
+            # Clear the screen – users expect this in a terminal.
+            # Ignore any arguments to avoid injection risk.
+            if [ -n "$rest_of_line" ]; then
+                printf "${RED}Error: 'clear' takes no arguments.${RESET}\n"
+            else
+                clear
+            fi
+            ;;
         "")
             # Handle empty input (just pressing Enter)
             ;;
         *)
             # Show a clear error for invalid commands
-            printf "${RED}Error: Only commands \"ably\" and \"exit\" are allowed.${RESET}\n"
+            printf "${RED}Error: Only commands \"ably\", \"clear\" and \"exit\" are allowed.${RESET}\n"
             ;;
     esac
 done
