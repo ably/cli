@@ -6,7 +6,7 @@
 // Global state
 let attempts = 0;
 let isCancelled = false;
-const maxAttempts = 15;
+let maxAttempts = 15;
 let remainingTimeMs = 0;
 let countdownTimer: NodeJS.Timeout | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
@@ -160,4 +160,9 @@ export function scheduleReconnect(reconnectCallback: () => void, url: string): v
     console.log(`[GlobalReconnect] Attempting connection to ${url}, attempt #${attempts + 1}`);
     reconnectCallback();
   }, delay);
+}
+
+// Allow overriding from outside (e.g., React prop)
+export function setMaxAttempts(value: number): void {
+  maxAttempts = value > 0 ? value : 1;
 } 
