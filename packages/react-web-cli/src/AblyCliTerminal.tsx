@@ -299,8 +299,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     const payload: any = {
       environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } };
+    if (ablyApiKey) payload.apiKey = ablyApiKey; // Always required
     if (ablyAccessToken) payload.accessToken = ablyAccessToken;
-    else if (ablyApiKey) payload.apiKey = ablyApiKey;
     if (sessionId) payload.sessionId = sessionId;
     
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {

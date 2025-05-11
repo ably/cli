@@ -10,7 +10,7 @@ A React component for embedding an interactive Ably CLI terminal in web applicat
 ## Features
 
 * Embed a **fully-featured Ably CLI** session (xterm.js) inside any React app.
-* Secure WebSocket connection to the Ably terminal-server using an **API Key or Access Token**.
+* Secure WebSocket connection to the Ably terminal-server using your **API Key** (required) and an optional **Access Token** for Control-API commands.
 * First-class terminal UX: 
   * Terminal-native status messages with ANSI colors
   * Animated spinner while (re)connecting
@@ -41,7 +41,7 @@ pnpm add @ably/react-web-cli
 
 - React 17.0.0 or higher
 - A running instance of the Ably CLI terminal server (provided in the main CLI package)
-- Valid Ably API Key and Access Token
+- Valid Ably API Key (required) and – optionally – an Access Token for Control-API commands
 
 ## Usage
 
@@ -56,9 +56,9 @@ export default function MyTerminal() {
     <div style={{ height: 500 }}>
       <AblyCliTerminal
         websocketUrl="ws://localhost:8080"
-        /* provide either an API-key … */
+        /* required API key … */
         ablyApiKey="YOUR_ABLY_API_KEY"
-        /* …or an Access-Token (JWT) */
+        /* optional Access-Token (Control-plane JWT) */
         // ablyAccessToken="YOUR_ABLY_TOKEN"
         initialCommand="ably --version"
         onConnectionStatusChange={setStatus}
@@ -79,8 +79,8 @@ export default function MyTerminal() {
 | Prop | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | `websocketUrl` | string | ✅ | - | URL of the WebSocket terminal server |
-| `ablyApiKey` | string | ☑️ * | - | Ably API key for authentication |
-| `ablyAccessToken` | string | ☑️ * | - | Ably access token for authentication |
+| `ablyApiKey` | string | ✅ | - | Ably API key (data-plane) **required** |
+| `ablyAccessToken` | string | No | - | Optional Control-API access token |
 | `initialCommand` | string | No | - | Command to run on startup |
 | `onConnectionStatusChange` | function | No | - | Callback when connection status changes |
 | `onSessionId` | function | No | - | Callback when session ID is received |
@@ -88,7 +88,7 @@ export default function MyTerminal() {
 | `maxReconnectAttempts` | number | No | 15 | Maximum reconnection attempts before giving up |
 | `resumeOnReload` | boolean | No | false | Whether to attempt to resume an existing session after page reload |
 
-*\* Provide one credential – omit both if your terminal-server allows anonymous access.
+*\* `ablyApiKey` is mandatory.  `ablyAccessToken` is optional and only needed for Control-API commands (e.g. accounts, apps, keys).
 
 ## Connection States
 
@@ -146,7 +146,7 @@ The terminal server required for this component is provided in the main Ably CLI
 
 - The terminal requires a container for sizing, so make sure the parent element has a defined height and width.
 - The component handles reconnection automatically with exponential backoff.
-- Only `ably` and `exit` commands are available in the terminal by default.
+- Only `ably`, `clear`, and `exit` commands are available in the terminal by default.
 - The terminal supports full xterm.js functionality including colors and Unicode.
 
 ## Example Project
