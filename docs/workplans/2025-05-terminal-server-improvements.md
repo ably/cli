@@ -58,8 +58,8 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 - **Testing:**
     - Unit tests for handling specific disconnect reasons.
     - Playwright tests: Simulate server sending disconnect errors, verify no auto-reconnect occurs, message is displayed, and manual reconnect is prompted.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Implemented non-recoverable disconnect handling. The terminal server now closes the WebSocket with specific codes (4001 invalid token, 4002 inactivity-timeout, 1013 capacity, 4008 protocol/policy) and a reason string. In the React component `AblyCliTerminal.tsx`, these codes are listed in `NON_RECOVERABLE_CLOSE_CODES`; on receipt the client stops automatic reconnection, shows an inline error box with the server-supplied reason, and prompts the user to press ⏎ to reconnect manually. Unit tests and Playwright E2E tests cover invalid-token and capacity scenarios.
 
 ### Step 1.5: Session Resumption (Client & Server)
 - **Task:** Implement session resumption on abrupt disconnects ad page reloeads using a session ID
@@ -83,8 +83,8 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
     - Unit/Integration tests for client-side handling of sessions not being created when the terminal interface is not visible, and the session terminated after 5 minutes of being not visible (hidden tab or drawer closed)
     - Unit tests for client-side handling
     - Playwright tests: Simulate drawer being closed and ensure the terminal session is not started, but then the session automatically starts when the terminal interface becomes visible. Simulate the terminal no longer being visible for 5 minutes, and ensure the session is terminated and the option to start a new session is available and works.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Added `useTerminalVisibility` hook to detect both drawer visibility (IntersectionObserver) and page visibility. `AblyCliTerminal.tsx` now defers initial connection until visible and starts a 5-minute inactivity timer when invisible; on timeout it closes the socket with code 4002 "inactivity-timeout", cancels global reconnect logic, writes a termination message in the terminal, and shows a manual reconnect prompt. Drawer close and tab hide events therefore conserve server resources. Comprehensive unit tests with fake timers and Playwright tests validate no connection while hidden, proper timeout, and manual restart.
 
 ## Phase 2: Enhancing User Experience & Guidance
 
