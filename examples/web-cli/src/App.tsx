@@ -24,12 +24,20 @@ const getWebSocketUrl = () => {
   return DEFAULT_WEBSOCKET_URL;
 };
 
-// Get credentials from Vite environment variables (prefixed with VITE_)
-const envApiKey = import.meta.env.VITE_ABLY_API_KEY;
-const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN;
+// Credentials: query parameters take precedence over env variables
+const urlParamsForCreds = new URLSearchParams(window.location.search);
+const qsApiKey = urlParamsForCreds.get('apikey') || urlParamsForCreds.get('apiKey');
+const qsAccessToken = urlParamsForCreds.get('accessToken') || urlParamsForCreds.get('accesstoken');
 
-// Check if initial credentials were provided via env
-const hasInitialCredentials = Boolean(envApiKey && envAccessToken);
+// Fallback to Vite env vars if query params absent
+const envApiKey = import.meta.env.VITE_ABLY_API_KEY as string | undefined;
+const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN as string | undefined;
+
+const initialApiKey = qsApiKey ?? envApiKey;
+const initialAccessToken = qsAccessToken ?? envAccessToken;
+
+// Determine whether we already have cred inputs (either source)
+const hasInitialCredentials = Boolean(initialApiKey || initialAccessToken);
 
 function App() {
   // Read initial mode from URL, default to fullscreen
@@ -37,8 +45,8 @@ function App() {
 
   type TermStatus = 'initial' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
   const [connectionStatus, setConnectionStatus] = useState<TermStatus>('disconnected');
-  const [apiKey, setApiKey] = useState<string | undefined>(envApiKey);
-  const [accessToken, setAccessToken] = useState<string | undefined>(envAccessToken);
+  const [apiKey, setApiKey] = useState<string | undefined>(initialApiKey);
+  const [accessToken, setAccessToken] = useState<string | undefined>(initialAccessToken);
   const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">(initialMode);
 
   // Remove state vars that cause remounting issues
@@ -96,6 +104,7 @@ function App() {
         onSessionId={handleSessionId}
         websocketUrl={currentWebsocketUrl}
         resumeOnReload={true}
+        maxReconnectAttempts={4} /* In the example, limit reconnection attempts for testing, default is 15 */
       />
     ) : null
   ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);

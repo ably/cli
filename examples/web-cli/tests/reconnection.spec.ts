@@ -1,148 +1,97 @@
 import { test, expect, Page } from '@playwright/test';
 
-// We need to mock WebSocket to simulate disconnections since the test runs against a real server
+/*
+  The web terminal now renders all reconnection messaging directly **inside** the xterm instance
+  rather than overlay HTML elements. The tests have been updated accordingly to interact solely
+  with terminal text and keyboard input.
+*/
+
+// ---------- Helpers to intercept & control WebSocket connections ----------
 test.beforeEach(async ({ page }) => {
-  // Intercept WebSocket connections and expose a method to forcibly close them
   await page.addInitScript(() => {
-    // Store the native WebSocket
     const NativeWebSocket = window.WebSocket;
-    // Store active connections
-    const activeConnections: WebSocket[] = [];
-    
-    // Custom controller to expose to the test
-    (window as any).__wsController = {
-      closeAllConnections: () => {
-        activeConnections.forEach(ws => {
-          // Use a code that will trigger reconnection (not 1000 or 1001)
-          ws.dispatchEvent(new CloseEvent('close', { 
-            code: 1006, 
-            reason: 'Connection closed for testing', 
-            wasClean: false 
-          }));
+    const active: WebSocket[] = [];
+
+    (window as any).__wsCtl = {
+      closeAll: () => {
+        active.forEach(ws => {
+          ws.dispatchEvent(new CloseEvent('close', { code: 1006, reason: 'test', wasClean: false }));
         });
       },
-      getConnectionCount: () => activeConnections.length
+      count: () => active.length,
     };
-    
-    // Create a WebSocket proxy
-    class MockedWebSocket extends NativeWebSocket {
+
+    class InterceptWS extends NativeWebSocket {
       constructor(url: string | URL, protocols?: string | string[]) {
         super(url, protocols);
-        activeConnections.push(this);
-        
-        // Remove from active connections when naturally closed
+        active.push(this);
         this.addEventListener('close', () => {
-          const index = activeConnections.indexOf(this);
-          if (index !== -1) activeConnections.splice(index, 1);
+          const idx = active.indexOf(this);
+          if (idx !== -1) active.splice(idx, 1);
         });
       }
     }
-    
-    // Replace the native WebSocket
-    window.WebSocket = MockedWebSocket;
+
+    window.WebSocket = InterceptWS as unknown as typeof WebSocket;
   });
 });
 
-// Function to get connection count
-async function getConnectionCount(page: Page): Promise<number> {
-  return await page.evaluate(() => (window as any).__wsController.getConnectionCount());
+async function wsCount(page: Page) {
+  return page.evaluate(() => (window as any).__wsCtl.count());
 }
 
-// Function to close all connections
-async function closeAllConnections(page: Page): Promise<void> {
-  await page.evaluate(() => (window as any).__wsController.closeAllConnections());
+async function closeAll(page: Page) {
+  await page.evaluate(() => (window as any).__wsCtl.closeAll());
 }
 
-test('should automatically attempt reconnection after abnormal close', async ({ page, baseURL }) => {
+// ---------- Tests ----------
+
+test('auto-reconnect can be cancelled then manually restarted using Enter key', async ({ page, baseURL }) => {
   await page.goto(baseURL || '/');
-  
-  // Wait for initial connection to be fully established
-  const statusDisplaySelector = '[data-testid="connection-status"]';
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connected', { timeout: 15000 });
-  
-  // Verify initial connection count
-  const initialCount = await getConnectionCount(page);
-  expect(initialCount).toBeGreaterThan(0);
-  
-  // Force connection close
-  await closeAllConnections(page);
-  
-  // The status should change to 'connecting'
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connecting', { timeout: 5000 });
-  
-  // There should be a reconnection attempt message visible
-  const terminalSelector = '.xterm-viewport';
-  await expect(page.locator(terminalSelector)).toContainText('Connection lost. Reconnecting (Attempt 1/15)', { timeout: 5000 });
-  
-  // Check for countdown message
-  await expect(page.locator(terminalSelector)).toContainText('Next attempt in', { timeout: 3000 });
-  
-  // Cancel button should be visible
-  const cancelButtonSelector = 'button:has-text("Cancel Reconnection")';
-  await expect(page.locator(cancelButtonSelector)).toBeVisible({ timeout: 5000 });
-  
-  // Click cancel button to stop reconnection
-  await page.click(cancelButtonSelector);
-  
-  // Manual reconnect UI should be shown
-  const reconnectButtonSelector = 'button:has-text("Try Reconnecting Now")';
-  await expect(page.locator(reconnectButtonSelector)).toBeVisible({ timeout: 5000 });
-  
-  // Click the Try Reconnecting Now button
-  await page.click(reconnectButtonSelector);
-  
-  // Terminal should show connecting again
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connecting', { timeout: 5000 });
-  
-  // Eventually we should reconnect
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connected', { timeout: 15000 });
+
+  const statusSel = '.status';
+  const termSel = '.xterm-viewport';
+
+  // Wait for initial connection
+  await expect(page.locator(statusSel)).toHaveText('connected', { timeout: 15000 });
+  expect(await wsCount(page)).toBeGreaterThan(0);
+
+  // Simulate connection loss
+  await closeAll(page);
+  await expect(page.locator(statusSel)).toHaveText('reconnecting', { timeout: 5000 });
+
+  // Verify attempt message & countdown appear inside terminal
+  await expect(page.locator(termSel)).toContainText('Reconnecting (Attempt', { timeout: 5000 });
+  await expect(page.locator(termSel)).toContainText('Next attempt in', { timeout: 5000 });
+
+  // Cancel auto-reconnect via <Enter>
+  await page.click(termSel);
+  await page.keyboard.press('Enter');
+  await expect(page.locator(statusSel)).toHaveText('disconnected', { timeout: 5000 });
+  await expect(page.locator(termSel)).toContainText('Reconnection attempts cancelled', { timeout: 3000 });
+
+  // Manual reconnect via <Enter>
+  await page.keyboard.press('Enter');
+  await expect(page.locator(statusSel)).toHaveText('connecting', { timeout: 5000 });
+  await expect(page.locator(statusSel)).toHaveText('connected', { timeout: 15000 });
 });
 
-test('should show manual reconnect prompt after max attempts', async ({ page, baseURL }) => {
-  // Extended test timeout since we need to wait for multiple reconnection attempts
+test('manual reconnect prompt shown after max automatic attempts', async ({ page, baseURL }) => {
   test.setTimeout(60000);
-  
   await page.goto(baseURL || '/');
-  
-  // Wait for initial connection to be fully established
-  const statusDisplaySelector = '[data-testid="connection-status"]';
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connected', { timeout: 15000 });
-  
-  // Mock approach: Instead of waiting for 15 actual reconnection attempts which would take too long,
-  // we'll manipulate the component state to simulate hitting max reconnection attempts
-  
-  // First force a disconnection
-  await closeAllConnections(page);
-  
-  // Wait for reconnection attempt to start
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connecting', { timeout: 5000 });
-  
-  // Now directly set the component state to simulate max attempts being reached
-  await page.evaluate(() => {
-    // Assuming the component exposes a way to set this state
-    const reconnectElement = document.querySelector('[data-reconnect-info]');
-    if (reconnectElement) {
-      // Dispatch a custom event to the element that the component listens for
-      reconnectElement.dispatchEvent(new CustomEvent('test:simulate-max-attempts'));
-    } else {
-      // Fallback: Try to find and click the Cancel Reconnection button
-      const cancelButton = document.querySelector('button:has-text("Cancel Reconnection")');
-      if (cancelButton) {
-        (cancelButton as HTMLButtonElement).click();
-      }
-    }
-  });
-  
-  // Now we should see the manual reconnect button
-  const reconnectButtonSelector = 'button:has-text("Try Reconnecting Now")';
-  await expect(page.locator(reconnectButtonSelector)).toBeVisible({ timeout: 10000 });
-  
-  // Click it to verify manual reconnection
-  await page.click(reconnectButtonSelector);
-  
-  // Terminal should show connecting again
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connecting', { timeout: 5000 });
-  
-  // Eventually we should reconnect
-  await expect(page.locator(statusDisplaySelector)).toHaveText('connected', { timeout: 15000 });
+
+  const statusSel = '.status';
+  const termSel = '.xterm-viewport';
+
+  await expect(page.locator(statusSel)).toHaveText('connected', { timeout: 15000 });
+
+  // Cause repeated disconnects to exceed max attempts quickly
+  for (let i = 0; i < 16; i++) {
+    await closeAll(page);
+    await page.waitForTimeout(100); // allow component to process
+  }
+
+  await expect(page.locator(statusSel)).toHaveText('disconnected', { timeout: 10000 });
+  await expect(page.locator(termSel)).toContainText('Failed to reconnect after', { timeout: 5000 });
+  await expect(page.locator(termSel)).toContainText('Press Enter to try reconnecting manually', { timeout: 5000 });
 }); 

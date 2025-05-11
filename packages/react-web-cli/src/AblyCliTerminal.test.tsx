@@ -24,6 +24,46 @@ vi.mock('./global-reconnect', () => ({
   setCountdownCallback: vi.fn(),
 }));
 
+// --- Mock terminal-box -------------------------------------------------
+// Because `vi.mock` calls are hoisted, we must **declare** our stub variables
+// first (with `let`) and *assign* them inside the factory. Otherwise the
+// factory executes before the `const` initialisation and we hit a TDZ error.
+
+let mockDrawBox: ReturnType<typeof vi.fn>;
+let mockClearBox: ReturnType<typeof vi.fn>;
+let mockUpdateLine: ReturnType<typeof vi.fn>;
+let mockUpdateSpinner: ReturnType<typeof vi.fn>;
+
+const mockBoxColour = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m',
+} as const;
+
+vi.mock('./terminal-box', async (importOriginal) => {
+  // Assign the stubs *inside* the factory to avoid hoisting issues.
+  mockDrawBox = vi.fn();
+  mockClearBox = vi.fn();
+  mockUpdateLine = vi.fn();
+  mockUpdateSpinner = vi.fn();
+
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    drawBox: mockDrawBox,
+    clearBox: mockClearBox,
+    updateLine: mockUpdateLine,
+    updateSpinner: mockUpdateSpinner,
+    colour: mockBoxColour,
+  };
+});
+
 // Mock xterm Terminal
 const mockWrite = vi.fn();
 const mockWriteln = vi.fn();
@@ -61,6 +101,7 @@ vi.mock('@xterm/addon-fit', () => ({
 // Now import the modules AFTER mocks are defined
 import * as GlobalReconnect from './global-reconnect';
 import { AblyCliTerminal } from './AblyCliTerminal'; // Import now
+import * as TerminalBoxModule from './terminal-box'; // Import to access mocked colours if needed for assertions
 
 // Simple minimal test component to verify hooks work in the test environment
 const MinimalHookComponent = () => {
@@ -174,6 +215,16 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     });
     vi.mocked(GlobalReconnect.setCountdownCallback).mockClear();
 
+    // Clear terminal-box mocks
+    mockDrawBox.mockClear();
+    mockClearBox.mockClear();
+    mockUpdateLine.mockClear();
+    mockUpdateSpinner.mockClear();
+    // Reset mockDrawBox return value if it's complex and needs to be clean per test
+    mockDrawBox.mockReturnValue({
+      row: 0, width: 0, content: [], write: vi.fn(), height: 0 // Minimal TerminalBox structure
+    });
+
     // Reset WebSocket constructor mock calls if needed for specific tests
     vi.mocked((global as any).WebSocket).mockClear();
   });
@@ -197,13 +248,110 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connecting');
   });
 
-  test('displays "Connecting..." animation when server sends "connecting" status', async () => {
+  test('displays "Connecting..." box animation when component mounts', async () => {
     renderTerminal();
+    // The component calls connectWebSocket -> startConnectingAnimation on mount
+    await waitFor(() => {
+      expect(mockDrawBox).toHaveBeenCalled();
+    });
+    const drawBoxArgs = mockDrawBox.mock.calls[0];
+    expect(drawBoxArgs[1]).toBe(mockBoxColour.cyan); // headerColor
+    expect(drawBoxArgs[2]).toBe('CONNECTING'); // title
+    expect(drawBoxArgs[3][0]).toContain('Establishing connection'); // content line 1
+  });
+
+  test('displays "Reconnecting..." box animation on WebSocket close if not max attempts', async () => {
+    vi.mocked(GlobalReconnect.getAttempts).mockReturnValue(0); // First attempt
+    vi.mocked(GlobalReconnect.isMaxAttemptsReached).mockReturnValue(false);
+    
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); }); // allow initial connection to establish/try
+    mockDrawBox.mockClear(); // Clear initial connecting box draw
+
     act(() => {
       if (!mockSocketInstance) throw new Error("mockSocketInstance not initialized");
-      mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'status', payload: 'connecting' }) });
+      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'Connection lost' });
     });
-    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connecting');
+
+    await waitFor(() => {
+      expect(mockDrawBox).toHaveBeenCalled();
+    });
+    const drawBoxArgs = mockDrawBox.mock.calls[0];
+    expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow); // headerColor for reconnecting
+    expect(drawBoxArgs[2]).toBe('RECONNECTING'); // title
+    expect(drawBoxArgs[3][0]).toMatch(/Attempt 1\/\d+/); // content line 1
+    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('reconnecting');
+  });
+
+  test('clears status box when PTY prompt is detected after connection', async () => {
+    renderTerminal();
+    // Wait for initial connection box to be drawn
+    await waitFor(() => expect(mockDrawBox).toHaveBeenCalledTimes(1));
+
+    // Simulate PTY data containing the prompt
+    act(() => {
+      // Get the onData handler registered with xterm
+      const onDataHandler = vi.mocked(mockOnData).mock.calls[0][0] as (data: string) => void;
+      onDataHandler('user@host:~$ '); // Simulate prompt
+    });
+
+    await waitFor(() => {
+      expect(mockClearBox).toHaveBeenCalled();
+    });
+    expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('connected');
+  });
+
+  test('displays error box for non-recoverable server close (e.g., 4001) and persists it', async () => {
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); }); // allow initial connection to establish/try
+    mockDrawBox.mockClear(); // Clear initial connecting box draw
+    mockClearBox.mockClear();
+
+    act(() => {
+      if (!mockSocketInstance) throw new Error("mockSocketInstance not initialized");
+      mockSocketInstance.triggerEvent('close', { code: 4001, reason: 'Auth failed', wasClean: true });
+    });
+
+    await waitFor(() => {
+      expect(mockDrawBox).toHaveBeenCalled();
+    });
+    const drawBoxArgs = mockDrawBox.mock.calls[0];
+    expect(drawBoxArgs[1]).toBe(mockBoxColour.red); 
+    expect(drawBoxArgs[2]).toBe('SERVER DISCONNECT');
+    expect(drawBoxArgs[3][0]).toContain('Auth failed');
+    expect(drawBoxArgs[3][1]).toContain('Press Enter to try reconnecting manually');
+    
+    expect(mockClearBox).not.toHaveBeenCalled(); // Box should persist
+    expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
+  });
+
+  test('displays error box when max reconnect attempts reached and persists it', async () => {
+    vi.mocked(GlobalReconnect.isMaxAttemptsReached).mockReturnValue(true);
+    vi.mocked(GlobalReconnect.getMaxAttempts).mockReturnValue(3);
+    vi.mocked(GlobalReconnect.getAttempts).mockReturnValue(3); // Current attempts = max attempts
+
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); }); 
+    mockDrawBox.mockClear(); 
+    mockClearBox.mockClear();
+
+    // Simulate a close event that would trigger the max attempts logic
+    act(() => {
+      if (!mockSocketInstance) throw new Error("No mock socket for close");
+      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'Connection lost' });
+    });
+
+    await waitFor(() => {
+      expect(mockDrawBox).toHaveBeenCalled();
+    });
+    const drawBoxArgs = mockDrawBox.mock.calls[0];
+    expect(drawBoxArgs[1]).toBe(mockBoxColour.red); // Or yellow, depending on specific logic path
+    expect(drawBoxArgs[2]).toBe('MAX RECONNECTS');
+    expect(drawBoxArgs[3][0]).toContain('Failed to reconnect after 3 attempts');
+    expect(drawBoxArgs[3][1]).toContain('Press Enter to try reconnecting manually');
+
+    expect(mockClearBox).not.toHaveBeenCalled(); // Box should persist
+    expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
   });
 
   test('emits "connected" status when server sends "connected"', async () => {
