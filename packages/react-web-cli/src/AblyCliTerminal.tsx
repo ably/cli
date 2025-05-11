@@ -17,6 +17,7 @@ import {
   setCountdownCallback as grSetCountdownCallback,
   setMaxAttempts as grSetMaxAttempts
 } from './global-reconnect';
+import { useTerminalVisibility } from './use-terminal-visibility.js';
 
 export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
@@ -77,6 +78,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const [showManualReconnectPrompt, setShowManualReconnectPrompt] = useState(false);
   
   const rootRef = useRef<HTMLDivElement>(null);
+  // Determine if terminal is visible (drawer open & tab visible)
+  const isVisible = useTerminalVisibility(rootRef);
   const term = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon>();
   const ptyBuffer = useRef('');
@@ -281,7 +284,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     setSocket(newSocket); // Trigger effect to add listeners
 
     // new WebSocket created
-  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation]);
+  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation, isVisible]);
 
   const socketRef = useRef<WebSocket | null>(null); // Ref to hold the current socket for cleanup
 
@@ -382,6 +385,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       4001, // Invalid token / credentials
       4008, // Policy violation / auth timeout / invalid message format
       1013, // Try again later (server overloaded / capacity)
+      4002, // Inactivity timeout initiated by client
     ]);
 
     if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
@@ -540,8 +544,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       });
     }
 
-    // Initial connection
-    if (componentConnectionStatus === 'initial') {
+    // Initial connection on mount – only if already visible
+    if (componentConnectionStatus === 'initial' && isVisible) {
       if (maxReconnectAttempts && maxReconnectAttempts !== grGetMaxAttempts()) {
         // set max attempts
         console.log('[AblyCLITerminal] Setting max reconnect attempts to', maxReconnectAttempts);
@@ -643,11 +647,75 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
   }, [overlay]);
 
+  // -----------------------------------------------------------------------------------
+  // Visibility & inactivity timer logic
+  // -----------------------------------------------------------------------------------
+
+  // Kick-off the initial WebSocket connection the *first* time the terminal
+  // becomes visible. We cannot rely solely on the mount-time effect because
+  // `useTerminalVisibility` may report `false` on mount (e.g. drawer closed),
+  // so this secondary effect waits for the first visible=true transition.
+  useEffect(() => {
+    if (componentConnectionStatus !== 'initial') return; // already attempted
+    if (!isVisible) return; // still not visible → wait
+
+    if (maxReconnectAttempts && maxReconnectAttempts !== grGetMaxAttempts()) {
+      grSetMaxAttempts(maxReconnectAttempts);
+    }
+
+    grResetState();
+    clearPtyBuffer();
+    connectWebSocket();
+  }, [isVisible, maxReconnectAttempts, componentConnectionStatus, clearPtyBuffer, connectWebSocket]);
+
+  const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+  }, []);
+
+  const startInactivityTimer = useCallback(() => {
+    clearInactivityTimer();
+    inactivityTimerRef.current = setTimeout(() => {
+      // Auto-terminate session due to prolonged invisibility
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.close(4002, 'inactivity-timeout');
+      }
+      // Inform the user inside the terminal UI
+      if (term.current) {
+        term.current.writeln(`\r\nSession terminated after ${INACTIVITY_TIMEOUT_MS / 60000} minutes of inactivity.`);
+        term.current.writeln('Press ⏎ to start a new session.');
+      }
+      grCancelReconnect();
+      grResetState();
+      setShowManualReconnectPrompt(true);
+      updateConnectionStatusAndExpose('disconnected');
+    }, INACTIVITY_TIMEOUT_MS);
+  }, [INACTIVITY_TIMEOUT_MS, grCancelReconnect, grResetState, updateConnectionStatusAndExpose]);
+
+  // Manage the timer whenever visibility changes
+  useEffect(() => {
+    if (isVisible) {
+      clearInactivityTimer();
+      return;
+    }
+    // If not visible start countdown only if there is an active/open socket
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      startInactivityTimer();
+    }
+  }, [isVisible, startInactivityTimer, clearInactivityTimer]);
+
+  useEffect(() => () => clearInactivityTimer(), [clearInactivityTimer]);
+
   return (
-    <div 
-      ref={rootRef} 
-      data-testid="terminal-container" 
-      className="Terminal-container" 
+    <div
+      ref={rootRef}
+      data-testid="terminal-container"
+      className="Terminal-container"
       style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', padding: 0, boxSizing: 'border-box', backgroundColor: '#000000' }}
     >
       {overlay && <TerminalOverlay {...overlay} />}
