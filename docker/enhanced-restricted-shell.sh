@@ -203,12 +203,19 @@ while true; do
                 unset 'HISTORY_ARRAY[${#HISTORY_ARRAY[@]}-1]'
             fi
 
-            # Preserve quoted segments and avoid eval
-            IFS=' ' read -r -a args <<< "$rest_of_line"
-            # Execute the ably command without eval - much safer!
+            # Preserve quoted segments so that, for example, arguments like
+            #   ably help ask "what is ably?"
+            # are forwarded **with** the quotes respected. The previous
+            # implementation used a simple IFS split which broke quoted
+            # arguments (they were split into multiple words). We now rely on
+            # bash's own parser via `eval set --` which honours standard shell
+            # quoting rules *after* we have already validated that the input
+            # contains no dangerous shell metacharacters via `check_injection`.
+
             if [ -n "$rest_of_line" ]; then
-                # Run ably with the array of arguments directly, not through shell evaluation
-                ably "${args[@]}"
+                # shellcheck disable=SC2086  # we want word-splitting performed by `set --`
+                eval set -- $rest_of_line
+                ably "$@"
             else
                 ably
             fi
