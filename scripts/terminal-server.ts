@@ -131,8 +131,8 @@ function checkAppArmorProfileStatus(): void {
           log('AppArmor profile found and seems loaded.');
           isAppArmorProfileLoaded = true;
       }
-  } catch (appArmorError) {
-      log(`AppArmor check command failed, assuming profile not loaded: ${appArmorError instanceof Error ? appArmorError.message : String(appArmorError)}`);
+  } catch (error) {
+      log(`AppArmor check command failed, assuming profile not loaded: ${error instanceof Error ? error.message : String(error)}`);
       isAppArmorProfileLoaded = false;
   }
 }
@@ -168,16 +168,16 @@ async function cleanupStaleContainers(): Promise<void> {
         log(`Removing stale container ${containerInfo.Id} (state: ${containerInfo.State}) ...`);
         await container.remove({ force: true }); // Force remove
         log(`Removed stale container ${containerInfo.Id}.`);
-      } catch (removeError: unknown) {
+      } catch (error: unknown) {
         // Ignore "no such container" errors, it might have been removed already
         if (
           !(
-            removeError instanceof Error &&
-            /no such container/i.test(removeError.message)
+            error instanceof Error &&
+            /no such container/i.test(error.message)
           )
         ) {
           logError(
-            `Failed to remove stale container ${containerInfo.Id}: ${removeError instanceof Error ? removeError.message : String(removeError)}`,
+            `Failed to remove stale container ${containerInfo.Id}: ${error instanceof Error ? error.message : String(error)}`,
           );
         }
       }
@@ -242,8 +242,8 @@ async function ensureDockerImage(): Promise<void> {
         log(`Docker build output: ${output.slice(0, 200)}...`);
         log(`Docker image ${DOCKER_IMAGE_NAME} built successfully using CLI.`);
         return;
-      } catch (cliError) {
-        log(`Failed to build using Docker CLI: ${cliError}. Falling back to Docker SDK.`);
+      } catch (error) {
+        log(`Failed to build using Docker CLI: ${error}. Falling back to Docker SDK.`);
       }
 
       // Fallback to Docker SDK if CLI approach fails
@@ -266,8 +266,8 @@ async function ensureDockerImage(): Promise<void> {
         });
 
         log(`Docker image ${DOCKER_IMAGE_NAME} built successfully using SDK.`);
-      } catch (buildError) {
-        logError(`Failed to build Docker image ${DOCKER_IMAGE_NAME}: ${buildError}`);
+      } catch (error) {
+        logError(`Failed to build Docker image ${DOCKER_IMAGE_NAME}: ${error}`);
         throw new Error(
           `Failed to build Docker image "${DOCKER_IMAGE_NAME}". Please build it manually using "docker build -t ${DOCKER_IMAGE_NAME} ." in the project root.`,
         );
@@ -496,8 +496,8 @@ async function terminateSession(
       const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason };
       session.ws.send(JSON.stringify(statusMsg));
       log(`Sent 'disconnected' status to session ${sessionId}`);
-    } catch (sendError) {
-      logError(`Error sending 'disconnected' status to ${sessionId}: ${sendError}`);
+    } catch (error) {
+      logError(`Error sending 'disconnected' status to ${sessionId}: ${error}`);
     }
   }
 
@@ -523,33 +523,33 @@ async function terminateSession(
     try {
       await session.container.stop({ t: 5 }); // Allow 5 seconds to stop
       log(`Container for session ${sessionId} stopped.`);
-    } catch (stopError: unknown) {
+    } catch (error: unknown) {
       // Ignore "container already stopped" or "no such container" errors
       if (
         !(
-          stopError instanceof Error &&
-          (/already stopped/i.test(stopError.message) ||
-            /no such container/i.test(stopError.message))
+          error instanceof Error &&
+          (/already stopped/i.test(error.message) ||
+            /no such container/i.test(error.message))
         )
       ) {
         logError(
-          `Error stopping container for session ${sessionId}: ${stopError instanceof Error ? stopError.message : String(stopError)}`,
+          `Error stopping container for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
     try {
       await session.container.remove();
       log(`Container for session ${sessionId} removed.`);
-    } catch (removeError: unknown) {
+    } catch (error: unknown) {
       // Ignore "no such container" errors
       if (
         !(
-          removeError instanceof Error &&
-          /no such container/i.test(removeError.message)
+          error instanceof Error &&
+          /no such container/i.test(error.message)
         )
       ) {
         logError(
-          `Error removing container for session ${sessionId}: ${removeError instanceof Error ? removeError.message : String(removeError)}`,
+          `Error removing container for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
@@ -648,8 +648,8 @@ async function startServer() {
           const connectingMsg: ServerStatusMessage = { type: "status", payload: "connecting" };
           ws.send(JSON.stringify(connectingMsg));
           log(`Sent 'connecting' status to new session ${sessionId}`);
-        } catch (sendError) {
-          logError(`Error sending 'connecting' status to ${sessionId}: ${sendError}`);
+        } catch (error) {
+          logError(`Error sending 'connecting' status to ${sessionId}: ${error}`);
           // If we can't send 'connecting', close the connection
           ws.close(1011, "Failed to send initial status");
           // Note: No session object to cleanup here yet if this fails immediately.
@@ -820,8 +820,8 @@ async function startServer() {
                    await container.start();
                    log(`[${sessionId}] Container started successfully: ${container.id}`);
 
-                } catch (containerError) {
-                    logError(`[${sessionId}] Failed to create or start container: ${containerError instanceof Error ? containerError.message : String(containerError)}`);
+                } catch (error) {
+                    logError(`[${sessionId}] Failed to create or start container: ${error instanceof Error ? error.message : String(error)}`);
                     const containerErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Failed to create session environment" };
                     try { ws.send(JSON.stringify(containerErrorMsg)); } catch (error) { void error; /* ignore */ }
                     ws.close(1011, 'Container creation failed');
@@ -857,9 +857,9 @@ async function startServer() {
                     // Only set up *after* successful attachment
                     ws.on('message', (msg) => handleMessage(fullSession, msg as Buffer));
                     log(`[${sessionId}] Main message handler attached.`);
-                } catch (attachError) {
+                } catch (error) {
                     // Attachment failed, but we'll let the error handling in attachToContainer handle it
-                    logError(`[${sessionId}] Attachment error: ${String(attachError)}`);
+                    logError(`[${sessionId}] Attachment error: ${String(error)}`);
                     // Don't attempt to cleanup here as attachToContainer will have done it already
                 }
             } catch (error) {
@@ -1040,23 +1040,46 @@ function pipeStreams(
     let firstChunkReceived = false; // Flag to log only the first chunk
 
     if (isRawTty) {
-      // For TTY=true the stream is raw – pipe chunks straight through.
+      // Handle potential fragmented handshake JSON that appears **once**
+      let handshakeHandled = false;
+
       containerStream.on('data', (chunk: Buffer) => {
-        if (!firstChunkReceived) {
-          log(`First chunk received from container (raw, size ${chunk.length})`);
-          firstChunkReceived = true;
+        // Fast path once handshake removed
+        if (handshakeHandled) {
+          if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
+          if (session) {
+            const txt = chunk.toString('utf8');
+            if (!session.outputBuffer) session.outputBuffer = [];
+            session.outputBuffer.push(txt);
+          }
+          return;
         }
 
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(chunk);
-        }
+        // Still looking for handshake
+        const text = chunk.toString('utf8');
+        const handshakeRegex = /\{[^}]*stream[^}]*stdin[^}]*stdout[^}]*stderr[^}]*hijack[^}]*\}/;
+        const match = text.match(handshakeRegex);
 
-        if (session) {
-          const text = chunk.toString('utf8');
-          if (!session.outputBuffer) session.outputBuffer = [];
-          session.outputBuffer.push(text);
-          if (session.outputBuffer.length > OUTPUT_BUFFER_MAX_LINES) {
-            session.outputBuffer.splice(0, session.outputBuffer.length - OUTPUT_BUFFER_MAX_LINES);
+        if (match) {
+          log('Swallowed Docker attach handshake JSON (regex match)');
+          handshakeHandled = true;
+          const before = text.slice(0, match.index);
+          const after = text.slice(match.index! + match[0].length);
+
+          if (before.length > 0 && ws.readyState === WebSocket.OPEN) ws.send(before);
+          if (after.length > 0 && ws.readyState === WebSocket.OPEN) ws.send(after);
+
+          if (session) {
+            if (!session.outputBuffer) session.outputBuffer = [];
+            if (before.length > 0) session.outputBuffer.push(before);
+            if (after.length > 0) session.outputBuffer.push(after);
+          }
+        } else {
+          // No handshake in this chunk → forward as-is
+          if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
+          if (session) {
+            if (!session.outputBuffer) session.outputBuffer = [];
+            session.outputBuffer.push(text);
           }
         }
       });
@@ -1101,8 +1124,46 @@ function pipeStreams(
       });
     }
 
-    // NOTE: We no longer set up WebSocket message handling here
-    // This is now handled by the main message handler to avoid duplication
+    // ------------------------------------------------------------------
+    // Detect when the user terminates the shell (e.g. by typing `exit`).
+    // When the underlying container stream ends we notify the client and
+    // close the WebSocket with an application-specific code (4000). This is
+    // treated as a *non-recoverable* disconnect by the React component so
+    // it will show a prompt instead of auto-reconnecting.
+    // ------------------------------------------------------------------
+    const handleStreamTermination = (label: string) => {
+      try {
+        log(`Container stream ${label} – signalling session end to client`);
+        if (ws.readyState === WebSocket.OPEN) {
+          const endMsg: ServerStatusMessage = {
+            type: 'status',
+            payload: 'disconnected',
+            reason: 'Session ended by user',
+          };
+          ws.send(JSON.stringify(endMsg));
+          // Give the message a moment to flush before closing
+          setTimeout(() => {
+            try {
+              ws.close(4000, 'user-exit');
+            } catch { /* ignore */ }
+          }, 10);
+        }
+      } catch (error) {
+        logError(`Error while handling stream termination: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      // Ensure container/session cleanup (graceful=false because CLI already exited)
+      if (session) {
+        void terminateSession(session.sessionId, 'User exit', false, 4000);
+      }
+    };
+
+    containerStream.on('end', () => handleStreamTermination('end'));
+    containerStream.on('close', () => handleStreamTermination('close'));
+    containerStream.on('error', (error) => {
+      logError(`Container stream error: ${error}`);
+      handleStreamTermination('error');
+    });
 
   } catch (error) {
     logError(`Failed to pipe streams: ${error instanceof Error ? error.message : String(error)}`);
@@ -1177,8 +1238,8 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
             const helloMsg = { type: "hello", sessionId: session.sessionId };
             ws.send(JSON.stringify(helloMsg));
         }
-    } catch (sendError) {
-        logError(`Error sending 'connected' status to ${session.sessionId}: ${sendError}`);
+    } catch (error) {
+        logError(`Error sending 'connected' status to ${session.sessionId}: ${error}`);
         await terminateSession(session.sessionId, "Failed to confirm connection status", false);
         return;
     }
@@ -1226,8 +1287,8 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
             cleanupSession(session.sessionId);
         }
     });
-    containerStream.on('error', (err) => {
-        logError(`Container stream error for session ${session.sessionId}: ${err.message}`);
+    containerStream.on('error', (error) => {
+        logError(`Container stream error for session ${session.sessionId}: ${error.message}`);
         safeCloseWsStream(containerStream);
         if (session.authenticated) {
             scheduleOrphanCleanup(session);
@@ -1276,12 +1337,12 @@ async function cleanupSession(sessionId: string) {
   if (session.container) {
     try {
       log(`Removing container ${session.container.id}...`);
-      await session.container.remove({ force: true }).catch((removeError: Error) => {
-        log(`Note: Error removing container ${session.container?.id}: ${removeError.message}.`);
+      await session.container.remove({ force: true }).catch((error: Error) => {
+        log(`Note: Error removing container ${session.container?.id}: ${error.message}.`);
       });
       log(`Container ${session.container.id} removed.`);
-    } catch (removeError) {
-      log(`Note: Error during container removal: ${removeError}.`);
+    } catch (error) {
+      log(`Note: Error during container removal: ${error}.`);
     }
   }
 
@@ -1406,8 +1467,8 @@ function handleMessage(session: ClientSession, message: Buffer) {
             try {
                 // Attempt raw write as fallback
                 session.stdinStream.write(message);
-            } catch (writeError) {
-                logError(`Failed to write input as fallback: ${writeError instanceof Error ? writeError.message : String(writeError)}`);
+            } catch (error) {
+                logError(`Failed to write input as fallback: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
     }
