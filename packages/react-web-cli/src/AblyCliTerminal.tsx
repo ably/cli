@@ -476,6 +476,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       1006, // Abnormal closure (no close frame)
     ]);
 
+    // Treat graceful close (1000) as non-recoverable if the server reason
+    // indicates an inactivity timeout or similar final condition.
+    const inactivityRegex = /inactiv|timed out/i;
+    if (event.code === 1000 && inactivityRegex.test(event.reason)) {
+      NON_RECOVERABLE_CLOSE_CODES.add(1000);
+    }
+
     if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
       // Ensure any global reconnection timers are cleared
       grCancelReconnect();

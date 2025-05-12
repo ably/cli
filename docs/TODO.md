@@ -118,6 +118,7 @@
 - [ ] Running the tests in debug mode seem to indicate here is a loop of some sort causing slowness: `DEBUG=* pnpm test test/e2e/core/basic-cli.test.ts` to replicate this issue, see how man times `config loading plugins [ './dist/src' ]` is loadedx
 - [ ] [feat/terminal-server-improvements] Running web CLI terminal has some bugs a) running a command such as `ably help status` clears the display instead of showing progress updates, b) " and ' are not recognise correctly, running the command `ably help ask "what is ably"`
 - [ ] Test filters don't appear to be working with pnpm `pnpm test --filter 'resume helpers'` shows warning 'Warning: Cannot find any files matching pattern "helpers"' and then runs all tests.
+- [ ] When the server times out due to inactivity, the message "--- Session Ended (from server): Session timed out due to inactivity ---" is shown. At this time, the CLI should have shown a dialog saying the client was disconnected and prompting the user to interact by pressing Enter to reconnect. It should not automatically reconnect to conserve resources for idle connections.
 
 ## Test coverage
 
