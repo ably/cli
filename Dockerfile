@@ -69,6 +69,13 @@ WORKDIR /usr/src/app
 # Set environment variable to indicate web CLI mode
 ENV ABLY_WEB_CLI_MODE=true
 
+# Improve colour support inside the container so that utilities such as Chalk
+# (used by the Ably CLI) detect 24-bit colour capability instead of falling
+# back to the basic 16-colour palette that was previously observed when running
+# via `pnpm dev:container`.
+ENV COLORTERM=truecolor
+ENV FORCE_COLOR=3
+
 # Ensure PATH includes npm bins and our scripts directory
 ENV PATH=/usr/local/lib/node_modules/.bin:/scripts:$PATH
 
