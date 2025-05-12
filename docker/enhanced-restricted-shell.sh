@@ -23,8 +23,11 @@ export CLICOLOR=${CLICOLOR:-1}
 # Essential path setup
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/lib/node_modules/.bin:$PATH
 
-# Force simple prompt, overriding any inherited value
-export PS1='$ '
+# Use the same colour-coded prompt for any subshells spawned interactively.
+# We wrap the non-printing ANSI colour sequences in \[ ... \] so Bash knows
+# their length is zero when doing line-editing.  This *only* affects PS1; our
+# custom readline loop uses a different escape (\001/\002) – see PROMPT below.
+export PS1='\[\e[32m\]\$\[\e[0m\] '
 
 # Ensure .ably directory exists with proper permissions
 # This prevents race conditions when multiple processes try to create it
@@ -39,19 +42,25 @@ RED='\033[31m'
 # Flag to indicate if read was interrupted by our trap
 interrupted=0
 
+# --- Script Initialization ---
+# Check if this is the first run or a restart after Ctrl+C
+if [[ -z "$RESTRICTED_SHELL_RESTARTED" ]]; then
+  # First run: Clear screen, show welcome message
+  printf '\033[2J\033[H'
+  ably help web-cli
+  # Set flag so restarts skip the welcome
+  export RESTRICTED_SHELL_RESTARTED=true
+else
+  # This is a restart after Ctrl+C
+fi
+
 # Function to handle interrupt signals
 handle_interrupt() {
-  interrupted=1 # Set the flag
-  # Print message on a new line
+  # Show informative message.
   printf "\n${YELLOW}Signal received. To exit this shell, type 'exit' and press Enter.${RESET}\n"
-
-  # Show the prompt immediately
-  printf "${GREEN}$ ${RESET}"
-
-  # Reset readline and terminal state
-  # Send an empty readline command to reset input state
-  # We don't use true since we want to reset terminal state
-  read -t 0.001 -n 1 >/dev/null 2>&1 || true
+ 
+  # Restart the entire script to ensure a clean state and prompt
+  exec "$0"
 }
 
 # Special double prompt for xterm.js compatibility
@@ -74,16 +83,11 @@ show_robust_prompt() {
 # Trap common interrupt signals (Ctrl+C, Ctrl+Z, Ctrl+\)
 trap 'handle_interrupt' SIGINT SIGTSTP SIGQUIT
 
-# Redraw prompt on window resize (SIGWINCH)
-trap 'show_robust_prompt' SIGWINCH
+# The prompt is now rendered by readline itself; no extra redraw needed on
+# window resize.
+# trap 'show_robust_prompt' SIGWINCH
 
 # -- Interactive Restricted Shell starts here --
-
-# Clear screen to start with a clean terminal
-printf '\033[2J\033[H'
-
-# Print welcome message using ably CLI's built-in help
-ably help web-cli
 
 # Enable bash completion if available
 if [ -f /etc/bash_completion ]; then
@@ -144,40 +148,43 @@ if [[ -z "$ABLY_ACCESS_TOKEN" ]]; then
   echo -e "\033[33mWarning: ABLY_ACCESS_TOKEN is not set; Control-API commands may fail unless you provide one.\033[0m"
 fi
 
+# Define a readline-aware, colour-coded prompt for the `read -p` call.  For
+# Readline we need to use \001 and \002 to delimit non-printing sequences.
+# Using $'' ensures the escape characters are interpreted correctly.
+PROMPT=$'\001\e[32m\002$ \001\e[0m\002'
+
 # Read commands in a loop with proper handling
 while true; do
-    # Skip showing prompt if we've just processed an interrupt
-    # (since the interrupt handler already showed one)
-    if [ "$interrupted" -eq 0 ]; then
-        # Show the robust double prompt for terminal compatibility
-        show_robust_prompt
-    fi
-
-    # Reset interrupted flag AFTER checking it for prompt display,
-    # but BEFORE reading the command so we're ready for the next interrupt
+    # Reset interrupted flag before reading input so we're ready for the next interrupt
     interrupted=0
 
-    # Read the command line with bash's readline support
+    # Populate the interactive history for readline from our sanitized array
     if [ ${#HISTORY_ARRAY[@]} -gt 0 ]; then
-        # Add our clean history items to the readline history
         history -c
+        # Iterate in the natural chronological order so that the most recent
+        # command is *last* – this means the first <Up> arrow brings back the
+        # most recent command the user executed, matching normal shell
+        # behaviour.
         for item in "${HISTORY_ARRAY[@]}"; do
             history -s "$item"
         done
     fi
 
-    # Handle terminal input
-    read -e full_command
-    read_status=$?
-
-    # Clear readline history immediately to prevent contamination
-    history -c
-
-    # Check for EOF (Ctrl+D)
-    if [ $read_status -ne 0 ]; then
+    # Read user input using Bash's built-in PS1 prompt and readline support
+    # Ctrl+C is handled entirely by the trap, which execs a new shell.
+    # Read only fails (non-zero status) on EOF (Ctrl+D).
+    if ! read -e -r -p "${PS1@P}" full_command; then
         printf "\nExiting Ably CLI shell.\n"
         break
     fi
+
+    # If the user just pressed Enter, loop again.
+    if [[ -z "$full_command" ]]; then
+        continue
+    fi
+
+    # Re-enable history clearing after read returns.
+    history -c
 
     # Parse the command (first word) and arguments (rest)
     read -r cmd rest_of_line <<< "$full_command"
@@ -193,15 +200,9 @@ while true; do
                 continue
             fi
 
-            # Store in our custom history array
-            FULL_CMD="ably $rest_of_line"
-            # Add to front of array (newest first)
-            HISTORY_ARRAY=("$FULL_CMD" "${HISTORY_ARRAY[@]}")
-            # Keep array size manageable
-            if [ ${#HISTORY_ARRAY[@]} -gt 100 ]; then
-                # Remove oldest entry
-                unset 'HISTORY_ARRAY[${#HISTORY_ARRAY[@]}-1]'
-            fi
+            # Add the validated command to Bash's history
+            # Add to history *before* execution
+            history -s "$full_command"
 
             # Preserve quoted segments so that, for example, arguments like
             #   ably help ask "what is ably?"
