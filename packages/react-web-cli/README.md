@@ -149,6 +149,25 @@ The terminal server required for this component is provided in the main Ably CLI
 - Only `ably`, `clear`, and `exit` commands are available in the terminal by default.
 - The terminal supports full xterm.js functionality including colors and Unicode.
 
+## Debugging & Verbose Logging
+
+The component ships with a built-in verbose logger that is **disabled by default**.  
+Enable it in any of the following ways *before* the component mounts:
+
+1. **Query-string flag** – simply add `?cliDebug=true` to the page URL.  
+  Example: `http://localhost:5173/?cliDebug=true`  
+  (The flag may be combined with other query parameters.)
+
+2. **Runtime global flag** – from the browser DevTools console run:
+
+```js
+window.ABLY_CLI_DEBUG = true;
+```
+
+The terminal will now emit detailed lifecycle logs prefixed with
+`[AblyCLITerminal DEBUG]`.  Remove the flag or refresh without the query
+parameter to return to silent mode.
+
 ## Example Project
 
 For a complete example of using this component, see the [web-cli example](https://github.com/ably/cli/tree/main/examples/web-cli) in the Ably CLI repository.
