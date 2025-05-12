@@ -93,11 +93,6 @@ export default class ConnectionsStats extends AblyBaseCommand {
       return;
     }
 
-    // Create the Ably REST client
-    const options: Ably.ClientOptions = this.getClientOptions(flags);
-    this.client = this.createAblyRestClient(options);
-    const { client } = this; // Local const
-
     // Create stats display
     this.statsDisplay = new StatsDisplay({
       intervalSeconds: flags.interval,
@@ -109,15 +104,18 @@ export default class ConnectionsStats extends AblyBaseCommand {
     });
 
     await (flags.live
-      ? this.runLiveStats(flags, client)
-      : this.runOneTimeStats(flags, client));
+      ? this.runLiveStats(flags)
+      : this.runOneTimeStats(flags));
   }
 
   async runLiveStats(
     flags: Record<string, unknown>,
-    client: Ably.Rest,
   ): Promise<void> {
+    let client: Ably.Rest | null = null;
     try {
+      const options: Ably.ClientOptions = this.getClientOptions(flags);
+      client = this.createAblyRestClient(options);
+
       this.logCliEvent(
         flags,
         "stats",
@@ -155,9 +153,8 @@ export default class ConnectionsStats extends AblyBaseCommand {
       // Poll for stats at the specified interval
       this.pollInterval = setInterval(
         () => {
-          // Use non-blocking polling - don't wait for previous poll to complete
           if (!this.isPolling) {
-            this.pollStats(flags, client);
+            this.pollStats(flags, client!);
           } else if (flags.debug) {
             this.logCliEvent(
               flags,
@@ -205,8 +202,8 @@ export default class ConnectionsStats extends AblyBaseCommand {
 
   async runOneTimeStats(
     flags: Record<string, unknown>,
-    client: Ably.Rest,
   ): Promise<void> {
+    let client: Ably.Rest | null = null;
     // Calculate time range based on the unit
     const now = new Date();
     let startTime = new Date();
@@ -252,6 +249,9 @@ export default class ConnectionsStats extends AblyBaseCommand {
     );
 
     try {
+      const options: Ably.ClientOptions = this.getClientOptions(flags);
+      client = this.createAblyRestClient(options);
+
       // Get stats
       const statsPage = await client.stats(params);
       const stats = statsPage.items;

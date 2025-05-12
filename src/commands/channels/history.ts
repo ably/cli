@@ -52,18 +52,20 @@ export default class ChannelsHistory extends AblyBaseCommand {
     const channelName = args.channel;
     let client: Ably.Rest;
 
-    // Show authentication information
     this.showAuthInfoIfNeeded(flags);
 
     try {
-      // Get API key from flags or config
+      // Get API key from flags or config - Keep this check outside for early exit
       const apiKey = flags["api-key"] || (await this.configManager.getApiKey());
       if (!apiKey) {
+        // If no key is found via flag or config (which checks env var), ensure app/key setup
         await this.ensureAppAndKey(flags);
+        // ensureAppAndKey might throw or exit, so we might not reach here.
+        // If it *doesn't* throw (e.g., user interaction), we should exit gracefully.
         return;
       }
 
-      // Create a REST client using our test-enabled method
+      // Create a REST client using our test-enabled method *inside* the try block
       client = this.createAblyRestClient(flags);
 
       // Setup channel options
@@ -143,6 +145,7 @@ export default class ChannelsHistory extends AblyBaseCommand {
         }
       }
     } catch (error) {
+      // Restore standard error handling
       this.error(
         `Error retrieving channel history: ${error instanceof Error ? error.message : String(error)}`,
       );
