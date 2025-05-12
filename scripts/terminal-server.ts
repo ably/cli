@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/prefer-optional-catch-binding */
 import { WebSocket, WebSocketServer } from "ws";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -487,7 +488,7 @@ async function terminateSession(
     return;
   }
 
-  log(`Terminating session ${sessionId}. Reason: ${reason}`);
+  log(`[Server] terminateSession called for sessionId=${sessionId}, reason=${reason}`);
   clearTimeout(session.timeoutId);
 
   // Send disconnected status message
@@ -512,8 +513,8 @@ async function terminateSession(
     log(`stdinStream for session ${sessionId} ended and destroyed.`);
   }
   if (session.stdoutStream) {
-    // session.stdoutStream.end(); // stdoutStream is readable, typically doesn't need end()
-    session.stdoutStream.destroy(); // Ensure stream is fully destroyed
+    // stdoutStream is readable, typically doesn't need end(); just destroy
+    session.stdoutStream.destroy();
     log(`stdoutStream for session ${sessionId} destroyed.`);
   }
 
@@ -641,7 +642,7 @@ async function startServer() {
 
     wss.on("connection", (ws: WebSocket, _req: http.IncomingMessage) => {
         const sessionId = generateSessionId();
-        log(`Client connected, assigned session ID: ${sessionId}`);
+        log(`[Server] New connection. Assigned sessionId: ${sessionId}`);
 
         // Immediately send a "connecting" status message
         try {
@@ -660,7 +661,7 @@ async function startServer() {
             log("Max session limit reached. Rejecting new connection.");
             // Send structured error status before closing so client can handle gracefully
             const busyMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Server busy. Please try again later." };
-            try { ws.send(JSON.stringify(busyMsg)); } catch (error) { void error; /* Non-fatal: client likely disconnected */ }
+            try { ws.send(JSON.stringify(busyMsg)); } catch (_error) { /* ignore */ }
             ws.close(1013, "Server busy");
             return;
         }
@@ -673,7 +674,7 @@ async function startServer() {
                  // Ensure ws is still open before closing
                  if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                      const timeoutMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Authentication timeout" };
-                     try { ws.send(JSON.stringify(timeoutMsg)); } catch (error) { void error; /* ignore */ }
+                     try { ws.send(JSON.stringify(timeoutMsg)); } catch (_error) { /* ignore */ }
                      ws.close(4008, 'Authentication timeout');
                  }
                  cleanupSession(sessionId); // Cleanup based on ID
@@ -695,11 +696,11 @@ async function startServer() {
                 let authPayload: { apiKey?: string; accessToken?: string; environmentVariables?: Record<string, string>; sessionId?: string };
                 try {
                     authPayload = JSON.parse(message.toString());
-                } catch (error) {
-                    void error;
+                } catch (_error) {
+                    void _error;
                     logError(`[${sessionId}] Failed to parse auth message JSON.`);
                     const invalidAuthMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Invalid auth message format" };
-                    try { ws.send(JSON.stringify(invalidAuthMsg)); } catch (sendError) { void sendError; }
+                    try { ws.send(JSON.stringify(invalidAuthMsg)); } catch (_error) { /* ignore */ }
                     ws.close(4008, 'Invalid auth format');
                     if (sessionId) cleanupSession(sessionId);
                     return;
@@ -716,14 +717,14 @@ async function startServer() {
                     // First attempt in-memory resume
                     if (sessions.has(resumeAttemptId)) {
                         const existing = sessions.get(resumeAttemptId)!;
-                        log(`[${sessionId}] Resume requested for session ${resumeAttemptId}`);
+                        log(`[Server] Resume attempt: incoming sessionId=${resumeAttemptId}, credentialHash=${incomingCredentialHash}`);
 
                         if (existing.credentialHash !== incomingCredentialHash) {
                             logError(`[${sessionId}] Resume rejected: credential mismatch`);
                             try {
                               const errMsg: ServerStatusMessage = { type: 'status', payload: 'error', reason: 'Credentials do not match original session' };
                               ws.send(JSON.stringify(errMsg));
-                            } catch { /* ignore */ }
+                            } catch (_error) { /* ignore */ }
                             ws.close(4001, 'Credential mismatch');
                             return;
                         }
@@ -744,7 +745,7 @@ async function startServer() {
                         // Send buffered output prior to new piping
                         if (existing.outputBuffer && existing.outputBuffer.length > 0) {
                            for (const line of existing.outputBuffer) {
-                              try { ws.send(line); } catch { /* ignore send errors */ }
+                              try { ws.send(line); } catch (_error) { /* ignore send errors */ }
                            }
                         }
 
@@ -752,10 +753,10 @@ async function startServer() {
                         try {
                            await attachToContainer(existing, ws);
                            ws.on('message', (msg) => handleMessage(existing, msg as Buffer));
-                           log(`[${sessionId}] Successfully resumed session ${resumeAttemptId} (handler re-attached)`);
+                           log(`[Server] attemptCrossProcessResume: SUCCESS. sessionId=${resumeAttemptId}`);
                         } catch (error) {
-                           logError(`[${sessionId}] Error during resume attach: ${error}`);
-                           terminateSession(existing.sessionId, 'Failed to resume');
+                           logError(`[Server] attemptCrossProcessResume: FAILED. sessionId=${resumeAttemptId}`);
+                           terminateSession(existing.sessionId, 'Failed cross-process resume');
                         }
                         return; // In-memory resume handled
                     }
@@ -763,7 +764,7 @@ async function startServer() {
                     // Fallback: try to restore session by locating existing container
                     const restored = await attemptCrossProcessResume(resumeAttemptId, incomingCredentialHash, ws);
                     if (restored) {
-                        log(`[${sessionId}] Cross-process resume successful for ${resumeAttemptId}`);
+                        log(`[Server] attemptCrossProcessResume: SUCCESS. sessionId=${resumeAttemptId}`);
 
                         // Clean up the placeholder session for this connection just as we do in the
                         // in-memory resume path.
@@ -786,7 +787,7 @@ async function startServer() {
                 if (!hasApiKey && !hasAccessToken) {
                     logError(`[${sessionId}] No credentials supplied.`);
                     const missingCredMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "No API key or access token provided" };
-                    try { ws.send(JSON.stringify(missingCredMsg)); } catch (error) { void error; /* ignore */ }
+                    try { ws.send(JSON.stringify(missingCredMsg)); } catch (_error) { /* ignore */ }
                     ws.close(4001, 'Missing credentials');
                     if (sessionId) cleanupSession(sessionId);
                     return;
@@ -797,7 +798,7 @@ async function startServer() {
                 if (accessTokenStr && accessTokenStr.split('.').length === 3 && !isValidToken(accessTokenStr as string)) {
                     logError(`[${sessionId}] Supplied JWT access token failed validation.`);
                     const invalidTokenMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Invalid or expired access token" };
-                    try { ws.send(JSON.stringify(invalidTokenMsg)); } catch (error) { void error; /* ignore */ }
+                    try { ws.send(JSON.stringify(invalidTokenMsg)); } catch (_error) { /* ignore */ }
                     ws.close(4001, 'Invalid token');
                     if (sessionId) cleanupSession(sessionId);
                     return;
@@ -805,7 +806,7 @@ async function startServer() {
                 const { apiKey, accessToken, environmentVariables } = authPayload;
 
                 // --- Auth Success -> Container Creation Phase ---
-                log(`[${sessionId}] Authentication successful.`);
+                log(`[Server] Authentication successful.`);
 
                 // Clear the auth timeout since we've authenticated successfully
                 clearTimeout(initialSession.timeoutId);
@@ -814,16 +815,16 @@ async function startServer() {
                 try {
                    // Pass credentials to createContainer
                    container = await createContainer(apiKey ?? '', accessToken ?? '', environmentVariables || {}, sessionId);
-                   log(`[${sessionId}] Container created successfully: ${container.id}`);
+                   log(`[Server] Container created successfully: ${container.id}`);
 
                    // Start the container before attempting to attach
                    await container.start();
-                   log(`[${sessionId}] Container started successfully: ${container.id}`);
+                   log(`[Server] Container started successfully: ${container.id}`);
 
                 } catch (error) {
-                    logError(`[${sessionId}] Failed to create or start container: ${error instanceof Error ? error.message : String(error)}`);
+                    logError(`[Server] Failed to create or start container: ${error instanceof Error ? error.message : String(error)}`);
                     const containerErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Failed to create session environment" };
-                    try { ws.send(JSON.stringify(containerErrorMsg)); } catch (error) { void error; /* ignore */ }
+                    try { ws.send(JSON.stringify(containerErrorMsg)); } catch (_error) { /* ignore */ }
                     ws.close(1011, 'Container creation failed');
                     if (sessionId) cleanupSession(sessionId); // Cleanup partial session
                     return;
@@ -831,7 +832,7 @@ async function startServer() {
 
                 // Compute credential hash for later resume validation
                 const credentialHash = computeCredentialHash(apiKey, accessToken);
-                log(`[${sessionId}] credentialHash=${credentialHash.slice(0, 8)}...`);
+                log(`[Server] credentialHash=${credentialHash.slice(0, 8)}...`);
 
                 // --- Create Full Session Object ---
                 const fullSession: ClientSession = {
@@ -845,28 +846,28 @@ async function startServer() {
                 };
                 clearTimeout(fullSession.timeoutId); // Clear the dummy timeout
                 sessions.set(sessionId, fullSession); // Update session map with full data
-                log(`[${sessionId}] Full session object created.`);
+                log(`[Server] Full session object created.`);
 
                 // --- Attachment Phase ---
                 try {
                     // Wait for attachment to complete before setting up message handlers
                     await attachToContainer(fullSession, ws);
-                    log(`[${sessionId}] Successfully attached to container.`);
+                    log(`[Server] Successfully attached to container.`);
 
                     // --- Set up Main Message Handler ---
                     // Only set up *after* successful attachment
                     ws.on('message', (msg) => handleMessage(fullSession, msg as Buffer));
-                    log(`[${sessionId}] Main message handler attached.`);
-                } catch (error) {
+                    log(`[Server] Main message handler attached.`);
+                } catch (_error) {
                     // Attachment failed, but we'll let the error handling in attachToContainer handle it
-                    logError(`[${sessionId}] Attachment error: ${String(error)}`);
+                    logError(`[Server] Attachment error: ${String(_error)}`);
                     // Don't attempt to cleanup here as attachToContainer will have done it already
                 }
             } catch (error) {
                 // Catch errors during the setup process (auth, container create, attach)
-                logError(`[${sessionId}] Error during connection setup: ${error instanceof Error ? error.message : String(error)}`);
+                logError(`[Server] Error during connection setup: ${error instanceof Error ? error.message : String(error)}`);
                 const setupErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Internal server error during setup" };
-                try { ws.send(JSON.stringify(setupErrorMsg)); } catch (error) { void error; /* ignore */ }
+                try { ws.send(JSON.stringify(setupErrorMsg)); } catch { /* ignore */ }
                 ws.close(1011, 'Setup error');
                 if (sessionId) cleanupSession(sessionId); // Cleanup whatever state exists
             }
@@ -877,7 +878,7 @@ async function startServer() {
         // the session immediately – instead we schedule orphan cleanup so the
         // container can be resumed within the RESUME_GRACE_MS window.
         const topLevelCloseHandler = (code: number, reason: Buffer) => {
-            log(`[${sessionId}] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+            log(`[Server] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
 
             const existing = sessions.get(sessionId);
             if (existing && existing.authenticated) {
@@ -892,7 +893,7 @@ async function startServer() {
         ws.on('close', topLevelCloseHandler);
 
         ws.on('error', (err) => {
-            logError(`[${sessionId}] WebSocket error: ${err.message}`);
+            logError(`[Server] WebSocket error: ${err.message}`);
             const existing = sessions.get(sessionId);
             if (existing && existing.authenticated) {
                 scheduleOrphanCleanup(existing);
@@ -1012,13 +1013,9 @@ if (__isDirectRun) {
 
     if (nodeProcess._debugProcess && nodeProcess.pid) {
       process.on('SIGINT', () => {
-        try {
-          // Disable the debugger on first SIGINT to allow clean exit
-          if (nodeProcess._debugEnd) {
-            nodeProcess._debugEnd();
-          }
-        } catch (error) {
-          void error; // Ignore debugger detachment errors – nothing we can do here
+        // Disable the debugger on first SIGINT to allow clean exit
+        if (nodeProcess._debugEnd) {
+          nodeProcess._debugEnd();
         }
       });
     }
@@ -1186,7 +1183,7 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
         try {
             const errorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Internal server error: Container not found" };
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(errorMsg));
-        } catch { logError('Failed to send error status for container not found'); }
+        } catch (_error) { logError('Failed to send error status for container not found'); }
         await terminateSession(session.sessionId, "Container not found", false);
         return;
     }
@@ -1199,9 +1196,18 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
     // connection open which steals STDIN and leaves the new attachment
     // read-only.
     if (session.stdinStream && !session.stdinStream.destroyed) {
+      // Detach termination listeners so that destroying the old stream while
+      // re-attaching doesn't trigger the "user exit" path that would
+      // otherwise call terminateSession and kill the container.
+      session.stdinStream.removeAllListeners('end');
+      session.stdinStream.removeAllListeners('close');
+      session.stdinStream.removeAllListeners('error');
       safeCloseWsStream(session.stdinStream);
     }
     if (session.stdoutStream && session.stdoutStream !== session.stdinStream && !session.stdoutStream.destroyed) {
+      session.stdoutStream.removeAllListeners('end');
+      session.stdoutStream.removeAllListeners('close');
+      session.stdoutStream.removeAllListeners('error');
       safeCloseWsStream(session.stdoutStream as unknown as Duplex);
     }
 
@@ -1231,7 +1237,7 @@ async function attachToContainer(session: ClientSession, ws: WebSocket): Promise
     try {
         if (ws.readyState === WebSocket.OPEN) {
             const connectedMsg: ServerStatusMessage = { type: "status", payload: "connected" };
-            log(`[attachToContainer] Sending 'connected' status to session ${session.sessionId}`);
+            log(`[Server] Sending 'connected' status to session ${session.sessionId}`);
             ws.send(JSON.stringify(connectedMsg));
 
             // Immediately follow with a hello that contains the sessionId for the client to log/store
@@ -1303,7 +1309,7 @@ async function cleanupSession(sessionId: string) {
   if (!session) {
     return;
   }
-  log(`Cleaning up session ${sessionId}...`);
+  log(`[Server] cleanupSession called for sessionId=${sessionId}`);
 
   // Attempt to send disconnected status if ws is open and not already handled by terminateSession
   // This is more of a fallback. terminateSession is the primary place.
@@ -1315,9 +1321,7 @@ async function cleanupSession(sessionId: string) {
       const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason: "Session cleanup initiated" };
       session.ws.send(JSON.stringify(statusMsg));
       log(`Sent 'disconnected' status during cleanup for session ${sessionId} (fallback)`);
-    } catch (error) {
-      void error; // Suppress error logging here to avoid noise if ws is closing.
-    }
+    } catch (_error) { /* ignore */ }
   }
 
   clearTimeout(session.timeoutId);
@@ -1328,9 +1332,9 @@ async function cleanupSession(sessionId: string) {
     log(`stdinStream for session ${sessionId} ended and destroyed.`);
   }
   if (session.stdoutStream) {
-    // session.stdoutStream.end(); // stdoutStream is readable, typically doesn't need end()
-    session.stdoutStream.destroy(); // Ensure stream is fully destroyed
-    log(`stdoutStream for session ${sessionId} destroyed during cleanup.`);
+    // stdoutStream is readable, typically doesn't need end(); just destroy
+    session.stdoutStream.destroy();
+    log(`stdoutStream for session ${sessionId} destroyed.`);
   }
 
   // Remove container if it exists and isn't already being removed
@@ -1408,8 +1412,8 @@ function handleMessage(session: ClientSession, message: Buffer) {
                 } | null = null;
                 try {
                     parsed = JSON.parse(msgStr);
-                } catch (error) {
-                    void error; // Not JSON, continue with raw input handling
+                } catch (_error) {
+                    void _error; // Not JSON, continue with raw input handling
                 }
 
                 // Process JSON control messages (resize etc.)
@@ -1438,8 +1442,8 @@ function handleMessage(session: ClientSession, message: Buffer) {
                         }
                 }
             }
-        } catch (error) {
-            void error; // Not JSON, continue with raw input handling
+        } catch (_error) {
+            void _error; // Not JSON, continue with raw input handling
         }
 
         // Direct pass-through for raw input (both regular characters and control keys)
@@ -1599,6 +1603,19 @@ async function attemptCrossProcessResume(resumeId: string, incomingCredentialHas
     }
 
     const containerInfo = containers[0];
+
+    // If the container is not running we cannot resume – tell client immediately
+    if (containerInfo.State !== 'running') {
+      try {
+        const errMsg: ServerStatusMessage = { type: 'status', payload: 'error', reason: 'Session ended on server' };
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(errMsg));
+      } catch { /* ignore */ }
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close(4004, 'session-ended');
+      }
+      return true; // handled (but cannot resume)
+    }
+
     const container = docker.getContainer(containerInfo.Id);
 
     // Inspect to get environment for credential validation & timestamps
@@ -1618,7 +1635,7 @@ async function attemptCrossProcessResume(resumeId: string, incomingCredentialHas
     const containerCredentialHash = computeCredentialHash(storedApiKey, storedAccessToken);
 
     if (containerCredentialHash !== incomingCredentialHash) {
-      logError(`[${resumeId}] Cross-process resume rejected: credential mismatch`);
+      logError(`[Server] attemptCrossProcessResume: credential mismatch. containerCredentialHash=${containerCredentialHash}`);
       try {
         const errMsg: ServerStatusMessage = { type: 'status', payload: 'error', reason: 'Credentials do not match original session' };
         ws.send(JSON.stringify(errMsg));
@@ -1656,27 +1673,27 @@ async function attemptCrossProcessResume(resumeId: string, incomingCredentialHas
       const lines = logStr.split(/\r?\n/);
       for (const line of lines) {
         if (line.length === 0) continue;
-        try { ws.send(line); } catch { /* ignore */ }
+        try { ws.send(line); } catch (_error) { /* ignore */ }
         newSession.outputBuffer!.push(line);
       }
     } catch (error) {
-      logError(`[${resumeId}] Failed to fetch logs for replay: ${error}`);
+      logError(`[Server] attemptCrossProcessResume: Failed to fetch logs for replay: ${error}`);
     }
 
     // Attach a fresh exec so that stdin/stdout continue
     try {
       await attachToContainer(newSession, ws);
       ws.on('message', (msg) => handleMessage(newSession, msg as Buffer));
-      log(`[${resumeId}] Message handler attached after cross-process resume`);
+      log(`[Server] attemptCrossProcessResume: SUCCESS. sessionId=${resumeId}`);
     } catch (error) {
-      logError(`[${resumeId}] attachToContainer failed during cross-process resume: ${error}`);
+      logError(`[Server] attemptCrossProcessResume: FAILED. sessionId=${resumeId}`);
       await terminateSession(resumeId, 'Failed cross-process resume');
       return true; // handled (but failed)
     }
 
     return true;
   } catch (error) {
-    logError(`[${resumeId}] Error during cross-process resume attempt: ${error}`);
+    logError(`[Server] attemptCrossProcessResume: Error during cross-process resume attempt: ${error}`);
     return false; // Fall back to fresh session
   }
 }
