@@ -52,6 +52,7 @@ if [[ -z "$RESTRICTED_SHELL_RESTARTED" ]]; then
   export RESTRICTED_SHELL_RESTARTED=true
 else
   # This is a restart after Ctrl+C
+  : # Add placeholder null command
 fi
 
 # Function to handle interrupt signals
