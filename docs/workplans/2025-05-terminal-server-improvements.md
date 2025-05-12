@@ -175,16 +175,19 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 ## Phase 4: Native CLI Enhancements (Related)
 
 ### Step 4.1: Post-Install Instructions
-- **Task:** Ensure that after installing the CLI (`@ably/cli`) globally via npm/pnpm/yarn, the user sees the Ably logo and basic "run `ably`" instructions.
+- **Task:** Ensure that after installing the CLI (`@ably/cli`) globally via npm/pnpm/yarn, the user sees the Ably logo, version, and basic "run `ably --help` / `ably login`" instructions.
 - **Details:**
-    - This likely involves configuring the `postinstall` script in `package.json`.
-    - The script should conditionally execute only during global installs (`npm install -g` or equivalent).
-    - Use the existing logo utility (`src/utils/logo.ts`).
+    - Implemented via a `postinstall` script in `package.json`.
+    - Created `src/scripts/postinstall-welcome.ts` which uses the `displayLogo` utility from `src/utils/logo.ts` and reads the version from `package.json`.
+    - The script is compiled to `dist/scripts/postinstall-welcome.js` during the `pnpm prepare` (build) step.
+    - Includes checks to avoid displaying the message during CI builds or local project dependency installs.
+    - The script runs `node ./dist/scripts/postinstall-welcome.js`.
 - **Testing:**
-    - Manual testing of global install (`npm i -g .`, `pnpm add -g .`) in a clean environment.
-    - Potentially an integration test simulating a global install if feasible.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+    - Manual testing: Run `pnpm prepare`, then test with global install simulation `pnpm add -g . --force` (use `--force` cautiously if overwriting an existing link) in a clean environment or directory outside the project.
+    - Verify the logo, version, and welcome messages appear correctly.
+    - Verify the message does *not* appear after a standard `pnpm install` within the project directory.
+- **Status:** `[x] Done`
+- **Summary:** Added a `postinstall` script (`src/scripts/postinstall-welcome.ts`) that displays the Ably logo, CLI version, and getting started instructions (`ably --help`, `ably login`) after a successful global installation. Updated `package.json` to execute the compiled version of this script.
 
 ---
 
@@ -196,3 +199,4 @@ Tasks:
 
 - [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections.
 - [ ] Feature: The terminal server should expose key metrics via Promotheus
+**Completion:** Once all steps are marked as `
