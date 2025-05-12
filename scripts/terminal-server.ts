@@ -305,7 +305,7 @@ async function createContainer(
     // Create base environment variables with better defaults for terminal behavior
     const env = [
       // These environment variables are critical for proper terminal behavior
-      'TERM=xterm-256color',
+      'TERM=dumb', // Disable ANSI escape sequences to fix spinner bug from Ora
       'COLORTERM=truecolor',
       'LANG=en_US.UTF-8',
       'LC_ALL=en_US.UTF-8',

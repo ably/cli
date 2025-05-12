@@ -167,8 +167,9 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
     - **Bug b):** Examine how commands and arguments are parsed and passed from the web client through the server to the CLI container. Ensure quotes are preserved or handled correctly during this process. Check shell interpretation within the container.
 - **Testing:**
     - Playwright tests: Reproduce the bug scenarios (`ably help status`, `ably help ask "quoted query"`) and verify they are fixed.
-- **Status:** `[ ] Not Started`
+- **Status:** `[x] Done`
 - **Summary:**
+  • **Bug a** – Changed terminal server to use `dumb` as the terminal type to stop it from sending ASCII chars that were causign the term server and xterm to go into a high CPU loop. This means we will not have Ora progress indicators in the web CLI
   • **Bug b** – Quoted arguments lost: The sandbox shell script now parses arguments with `eval set --`, preserving standard quoting after strict injection checks. Commands such as `ably help ask "what is ably"` are forwarded intact to the CLI. All unit, integration and E2E suites pass.
 
 ## Phase 4: Native CLI Enhancements (Related)
