@@ -183,7 +183,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         ptyBuffer.current = ptyBuffer.current.slice(ptyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
       }
       if (ptyBuffer.current.includes(TERMINAL_PROMPT_IDENTIFIER)) {
-        // prompt detected
+        console.log('[AblyCLITerminal] Shell prompt detected – session active');
         clearStatusDisplay(); // Clear the status box as per plan
         setIsSessionActive(true);
         // Full session confirmed – now reset global reconnect state
@@ -191,9 +191,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
         if (term.current) term.current.focus();
         clearPtyBuffer();
+        // Fully reset global reconnect tracking so no further auto retries are queued
+        grResetState();
+
+        // Send an extra newline *after* a tiny delay to ensure streams are attached server-side
+        setTimeout(() => {
+          if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            console.log('[AblyCLITerminal] Auto-sending newline to request shell prompt');
+            socketRef.current.send('\r');
+          } else {
+            console.warn('[AblyCLITerminal] Socket not open when attempting auto-newline');
+          }
+        }, 120);
       }
     }
-  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay]);
+  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay, socket]);
 
   const clearAnimationMessages = useCallback(() => {
     setReconnectAttemptMessage('');
@@ -270,8 +282,19 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   const connectWebSocket = useCallback(() => {
     // console.log('[AblyCLITerminal] connectWebSocket called.');
+
+    // Skip attempt if terminal not visible to avoid unnecessary server load
+    if (!isVisible) {
+      return;
+    }
+
+    // Prevent duplicate connections if one is already open/connecting
+    if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+      console.warn('[AblyCLITerminal] connectWebSocket called but socket already open/connecting – skip');
+      return;
+    }
+
     if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) {
-      // console.log('[AblyCLITerminal] Closing existing socket before creating new one.');
       socketRef.current.close();
     }
 
@@ -328,8 +351,31 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           if (msg.type === 'status') {
             // received server status message
             console.log(`[AblyCLITerminal] Received server status message: ${msg.payload}`);
-            // Server-driven status might override client, or inform it.
-            // For now, client primarily drives its status based on WebSocket events and PTY.
+
+            // Treat explicit 'connected' status from server as authoritative –
+            // this avoids hanging in the "connecting" state if prompt detection
+            // fails (e.g. due to coloured PS1 or locale differences).
+            if (msg.payload === 'connected') {
+              clearStatusDisplay();
+              setIsSessionActive(true);
+              updateConnectionStatusAndExpose('connected');
+
+              // Remove any residual spinner char by writing a newline locally
+              if (term.current) {
+                term.current.write('\r\n');
+                term.current.focus();
+              }
+
+              // Request a fresh prompt from the container
+              if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                socketRef.current.send('\r');
+              }
+
+              clearPtyBuffer();
+              return;
+            }
+
+            // Handle error & disconnected payloads
             if (msg.payload === 'error' || msg.payload === 'disconnected') {
               const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
               if (term.current) term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
@@ -354,7 +400,12 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
       else dataStr = new TextDecoder().decode(event.data); // Should handle Uint8Array from server
 
-      if (term.current) term.current.write(dataStr);
+      // Filter stray PTY meta JSON if server failed to strip it
+      if (/\{[^}]*stream[^}]*hijack[^}]*\}/.test(dataStr.trim())) {
+        console.warn('[AblyCLITerminal] Suppressed PTY meta-message text');
+      } else if (term.current) {
+        term.current.write(dataStr);
+      }
       handlePtyData(dataStr); // Pass PTY data for prompt detection
 
     } catch (_e) { console.error('[AblyCLITerminal] Error processing message:', _e); }
@@ -386,6 +437,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       4008, // Policy violation / auth timeout / invalid message format
       1013, // Try again later (server overloaded / capacity)
       4002, // Inactivity timeout initiated by client
+      4000, // User explicitly exited the shell
+      1005, // No status code present (server sent none)
+      1006, // Abnormal closure (no close frame)
     ]);
 
     if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
@@ -404,6 +458,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
 
       setShowManualReconnectPrompt(true);
+      showManualReconnectPromptRef.current = true;
       return; // Do NOT schedule automatic reconnection
     }
 
@@ -426,6 +481,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         setOverlay({variant:'error',title,lines:[message1, message2, message3]});
       }
       setShowManualReconnectPrompt(true);
+      showManualReconnectPromptRef.current = true;
       return; // Do not schedule further reconnect
     } else {
       grIncrement();
@@ -444,6 +500,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           grCancelReconnect();
         }
         setShowManualReconnectPrompt(true);
+        showManualReconnectPromptRef.current = true;
         return; // Do not schedule further reconnect
       }
 
@@ -477,6 +534,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           if (showManualReconnectPromptRef.current) {
             // manual reconnect
             console.log('[AblyCLITerminal] Enter pressed for manual reconnect.');
+            // Clear overlay and prompt before initiating new connection
+            clearAnimationMessages(); // removes spinner/box & overlay
             showManualReconnectPromptRef.current = false;
             setShowManualReconnectPrompt(false);
             grResetState();
@@ -693,6 +752,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       grCancelReconnect();
       grResetState();
       setShowManualReconnectPrompt(true);
+      showManualReconnectPromptRef.current = true;
       updateConnectionStatusAndExpose('disconnected');
     }, INACTIVITY_TIMEOUT_MS);
   }, [INACTIVITY_TIMEOUT_MS, grCancelReconnect, grResetState, updateConnectionStatusAndExpose]);
