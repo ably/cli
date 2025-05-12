@@ -2,7 +2,7 @@ import { Command, Flags } from "@oclif/core";
 import chalk from "chalk";
 import fetch from "node-fetch";
 import open from "open";
-import ora from "ora";
+import { createCliSafeSpinner } from "../../utils/web-cli-spinner.js";
 
 interface StatusResponse {
   status: boolean;
@@ -25,7 +25,7 @@ export default class StatusCommand extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(StatusCommand);
 
-    const spinner = ora("Checking Ably service status...").start();
+    const spinner = createCliSafeSpinner("Checking Ably service status...").start();
 
     try {
       const response = await fetch("https://ably.com/status/up.json");

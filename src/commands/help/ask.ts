@@ -1,6 +1,6 @@
 import { Args, Flags } from "@oclif/core";
 import chalk from "chalk";
-import ora from "ora";
+import { createCliSafeSpinner } from "../../utils/web-cli-spinner.js";
 
 import { ControlBaseCommand } from "../../control-base-command.js";
 import { Conversation, HelpResponse } from "../../services/control-api.js";
@@ -34,7 +34,8 @@ export default class AskCommand extends ControlBaseCommand {
     const { args, flags } = await this.parse(AskCommand);
 
     const controlApi = this.createControlApi(flags);
-    const spinner = ora("Thinking...").start();
+    
+    const spinner = createCliSafeSpinner("Thinking...").start();
 
     try {
       let response: HelpResponse;
