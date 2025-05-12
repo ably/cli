@@ -184,7 +184,7 @@ test.describe('Web CLI E2E Tests', () => {
     await page.keyboard.press('Enter');
 
     // Wait for specific output from 'ably --version'
-    const versionOutputText = '@ably/cli/0.3.3'; // Expected text
+    const versionOutputText = '@ably/cli/0.4.0'; // Expected text
     await expect(page.locator(terminalSelector)).toContainText(versionOutputText, { timeout: 15000 });
     console.log("'ably --version' output verified.");
 
