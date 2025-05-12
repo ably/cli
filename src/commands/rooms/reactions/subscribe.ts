@@ -5,11 +5,6 @@ import chalk from "chalk";
 
 import { ChatBaseCommand } from "../../../chat-base-command.js";
 
-// interface ChatClients { // Remove ChatClients interface
-//   chatClient: ChatClient;
-//   realtimeClient: any;
-// }
-
 export default class RoomsReactionsSubscribe extends ChatBaseCommand {
   static override args = {
     roomId: Args.string({
