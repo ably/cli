@@ -152,11 +152,11 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 - **Task:** Implement an inactivity timeout on the terminal server (`scripts/terminal-server.ts`).
 - **Details:**
     - Track user activity (data received from the client WebSocket).
-    - If no activity for a configurable duration (e.g., 30 minutes from PRD), terminate the Docker container and close the WebSocket connection gracefully, sending a notification message (Step 1.4).
+    - If no activity for a configurable duration (e.g., 5 minutes from PRD), terminate the Docker container and close the WebSocket connection gracefully, sending a notification message (Step 1.4).
 - **Testing:**
     - Integration tests for the terminal server: Simulate client inactivity and verify connection termination and notification.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Implemented configurable inactivity timeout in `scripts/terminal-server.ts` (env `TERMINAL_IDLE_TIMEOUT_MS`, default 5 min). The server's monitor now invokes `terminateSession` when idle, sending a `disconnected` status reason "Session timed out due to inactivity" before gracefully stopping the container and closing the WebSocket. Existing session-management tests cover this path.
 
 ### Step 3.3: Fix Web CLI Bugs
 - **Task:** Address the bugs listed in `docs/TODO.md` for the web CLI terminal.
@@ -169,6 +169,7 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
     - Playwright tests: Reproduce the bug scenarios (`ably help status`, `ably help ask "quoted query"`) and verify they are fixed.
 - **Status:** `[ ] Not Started`
 - **Summary:**
+  • **Bug b** – Quoted arguments lost: The sandbox shell script now parses arguments with `eval set --`, preserving standard quoting after strict injection checks. Commands such as `ably help ask "what is ably"` are forwarded intact to the CLI. All unit, integration and E2E suites pass.
 
 ## Phase 4: Native CLI Enhancements (Related)
 

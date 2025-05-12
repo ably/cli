@@ -34,7 +34,9 @@ const DEFAULT_MAX_SESSIONS = 50;
 const AUTH_TIMEOUT_MS = 10_000; // 10 seconds
 const SHUTDOWN_GRACE_PERIOD_MS = 10_000; // 10 seconds for graceful shutdown
 // Add session timeout constants
-const MAX_IDLE_TIME_MS = 10 * 60 * 1000;      // 10 minutes of inactivity
+const MAX_IDLE_TIME_MS = process.env.TERMINAL_IDLE_TIMEOUT_MS
+  ? Number(process.env.TERMINAL_IDLE_TIMEOUT_MS)
+  : 5 * 60 * 1000;      // 5 minutes of inactivity
 const MAX_SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes total
 // Max lines of recent output retained per session for reconnection resumes
 const OUTPUT_BUFFER_MAX_LINES = 1000;
