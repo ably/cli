@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import chalk from 'chalk';
 
 /**
  * Display the Ably logo with a gradient color
@@ -66,4 +66,14 @@ export function displayLogo(
 
     log(coloredLine);
   }
+}
+
+/**
+ * Display the Ably logo with the provided message
+ * @param message The message to display after the logo
+ */
+export function showLogoAndText(message: string): void {
+  displayLogo(console.log);
+  console.log('');
+  console.log(chalk.bold(message));
 }
