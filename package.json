@@ -33,8 +33,10 @@
     "terminal-server": "node dist/scripts/terminal-server.js",
     "diagnostics:container": "bash scripts/diagnostics-container.sh",
     "diagnostics:server": "pnpm run build && node dist/scripts/diagnostics-server.js",
-    "dev:terminal-server": "docker build . -t ably-cli-sandbox && pnpm build && pnpm terminal-server",
-    "dev:examples": "pnpm build:packages && pnpm build:examples && cd examples/web-cli && pnpm dev"
+    "build:container": "docker build . -t ably-cli-sandbox",
+    "dev:terminal-server": "pnpm build:container && pnpm build && pnpm terminal-server",
+    "dev:examples": "pnpm build:packages && pnpm build:examples && cd examples/web-cli && pnpm dev",
+    "dev:container": "pnpm build:container && bash scripts/run-dev-container.sh"
   },
   "author": "Ably <support@ably.com>",
   "license": "Apache-2.0",
