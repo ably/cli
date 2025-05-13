@@ -106,7 +106,7 @@ if $USE_PLAYWRIGHT; then
   fi
   echo "Using Playwright test runner for Web CLI tests..."
   # Pass ONLY the specific web-cli test file to Playwright
-  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
+  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE --workers 1"
   echo "Executing command: $COMMAND"
 elif [[ -n "$TEST_PATTERN" ]]; then
   # Running a specific test file or pattern
