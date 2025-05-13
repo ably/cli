@@ -193,7 +193,7 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 
 Tasks:
 
-- [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections.
+- [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections. Note I can see this in terminal logs "[TerminalServer 2025-05-13T12:25:36.217Z] Session ba69ef0f-74bb-49e0-8f31-4157b18f0115 removed. Active sessions: 2", with no message after that, indicating that this is indeed a problem given there are seemingly no active connections.
 - [ ] Feature: The terminal server should expose key metrics via Promotheus
 
 ## Phase 6: Implement Split-Screen Terminal in Web CLI Component
@@ -217,7 +217,7 @@ Tasks:
 - **Details:**
     - When the split view is activated, a second `Xterm.js` instance and WebSocket connection should be initialized for the right pane.
     - This second session should use the same `apiKey` and `controlAccessToken` as the primary session.
-    - Each session (left and right) must manage its own state (connection, buffer, etc.) independently.
+    - Each session (left and right) must manage its own state (connection, buffer, etc.) independently. The refresh of the browser must work too, with each session managing it's session state indepdently to survive a page reload.
     - Implement logic to handle closing one session and potentially making the other session primary.
 - **Testing:**
     - Unit tests: Mock WebSocket connections and verify that two independent sessions can be created, connect, and operate (send/receive mock data).
