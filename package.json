@@ -28,6 +28,7 @@
     "prepack": "pnpm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
     "prepare": "pnpm run build && oclif manifest && oclif readme --no-aliases",
     "postinstall": "node ./dist/scripts/postinstall-welcome.js",
+    "preversion": "pnpm run prepare",
     "version": "oclif readme && git add README.md",
     "cli": "bin/run.js",
     "terminal-server": "node dist/scripts/terminal-server.js",
