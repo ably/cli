@@ -189,14 +189,74 @@ This plan outlines the steps to implement the features tagged with `[feat/termin
 - **Status:** `[x] Done`
 - **Summary:** Added a `postinstall` script (`src/scripts/postinstall-welcome.ts`) that displays the Ably logo, CLI version, and getting started instructions (`ably --help`, `ably login`) after a successful global installation. Updated `package.json` to execute the compiled version of this script.
 
----
-
-**Completion:** Once all steps are marked as `Done`, have passed the mandatory workflow checks (build, lint, test, docs), **and the corresponding tasks in `docs/TODO.md` are marked complete, and all affected documentation and rules files (`/docs`, `.cursor/rules/`) have been updated,** this work plan is complete.
-
 ## Phase 5: Fix bugs or feature advancements identified during this development process
 
 Tasks:
 
 - [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections.
 - [ ] Feature: The terminal server should expose key metrics via Promotheus
-**Completion:** Once all steps are marked as `
+
+## Phase 6: Implement Split-Screen Terminal in Web CLI Component
+
+### Step 6.1: Basic UI for Split-Screen
+- **Task:** Implement the UI elements for split-screen mode within `AblyCliTerminal.tsx`.
+- **Details:**
+    - Add a "split" icon (e.g., using `lucide-react`) overlaid on the top-right of the terminal view when only one session is active.
+    - On clicking the split icon, the view should divide into two panes (left and right).
+    - Implement a tab bar above the terminal panes. Each tab should display a default name (e.g., "Terminal 1", "Terminal 2") and an "X" close button.
+    - The split icon should be hidden when two panes are visible and reappear if one is closed.
+    - Basic styling for panes, tabs, and borders to ensure clear visual separation (dark theme).
+- **Testing:**
+    - Unit tests for `AblyCliTerminal.tsx` verifying the rendering of the split icon, tab bar, and panes based on component state.
+    - Playwright tests: Verify the split icon appears, clicking it creates two panes and a tab bar, tabs have close buttons, and closing a pane reverts the UI correctly.
+- **Status:** `[ ] Not Started`
+- **Summary:**
+
+### Step 6.2: Second Terminal Session Logic
+- **Task:** Enable the instantiation and management of a second independent terminal session.
+- **Details:**
+    - When the split view is activated, a second `Xterm.js` instance and WebSocket connection should be initialized for the right pane.
+    - This second session should use the same `apiKey` and `controlAccessToken` as the primary session.
+    - Each session (left and right) must manage its own state (connection, buffer, etc.) independently.
+    - Implement logic to handle closing one session and potentially making the other session primary.
+- **Testing:**
+    - Unit tests: Mock WebSocket connections and verify that two independent sessions can be created, connect, and operate (send/receive mock data).
+    - Playwright tests: Verify that commands can be run independently in both panes. Test closing one pane and ensuring the other remains functional.
+- **Status:** `[ ] Not Started`
+- **Summary:**
+
+### Step 6.3: Split-Screen Configuration and Props
+- **Task:** Introduce a prop to enable/disable split-screen and update documentation.
+- **Details:**
+    - Add a new boolean prop `enableSplitScreen` (default `false`) to `AblyCliTerminal.tsx`.
+    - If `enableSplitScreen` is `false`, the split icon and related functionality should be disabled.
+    - Update the React component's `README.md` (or relevant documentation) to describe the `enableSplitScreen` prop and how to use the split-screen feature.
+- **Testing:**
+    - Unit tests: Verify that the split icon is not rendered and functionality is absent when `enableSplitScreen={false}`.
+    - Playwright tests: Test the component in both modes (`enableSplitScreen={true}` and `enableSplitScreen={false}`).
+- **Status:** `[ ] Not Started`
+- **Summary:**
+
+### Step 6.4: Connection Status Handling for Split-Screen
+- **Task:** Adapt connection status display and event emission for split-screen mode.
+- **Details:**
+    - The main `onConnectionStatusChange` prop of `AblyCliTerminal` should only report the status of the primary (left-most, or sole remaining) terminal.
+    - Visual connection status indicators (connecting animation, "Disconnected" message, reconnect prompts, error boxes from Step 1.4) must be displayed *within each individual terminal pane* they pertain to, centered over that specific pane.
+- **Testing:**
+    - Unit tests: Simulate connection events for both panes and verify that `onConnectionStatusChange` emits for the primary only, and that internal state for visual overlays is correctly set for each pane.
+    - Playwright tests: Simulate disconnects/reconnects for each pane independently. Verify that visual overlays appear correctly within the specific pane and that `onConnectionStatusChange` behaves as expected.
+- **Status:** `[ ] Not Started`
+- **Summary:**
+
+### Step 6.5: (Optional) Resizable Panes
+- **Task:** Implement draggable resizing for the split terminal panes.
+- **Details:**
+    - Add a draggable vertical divider between the two terminal panes.
+    - Dragging the divider should adjust the relative widths of the panes.
+    - Ensure `xterm.js` instances correctly reflow/resize when their container dimensions change.
+- **Testing:**
+    - Playwright tests: Verify that the divider is draggable and that resizing correctly adjusts pane widths and terminal content rendering.
+- **Status:** `[ ] Not Started`
+- **Summary:**
+
+**Completion:** Once all steps are marked as `Done`, have passed the mandatory workflow checks (build, lint, test, docs), **and the corresponding tasks in `docs/TODO.md` are marked complete, and all affected documentation and rules files (`/docs`, `.cursor/rules/`) have been updated,** this work plan is complete.

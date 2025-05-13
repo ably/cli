@@ -276,6 +276,27 @@ If a data plane command is run without explicit auth flags/env vars and no app/k
     - Reads `ABLY_ACCESS_TOKEN` and `ABLY_API_KEY` from `.env` file or environment.
     - Includes usage instructions in `README.md`.
 
+### 5.6.1. Split-Screen Terminal Functionality (Optional)
+
+The `AblyCliTerminal` React component can optionally support a split-screen mode, allowing for two concurrent terminal sessions.
+
+- **Activation & UI**:
+    - A "split" icon is displayed on the terminal. Clicking it divides the view into two side-by-side terminal panes.
+    - When split, a tab bar appears above the panes, with each tab representing a session and including a close button.
+    - If one of two sessions is closed, the remaining session takes the full view, and the "split" icon reappears.
+    - Visual styling will be modern and dark-themed, with clear separation of elements.
+- **Sessions & Authentication**:
+    - Supports a maximum of two independent sessions.
+    - Both sessions share the same `controlAccessToken` and `apiKey` provided to the parent component.
+- **Connection Status**:
+    - The component's primary `onConnectionStatusChange` prop reflects the status of the left-most (or sole remaining) terminal.
+    - In-terminal visual status indicators (connecting, disconnected, errors) are displayed *within each respective terminal pane*.
+- **Configuration**:
+    - Enabled via a new boolean prop (e.g., `enableSplitScreen`), defaulting to `false`.
+    - Documentation for this prop and its usage will be available in the component's `README.md`.
+- **Resizable Panes (Optional Enhancement)**:
+    - The ability to drag a divider to resize panes is a potential future improvement.
+
 ### 5.7. Model Context Protocol (MCP) Server
 
 *(This section describes running the CLI as an MCP server for AI tools)*
