@@ -110,6 +110,19 @@ export default [
     },
     rules: {
       "unicorn/prefer-module": "off",
+      "unicorn/no-negated-condition": "off",
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "no-console": "off",
+    },
+  },
+  {
+    // Configuration for the standalone terminal-server script (large, experimental – allow relaxed typing)
+    files: ["scripts/terminal-server.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "unicorn/prefer-optional-catch-binding": "off",
     },
   },
   {

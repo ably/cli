@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/prefer-optional-catch-binding */
 import { WebSocket, WebSocketServer } from "ws";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1453,11 +1452,9 @@ function handleMessage(session: ClientSession, message: Buffer) {
             // Debug: log the very first keystroke we receive after an attach to
             // confirm that STDIN is reaching the server side. We store a flag
             // on the session so we only log once per attachment.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             if (!(session as any)._debugLoggedFirstKey) {
               const preview = message.subarray(0, 20).toString('utf8');
               log(`First client input after attach for session ${session.sessionId}: ${JSON.stringify(preview)}`);
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (session as any)._debugLoggedFirstKey = true;
             }
 

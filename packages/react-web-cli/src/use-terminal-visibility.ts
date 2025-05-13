@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-negated-condition, no-undef */
 import React, { useEffect, useState, useRef } from 'react';
 
 /**
