@@ -25,6 +25,7 @@ export default [
       "**/.nyc_output/**",
       "**/tsconfig.tsbuildinfo",
       "**/*.d.ts",
+      "scripts/postinstall-welcome.ts",
       "node_modules/xterm/**",
       "packages/react-web-cli/dist/index.js",
       "packages/react-web-cli/dist/index.mjs",

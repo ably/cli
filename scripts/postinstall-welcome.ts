@@ -1,6 +1,7 @@
-#!/usr/bin/env node
-
-import { displayLogo } from '../utils/logo.js';
+/* eslint-disable n/no-missing-import, n/no-missing-require */
+/* eslint-disable-next-line n/no-missing-import */
+// @ts-ignore Dynamic require to avoid TS path resolution issues
+const { displayLogo } = require('../utils/logo.js') as { displayLogo: (logFn: (msg: string) => void) => void };
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
