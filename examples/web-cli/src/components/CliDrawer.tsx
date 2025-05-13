@@ -3,7 +3,7 @@
 import React from "react"
 
 import { useEffect, useRef, useState } from "react"
-import { X } from "lucide-react"
+import { X, SquareTerminal } from "lucide-react"
 import { cn } from "../lib/utils"
 
 interface CliDrawerProps {
@@ -100,9 +100,9 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
   // Terminal icon component embedded directly in this file
   const TerminalIcon = ({ className }: { className?: string }) => (
     <div
-      className={`bg-transparent border border-white rounded-sm flex items-start justify-start p-0.5 ${className || ""}`}
+      className={`flex items-center justify-center ${className || ""}`}
     >
-      <span className="text-[10px] leading-none text-white font-mono">{">"}_</span>
+      <SquareTerminal size={18} className="text-white" />
     </div>
   )
 
@@ -143,7 +143,7 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
           {/* Header bar */}
           <div className="flex items-center justify-between px-4 h-10 bg-zinc-900 flex-shrink-0 border-b border-gray-700 mt-3">
             <div className="flex items-center gap-3">
-              <TerminalIcon className="w-5 h-4" />
+              <SquareTerminal size={18} className="text-white" />
               <span className="font-medium text-sm">Ably Shell</span>
               <span className="text-xs px-2 py-0.5 bg-[#3A3A3A] text-[#F5A623] rounded-sm font-medium">TEST MODE</span>
             </div>
