@@ -5,7 +5,7 @@ import { getVersionInfo, formatVersionJson } from '../../utils/version.js';
  * Hook to intercept the --version flag and support JSON output
  */
 const hook: Hook<'init'> = async function (opts) {
-  const { argv: _argv, config } = opts;
+  const { config } = opts;
 
   // Use raw process.argv to guarantee we see all flags
   const rawArgv = process.argv.slice(2);
@@ -22,8 +22,8 @@ const hook: Hook<'init'> = async function (opts) {
 
     // Handle JSON output
     if (hasJsonFlag || hasPrettyJsonFlag) {
-      console.log(formatVersionJson(versionInfo, hasPrettyJsonFlag));
-      // Exit immediately to prevent default behavior
+      const jsonOutput = formatVersionJson(versionInfo, hasPrettyJsonFlag);
+      console.log(jsonOutput);
       process.exit(0);
     }
     // Otherwise, let oclif handle default format

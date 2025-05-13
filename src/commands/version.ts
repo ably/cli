@@ -1,5 +1,5 @@
 import { AblyBaseCommand } from "../base-command.js";
-import { getVersionInfo, formatVersionString } from "../utils/version.js";
+import { getVersionInfo, formatVersionString, formatVersionJson } from "../utils/version.js";
 
 export default class Version extends AblyBaseCommand {
   static description = "Display CLI version information";
@@ -21,8 +21,7 @@ export default class Version extends AblyBaseCommand {
 
     // Check if output should be in JSON format
     if (this.shouldOutputJson(flags)) {
-      // Use shared formatting with AblyBaseCommand's JSON formatting
-      this.log(this.formatJsonOutput(versionInfo, flags));
+      this.log(formatVersionJson(versionInfo, Boolean(flags["pretty-json"])));
     } else {
       // Use shared string formatting
       this.log(formatVersionString(this.config));

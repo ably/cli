@@ -15,7 +15,7 @@
     "resolveJsonModule": true,
     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
-  "include": ["src/**/*", "scripts/terminal-server.ts", "scripts/postinstall-welcome.ts"],
+  "include": ["src/**/*", "scripts/terminal-server.ts", "scripts/postinstall-welcome.ts", "scripts/diagnostics-server.ts"],
   "exclude": ["node_modules", "dist", "test/**/*", "examples/**/*"],
   "ts-node": {
     "esm": true
