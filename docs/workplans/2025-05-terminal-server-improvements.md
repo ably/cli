@@ -195,6 +195,7 @@ Tasks:
 
 - [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections. Note I can see this in terminal logs "[TerminalServer 2025-05-13T12:25:36.217Z] Session ba69ef0f-74bb-49e0-8f31-4157b18f0115 removed. Active sessions: 2", with no message after that, indicating that this is indeed a problem given there are seemingly no active connections.
 - [ ] Feature: The terminal server should expose key metrics via Promotheus
+- [ ] Bug: After some amount of refreshes, following a `clear` statement, I managed to see the following: `<in":true,"stdout":true,"stderr":true,"hijack":true}` in the termianl serfver console. We need to understand how these commands are making it through the temrinal and strip them.
 
 ## Phase 6: Implement Split-Screen Terminal in Web CLI Component
 
