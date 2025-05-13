@@ -8,11 +8,15 @@ import { fileURLToPath } from 'node:url';
 // Helper to require JSON files (like package.json) in ES modules
 const require = createRequire(import.meta.url);
 
-// NOTE: dynamic import of displayLogo will be used below
-
 // Resolve __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Avoid printing during CI builds or Netlify deploys - check this early
+if (process.env.CI === 'true' || process.env.NETLIFY || process.env.CI) {
+  console.log('CI environment detected, skipping welcome message');
+  process.exit(0);
+}
 
 // Load package.json to get the version
 // Path from dist/scripts/postinstall-welcome.js to root package.json is ../../package.json
@@ -23,11 +27,6 @@ try {
   version = packageJson.version;
 } catch (error) {
   // console.warn(`[postinstall] Could not read version from ${packageJsonPath}:`, error);
-}
-
-// Avoid printing during CI builds or Netlify deploys
-if (process.env.CI || process.env.NETLIFY) {
-  process.exit(0);
 }
 
 // Basic check to avoid running during local 'pnpm install' within the mono-repo or project itself.
@@ -43,14 +42,18 @@ try {
   // Ignore errors and proceed
 }
 
-// Simple ASCII art for CLI
-
 // Display the version
 try {
-  const { displayLogo } = await import('../src/utils/logo.js');
-  displayLogo(console.log);
-} catch {
+  // Try to use the correct relative path for the logo util
+  const logoPath = path.resolve(__dirname, '../src/utils/logo.js');
+  // Use a dynamic import with relative path
+  const logoModule = await import('../src/utils/logo.js');
+  if (logoModule && typeof logoModule.displayLogo === 'function') {
+    logoModule.displayLogo(console.log);
+  }
+} catch (error) {
   // Fallback: no logo
+  console.log('[Welcome] Error displaying logo:', error);
 }
 
 console.log(`   Version: ${version}\n`);
@@ -60,4 +63,4 @@ console.log('Ably CLI installed successfully!');
 console.log('To get started, explore commands:');
 console.log('  ably --help');
 console.log('\nOr log in to your Ably account:');
-console.log('  ably login'); 
+console.log('  ably login');

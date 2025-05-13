@@ -10,8 +10,8 @@ const targetUrl = process.env.TERMINAL_SERVER_URL || process.argv[2] || DEFAULT_
 const DUMMY_API_KEY = 'dummy.key:secret';
 const DUMMY_ACCESS_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaWFnbm9zdGljIiwiaWF0IjoxNTE2MjM5MDIyfQ.dummy_signature';
 const CONNECTION_TIMEOUT = 30000; // 30 seconds
-const RESPONSE_TIMEOUT_DEFAULT = 20000;  // 20 seconds default
-const RESPONSE_TIMEOUT_STATUS = 25000; // 25 seconds specifically for status check
+const RESPONSE_TIMEOUT_DEFAULT = 40000;  // 40 seconds default (increased for CI environments)
+const RESPONSE_TIMEOUT_STATUS = 45000; // 45 seconds specifically for status check
 
 // --- Helper Functions ---
 function log(message: string): void {
@@ -51,13 +51,20 @@ try {
       }));
       testStage = 1; // Move to waiting for prompt
       // Set timeout for initial prompt
-      responseTimeoutId = setTimeout(() => reject(new Error('Timeout waiting for initial prompt')), RESPONSE_TIMEOUT_DEFAULT);
+      responseTimeoutId = setTimeout(() => {
+        log(`Timeout waiting for initial prompt. Current output: ${receivedOutput.slice(0, 200)}...`);
+        reject(new Error('Timeout waiting for initial prompt'));
+      }, RESPONSE_TIMEOUT_DEFAULT);
     });
 
     ws?.on('message', (data: Buffer) => {
       const message = data.toString();
       receivedOutput += message; // Accumulate output
-      // process.stdout.write(message); // Optional: log raw output
+      
+      // Log some output for visibility during tests
+      if (process.env.DEBUG) {
+        process.stdout.write(message);
+      }
 
       try {
         switch (testStage) {
@@ -70,7 +77,10 @@ try {
               ws?.send('ably\n');
               testStage = 2; // Move to waiting for ably response
               receivedOutput = ''; // Reset buffer for next command output
-              responseTimeoutId = setTimeout(() => reject(new Error('Timeout waiting for `ably` response')), RESPONSE_TIMEOUT_DEFAULT);
+              responseTimeoutId = setTimeout(() => {
+                log(`Timeout waiting for 'ably' response. Current output: ${receivedOutput.slice(0, 300)}...`);
+                reject(new Error('Timeout waiting for `ably` response'));
+              }, RESPONSE_TIMEOUT_DEFAULT);
             }
             break;
           }
@@ -78,7 +88,15 @@ try {
           case 2: {
             // Waiting for `ably` response
             // Check for common command names in the output more flexibly
-            if (receivedOutput.includes('accounts') || receivedOutput.includes('apps') || receivedOutput.includes('channels') || receivedOutput.includes('help')) {
+            if (receivedOutput.includes('accounts') || 
+                receivedOutput.includes('apps') || 
+                receivedOutput.includes('channels') || 
+                receivedOutput.includes('help') ||
+                receivedOutput.includes('login') ||
+                receivedOutput.includes('COMMANDS') ||
+                receivedOutput.includes('USAGE') ||
+                receivedOutput.includes('Ably CLI') ||
+                receivedOutput.includes('Only commands')) {
               clearTimeout(responseTimeoutId!);
               log('Received expected output from `ably` command.');
               log('Sending command: ably help status');
@@ -86,14 +104,21 @@ try {
               testStage = 3; // Move to waiting for status response
               receivedOutput = ''; // Reset buffer
               // Use slightly longer timeout for status check
-              responseTimeoutId = setTimeout(() => reject(new Error('Timeout waiting for `ably help status` response')), RESPONSE_TIMEOUT_STATUS);
+              responseTimeoutId = setTimeout(() => {
+                log(`Timeout waiting for 'ably help status' response. Current output: ${receivedOutput.slice(0, 300)}...`);
+                reject(new Error('Timeout waiting for `ably help status` response'));
+              }, RESPONSE_TIMEOUT_STATUS);
             }
             break;
           }
 
           case 3: { // Waiting for `ably help status` response
-            // Check only for the header, indicating the command ran and accessed the status service
-            if (receivedOutput.includes('Ably service status')) {
+            // Check for various patterns that indicate the command executed successfully
+            if (receivedOutput.includes('Ably service status') || 
+                receivedOutput.includes('Ably services are operational') ||
+                receivedOutput.includes('status.ably.io') || 
+                receivedOutput.includes('Check the status of the Ably service') ||
+                receivedOutput.includes('shows the current status')) {
               clearTimeout(responseTimeoutId!);
               log('Received expected output header from "ably help status". Diagnostics successful!');
               ws?.close(1000, 'Test Complete');

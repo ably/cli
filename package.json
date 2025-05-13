@@ -49,22 +49,22 @@
   "oclif": {
     "bin": "ably",
     "dirname": "ably",
-    "commands": "./dist/commands",
+    "commands": "./dist/src/commands",
     "topicSeparator": " ",
     "plugins": [
       "./dist"
     ],
     "hooks": {
       "init": [
-        "./dist/hooks/init/alias-command",
-        "./dist/hooks/init/version-flag"
+        "./dist/src/hooks/init/alias-command",
+        "./dist/src/hooks/init/version-flag"
       ],
-      "command_not_found": "./dist/hooks/command_not_found/did-you-mean"
+      "command_not_found": "./dist/src/hooks/command_not_found/did-you-mean"
     },
     "hidden": [
       "aliases"
     ],
-    "helpClass": "./dist/help.js"
+    "helpClass": "./dist/src/help.js"
   },
   "dependencies": {
     "@ably/chat": "^0.5.1",

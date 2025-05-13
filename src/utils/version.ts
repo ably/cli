@@ -36,13 +36,14 @@ export function formatVersionJson(
   versionInfo: ReturnType<typeof getVersionInfo>,
   isPretty: boolean
 ): string {
-  if (isPretty) {
-    try {
+  try {
+    if (isPretty) {
       return colorJson(versionInfo);
-    } catch {
-      // Fallback to regular JSON.stringify if colorJson fails
-      return JSON.stringify(versionInfo, null, 2);
     }
+    return JSON.stringify(versionInfo);
+  } catch (error) {
+    // Fallback to regular JSON.stringify if colorJson fails
+    console.error('Error formatting version as JSON:', error);
+    return JSON.stringify(versionInfo, undefined, isPretty ? 2 : undefined);
   }
-  return JSON.stringify(versionInfo);
 }
