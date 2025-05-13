@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -11,7 +10,6 @@ import {
   isCancelledState as grIsCancelledState,
   isMaxAttemptsReached as grIsMaxAttemptsReached,
   resetState as grResetState,
-  increment as grIncrement,
   cancelReconnect as grCancelReconnect,
   scheduleReconnect as grScheduleReconnect,
   setCountdownCallback as grSetCountdownCallback,
@@ -49,11 +47,8 @@ export interface AblyCliTerminalProps {
 // Debug logging helper – disabled by default. To enable in local dev set
 // window.ABLY_CLI_DEBUG = true in the browser console *before* the component
 // mounts.
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function debugLog(...args: unknown[]) {
-  // eslint-disable-next-line no-restricted-globals
   if (typeof window !== 'undefined' && (window as any).ABLY_CLI_DEBUG) {
-    // eslint-disable-next-line no-console
     console.log('[AblyCLITerminal DEBUG]', ...args);
   }
 }
@@ -743,10 +738,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Wait till next tick to ensure DOM rendered
       requestAnimationFrame(() => {
         try {
-          const rootRect = rootRef.current?.getBoundingClientRect();
-          const parentRect = rootRef.current?.parentElement?.getBoundingClientRect();
+          const _rootRect = rootRef.current?.getBoundingClientRect();
+          const _parentRect = rootRef.current?.parentElement?.getBoundingClientRect();
           const overlayEl = rootRef.current?.querySelector('.ably-overlay') as HTMLElement | null;
-          const overlayRect = overlayEl?.getBoundingClientRect();
+          const _overlayRect = overlayEl?.getBoundingClientRect();
 
           // layout diagnostics removed
         } catch (err) {
