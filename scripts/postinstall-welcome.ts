@@ -1,7 +1,5 @@
 /* eslint-disable n/no-missing-import, n/no-missing-require */
-/* eslint-disable-next-line n/no-missing-import */
-// @ts-ignore Dynamic require to avoid TS path resolution issues
-const { displayLogo } = require('../utils/logo.js') as { displayLogo: (logFn: (msg: string) => void) => void };
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -10,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 // Helper to require JSON files (like package.json) in ES modules
 const require = createRequire(import.meta.url);
 
-// Resolve __dirname for ES modules
+// NOTE: dynamic import of displayLogo will be used below
+
+// Resolve __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -37,19 +37,22 @@ try {
   const initialCwd = process.env.INIT_CWD || process.cwd();
   if (fs.existsSync(path.join(initialCwd, 'package.json'))) {
     // Likely a local development install or dependency install, suppress the message.
-    // A log message here could be useful for debugging detection issues:
-    // console.log(`[postinstall] Detected local install in ${initialCwd}. Skipping welcome message.`);
     process.exit(0);
   }
 } catch (error) {
-  // Ignore errors (like permission issues) and proceed with the message.
-  // console.warn('[postinstall] Error checking for local package.json:', error);
+  // Ignore errors and proceed
 }
 
-// Display the logo using the imported function and console.log
-displayLogo(console.log);
+// Simple ASCII art for CLI
 
 // Display the version
+try {
+  const { displayLogo } = await import('../src/utils/logo.js');
+  displayLogo(console.log);
+} catch {
+  // Fallback: no logo
+}
+
 console.log(`   Version: ${version}\n`);
 
 // Display the welcome messages
