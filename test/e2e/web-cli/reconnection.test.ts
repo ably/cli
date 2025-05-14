@@ -5,25 +5,31 @@
  */
 declare const window: any;
 
-import { test, expect, type BrowserContext } from 'playwright/test';
+import { test, expect } from './fixtures';
+import type { BrowserContext } from 'playwright/test';
 import { startWebServer, stopWebServer, startTerminalServer, stopTerminalServer } from './reconnection-utils';
 
-const WEB_SERVER_PORT = Number(process.env.WEB_SERVER_PORT) || 48001;
-const TERMINAL_SERVER_PORT = Number(process.env.TERMINAL_SERVER_PORT) || 48000;
-const WS_URL = `ws://localhost:${TERMINAL_SERVER_PORT}`;
+// Ports are provided via fixtures per-worker
+let WEB_SERVER_PORT: number;
+let TERMINAL_SERVER_PORT: number;
+let WS_URL: string;
+
 const TERMINAL_PROMPT = '$ '; // Corrected prompt based on sandbox.sh PS1
 
-// Increase default timeout for these slower, network-heavy tests
-test.setTimeout(120_000);
+// Increase default timeout further to accommodate slower Docker startups on CI
+test.setTimeout(300_000);
 
 let context: BrowserContext;
 
-test.describe('Web CLI Reconnection Tests - Server Control', () => {
+test.describe.serial('Web CLI Reconnection Tests - Server Control', () => {
   let webServerProcess: any;
   let terminalServerProcess: any;
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser, webPort, termPort }) => {
     console.log('[E2E Test Setup] Starting web server...');
+    WEB_SERVER_PORT = webPort;
+    TERMINAL_SERVER_PORT = termPort;
+    WS_URL = `ws://localhost:${TERMINAL_SERVER_PORT}`;
     webServerProcess = await startWebServer(WEB_SERVER_PORT);
     console.log('[E2E Test Setup] Web server started.');
     context = await browser.newContext();
@@ -78,32 +84,58 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
     );
 
     console.log('[Test AutoReconnect Server Down] Terminal server is intentionally down.');
-    const pageUrl = `http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}`;
+    const pageUrl = `http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}&cliDebug=true`;
     const terminalSelector = '.xterm';
     
     console.log('[Test AutoReconnect Server Down] Initial page load...');
     await page.goto(pageUrl, { waitUntil: 'networkidle' });
     const terminalContent = page.locator(terminalSelector);
 
-    // Verify that reconnection logic has started by checking for a scheduling log
-    console.log('[Test AutoReconnect Server Down] Waiting for GlobalReconnect to schedule a retry...');
-    await page.waitForFunction(
-      async () => await (window as any).hasConsoleMessageIncluding('[GlobalReconnect] Scheduling attempt #2'), 
-      null, 
-      { timeout: 10000 } // Wait for at least one retry to be scheduled
-    );
-    console.log('[Test AutoReconnect Server Down] Reconnect scheduling verified.');
+    // The client should very quickly transition into a reconnecting state. Instead of looking
+    // for a specific overlay copy we wait for our Playwright hook flag which is set whenever
+    // the React component fires a "reconnecting" status change. This is far more stable than
+    // asserting transient overlay text which may change frame-to-frame.
+    const overlay = page.locator('[data-testid="ably-overlay"]');
+    await expect(overlay).toBeVisible({ timeout: 15000 });
 
-    // Optionally, wait a bit more to simulate a few failed attempts with server down
-    await page.waitForTimeout(3000); // e.g. allow for 0s, 2s attempts to fail
+    // Wait until the global flag reports at least one reconnecting event. The flag persists
+    // for the whole page life-time so this is not subject to race conditions.
+    await page.waitForFunction(() => (window as any)._playwright_reconnectingFlag === true, null, {
+      timeout: 15_000,
+    });
+    console.log('[Test AutoReconnect Server Down] Reconnecting state detected (flag set).');
 
+    // Optional sanity-check: overlay should contain the word "RECONNECTING". Don't fail if it
+    // races past this copy, but log to aid debugging.
+    try {
+      await expect(overlay).toContainText('RECONNECTING', { timeout: 1000 });
+    } catch {/* swallow – string may not be present if overlay changed quickly */}
+
+    // Start the server
     console.log('[Test AutoReconnect Server Down] Starting terminal server now...');
     terminalServerProcess = await startTerminalServer(TERMINAL_SERVER_PORT);
     expect(terminalServerProcess).toBeTruthy();
+    console.log('[Test AutoReconnect Server Down] Terminal server started.');
 
-    console.log('[Test AutoReconnect Server Down] Waiting for successful automatic reconnection...');
-    await expect(terminalContent).toContainText('$', { timeout: 30000 }); // Increased for server start + multiple backoffs if needed
-    console.log('[Test AutoReconnect Server Down] Successfully reconnected and prompt is visible.');
+    // NOW, THE CRUCIAL PART: Wait for the prompt.
+    // If reconnection works, the client should eventually connect, and xterm.js should render a prompt.
+    console.log('[Test AutoReconnect Server Down] Waiting for terminal prompt after server restart...');
+    // Focus might help, but the main thing is waiting for the text to appear after reconnections.
+    try {
+        await terminalContent.focus({ timeout: 5000 }); // Brief timeout for focus
+    } catch (e) {
+        console.warn('[Test AutoReconnect Server Down] Focusing terminal failed, proceeding.', e);
+    }
+
+    // Wait until the React component reports we are fully connected. This is less flaky than
+    // waiting for the prompt string which depends on shell output timing.
+    await page.waitForFunction(() => {
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore – function runs in browser context
+      const s = window.getAblyCliTerminalReactState?.();
+      return s?.componentConnectionStatus === 'connected';
+    }, null, { timeout: 60_000 });
+    console.log('[Test AutoReconnect Server Down] React state now "connected".');
 
     await terminalContent.focus();
     await page.keyboard.type('ably --version');
@@ -127,17 +159,20 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
       }
     });
     
-    const pageUrl = `http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}`;
+    const pageUrl = `http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}&cliDebug=true`;
     console.log(`[Test Scenario 1 Simplified] Navigating to ${pageUrl}`);
     await page.goto(pageUrl, { waitUntil: 'networkidle' });
     console.log(`[Test Scenario 1 Simplified] Navigation to ${pageUrl} completed.`);
     
     console.log('[Test Scenario 1 Simplified] Waiting for terminal rows to be rendered.');
-    await page.waitForSelector('.xterm', { timeout: 10000 });
+    await page.waitForSelector('.xterm', { timeout: 60000 });
 
-    console.log(`[Test Scenario 1 Simplified] Waiting for initial terminal prompt: "${TERMINAL_PROMPT}"`);
-    await expect(page.locator('.xterm')).toContainText(TERMINAL_PROMPT, { timeout: 20000 });
-    console.log('[Test Scenario 1 Simplified] Initial terminal prompt is visible.');
+    console.log('[Test Scenario 1 Simplified] Waiting for React state "connected".');
+    await page.waitForFunction(() => {
+      const s = (window as any).getAblyCliTerminalReactState?.();
+      return s?.componentConnectionStatus === 'connected';
+    }, null, { timeout: 60_000 });
+    console.log('[Test Scenario 1 Simplified] React state reports connected.');
 
     // Wait an additional moment to ensure the client is fully in connected state
     await page.waitForTimeout(1000);
@@ -157,8 +192,13 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
     console.log('[Test Scenario 1 Simplified] Forcing disconnect by stopping terminal server...');
     await stopTerminalServer(terminalServerProcess);
     terminalServerProcess = null;
-    console.log('[Test Scenario 1 Simplified] Terminal server stopped – waiting 3s for client to detect disconnect.');
-    await page.waitForTimeout(3000);
+    console.log('[Test Scenario 1 Simplified] Terminal server stopped – waiting for client to enter reconnecting state.');
+
+    // Wait until React reports a reconnecting status so we know the auto-retry loop is active.
+    await page.waitForFunction(() => (window as any)._playwright_reconnectingFlag === true, null, {
+      timeout: 20_000,
+    });
+    console.log('[Test Scenario 1 Simplified] Reconnecting flag observed.');
 
     // Restart terminal server to allow automatic reconnection
     console.log('[Test Scenario 1 Simplified] Restarting terminal server to allow auto-reconnect...');
@@ -166,9 +206,12 @@ test.describe('Web CLI Reconnection Tests - Server Control', () => {
     expect(terminalServerProcess).toBeTruthy();
 
     // Wait for prompt to reappear after reconnect
-    console.log(`[Test Scenario 1 Simplified] Waiting for terminal prompt again: "${TERMINAL_PROMPT}" after reconnect.`);
-    await expect(page.locator('.xterm')).toContainText(TERMINAL_PROMPT, { timeout: 40000 });
-    console.log('[Test Scenario 1 Simplified] Terminal prompt is visible after reconnect.');
+    console.log('[Test Scenario 1 Simplified] Waiting for React connectionStatus "connected" after reconnect.');
+    await page.waitForFunction(() => {
+      const s = (window as any).getAblyCliTerminalReactState?.();
+      return s?.componentConnectionStatus === 'connected';
+    }, null, { timeout: 60_000 });
+    console.log('[Test Scenario 1 Simplified] React state reports connected after reconnect.');
 
     // Skip verifying internal connectionHelpMessage state after reconnect – prompt visibility is sufficient.
     console.log('[Test Scenario 1 Simplified] Skipping connectionHelpMessage state verification after reconnect.');

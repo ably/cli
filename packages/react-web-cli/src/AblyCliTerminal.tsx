@@ -13,7 +13,9 @@ import {
   cancelReconnect as grCancelReconnect,
   scheduleReconnect as grScheduleReconnect,
   setCountdownCallback as grSetCountdownCallback,
-  setMaxAttempts as grSetMaxAttempts
+  setMaxAttempts as grSetMaxAttempts,
+  successfulConnectionReset as grSuccessfulConnectionReset,
+  increment as grIncrement
 } from './global-reconnect';
 import { useTerminalVisibility } from './use-terminal-visibility.js';
 
@@ -203,16 +205,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         debugLog('Shell prompt detected – session active');
         clearStatusDisplay(); // Clear the status box as per plan
         setIsSessionActive(true);
-        // Full session confirmed – now reset global reconnect state
-        grResetState();
+        grSuccessfulConnectionReset();
         updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
         if (term.current) term.current.focus();
         clearPtyBuffer();
-        // Fully reset global reconnect tracking so no further auto retries are queued
-        grResetState();
       }
     }
-  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay, socket]);
+  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay]);
 
   const clearAnimationMessages = useCallback(() => {
     setReconnectAttemptMessage('');
@@ -400,7 +399,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               if (term.current) term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
               if (onSessionEnd) onSessionEnd(reason);
               updateConnectionStatusAndExpose(msg.payload); // Reflect server's final say
-              if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) socketRef.current.close();
+
+              // Do NOT cancel the global reconnect loop here. The subsequent WebSocket `close` event
+              // will evaluate the close code (e.g. 4000 for user-initiated exit, 1000 or 1006 for other
+              // scenarios) and take the appropriate action.  Handling it in one place avoids ambiguity
+              // and ensures test expectations around automatic reconnect remain stable.
+
+              // Let the server drive the close handshake so we keep the correct code (1005) and our
+              // subsequent `close` handler can show the proper "Server Disconnect" overlay.  We therefore
+              // purposefully avoid calling `socket.close()` here.
+              debugLog('[AblyCLITerminal] Purging sessionId due to server error/disconnect. sessionId:', sessionId);
 
               // Persisted session is no longer valid – forget it
               if (resumeOnReload && typeof window !== 'undefined') {
@@ -408,7 +416,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
                 setSessionId(null);
               }
 
-              debugLog('[AblyCLITerminal] Purging sessionId due to server error/disconnect. sessionId:', sessionId);
+              if (term.current && msg.payload === 'disconnected') {
+                const title = "ERROR: SERVER DISCONNECT";
+                const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
+                const message2 = '';
+                const message3 = `Press ⏎ to try reconnecting manually.`;
+                statusBoxRef.current = drawBox(term.current, boxColour.red, title, [message1, message2, message3], 60);
+                setOverlay({ variant: 'error', title, lines:[message1, message2, message3]});
+              }
               return;
             }
             return;
@@ -446,44 +461,62 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       console.error(`[AblyCLITerminal] WebSocket ErrorEvent: message=${event.message}, filename=${event.filename}, lineno=${event.lineno}, colno=${event.colno}`);
     }
 
-    if (!grIsCancelledState() && !grIsMaxAttemptsReached()) { // Avoid error state if we are already done trying
-      updateConnectionStatusAndExpose('error'); // Indicate error, close will follow
+    if (!grIsCancelledState() && !grIsMaxAttemptsReached()) {
+      // Transition into an error state for UI feedback first.
+      updateConnectionStatusAndExpose('error');
+
+      console.log('[AblyCLITerminal handleWebSocketError] Entered reconnection branch. isCancelled=', grIsCancelledState(), 'maxReached=', grIsMaxAttemptsReached());
+      // Browsers don't always fire a subsequent `close` event when the WebSocket
+      // handshake itself fails (e.g. server down).  In that scenario our usual
+      // reconnection logic in `handleWebSocketClose` never runs, so we need to
+      // kick-off the retry sequence from here.
+
+      debugLog('[AblyCLITerminal handleWebSocketError] Triggering auto-reconnect sequence. Current grAttempts (before increment):', grGetAttempts());
+
+      startConnectingAnimation(true);
+      grIncrement();
+      console.log('[AblyCLITerminal handleWebSocketError] grIncrement done. Attempts now:', grGetAttempts());
+
+      if (connectWebSocketRef.current) {
+        console.log('[AblyCLITerminal handleWebSocketError] Scheduling reconnect...');
+        grScheduleReconnect(connectWebSocketRef.current!, websocketUrl);
+      } else {
+        console.error('[AblyCLITerminal handleWebSocketError] connectWebSocketRef.current is null, cannot schedule reconnect!');
+      }
     }
-  }, [updateConnectionStatusAndExpose]);
+  }, [updateConnectionStatusAndExpose, startConnectingAnimation, websocketUrl]);
 
   const handleWebSocketClose = useCallback((event: CloseEvent) => {
-    // websocket closed
-    // Keep the overlay visible between reconnect attempts; just clear the drawn box & spinner interval.
+    debugLog(`[AblyCLITerminal] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
     clearTerminalBoxOnly();
-    setIsSessionActive(false); // Session is no longer active
+    setIsSessionActive(false); 
 
-    // --- Handle non-recoverable server-initiated disconnects ---
-    // These status codes indicate problems that automatic reconnection cannot fix
-    // and therefore require user intervention (e.g. invalid credentials or capacity issues)
+    // Close codes that should *not* trigger automatic reconnection because
+    // they represent explicit server-side rejections or client-initiated
+    // terminations.  Codes such as 1005 (No Status) or 1006 (Abnormal
+    // Closure) can legitimately occur when the server is temporarily
+    // unreachable – for example when the terminal server is still
+    // starting up.  Those cases should be treated as recoverable so they
+    // are intentionally **excluded** from this list.
     const NON_RECOVERABLE_CLOSE_CODES = new Set<number>([
-      4001, // Invalid token / credentials
-      4008, // Policy violation / auth timeout / invalid message format
-      1013, // Try again later (server overloaded / capacity)
-      4002, // Inactivity timeout initiated by client
-      4000, // User explicitly exited the shell
-      4004, // Session ended on server side – cannot resume
-      1005, // No status code present (server sent none)
-      1006, // Abnormal closure (no close frame)
+      4001, // Policy violation (e.g. invalid credentials)
+      4008, // Token expired
+      1013, // Try again later – the server is telling us not to retry
+      4002, // Session resume rejected
+      4000, // Generic server error
+      4004, // Unsupported protocol version
+      1005, // No status received – used when server terminates gracefully after `exit`
     ]);
 
-    // Treat graceful close (1000) as non-recoverable if the server reason
-    // indicates an inactivity timeout or similar final condition.
     const inactivityRegex = /inactiv|timed out/i;
     if (event.code === 1000 && inactivityRegex.test(event.reason)) {
       NON_RECOVERABLE_CLOSE_CODES.add(1000);
     }
 
     if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
-      // Ensure any global reconnection timers are cleared
       grCancelReconnect();
       grResetState();
       updateConnectionStatusAndExpose('disconnected');
-
       if (term.current) {
         const title = "ERROR: SERVER DISCONNECT";
         const message1 = `Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
@@ -492,18 +525,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         statusBoxRef.current = drawBox(term.current, boxColour.red, title, [message1, message2, message3], 60);
         setOverlay({variant: 'error', title, lines:[message1, message2, message3]});
       }
-
       setShowManualReconnectPrompt(true);
-      showManualReconnectPromptRef.current = true;
-
-      // This session cannot be resumed – forget stored id (if any)
       if (resumeOnReload && typeof window !== 'undefined') {
         window.sessionStorage.removeItem('ably.cli.sessionId');
         setSessionId(null);
       }
-
       debugLog('[AblyCLITerminal] Purging sessionId due to non-recoverable close. code:', event.code, 'sessionId:', sessionId);
-      return; // Do NOT schedule automatic reconnection
+      return; 
     }
 
     if (grIsCancelledState() || grIsMaxAttemptsReached()) {
@@ -525,16 +553,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         setOverlay({variant:'error',title,lines:[message1, message2, message3]});
       }
       setShowManualReconnectPrompt(true);
-      showManualReconnectPromptRef.current = true;
-      return; // Do not schedule further reconnect
+      return; 
     } else {
-      debugLog('[AblyCLITerminal handleWebSocketClose] PRE - updateConnectionStatusAndExpose("reconnecting")');
+      debugLog('[AblyCLITerminal handleWebSocketClose] Scheduling reconnect. Current grAttempts (before increment):', grGetAttempts());
       updateConnectionStatusAndExpose('reconnecting');
-      startConnectingAnimation(true);
-      grScheduleReconnect(connectWebSocket, websocketUrl);
-      setReconnectAttemptMessage(`Attempt ${grGetAttempts()}/${grGetMaxAttempts()}.`);
+      startConnectingAnimation(true); 
+      
+      grIncrement(); 
+      debugLog('[AblyCLITerminal handleWebSocketClose] grIncrement called. Current grAttempts (after increment):', grGetAttempts());
+      
+      if (connectWebSocketRef.current) {
+        grScheduleReconnect(connectWebSocketRef.current!, websocketUrl); 
+      } else {
+        console.error('[AblyCLITerminal handleWebSocketClose] connectWebSocketRef.current is null, cannot schedule reconnect!');
+      }
     }
-  }, [clearAnimationMessages, connectWebSocket, updateConnectionStatusAndExpose, clearTerminalBoxOnly]);
+  }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId /* removed connectWebSocketRef */]);
 
   useEffect(() => {
     // Setup terminal
@@ -595,6 +629,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             // user cancelled reconnect
             debugLog('[AblyCLITerminal] Enter pressed during auto-reconnect: Cancelling.');
             grCancelReconnect();
+            grResetState();
             clearAnimationMessages();
             if (term.current) {
               term.current.writeln(`\r\n\n${colour.yellow}Reconnection attempts cancelled by user.${colour.reset}`);

@@ -31,21 +31,27 @@ export function getBackoffDelay(attempt: number): number {
  * Reset the reconnection state
  */
 export function resetState(): void {
-  console.log('[GlobalReconnect] Resetting state');
-  attempts = 0;
-  isCancelled = false;
-  remainingTimeMs = 0;
+  console.log(`[GlobalReconnect] resetState called. Current attempts (before potential reset): ${attempts}, isCancelled: ${isCancelled}`);
+  // ATTEMPTS ARE NO LONGER RESET HERE. They should be reset by a successful connection
+  // or an explicit action to start a new connection sequence like cancelReconnect.
+  // attempts = 0; 
   
-  // Clear any pending timers
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
+  // Only clear timers if fully cancelling. If just a transient reset before a new schedule,
+  // scheduleReconnect will handle its own timer. isCancelled drives this.
+  if (isCancelled) { 
+    if (countdownTimer) {
+      console.log('[GlobalReconnect] resetState: Clearing countdownTimer because isCancelled=true');
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+    if (reconnectTimer) {
+      console.log('[GlobalReconnect] resetState: Clearing reconnectTimer because isCancelled=true');
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
   }
-  
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
+  remainingTimeMs = 0; 
+  // isCancelled is NOT reset here. It's reset by successfulConnectionReset or explicitly by scheduleReconnect if not at max attempts.
 }
 
 /**
@@ -88,18 +94,17 @@ export function isMaxAttemptsReached(): boolean {
  * Cancel reconnection attempts
  */
 export function cancelReconnect(): void {
+  console.log('[GlobalReconnect] cancelReconnect called. Clearing timers and resetting attempts.');
   isCancelled = true;
-  
-  // Clear any pending timers
   if (countdownTimer) {
     clearInterval(countdownTimer);
     countdownTimer = null;
   }
-  
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+  attempts = 0; // If explicitly cancelled, reset attempts too for a clean slate.
 }
 
 /**
@@ -116,25 +121,29 @@ export function setCountdownCallback(callback: (remaining: number) => void): voi
  * @param url WebSocket URL to connect to
  */
 export function scheduleReconnect(reconnectCallback: () => void, url: string): void {
-  // Don't reconnect if cancelled or max attempts reached
-  if (isCancelled || attempts >= maxAttempts) {
+  if (attempts >= maxAttempts) {
+    console.log(`[GlobalReconnect] scheduleReconnect: Aborting due to maxAttemptsReached (attempts=${attempts}, max=${maxAttempts})`);
+    console.warn('[GlobalReconnect] Maximum reconnection attempts reached.');
+    isCancelled = true; // Set cancelled if max attempts reached, prevents further scheduling from other paths.
     return;
   }
   
+  // If we are scheduling a reconnect, it means we are no longer in a user-cancelled state from this module's perspective.
+  // A higher-level component might still decide to call cancelReconnect() later.
+  isCancelled = false; 
+
   const delay = getBackoffDelay(attempts);
-  console.log(`[GlobalReconnect] Will reconnect in ${delay}ms`);
+  console.log(`[GlobalReconnect] scheduleReconnect: Current attempts: ${attempts}, Calculated delay: ${delay}ms, isCancelled: ${isCancelled}`);
   
-  // Update remaining time state
   remainingTimeMs = delay;
   
-  // Clear any existing countdown timer
   if (countdownTimer) {
     clearInterval(countdownTimer);
     countdownTimer = null;
   }
   
-  // Start countdown timer if there's a delay and a callback
   if (delay > 0 && onCountdownTick) {
+    onCountdownTick(remainingTimeMs); 
     countdownTimer = setInterval(() => {
       remainingTimeMs = Math.max(0, remainingTimeMs - 1000);
       if (onCountdownTick) {
@@ -148,21 +157,47 @@ export function scheduleReconnect(reconnectCallback: () => void, url: string): v
     }, 1000);
   }
   
-  // Clear any existing reconnect timer
   if (reconnectTimer) {
+    console.log('[GlobalReconnect] scheduleReconnect: Clearing existing reconnectTimer before setting new one.');
     clearTimeout(reconnectTimer);
+    reconnectTimer = null; // Explicitly nullify after clearing
   }
   
-  console.log(`[GlobalReconnect] Scheduling attempt #${attempts + 1} in ${delay}ms`);
+  console.log(`[GlobalReconnect] PRE-SETIMEOUT: About to set timer for attempt #${attempts + 1} with delay ${delay}ms.`);
   
-  // Schedule the actual reconnection
   reconnectTimer = setTimeout(() => {
-    console.log(`[GlobalReconnect] Attempting connection to ${url}, attempt #${attempts + 1}`);
+    console.log(`[GlobalReconnect] SETTIMEOUT_FIRED_RAW for attempt #${attempts + 1}. isCancelled: ${isCancelled}`);
+    if (isCancelled) {
+      console.log(`[GlobalReconnect] reconnectTimer FIRED but isCancelled is true. Aborting reconnectCallback for attempt #${attempts + 1}.`);
+      return;
+    }
+    if (!reconnectCallback) {
+      console.error(`[GlobalReconnect] ERROR: reconnectTimer FIRED for attempt #${attempts + 1}, but reconnectCallback is null/undefined!`);
+      return;
+    }
+    console.log(`[GlobalReconnect] reconnectTimer FIRED. Attempting connection to ${url}, attempt #${attempts + 1}`);
     reconnectCallback();
   }, delay);
+  console.log(`[GlobalReconnect] scheduleReconnect: NEW reconnectTimer scheduled with ID: ${reconnectTimer} for attempt #${attempts + 1}`);
 }
 
 // Allow overriding from outside (e.g., React prop)
 export function setMaxAttempts(value: number): void {
   maxAttempts = value > 0 ? value : 1;
+}
+
+export function successfulConnectionReset(): void {
+  console.log(`[GlobalReconnect] successfulConnectionReset called. Resetting attempts from ${attempts} to 0.`);
+  attempts = 0;
+  isCancelled = false; // Allow new retries after a successful period.
+  remainingTimeMs = 0; // Reset countdown display value.
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  if (reconnectTimer) { 
+    console.log('[GlobalReconnect] successfulConnectionReset: Clearing reconnectTimer.');
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
 } 
