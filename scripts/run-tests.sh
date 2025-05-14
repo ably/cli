@@ -10,8 +10,7 @@ PLAYWRIGHT_TEST_FILE=""
 for arg in "${ARGS[@]}"; do
   if [[ "$arg" == *"test/e2e/web-cli/"*".test.ts" ]]; then
     USE_PLAYWRIGHT=true
-    PLAYWRIGHT_TEST_FILE="$arg"
-    break
+    PLAYWRIGHT_TEST_FILE="$arg" # Keep updating, last one found will be used
   fi
 done
 
@@ -99,14 +98,21 @@ fi
 
 if $USE_PLAYWRIGHT; then
   # Use Playwright runner
-  # Ensure TypeScript has been compiled so the terminal server script exists for browser tests
-  if [ ! -f dist/scripts/terminal-server.js ]; then
-    echo "dist not found or terminal-server.js missing – running \"pnpm build\" first..."
-    pnpm build || { echo "Build failed, aborting Playwright run."; exit 1; }
-  fi
+  # Always rebuild to ensure the example app & shared packages reflect the latest code changes
+  echo "Building project before running Playwright tests (ensures latest TS changes are picked up)..."
+  pnpm build || { echo "Root build failed, aborting Playwright run."; exit 1; }
+
+  # ALSO rebuild the React Web CLI package so that its dist/ output includes recent edits.
+  echo "Building @ably/react-web-cli package (tsup)..."
+  pnpm --filter @ably/react-web-cli run build || { echo "react-web-cli build failed, aborting Playwright run."; exit 1; }
+
+  # Rebuild the example app so the preview server serves the latest bundle that includes changed library code.
+  echo "Building example web-cli app (vite build)..."
+  pnpm --filter ./examples/web-cli run build || { echo "example web-cli build failed, aborting Playwright run."; exit 1; }
+
   echo "Using Playwright test runner for Web CLI tests..."
   # Pass ONLY the specific web-cli test file to Playwright
-  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE --workers 1"
+  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
   echo "Executing command: $COMMAND"
 elif [[ -n "$TEST_PATTERN" ]]; then
   # Running a specific test file or pattern
@@ -145,8 +151,7 @@ else
   echo "Executing command: $COMMAND"
 fi
 
-# Set an outer timeout (in seconds) - default 180s or 3 minutes
-# Increased from 120s to give more buffer
+# Set an outer timeout (in seconds) – 5 minutes should be sufficient even on CI
 OUTER_TIMEOUT=300
 
 # Run the tests with the determined runner

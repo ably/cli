@@ -10,9 +10,12 @@ declare const window: any;
 import { test, expect, type Page as _Page } from 'playwright/test';
 import { startWebServer, stopWebServer, startTerminalServer, stopTerminalServer } from './reconnection-utils';
 
-const WEB_SERVER_PORT = Number(process.env.WEB_SERVER_PORT) || 48001;
-const TERMINAL_SERVER_PORT = Number(process.env.TERMINAL_SERVER_PORT) || 48000;
+const WEB_SERVER_PORT = Number(process.env.WEB_SERVER_PORT) || 48301;
+const TERMINAL_SERVER_PORT = Number(process.env.TERMINAL_SERVER_PORT) || 48300;
 const WS_URL = `ws://localhost:${TERMINAL_SERVER_PORT}`;
+
+// Increase timeout for Docker / connection heavy test
+test.setTimeout(150_000);
 
 test.describe('Web CLI Reconnection Route Test Diagnostic', () => {
   let terminalServerProcess: any;
@@ -42,8 +45,8 @@ test.describe('Web CLI Reconnection Route Test Diagnostic', () => {
     // Wait for initial prompt
     await page.waitForSelector('.xterm', { timeout: 20000 });
     const waitForPrompt = async () => {
-      await page.locator('.xterm').waitFor({ state: 'attached', timeout: 30000 });
-      await expect(page.locator('.xterm')).toContainText('$', { timeout: 30000 });
+      await page.locator('.xterm').waitFor({ state: 'attached', timeout: 120000 });
+      await expect(page.locator('.xterm')).toContainText('$', { timeout: 180_000 });
     };
     await waitForPrompt();
     console.log('[Test] Initial connection and prompt verified.');

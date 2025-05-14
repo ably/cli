@@ -58,7 +58,7 @@ async function waitForPrompt(page: _Page, terminalSelector: string, timeout = 30
   const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
   console.log('Waiting for terminal prompt...');
   try {
-    await page.locator(terminalSelector).getByText(promptText, { exact: true }).waitFor({ timeout });
+    await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout });
     console.log('Terminal prompt found.');
   } catch (error) {
     console.error('Error waiting for terminal prompt:', error);
@@ -195,7 +195,7 @@ test.describe('Web CLI E2E Tests', () => {
     const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
     console.log('Attempting to wait for initial prompt...'); // Log before wait
     try {
-      await page.locator(terminalSelector).getByText(promptText, { exact: true }).waitFor({ timeout: 30000 }); // Use exact: true
+      await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout: 30000 });
       console.log('Initial prompt found.');
     } catch (error) {
       console.error('Error waiting for initial prompt:', error);

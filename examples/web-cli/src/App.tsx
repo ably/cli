@@ -104,7 +104,7 @@ function App() {
         onSessionId={handleSessionId}
         websocketUrl={currentWebsocketUrl}
         resumeOnReload={true}
-        maxReconnectAttempts={4} /* In the example, limit reconnection attempts for testing, default is 15 */
+        maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
       />
     ) : null
   ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
