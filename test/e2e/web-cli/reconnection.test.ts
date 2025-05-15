@@ -14,6 +14,7 @@ let WEB_SERVER_PORT: number;
 let TERMINAL_SERVER_PORT: number;
 let WS_URL: string;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TERMINAL_PROMPT = '$ '; // Corrected prompt based on sandbox.sh PS1
 
 // Increase default timeout further to accommodate slower Docker startups on CI

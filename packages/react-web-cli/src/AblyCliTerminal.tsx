@@ -107,6 +107,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   // Ref to track manual reconnect prompt visibility inside stable event handlers
   const showManualReconnectPromptRef = useRef<boolean>(false);
+  // Guard to ensure we do NOT double-count a failed attempt when both the
+  // `error` and the subsequent `close` events fire for the *same* socket.
+  const reconnectScheduledThisCycleRef = useRef<boolean>(false);
 
   // Use block-based spinner where empty dots are invisible in most monospace fonts
   const spinnerFrames = ['●  ', ' ● ', '  ●', ' ● '];
@@ -295,10 +298,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
 
     // Prevent duplicate connections if one is already open/connecting
-    if (!showManualReconnectPromptRef.current && socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+    if (!showManualReconnectPromptRef.current && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       if ((window as any).ABLY_CLI_DEBUG) console.warn('[AblyCLITerminal] connectWebSocket already open/connecting – skip');
       return;
-    } else if (socketRef.current) {
+    } else if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
       debugLog('Existing socket state', socketRef.current.readyState, '→ will proceed to open new socket');
     }
 
@@ -315,6 +318,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     (window as any).ablyCliSocket = newSocket; // For E2E tests
     socketRef.current = newSocket; // Use ref for listeners
     setSocket(newSocket); // Trigger effect to add listeners
+
+    // Reset the per-cycle guard now that we have started a *fresh* connection
+    // attempt.  Any failure events for this socket may schedule (at most) one
+    // reconnect.
+    reconnectScheduledThisCycleRef.current = false;
 
     // new WebSocket created
     debugLog('connectWebSocket called. sessionId:', sessionId, 'showManualReconnectPrompt:', showManualReconnectPromptRef.current);
@@ -461,9 +469,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       console.error(`[AblyCLITerminal] WebSocket ErrorEvent: message=${event.message}, filename=${event.filename}, lineno=${event.lineno}, colno=${event.colno}`);
     }
 
-    if (!grIsCancelledState() && !grIsMaxAttemptsReached()) {
-      // Transition into an error state for UI feedback first.
-      updateConnectionStatusAndExpose('error');
+    if (!grIsCancelledState() && !grIsMaxAttemptsReached() && !reconnectScheduledThisCycleRef.current) {
+      // Immediately enter "reconnecting" state so countdown / spinner UI is active
+      updateConnectionStatusAndExpose('reconnecting');
 
       console.log('[AblyCLITerminal handleWebSocketError] Entered reconnection branch. isCancelled=', grIsCancelledState(), 'maxReached=', grIsMaxAttemptsReached());
       // Browsers don't always fire a subsequent `close` event when the WebSocket
@@ -483,6 +491,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       } else {
         console.error('[AblyCLITerminal handleWebSocketError] connectWebSocketRef.current is null, cannot schedule reconnect!');
       }
+
+      // Mark that we have already handled scheduling for this cycle so the
+      // forthcoming `close` event (which most browsers still emit after a
+      // handshake failure) does NOT double-increment or re-schedule.
+      reconnectScheduledThisCycleRef.current = true;
     }
   }, [updateConnectionStatusAndExpose, startConnectingAnimation, websocketUrl]);
 
@@ -554,7 +567,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
       setShowManualReconnectPrompt(true);
       return; 
-    } else {
+    } else if (!reconnectScheduledThisCycleRef.current) {
       debugLog('[AblyCLITerminal handleWebSocketClose] Scheduling reconnect. Current grAttempts (before increment):', grGetAttempts());
       updateConnectionStatusAndExpose('reconnecting');
       startConnectingAnimation(true); 
@@ -567,6 +580,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       } else {
         console.error('[AblyCLITerminal handleWebSocketClose] connectWebSocketRef.current is null, cannot schedule reconnect!');
       }
+
+      // Prevent any (unlikely) duplicate scheduling from other late events
+      reconnectScheduledThisCycleRef.current = true;
     }
   }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId /* removed connectWebSocketRef */]);
 
