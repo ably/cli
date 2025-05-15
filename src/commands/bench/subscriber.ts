@@ -39,6 +39,11 @@ export default class BenchSubscriber extends AblyBaseCommand {
   private messageLogBuffer: string[] = []; // Buffer for the last 10 logs
   private realtime: Ably.Realtime | null = null;
 
+  // Track whether a test is currently running and retain a reference to the
+  // table that renders live status so we can update/clear it easily.
+  private testInProgress = false;
+  private displayTable: InstanceType<typeof Table> | null = null;
+
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
     if (this.intervalId) {
@@ -152,6 +157,8 @@ export default class BenchSubscriber extends AblyBaseCommand {
         if (
           data &&
           typeof data === "object" &&
+          "role" in data &&
+          data.role === "publisher" &&
           "testDetails" in data &&
           "testId" in data
         ) {
@@ -172,6 +179,10 @@ export default class BenchSubscriber extends AblyBaseCommand {
             metrics.testId = testId;
             metrics.publisherActive = true;
             metrics.lastMessageTime = Date.now(); // Assume active now
+            // If the publisher included startTime we can use it later when inferring a test
+            if (typeof testDetails === "object" && "startTime" in testDetails) {
+              metrics.testStartTime = Number(testDetails.startTime);
+            }
           }
 
           if (!this.shouldOutputJson(flags)) {
@@ -367,9 +378,6 @@ export default class BenchSubscriber extends AblyBaseCommand {
       `Entered presence as subscriber on channel: ${channel.name}`,
     );
 
-    let testInProgress = false; // Track if a test is currently active
-    let _display: InstanceType<typeof Table> | null = null; // Type for display table
-
     // --- Presence Enter Handler ---
     channel.presence.subscribe("enter", (member: Ably.PresenceMessage) => {
       const { clientId, data } = member; // Destructure member
@@ -428,22 +436,24 @@ export default class BenchSubscriber extends AblyBaseCommand {
         data &&
         typeof data === "object" &&
         "role" in data &&
-        data.role === "publisher" &&
-        "testId" in data &&
-        (data.testId as string) === metrics.testId &&
-        testInProgress
+        data.role === "publisher"
       ) {
-        const { testId } = data as { testId: string }; // Destructure data
+        const { testId } = (data as { testId?: string }) || {};
+
+        // Only finish the test if the leaving publisher matches the current test (or we don't know yet)
+        if (metrics.testId && testId && testId !== metrics.testId) {
+          return; // different test, ignore
+        }
         this.logCliEvent(
           flags,
           "benchmark",
           "publisherLeft",
-          `Publisher with test ID ${testId} has left. Finishing test.`,
+          `Publisher has left. Finishing test.`,
           { testId },
         );
         metrics.publisherActive = false;
         this.finishTest(flags, metrics);
-        testInProgress = false;
+        this.testInProgress = false;
 
         if (this.intervalId) {
           clearInterval(this.intervalId);
@@ -463,9 +473,13 @@ export default class BenchSubscriber extends AblyBaseCommand {
             "Waiting for a new benchmark test to start...",
           );
         } else {
-          _display = this.createStatusDisplay(null); // Reset display
           this.log("\nWaiting for a new benchmark test to start...");
+          this.displayTable = this.createStatusDisplay(null);
+          this.log(this.displayTable.toString());
         }
+
+        this.displayTable = null;
+        this.testInProgress = false;
       }
     });
   }
@@ -522,6 +536,14 @@ export default class BenchSubscriber extends AblyBaseCommand {
     metrics.publisherActive = true;
     metrics.lastMessageTime = startTime;
 
+    this.testInProgress = true;
+
+    // Create or reset the live status display table (only for non-JSON output)
+    if (!this.shouldOutputJson(flags)) {
+      this.displayTable = this.createStatusDisplay(testId);
+      this.resetDisplay(this.displayTable);
+    }
+
     // Clear previous intervals if they exist
     if (this.intervalId) clearInterval(this.intervalId);
     if (this.checkPublisherIntervalId)
@@ -552,9 +574,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
       // Display update interval is handled implicitly by the message handler calling resetDisplay/updateStatusAndLogs
       // We need an interval just to call the update function periodically if no messages are received
       this.intervalId = setInterval(() => {
-        // Find the display instance (this is a bit awkward, consider passing display ref)
-        // For now, assume updateStatusAndLogs handles null display
-        this.updateStatusAndLogs(null, metrics);
+        this.updateStatusAndLogs(this.displayTable, metrics);
       }, 500);
     }
   }
@@ -601,8 +621,13 @@ export default class BenchSubscriber extends AblyBaseCommand {
           );
         } else {
           this.log("\nWaiting for a new benchmark test to start...");
-          // Resetting display is handled by onInactive callback setting display=null
+          this.displayTable = this.createStatusDisplay(null);
+          this.log(this.displayTable.toString());
         }
+
+        // Clear current display so that a new test can recreate it
+        this.displayTable = null;
+        this.testInProgress = false;
       }
     }, 1000);
   }
@@ -612,8 +637,6 @@ export default class BenchSubscriber extends AblyBaseCommand {
     metrics: TestMetrics,
     flags: Record<string, unknown>,
   ): void {
-    let _display: InstanceType<typeof Table> | null = null;
-
     channel.subscribe((message: Ably.Message) => {
       const currentTime = Date.now();
 
@@ -641,21 +664,56 @@ export default class BenchSubscriber extends AblyBaseCommand {
         );
         const logMsg = `Benchmark test started: ${metrics.testId}`;
         this.addLogToBuffer(logMsg, flags); // Pass flags here
-      } else if (
-        metrics.publisherActive &&
-        message.data.type === "message" &&
-        message.data.testId === metrics.testId
-      ) {
+      } else if (message.data.type === "message") {
+        // If we missed the 'start' envelope (subscriber started late), initialise on first message
+        if (!this.testInProgress || metrics.testId === null) {
+          this.startNewTest(
+            metrics,
+            message.data.testId,
+            message.data.timestamp, // best approximation if startTime unknown
+            flags,
+          );
+          this.startPublisherCheckInterval(metrics, flags, () =>
+            this.finishTest(flags, metrics),
+          );
+          this.logCliEvent(
+            flags,
+            "benchmark",
+            "testStartedLate",
+            `Benchmark test inferred from first message with ID: ${metrics.testId}`,
+            { testId: metrics.testId },
+          );
+        }
+
+        if (message.data.testId !== metrics.testId) {
+          // Ignore stray messages from previous/future tests
+          return;
+        }
+
         metrics.messagesReceived += 1;
         metrics.lastMessageTime = currentTime;
 
-        // Calculate latency (assuming message.data.timestamp is publisher creation time)
         const endToEndLatency = currentTime - message.data.timestamp;
         metrics.endToEndLatencies.push(endToEndLatency);
-        metrics.totalLatency += endToEndLatency; // Accumulate for average calculation
+        metrics.totalLatency += endToEndLatency;
 
         const logMsg = `Received message ${message.id} (e2e: ${endToEndLatency}ms)`;
-        this.addLogToBuffer(logMsg, flags); // Pass flags here
+        this.addLogToBuffer(logMsg, flags);
+
+        if (!this.shouldOutputJson(flags)) {
+          this.updateStatusAndLogs(this.displayTable, metrics);
+        }
+      } else if (
+        message.data.type === "end" &&
+        message.data.testId === metrics.testId
+      ) {
+        // Explicit end-of-test control message – finish even if testInProgress flag somehow false
+        this.finishTest(flags, metrics);
+        this.testInProgress = false;
+        if (this.intervalId) {
+          clearInterval(this.intervalId);
+          this.intervalId = null;
+        }
       }
     });
     this.logCliEvent(
@@ -671,18 +729,11 @@ export default class BenchSubscriber extends AblyBaseCommand {
     displayTable: InstanceType<typeof Table> | null,
     metrics: TestMetrics,
   ): void {
-    if (!displayTable || !metrics.testId || this.shouldOutputJson({})) {
-      // If displayTable is null (e.g. JSON mode or between tests), try to recreate if needed
-      if (!this.shouldOutputJson({}) && metrics.testId && !displayTable) {
-        // This case is tricky - we don't have the display instance here.
-        // The logic in subscribeToMessages should handle creating the display.
-        // Maybe log a warning or reconsider the design.
-        // console.warn("Attempting to update status without a display table.");
-        return; // Cannot update without a table instance
-      }
+    if (this.shouldOutputJson({})) return;
 
-      if (!displayTable) return;
-    }
+    // Fallback to the command's stored table reference if none provided
+    const tableRef = displayTable ?? this.displayTable;
+    if (!tableRef || !metrics.testId) return;
 
     // Calculate average latency from most recent messages
     const recentCount = Math.min(metrics.messagesReceived, 50);
