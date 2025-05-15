@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2024-05-15
+
+### Added
+
+- Enhanced Web CLI with improved connection status display and animations.
+- Support for Docker container development with `pnpm dev:container`.
+- Improved bench tooling for performance testing.
+- Self-contained connection-status overlay with tests for Web CLI.
+- Postinstall notice for better user experience.
+- Support for `--filter` option to the pnpm test runner.
+- Split-screen support planning in terminal.
+- Defer first WebSocket connection until terminal is visible.
+- Add inactivity timeout for web connections.
+- New convenience development commands.
+
+### Changed
+
+- Improved UI styling and state persistence in Web CLI.
+- Enhanced example UI with integrated CliDrawer component.
+- Optimized prepare script to avoid redundant build steps.
+- Improved specificity for terminal server connection resume functionality.
+- Switched from npm to pnpm as the preferred package manager.
+- Web CLI no longer reconnects automatically for idle connections.
+- Silenced React terminal noise and added opt-in debug logging.
+
+### Fixed
+
+- Addressed numerous CI and build issues.
+- Fixed flakey tests in various test suites.
+- Resolved CPU issues with Ora spinner.
+- Fixed restricted shell parsing error.
+- Resolved history command issue with API key environment variable and silent failures.
+- Fixed terminal issues related to color support in Docker containers.
+- Improved reconnection stability.
+- Fixed hijack messages leaking into terminal interface.
+- Fixed TypeScript errors in Web CLI e2e tests.
+- Made Docker capability tests compatible with different Docker API versions.
+- Resolved React unit test drift from implementation.
+- Fixed package mismatch issues.
+- Removed messageId argument from room reactions.
+
 ## [0.4.0] - 2024-04-28
 
 ### Added
