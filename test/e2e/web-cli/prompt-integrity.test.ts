@@ -7,7 +7,7 @@ import { startTerminalServer, stopTerminalServer, startWebServer, stopWebServer 
 let WEB_SERVER_PORT: number;
 let TERMINAL_SERVER_PORT: number;
 let WS_URL: string;
-const PROMPT = '$ ';
+const PROMPT = '$'; // Prompt symbol (space may be trimmed in DOM)
 
 // Allow time – we spin up real Docker containers
 test.setTimeout(180_000);
@@ -76,15 +76,16 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
     await waitForPrompt(page);
 
     const afterReloadText = (await terminal.innerText()).trimEnd();
-    const initialPromptCount = (initialText.match(/\$ /g) || []).length;
-    const afterReloadPromptCount = (afterReloadText.match(/\$ /g) || []).length;
+    const countPrompts = (text: string) => text.split('\n').filter(line => line.trimStart().startsWith('$')).length;
+    const initialPromptCount = countPrompts(initialText);
+    const afterReloadPromptCount = countPrompts(afterReloadText);
     expect(afterReloadPromptCount).toBeLessThanOrEqual(initialPromptCount + 1);
 
     // Reload once more to guard against cumulative effects
     await page.reload({ waitUntil: 'networkidle' });
     await waitForPrompt(page);
     const afterSecondReloadText = (await terminal.innerText()).trimEnd();
-    const afterSecondPromptCount = (afterSecondReloadText.match(/\$ /g) || []).length;
+    const afterSecondPromptCount = countPrompts(afterSecondReloadText);
     expect(afterSecondPromptCount).toBeLessThanOrEqual(initialPromptCount + 2);
 
     await page.close();
