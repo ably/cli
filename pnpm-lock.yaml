@@ -202,8 +202,8 @@ importers:
         specifier: ^18.0.0
         version: 18.0.1
       sinon-chai:
-        specifier: ^4.0.0
-        version: 4.0.0(chai@4.5.0)(sinon@18.0.1)
+        specifier: ^3.7.0
+        version: 3.7.0(chai@4.5.0)(sinon@18.0.1)
       strip-ansi:
         specifier: ^7.1.0
         version: 7.1.0
@@ -284,7 +284,7 @@ importers:
         specifier: ^8.24.1
         version: 8.30.1(eslint@9.25.0(jiti@2.4.2))(typescript@5.7.3)
       vite:
-        specifier: ^6.2.6
+        specifier: ^6.2.7
         version: 6.3.4(@types/node@22.14.1)(jiti@2.4.2)(lightningcss@1.29.2)
       vite-tsconfig-paths:
         specifier: ^5.1.4
@@ -5257,10 +5257,10 @@ packages:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
 
-  sinon-chai@4.0.0:
-    resolution: {integrity: sha512-cWqO7O2I4XfJDWyWElAQ9D/dtdh5Mo0RHndsfiiYyjWnlPzBJdIvjCVURO4EjyYaC3BjV+ISNXCfTXPXTEIEWA==}
+  sinon-chai@3.7.0:
+    resolution: {integrity: sha512-mf5NURdUaSdnatJx3uhoBOrY9dtL19fiOtAdT1Azxg3+lNJFiuN0uzaU3xX1LeAfL17kHQhTAJgpsfhbMJMY2g==}
     peerDependencies:
-      chai: ^5.0.0
+      chai: ^4.0.0
       sinon: '>=4.0.0'
 
   sinon@18.0.1:
@@ -11780,7 +11780,7 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  sinon-chai@4.0.0(chai@4.5.0)(sinon@18.0.1):
+  sinon-chai@3.7.0(chai@4.5.0)(sinon@18.0.1):
     dependencies:
       chai: 4.5.0
       sinon: 18.0.1
