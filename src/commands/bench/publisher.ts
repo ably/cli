@@ -45,6 +45,7 @@ interface BenchmarkPayload {
   testId: string;
   timestamp: number;
   padding?: string;
+  type: string;
   [key: string]: unknown;
 }
 
@@ -419,7 +420,14 @@ export default class BenchPublisher extends AblyBaseCommand {
 
     messageTracking[msgId] = { publishTime: timestamp };
 
-    const basePayload = { index, msgId, testId, timestamp };
+    // Include a `type` field so subscribers can distinguish benchmark payloads
+    const basePayload: BenchmarkPayload & { type: string } = {
+      type: "message",
+      index,
+      msgId,
+      testId,
+      timestamp,
+    };
     const basePayloadString = JSON.stringify(basePayload);
     const paddingSize = Math.max(0, size - basePayloadString.length - 2);
     const padding = paddingSize > 0 ? "a".repeat(paddingSize) : "";
@@ -650,6 +658,18 @@ export default class BenchPublisher extends AblyBaseCommand {
       "publishingStart",
       "Starting to publish messages via Realtime",
     );
+
+    // Send a control envelope to mark the start of the benchmark so that
+    // subscriber logic can initialise its state and rendering immediately.
+    await channel.publish("benchmark", {
+      type: "start",
+      testId,
+      startTime: Date.now(),
+      messageCount,
+      messageRate,
+      transport: flags.transport,
+    });
+
     const messagePromises: Promise<void>[] = [];
     let i = 0;
     const messageDelay = 1000 / messageRate;
@@ -682,6 +702,15 @@ export default class BenchPublisher extends AblyBaseCommand {
                 "Error occurred while waiting for publish acknowledgements",
               );
               resolveOuter();
+            });
+
+          // After all messages have been published/acknowledged send a final
+          // control envelope so subscribers finish instantly rather than
+          // waiting for presence-leave or inactivity watchdogs.
+          channel
+            .publish("benchmark", { type: "end", testId })
+            .catch(() => {
+              /* non-critical */
             });
           return;
         }
@@ -744,6 +773,17 @@ export default class BenchPublisher extends AblyBaseCommand {
       "publishingStart",
       "Starting to publish messages via REST",
     );
+
+    // Send start control message
+    await channel.publish("benchmark", {
+      type: "start",
+      testId,
+      startTime: Date.now(),
+      messageCount,
+      messageRate,
+      transport: flags.transport,
+    });
+
     const messagePromises: Promise<void>[] = [];
     let i = 0;
     const messageDelay = 1000 / messageRate;
@@ -776,6 +816,13 @@ export default class BenchPublisher extends AblyBaseCommand {
                 "Error occurred while waiting for publish acknowledgements",
               );
               resolveOuter();
+            });
+
+          // Send end control message
+          channel
+            .publish("benchmark", { type: "end", testId })
+            .catch(() => {
+              /* ignore */
             });
           return;
         }
