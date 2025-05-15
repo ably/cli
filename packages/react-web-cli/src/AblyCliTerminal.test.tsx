@@ -571,4 +571,52 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(sentPayload.apiKey).toBe('key123');
     expect(sentPayload.accessToken).toBe('tokenXYZ');
   });
+
+  test('increments only once when both error and close events fire for the same failure', async () => {
+    renderTerminal();
+
+    // Allow the initial connection attempt to set up listeners
+    await act(async () => { await Promise.resolve(); });
+
+    // Simulate a handshake failure that triggers *both* error and close
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialised');
+      mockSocketInstance.triggerEvent('error', new Event('error'));
+      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'Abnormal closure', wasClean: false });
+    });
+
+    // Only one increment should have been recorded for this failed attempt
+    expect(GlobalReconnect.increment).toHaveBeenCalledTimes(1);
+  });
+
+  test('opens a new WebSocket even if the previous one is still CONNECTING', async () => {
+    vi.useFakeTimers();
+    renderTerminal();
+
+    // Allow mount effects
+    await act(async () => { await Promise.resolve(); });
+
+    // Simulate a connection failure that triggers scheduleReconnect
+    act(() => {
+      if (!mockSocketInstance) throw new Error('socket not initialised');
+      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'lost' });
+    });
+
+    // capture reconnect callback
+    const reconnectCallback = vi.mocked(GlobalReconnect.scheduleReconnect).mock.calls[0][0];
+
+    // Pretend the old socket is still in CONNECTING state when the timer fires
+    mockSocketInstance.readyStateValue = WebSocket.CONNECTING; // 0
+
+    // Clear constructor count for clarity
+    vi.mocked((global as any).WebSocket).mockClear();
+
+    await act(async () => {
+      reconnectCallback();
+    });
+
+    expect(vi.mocked((global as any).WebSocket)).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
 }); 

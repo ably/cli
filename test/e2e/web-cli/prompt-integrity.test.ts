@@ -1,4 +1,5 @@
 /* eslint-disable unicorn/consistent-function-scoping, unicorn/prefer-dom-node-text-content, unicorn/no-await-expression-member */
+/* eslint-disable no-control-regex, unicorn/prefer-string-replace-all */
 import { test, expect } from './fixtures';
 import type { BrowserContext } from 'playwright/test';
 import { startTerminalServer, stopTerminalServer, startWebServer, stopWebServer } from './reconnection-utils';
@@ -55,8 +56,8 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
 
       const term = document.querySelector('.xterm');
       if (!term) return false;
-      // Strip ANSI escape sequences (\x1b[...m etc.) before prompt check
-      const clean = (term.textContent || '').replace(/\x1B\[[0-9;]*[mGKHF]/g, '').trim();
+      // Strip ANSI escape sequences (e.g. " " before prompt check
+      const clean = (term.textContent || '').replace(/\u001B\[[0-9;]*[mGKHF]/g, '').trim();
       return clean.includes('$');
     }, { timeout: 150_000 });
   }
