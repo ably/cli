@@ -65,6 +65,16 @@ if (typeof window !== 'undefined') {
   } catch { /* ignore URL parsing errors in non-browser env */ }
 }
 
+// Detect whether a chunk of text is part of the server-side PTY meta JSON that
+// should never be rendered in the terminal.  We look for key markers that can
+// appear in *either* fragment of a split WebSocket frame (e.g. the opening
+// half may contain "\"stream\":true" while the closing half has
+// "\"hijack\":true").  Using separate regexp checks allows us to filter
+// partial fragments reliably without needing to reconstruct the full object.
+function isHijackMetaChunk(txt: string): boolean {
+  return /"stream"\s*:\s*true/.test(txt) || /"hijack"\s*:\s*true/.test(txt);
+}
+
 export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   websocketUrl,
   ablyAccessToken,
@@ -204,7 +214,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       if (ptyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
         ptyBuffer.current = ptyBuffer.current.slice(ptyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
       }
-      if (ptyBuffer.current.includes(TERMINAL_PROMPT_IDENTIFIER)) {
+      // Strip ANSI colour/formatting codes before looking for the literal "$ " prompt
+      const cleanBuf = ptyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
+      if (cleanBuf.includes(TERMINAL_PROMPT_IDENTIFIER)) {
         debugLog('Shell prompt detected – session active');
         clearStatusDisplay(); // Clear the status box as per plan
         setIsSessionActive(true);
@@ -451,9 +463,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
       else dataStr = new TextDecoder().decode(event.data); // Should handle Uint8Array from server
 
-      // Filter stray PTY meta JSON if server failed to strip it
-      if (/\{[^}]*stream[^}]*hijack[^}]*\}/.test(dataStr.trim())) {
-        debugLog('[AblyCLITerminal] Suppressed PTY meta-message text');
+      // Filter stray (possibly fragmented) PTY meta JSON if the server failed to strip it
+      if (isHijackMetaChunk(dataStr.trim())) {
+        debugLog('[AblyCLITerminal] Suppressed PTY meta-message chunk');
       } else if (term.current) {
         term.current.write(dataStr);
       }

@@ -619,4 +619,41 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
     vi.useRealTimers();
   });
+
+  test('suppresses fragmented hijack meta JSON chunks', async () => {
+    renderTerminal();
+
+    // Wait initial listeners
+    await act(async () => { await Promise.resolve(); });
+
+    mockWrite.mockClear();
+
+    // First fragment (opening half) – should be ignored
+    act(() => {
+      if (!mockSocketInstance) throw new Error('socket not initialised');
+      mockSocketInstance.triggerEvent('message', { data: '{"stream":true,"std' });
+    });
+
+    // Second fragment (closing half) – should also be ignored
+    act(() => {
+      if (!mockSocketInstance) throw new Error('socket not initialised');
+      mockSocketInstance.triggerEvent('message', { data: 'in":true,"stdout":true,"stderr":true,"hijack":true}' });
+    });
+
+    expect(mockWrite).not.toHaveBeenCalled();
+  });
+
+  test('detects prompt even when ANSI colour codes are present', async () => {
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); });
+
+    // Simulate PTY output with colour codes around "$ "
+    const ansiPrompt = '\u001B[32muser@host\u001B[0m:~$ ';
+    const onDataHandler = mockOnData.mock.calls[0][0] as (data: string) => void;
+    act(() => { onDataHandler(ansiPrompt); });
+
+    await waitFor(() => {
+      expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('connected');
+    });
+  });
 }); 
