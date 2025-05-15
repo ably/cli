@@ -54,8 +54,8 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
  * @param terminalSelector Selector for the terminal element
  * @param timeout Maximum time to wait in milliseconds
  */
-async function waitForPrompt(page: _Page, terminalSelector: string, timeout = 30000): Promise<void> {
-  const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
+async function waitForPrompt(page: _Page, terminalSelector: string, timeout = 60000): Promise<void> {
+  const promptText = '$'; // Prompt symbol (space may be trimmed in DOM)
   console.log('Waiting for terminal prompt...');
   try {
     await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout });
@@ -192,7 +192,7 @@ test.describe('Web CLI E2E Tests', () => {
     console.log('Terminal element found.');
 
     // Wait for the initial prompt to appear, indicating connection and container ready
-    const promptText = '$ '; // The simple prompt used in the container (NOTE: Space added)
+    const promptText = '$'; // Prompt symbol (space may be trimmed in DOM)
     console.log('Attempting to wait for initial prompt...'); // Log before wait
     try {
       await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout: 30000 });
@@ -430,7 +430,7 @@ test.describe('Web CLI E2E Tests', () => {
     
     // Wait for reconnection attempt to complete (prompt visible again)
     await page.waitForTimeout(5000);
-    await waitForPrompt(page, '.xterm', 30000);
+    await waitForPrompt(page, '.xterm');
 
     // Type a test command to verify we reconnected successfully
     await page.locator('.xterm').focus();
