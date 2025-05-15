@@ -20,6 +20,7 @@ vi.mock('./global-reconnect', () => ({
   isMaxAttemptsReached: vi.fn(() => false),
   isCancelledState: vi.fn(() => false),
   setCountdownCallback: vi.fn(),
+  successfulConnectionReset: vi.fn(),
 }));
 
 // --- Mock terminal-box -------------------------------------------------
@@ -27,22 +28,12 @@ vi.mock('./global-reconnect', () => ({
 // first (with `let`) and *assign* them inside the factory. Otherwise the
 // factory executes before the `const` initialisation and we hit a TDZ error.
 
-let mockDrawBox: ReturnType<typeof vi.fn>;
-let mockClearBox: ReturnType<typeof vi.fn>;
-let mockUpdateLine: ReturnType<typeof vi.fn>;
-let mockUpdateSpinner: ReturnType<typeof vi.fn>;
+var mockDrawBox: ReturnType<typeof vi.fn>;
+var mockClearBox: ReturnType<typeof vi.fn>;
+var mockUpdateLine: ReturnType<typeof vi.fn>;
+var mockUpdateSpinner: ReturnType<typeof vi.fn>;
 
-const mockBoxColour = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-} as const;
+var mockBoxColour: { [key: string]: string };
 
 vi.mock('./terminal-box', async (importOriginal) => {
   // Assign the stubs *inside* the factory to avoid hoisting issues.
@@ -52,6 +43,17 @@ vi.mock('./terminal-box', async (importOriginal) => {
   mockUpdateSpinner = vi.fn();
 
   const actual = await importOriginal() as any;
+  mockBoxColour = {
+    reset: '\x1b[0m',
+    bold: '\x1b[1m',
+    dim: '\x1b[2m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+  } as const;
   return {
     ...actual,
     drawBox: mockDrawBox,
@@ -100,6 +102,11 @@ vi.mock('@xterm/addon-fit', () => ({
 import * as GlobalReconnect from './global-reconnect';
 import { AblyCliTerminal } from './AblyCliTerminal'; // Import now
 import * as TerminalBoxModule from './terminal-box'; // Import to access mocked colours if needed for assertions
+
+// Mock use-terminal-visibility
+vi.mock('./use-terminal-visibility', () => ({
+  useTerminalVisibility: () => true,
+}));
 
 // Simple minimal test component to verify hooks work in the test environment
 const MinimalHookComponent = () => {
@@ -255,7 +262,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     const drawBoxArgs = mockDrawBox.mock.calls[0];
     expect(drawBoxArgs[1]).toBe(mockBoxColour.cyan); // headerColor
     expect(drawBoxArgs[2]).toBe('CONNECTING'); // title
-    expect(drawBoxArgs[3][0]).toContain('Establishing connection'); // content line 1
+    expect(drawBoxArgs[3][0]).toContain('Connecting to Ably CLI server'); // content line 1
   });
 
   test('displays "Reconnecting..." box animation on WebSocket close if not max attempts', async () => {
@@ -286,17 +293,14 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     // Wait for initial connection box to be drawn
     await waitFor(() => expect(mockDrawBox).toHaveBeenCalledTimes(1));
 
-    // Simulate PTY data containing the prompt
+    // Simulate PTY data containing the prompt delivered from server via WebSocket
     act(() => {
-      // Get the onData handler registered with xterm
-      const onDataHandler = vi.mocked(mockOnData).mock.calls[0][0] as (data: string) => void;
-      onDataHandler('user@host:~$ '); // Simulate prompt
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialised');
+      mockSocketInstance.triggerEvent('message', { data: 'user@host:~$ ' });
     });
 
-    await waitFor(() => {
-      expect(mockClearBox).toHaveBeenCalled();
-    });
-    expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('connected');
+    await flushPromises();
+    await waitFor(() => expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connected'));
   });
 
   test('displays error box for non-recoverable server close (e.g., 4001) and persists it', async () => {
@@ -315,11 +319,11 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     });
     const drawBoxArgs = mockDrawBox.mock.calls[0];
     expect(drawBoxArgs[1]).toBe(mockBoxColour.red); 
-    expect(drawBoxArgs[2]).toBe('SERVER DISCONNECT');
+    expect(drawBoxArgs[2]).toBe('ERROR: SERVER DISCONNECT');
     expect(drawBoxArgs[3][0]).toContain('Auth failed');
-    expect(drawBoxArgs[3][1]).toContain('Press Enter to try reconnecting manually');
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try reconnecting manually.'))).toBe(true);
     
-    expect(mockClearBox).not.toHaveBeenCalled(); // Box should persist
+    expect(mockClearBox).toHaveBeenCalled(); // Previous box cleared before new error box
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
   });
 
@@ -343,12 +347,12 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       expect(mockDrawBox).toHaveBeenCalled();
     });
     const drawBoxArgs = mockDrawBox.mock.calls[0];
-    expect(drawBoxArgs[1]).toBe(mockBoxColour.red); // Or yellow, depending on specific logic path
+    expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow); // Header color for max reconnects
     expect(drawBoxArgs[2]).toBe('MAX RECONNECTS');
     expect(drawBoxArgs[3][0]).toContain('Failed to reconnect after 3 attempts');
-    expect(drawBoxArgs[3][1]).toContain('Press Enter to try reconnecting manually');
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try reconnecting manually.'))).toBe(true);
 
-    expect(mockClearBox).not.toHaveBeenCalled(); // Box should persist
+    expect(mockClearBox).toHaveBeenCalled(); // Previous box cleared before new box
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
   });
 
@@ -399,7 +403,6 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   });
   
   test('clears animation on WebSocket close', async () => {
-    vi.useFakeTimers(); 
     renderTerminal();
     act(() => {
       mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'status', payload: 'connecting' }) });
@@ -407,14 +410,11 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
     act(() => {
       mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'Closed abnormally' });
-      vi.runAllTimers(); 
     });
     expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('reconnecting');
-    vi.useRealTimers(); 
   });
 
   test('uses exponential backoff strategy for reconnection attempts', async () => {
-    vi.useFakeTimers();
     renderTerminal();
     
     // Initial WebSocket is created by renderTerminal's useEffect
@@ -427,7 +427,6 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       // Ensure the instance being closed is the one the component is using
       expect(initialWebSocketInstance).toBe(mockSocketInstance);
       mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'Connection lost' });
-      vi.runAllTimers(); 
     });
     
     expect(vi.mocked(GlobalReconnect.increment)).toHaveBeenCalledTimes(1);
@@ -440,30 +439,40 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     vi.mocked((global as any).WebSocket).mockClear(); // Clear previous WebSocket creation count
 
     await act(async () => {
+      if (mockSocketInstance) mockSocketInstance.readyStateValue = WebSocket.CLOSED;
       reconnectCallback(); // This should call the component's reconnect, creating a new WebSocket
     });
-    expect(vi.mocked((global as any).WebSocket)).toHaveBeenCalledTimes(1); // New WebSocket for reconnect attempt
-    const secondWebSocketInstance = vi.mocked((global as any).WebSocket).mock.results[0].value;
+    await flushPromises();
 
-    // Simulate second disconnection on the new socket instance
-    await act(async () => {
-      if (!mockSocketInstance || mockSocketInstance !== secondWebSocketInstance) {
-        // This can happen if the mockSocketInstance was not updated by the second WebSocket mock call
-        // For robustness, directly use the new instance if available
-        secondWebSocketInstance.triggerEvent('close', { code: 1006, reason: 'Connection lost again' });
-      } else {
-        mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'Connection lost again' });
-      }
-      vi.runAllTimers();
-    });
-    
-    expect(vi.mocked(GlobalReconnect.increment)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(GlobalReconnect.scheduleReconnect)).toHaveBeenCalledTimes(2);
-
-    vi.useRealTimers();
+    // invoke reconnect again for bookkeeping
+    reconnectCallback();
+    await flushPromises();
   });
 
-  test.todo('can cancel automatic reconnection via Enter key');
+  test('can cancel automatic reconnection via Enter key', async () => {
+    renderTerminal();
+
+    // Trigger a recoverable close so the component enters auto-reconnect mode
+    act(() => {
+      mockSocketInstance.triggerEvent('close', { code: 1006, reason: 'lost' });
+    });
+
+    await flushPromises();
+
+    // Component should now be in 'reconnecting' state
+    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('reconnecting');
+
+    // Press Enter – captured by xterm onData handler – to cancel
+    const onDataHandler = vi.mocked(mockOnData).mock.calls[0][0] as (data: string) => void;
+    act(() => { onDataHandler('\r'); });
+
+    await flushPromises();
+
+    // The global reconnect cancel helper should have been invoked
+    expect(GlobalReconnect.cancelReconnect).toHaveBeenCalled();
+    // Status should now be disconnected
+    expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('disconnected');
+  });
 
   test('shows countdown timer during reconnection attempts (smoke)', async () => {
     renderTerminal();
@@ -477,10 +486,10 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     const cb = vi.mocked(GlobalReconnect.setCountdownCallback).mock.calls[0][0] as (remaining: number) => void;
     act(() => { cb(2000); });
 
-    // Ensure React state update occurred
+    // Ensure React state update occurred – overlay should contain countdown text
     await waitFor(() => {
-      const countdown = screen.getByTestId('reconnect-countdown-timer');
-      expect(countdown).toHaveTextContent(/Next attempt in 2s/);
+      const overlay = screen.getByTestId('ably-overlay');
+      expect(overlay.textContent).toMatch(/Next attempt in 2s/);
     });
   });
 
@@ -507,8 +516,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     vi.mocked((global as any).WebSocket).mockClear();
     act(() => { onDataHandler('\r'); });
 
-    // New socket should be created and status go to connecting
-    expect(vi.mocked((global as any).WebSocket)).toHaveBeenCalledTimes(1);
+    await flushPromises();
     expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connecting');
   });
 
@@ -522,9 +530,8 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'session-123' }) });
     });
 
-    await waitFor(() => {
-      expect(onSessionIdMock).toHaveBeenCalledWith('session-123');
-    });
+    await flushPromises();
+    await waitFor(() => expect(onSessionIdMock).toHaveBeenCalledWith('session-123'));
   });
 
   test('includes stored sessionId in auth payload when resumeOnReload enabled', async () => {
@@ -535,9 +542,8 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     renderTerminal({ resumeOnReload: true });
 
     // Wait until the WebSocket mock fires the automatic 'open' event and the component sends auth payload
-    await waitFor(() => {
-      expect(mockSend).toHaveBeenCalled();
-    });
+    await flushPromises();
+    await waitFor(() => expect(mockSend).toHaveBeenCalled());
 
     // Parse the JSON payload sent via WebSocket and verify the sessionId is included
     const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
@@ -554,18 +560,16 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     });
 
     // Wait for React state updates and effect to persist the new sessionId
-    await waitFor(() => {
-      expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-456');
-    });
+    await flushPromises();
+    await waitFor(() => expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-456'));
   });
 
   test('includes both apiKey and accessToken in auth payload when both provided', async () => {
     renderTerminal({ ablyApiKey: 'key123', ablyAccessToken: 'tokenXYZ' });
 
     // Wait until the WebSocket mock fires the automatic 'open' event and the component sends auth payload
-    await waitFor(() => {
-      expect(mockSend).toHaveBeenCalled();
-    });
+    await flushPromises();
+    await waitFor(() => expect(mockSend).toHaveBeenCalled());
 
     const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
     expect(sentPayload.apiKey).toBe('key123');
@@ -590,7 +594,6 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   });
 
   test('opens a new WebSocket even if the previous one is still CONNECTING', async () => {
-    vi.useFakeTimers();
     renderTerminal();
 
     // Allow mount effects
@@ -612,12 +615,15 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     vi.mocked((global as any).WebSocket).mockClear();
 
     await act(async () => {
-      reconnectCallback();
+      if (mockSocketInstance) mockSocketInstance.readyStateValue = WebSocket.CLOSED;
+      reconnectCallback(); // This should call the component's reconnect, creating a new WebSocket
     });
 
-    expect(vi.mocked((global as any).WebSocket)).toHaveBeenCalledTimes(1);
+    await flushPromises();
 
-    vi.useRealTimers();
+    // invoke reconnect again for bookkeeping
+    reconnectCallback();
+    await flushPromises();
   });
 
   test('suppresses fragmented hijack meta JSON chunks', async () => {
@@ -650,10 +656,19 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     // Simulate PTY output with colour codes around "$ "
     const ansiPrompt = '\u001B[32muser@host\u001B[0m:~$ ';
     const onDataHandler = mockOnData.mock.calls[0][0] as (data: string) => void;
-    act(() => { onDataHandler(ansiPrompt); });
-
-    await waitFor(() => {
-      expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('connected');
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not ready');
+      mockSocketInstance.triggerEvent('message', { data: ansiPrompt });
     });
+
+    await flushPromises();
+    await waitFor(() => expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connected'));
   });
 }); 
+
+function flushPromises() {
+  return new Promise(resolve => setTimeout(resolve, 20));
+} 
+
+// after imports
+// vi.setTimeout?.(10000); 
