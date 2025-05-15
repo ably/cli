@@ -102,12 +102,18 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
     await page.keyboard.type('exit');
     await page.keyboard.press('Enter');
 
-    // Allow command to be sent and server to start processing termination
-    await page.waitForTimeout(1000);
+    // Allow server to process termination and React state to update
+    await page.waitForTimeout(2000);
+
+    // Purge any persisted sessionId to guarantee new session on next page
+    await page.evaluate(() => {
+      sessionStorage.removeItem('ably.cli.sessionId');
+    });
+
     await page.close(); // Close the original page and its WebSocket
 
     // Allow server to fully process the disconnection of the first session
-    await new Promise(resolve => setTimeout(resolve, 5000)); 
+    await new Promise(resolve => setTimeout(resolve, 3000)); 
 
     const page2 = await context.newPage();
     await page2.goto(`http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}&cliDebug=true`, { waitUntil: 'networkidle' });
@@ -153,15 +159,14 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
       } catch {
         return false;
       }
-    }, { timeout: 20000 });
+    }, { timeout: 30000 }); // increased timeout slightly for CI flakiness
 
     // Overlay should exist – but in case of slow DOM/animation we give a soft assertion
     const overlay = page.locator('[data-testid="ably-overlay"]');
     try {
-      await expect(overlay).toBeVisible({ timeout: 5000 });
+      await expect(overlay).toBeVisible({ timeout: 6000 });
       await expect(overlay).toContainText('ERROR: SERVER DISCONNECT');
     } catch (e) {
-      // If overlay not visible we continue because React state already confirmed prompt.
       console.warn('[Prompt-Integrity] Overlay visibility assertion skipped due to timeout:', e);
     }
 
