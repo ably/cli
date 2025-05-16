@@ -137,7 +137,8 @@
     "strip-ansi": "^7.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "@webcontainer/api": "^1.2.2"
   },
   "engines": {
     "node": ">=18.0.0"

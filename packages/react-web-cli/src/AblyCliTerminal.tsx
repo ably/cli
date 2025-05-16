@@ -19,6 +19,7 @@ import {
 } from './global-reconnect';
 import { useTerminalVisibility } from './use-terminal-visibility.js';
 import { SplitSquareHorizontal, X } from 'lucide-react';
+import { WebContainerTerminal } from './WebContainerTerminal.js';
 
 /**
  * Simple debounce utility function to prevent rapid successive calls
@@ -68,6 +69,8 @@ export interface AblyCliTerminalProps {
    * A split icon will be displayed in the top-right corner when in single-pane mode.
    */
   enableSplitScreen?: boolean;
+  /** Experimental: run entirely in-browser using WebContainers instead of Docker/WebSocket */
+  mode?: 'docker' | 'webcontainer';
 }
 
 // Debug logging helper – disabled by default. To enable in local dev set
@@ -110,7 +113,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   resumeOnReload,
   maxReconnectAttempts,
   enableSplitScreen = false,
+  mode = 'docker',
 }) => {
+  // If the experimental WebContainer mode is requested, delegate to the minimal
+  // client-side implementation and skip all Docker/WebSocket logic.
+  if (mode === 'webcontainer') {
+    return (
+      <WebContainerTerminal
+        ablyApiKey={ablyApiKey}
+        ablyAccessToken={ablyAccessToken}
+        onConnectionStatusChange={onConnectionStatusChange as (status: 'connecting' | 'connected' | 'error') => void}
+      />
+    );
+  }
+
   const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [connectionHelpMessage, setConnectionHelpMessage] = useState('');
