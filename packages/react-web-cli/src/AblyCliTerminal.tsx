@@ -166,7 +166,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     
     // Reset secondary terminal state
-    setSecondaryConnectionStatus('initial');
+    updateSecondaryConnectionStatus('initial');
     setIsSecondarySessionActive(false);
     setSecondaryShowManualReconnectPrompt(false);
     setSecondarySessionId(null);
@@ -255,7 +255,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       setIsSessionActive(tempIsActive);
       
       // Reset secondary terminal state
-      setSecondaryConnectionStatus('initial');
+      updateSecondaryConnectionStatus('initial');
       setIsSecondarySessionActive(false);
       setSecondaryShowManualReconnectPrompt(false);
       setSecondarySessionId(null);
@@ -298,7 +298,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     
     // Reset secondary terminal state
-    setSecondaryConnectionStatus('initial');
+    updateSecondaryConnectionStatus('initial');
     setIsSecondarySessionActive(false);
     setSecondaryShowManualReconnectPrompt(false);
     setSecondarySessionId(null);
@@ -425,10 +425,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // (window as any).componentConnectionStatusForTest = status; // Keep for direct inspection if needed, but primary is below
     // console.log(`[AblyCLITerminal] (window as any).componentConnectionStatusForTest SET TO: ${status}`);
     
-    // Call playwright hook if it exists
+    connectionStatusRef.current = status;
+    
+    // Only report status changes from the primary terminal
     if (typeof (window as any).setWindowTestFlagOnStatusChange === 'function') {
       (window as any).setWindowTestFlagOnStatusChange(status);
-      // test flag hook called
     }
 
     if (onConnectionStatusChange) {
@@ -553,8 +554,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         // Only set active if not already active
         if (!isSecondarySessionActive) {
           setIsSecondarySessionActive(true);
-          setSecondaryConnectionStatus('connected');
-          secondaryConnectionStatusRef.current = 'connected';
+          updateSecondaryConnectionStatus('connected');
           if (secondaryTerm.current) secondaryTerm.current.focus();
         }
         
@@ -1381,8 +1381,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     debugLog('[AblyCLITerminal] Creating secondary WebSocket instance');
 
     // Update connection status
-    setSecondaryConnectionStatus('connecting');
-    secondaryConnectionStatusRef.current = 'connecting';
+      updateSecondaryConnectionStatus('connecting');
 
     // Show connecting animation in secondary terminal
     if (secondaryTerm.current) {
@@ -1447,8 +1446,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               if (msg.payload === 'connected') {
                 // Clear any overlay when connected
                 clearSecondaryStatusDisplay();
-                setSecondaryConnectionStatus('connected');
-                secondaryConnectionStatusRef.current = 'connected';
+                updateSecondaryConnectionStatus('connected');
                 setIsSecondarySessionActive(true);
                 
                 if (secondaryTerm.current) {
@@ -1466,8 +1464,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               if (msg.payload === 'error' || msg.payload === 'disconnected') {
                 const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
                 if (secondaryTerm.current) secondaryTerm.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
-                setSecondaryConnectionStatus(msg.payload as ConnectionStatus);
-                secondaryConnectionStatusRef.current = msg.payload as ConnectionStatus;
+                updateSecondaryConnectionStatus(msg.payload as ConnectionStatus);
                 
                 if (secondaryTerm.current && msg.payload === 'disconnected') {
                   const title = "ERROR: SERVER DISCONNECT";
@@ -1533,8 +1530,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             // Only set active if not already active
             if (!isSecondarySessionActive) {
               setIsSecondarySessionActive(true);
-              setSecondaryConnectionStatus('connected');
-              secondaryConnectionStatusRef.current = 'connected';
+              updateSecondaryConnectionStatus('connected');
+              
               if (secondaryTerm.current) secondaryTerm.current.focus();
             }
             
@@ -1549,16 +1546,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // WebSocket error handler
     newSocket.addEventListener('error', (event) => {
       console.error('[AblyCLITerminal] [Secondary] WebSocket error:', event);
-      secondaryConnectionStatusRef.current = 'error';
-      setSecondaryConnectionStatus('error');
+                      updateSecondaryConnectionStatus('error');
     });
     
     // WebSocket close handler
     newSocket.addEventListener('close', (event) => {
       debugLog(`[AblyCLITerminal] [Secondary] WebSocket closed. Code: ${event.code}`);
       setIsSecondarySessionActive(false);
-      setSecondaryConnectionStatus('disconnected');
-      secondaryConnectionStatusRef.current = 'disconnected';
+                      updateSecondaryConnectionStatus('disconnected');
       
       if (secondaryTerm.current) {
         const title = "DISCONNECTED";
@@ -1687,7 +1682,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
       
       // Reset state
-      setSecondaryConnectionStatus('initial');
+      updateSecondaryConnectionStatus('initial');
       setIsSecondarySessionActive(false);
       setSecondaryShowManualReconnectPrompt(false);
       setSecondarySessionId(null);
@@ -1705,6 +1700,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       window.sessionStorage.removeItem('ably.cli.secondarySessionId');
     }
   }, [secondarySessionId, resumeOnReload, isSplit]);
+
+  // New function to handle secondary terminal status changes without external reporting
+  const updateSecondaryConnectionStatus = useCallback((status: ConnectionStatus) => {
+    // Update internal state for the secondary terminal
+    setSecondaryConnectionStatus(status);
+    secondaryConnectionStatusRef.current = status;
+    
+    // We intentionally don't call onConnectionStatusChange here
+    // as per requirements - only the primary terminal status should be reported
+  }, []);
 
   return (
     <div
