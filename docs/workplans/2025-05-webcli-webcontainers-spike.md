@@ -23,9 +23,9 @@ This plan outlines an **exploratory spike** to determine whether the React Web C
 
 | Step | Task | Outcome |
 |------|------|---------|
-| 0.1 | **Deep-dive into current implementation** – Read `scripts/terminal-server.ts`, `packages/react-web-cli`, `examples/web-cli`. Diagram data-flow (WebSocket ↔ Docker TTY ↔ Xterm) and identify Docker assumptions (env vars, file system, TTY resize). | Annotated architecture diagram committed to `docs/architecture/webcli-current.png`. |
-| 0.2 | **Study WebContainers docs & sample** – Tutorial 7 "Add interactivity" <https://webcontainers.io/tutorial/7-add-interactivity>, Guides intro <https://webcontainers.io/guides/introduction>.  Enumerate API surface (boot, mount, spawn, jsh shell, files snapshot, process API, limitations – 500 MB FS, Node 18). | Markdown notes `docs/arch/webcontainers-notes.md` listing API calls and constraints. |
-| 0.3 | **Identify CLI runtime requirements** – Node version, native deps (none), env vars (`ABLY_API_KEY`, `ABLY_ACCESS_TOKEN`), binary size (~15 MB).  Decide on install strategy: *npm install* inside container vs. mount pre-packed `node_modules`. | Decision recorded – likely **mount pre-built FS** to avoid on-the-fly npm install latency (>20 s). |
+| 0.1 | **Deep-dive into current implementation** – Read `scripts/terminal-server.ts`, `packages/react-web-cli`, `examples/web-cli`. Diagram data-flow (WebSocket ↔ Docker TTY ↔ Xterm) and identify Docker assumptions (env vars, file system, TTY resize). | ✅ Diagram created at `docs/architecture/webcli-current.mmd` |
+| 0.2 | **Study WebContainers docs & sample** – Tutorial 7 "Add interactivity" <https://webcontainers.io/tutorial/7-add-interactivity>, Guides intro <https://webcontainers.io/guides/introduction>.  Enumerate API surface (boot, mount, spawn, jsh shell, files snapshot, process API, limitations – 500 MB FS, Node 18). | ✅ Notes recorded in `docs/arch/webcontainers-notes.md` |
+| 0.3 | **Identify CLI runtime requirements** – Node version, native deps (none), env vars (`ABLY_API_KEY`, `ABLY_ACCESS_TOKEN`), binary size (~15 MB).  Decide on install strategy: *npm install* inside container vs. mount pre-packed `node_modules`. | ✅ Requirements & decision logged in notes (pre-bundled FS chosen) |
 
 ---
 
