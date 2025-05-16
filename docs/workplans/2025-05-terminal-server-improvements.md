@@ -227,8 +227,8 @@ Tasks:
 - **Testing:**
     - Unit tests: Verify that the split icon is not rendered and functionality is absent when `enableSplitScreen={false}`.
     - Playwright tests: Test the component in both modes (`enableSplitScreen={true}` and `enableSplitScreen={false}`).
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Added `enableSplitScreen` boolean prop (defaulting to false) to control the availability of split-screen functionality. When disabled, the split button is not rendered and split-screen mode cannot be activated. Updated component implementation to check this prop before showing the split icon and enforced the check at initialization when reading from session storage. Added comprehensive documentation in the README.md, including a dedicated "Split-Screen Mode" section explaining the feature's capabilities and a props table entry detailing the prop's purpose. Updated Playwright tests to verify component behavior in both enabled and disabled configurations, ensuring that the split button only appears and functions when the prop is enabled.
 
 ### Step 6.4: Connection Status Handling for Split-Screen
 - **Task:** Adapt connection status display and event emission for split-screen mode.
