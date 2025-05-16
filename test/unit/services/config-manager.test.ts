@@ -8,7 +8,8 @@
 // Set test isolation marker to prevent Ably connection conflicts
 process.env.NODE_TEST_CONTEXT = 'config-manager-only';
 
-import chai, { expect } from "chai";
+import { expect } from "chai";
+import * as chai from "chai";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

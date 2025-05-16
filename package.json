@@ -67,7 +67,7 @@
     "helpClass": "./dist/src/help.js"
   },
   "dependencies": {
-    "@ably/chat": "^0.5.1",
+    "@ably/chat": "^0.7.0",
     "@ably/spaces": "^0.4.0",
     "@inquirer/prompts": "^5.1.3",
     "@modelcontextprotocol/sdk": "^1.8.0",

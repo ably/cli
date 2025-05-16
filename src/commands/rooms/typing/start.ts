@@ -5,6 +5,16 @@ import chalk from "chalk";
 
 import { ChatBaseCommand } from "../../../chat-base-command.js";
 
+// The heartbeats are throttled to one every 10 seconds. There's a 2 second
+// leeway to send a keystroke/heartbeat after the 10 second mark so the
+// typing indicator won't flicker for others. The 2 second leeway is at the
+// recipient side, we have 2 second window to publish the heartbeat and it
+// should also arrive within this interval.
+//
+// The best thing to do to keep the indicator on is to keystroke() often.
+const KEYSTROKE_INTERVAL = 450; // ms
+
+
 export default class TypingStart extends ChatBaseCommand {
   static override args = {
     roomId: Args.string({
@@ -91,9 +101,7 @@ export default class TypingStart extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${roomId}`,
       );
-      const room = await this.chatClient.rooms.get(roomId, {
-        typing: { timeoutMs: 5000 }, // Default timeout is 5s, interval should be < 5s
-      });
+      const room = await this.chatClient.rooms.get(roomId);
       this.logCliEvent(
         flags,
         "room",
@@ -139,7 +147,7 @@ export default class TypingStart extends ChatBaseCommand {
               "Attempting to start typing...",
             );
             room.typing
-              .start()
+              .keystroke()
               .then(() => {
                 this.logCliEvent(
                   flags,
@@ -157,7 +165,7 @@ export default class TypingStart extends ChatBaseCommand {
                 // Keep typing active by calling start() periodically
                 if (this.typingIntervalId) clearInterval(this.typingIntervalId);
                 this.typingIntervalId = setInterval(() => {
-                  room.typing.start().catch((error: Error) => {
+                  room.typing.keystroke().catch((error: Error) => {
                     this.logCliEvent(
                       flags,
                       "typing",
@@ -165,14 +173,8 @@ export default class TypingStart extends ChatBaseCommand {
                       `Error refreshing typing state: ${error.message}`,
                       { error: error.message },
                     );
-                  }); // Refresh typing state
-                  this.logCliEvent(
-                    flags,
-                    "typing",
-                    "refreshing",
-                    "Refreshed typing state",
-                  );
-                }, 4000); // Interval < timeoutMs
+                  });
+                }, KEYSTROKE_INTERVAL);
               })
               .catch((error: Error) => {
                 this.logCliEvent(
@@ -220,8 +222,9 @@ export default class TypingStart extends ChatBaseCommand {
         "listening",
         "Maintaining typing status...",
       );
+
       // Keep the process running until Ctrl+C
-      await new Promise(() => {
+      await new Promise<void>((resolve) => {
         // This promise intentionally never resolves
         process.on("SIGINT", async () => {
           this.logCliEvent(
@@ -335,7 +338,8 @@ export default class TypingStart extends ChatBaseCommand {
               "closing",
               "Closing Realtime connection",
             );
-            this.ablyClient.close();
+            this.ablyClient.connection.off(); // unsubscribe connection events
+            this.ablyClient.close(); // close client
             this.logCliEvent(
               flags,
               "connection",
@@ -347,6 +351,9 @@ export default class TypingStart extends ChatBaseCommand {
           if (!this.shouldOutputJson(flags)) {
             this.log(`${chalk.green("Successfully disconnected.")}`);
           }
+
+          resolve();
+          process.exit(0); // Explicitly exit to ensure process terminates
         });
       });
     } catch (error) {
