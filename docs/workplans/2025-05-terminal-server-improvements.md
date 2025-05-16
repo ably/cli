@@ -211,11 +211,12 @@ Tasks:
     - This second session should use the same `apiKey` and `controlAccessToken` as the primary session.
     - Each session (left and right) must manage its own state (connection, buffer, etc.) independently. The refresh of the browser must work too, with each session managing it's session state indepdently to survive a page reload.
     - Implement logic to handle closing one session and potentially making the other session primary.
+    - Each terminal interface should be obviously its own container visually, with the terminal interfaces split with a visual indicator line of some sort, with the tabs aligned to the top left of each terminal (in split mode) that are clearly associated with the terminal itself and will contain a small X button to close the tabs. 
 - **Testing:**
     - Unit tests: Mock WebSocket connections and verify that two independent sessions can be created, connect, and operate (send/receive mock data).
     - Playwright tests: Verify that commands can be run independently in both panes. Test closing one pane and ensuring the other remains functional.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Implemented robust secondary terminal session management in the split-screen UI. Added independent WebSocket connection and Xterm.js instance for the secondary terminal pane with its own state management (connection status, PTY buffer, etc.). Created handlers for proper initialization and cleanup when toggling split mode, including specialized logic for closing primary vs. secondary terminals. Fixed a critical bug where split screen state persisted incorrectly in sessionStorage after closing terminals, causing unexpected terminal duplication on page reload. Added comprehensive state persistence using sessionStorage for both terminal sessions, with careful cleanup on all terminal close actions. Added unit tests covering split mode initialization, terminal closing behavior, and session persistence, and updated Playwright E2E tests to verify the functionality.
 
 ### Step 6.3: Split-Screen Configuration and Props
 - **Task:** Introduce a prop to enable/disable split-screen and update documentation.
