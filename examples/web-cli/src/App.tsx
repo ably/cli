@@ -104,6 +104,7 @@ function App() {
         onSessionId={handleSessionId}
         websocketUrl={currentWebsocketUrl}
         resumeOnReload={true}
+        enableSplitScreen={true}
         maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
       />
     ) : null

@@ -21,6 +21,7 @@ A React component for embedding an interactive Ably CLI terminal in web applicat
   * Configurable maximum reconnection attempts (default: 15) before switching to manual reconnect
   * Proper handling of server-initiated disconnections with specific error codes
 * **Session resumption** on page reload or transient network loss (`resumeOnReload`).
+* **Split-screen mode** with two independent terminal sessions at once.
 * Works in fullscreen or in a resizable drawer (see `examples/web-cli`).
 * Written in TypeScript & totally tree-shakable.
 
@@ -87,6 +88,7 @@ export default function MyTerminal() {
 | `onSessionEnd` | function | No | - | Callback when session ends |
 | `maxReconnectAttempts` | number | No | 15 | Maximum reconnection attempts before giving up |
 | `resumeOnReload` | boolean | No | false | Whether to attempt to resume an existing session after page reload |
+| `enableSplitScreen` | boolean | No | false | Enable split-screen mode with a second independent terminal |
 
 *\* `ablyApiKey` is mandatory.  `ablyAccessToken` is optional and only needed for Control-API commands (e.g. accounts, apps, keys).
 
@@ -121,6 +123,20 @@ For other WebSocket close codes, the terminal will automatically attempt to reco
 ## Session Resumption
 
 When `resumeOnReload` is enabled, the terminal will store the session ID in `sessionStorage` and attempt to resume the session after a page reload. This allows for a seamless experience when navigating away and back to the page.
+
+## Split-Screen Mode
+
+When `enableSplitScreen` is set to `true`, the component displays a split icon in the top-right corner of the terminal. Clicking this icon splits the view into two independent terminal sessions side by side.
+
+Features of split-screen mode:
+
+- Two completely independent terminal sessions sharing the same credentials
+- Each terminal has its own tab with a close button
+- Both terminals resize automatically to maintain optimal layout
+- Status and connection management happens independently for each terminal
+- Close either terminal to return to single-pane mode
+
+The feature is designed for developers who need to run multiple commands simultaneously, such as subscribing to a channel in one pane while publishing to it in another.
 
 ## Setting Up a Terminal Server
 
