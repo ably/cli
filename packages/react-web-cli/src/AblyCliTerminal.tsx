@@ -18,6 +18,7 @@ import {
   increment as grIncrement
 } from './global-reconnect';
 import { useTerminalVisibility } from './use-terminal-visibility.js';
+import { SplitSquareHorizontal, X } from 'lucide-react';
 
 export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
@@ -888,14 +889,101 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const connectWebSocketRef = useRef(connectWebSocket);
   useEffect(() => { connectWebSocketRef.current = connectWebSocket; }, [connectWebSocket]);
 
+  // -------------------------------------------------------------
+  // Split-screen UI state (Step 6.1 – Basic UI only, no extra session logic)
+  // -------------------------------------------------------------
+
+  /**
+   * `isSplit` controls whether the UI is currently displaying a secondary pane.
+   * In this initial Step 6.1 implementation we *only* toggle the UI – we do **not**
+   * initialise a second terminal session yet (that comes in Step 6.2).
+   */
+  const [isSplit, setIsSplit] = useState(false);
+
+  /** Toggle into split-screen mode – basic UI only */
+  const handleSplitScreen = useCallback(() => {
+    setIsSplit(true);
+  }, []);
+
+  /** Close the secondary pane and return to single-pane mode */
+  const handleCloseSplit = useCallback(() => {
+    setIsSplit(false);
+  }, []);
+
   return (
     <div
-      ref={rootRef}
-      data-testid="terminal-container"
-      className="Terminal-container"
-      style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', padding: 0, boxSizing: 'border-box', backgroundColor: '#000000' }}
+      data-testid="terminal-outer-container"
+      className="flex flex-col w-full h-full bg-gray-800 text-white overflow-hidden relative"
+      style={{ position: 'relative' }}
     >
-      {overlay && <TerminalOverlay {...overlay} />}
+      {/* Tab bar – visible only in split mode */}
+      {isSplit && (
+        <div data-testid="tab-bar" className="flex items-center bg-gray-900 border-b border-gray-700 text-sm select-none">
+          <div className="flex items-center px-3 py-2 border-r border-gray-700">
+            <span className="mr-2">Terminal 1</span>
+          </div>
+          <div className="flex items-center px-3 py-2 border-r border-gray-700">
+            <span className="mr-2">Terminal 2</span>
+            <button
+              onClick={handleCloseSplit}
+              aria-label="Close Terminal 2"
+              title="Close Terminal 2"
+              className="text-gray-400 hover:text-white ml-1 p-0.5 rounded hover:bg-gray-700"
+              data-testid="close-terminal-2-button"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Panes */}
+      <div className="flex-grow flex w-full h-full relative overflow-hidden">
+        {/* Primary pane */}
+        <div
+          ref={rootRef}
+          data-testid="terminal-container"
+          className="Terminal-container flex-1 w-full h-full overflow-hidden relative p-0 box-border bg-black"
+        >
+          {/* Split button – only when not already split */}
+          {!isSplit && (
+            <button
+              onClick={handleSplitScreen}
+              aria-label="Split terminal"
+              title="Split terminal"
+              data-testid="split-terminal-button"
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                zIndex: 9999,
+                backgroundColor: '#374151',
+                borderRadius: '0.25rem',
+                padding: '0.4em',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <SplitSquareHorizontal size={16} />
+            </button>
+          )}
+
+          {overlay && <TerminalOverlay {...overlay} />}
+        </div>
+
+        {/* Secondary pane – UI only for now */}
+        {isSplit && (
+          <div
+            data-testid="terminal-container-secondary"
+            className="flex-1 w-full h-full overflow-hidden relative p-0 box-border bg-black border-l border-gray-700"
+          >
+            {/* Placeholder – actual terminal session to be implemented in Step 6.2 */}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
