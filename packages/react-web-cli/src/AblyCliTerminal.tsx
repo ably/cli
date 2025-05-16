@@ -132,6 +132,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     return false;
   });
+  
+  /**
+   * `splitPosition` controls the relative width of the left pane as a percentage (0-100)
+   */
+  const [splitPosition, setSplitPosition] = useState<number>(() => {
+    if (resumeOnReload && typeof window !== 'undefined' && enableSplitScreen) {
+      const saved = window.sessionStorage.getItem('ably.cli.splitPosition');
+      return saved ? parseFloat(saved) : 50; // Default to 50% if not found
+    }
+    return 50; // Default to 50% split
+  });
+  
+  // Track whether we're currently dragging the divider
+  const [isDragging, setIsDragging] = useState(false);
+  // Ref to the outer container for calculating percentages
+  const outerContainerRef = useRef<HTMLDivElement>(null);
 
   // Updated handler to initialize the secondary terminal
   const handleSplitScreenWithSecondTerminal = useCallback(() => {
@@ -1307,6 +1323,66 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const connectWebSocketRef = useRef(connectWebSocket);
   useEffect(() => { connectWebSocketRef.current = connectWebSocket; }, [connectWebSocket]);
 
+  // -------------------------------------------------------------
+  // Resizable panes logic
+  // -------------------------------------------------------------
+
+  // Start dragging the divider
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  // Handle mouse movement while dragging
+  const handleDrag = useCallback((e: MouseEvent) => {
+    if (!isDragging || !outerContainerRef.current) return;
+    
+    const containerRect = outerContainerRef.current.getBoundingClientRect();
+    const containerWidth = containerRect.width;
+    const mouseX = e.clientX - containerRect.left;
+    
+    // Calculate percentage position (0-100)
+    let newPosition = (mouseX / containerWidth) * 100;
+    
+    // Constrain to reasonable limits (10%-90%)
+    newPosition = Math.max(10, Math.min(90, newPosition));
+    
+    setSplitPosition(newPosition);
+    
+    // Trigger resize event for terminals to adapt
+    window.dispatchEvent(new Event('resize'));
+  }, [isDragging]);
+
+  // End dragging
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    
+    setIsDragging(false);
+    
+    // Save split position to session storage if resume enabled
+    if (resumeOnReload && typeof window !== 'undefined') {
+      window.sessionStorage.setItem('ably.cli.splitPosition', splitPosition.toString());
+    }
+    
+    // Ensure terminals resize properly after drag ends
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 50);
+  }, [isDragging, resumeOnReload, splitPosition]);
+
+  // Add/remove global mouse event listeners for drag
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDrag);
+      window.addEventListener('mouseup', handleDragEnd);
+    }
+    
+    return () => {
+      window.removeEventListener('mousemove', handleDrag);
+      window.removeEventListener('mouseup', handleDragEnd);
+    };
+  }, [isDragging, handleDrag, handleDragEnd]);
+
   // Single resize handler for both terminals
   useEffect(() => {
     const handleGlobalResize = debounce(() => {
@@ -1321,7 +1397,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         console.warn("Error in global resize handler:", e);
       }
     }, 200);
-
+    
     // Add resize listener
     window.addEventListener('resize', handleGlobalResize);
     
@@ -1334,14 +1410,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       window.removeEventListener('resize', handleGlobalResize);
     };
   }, [isSplit]);
-
-  // Handle resize when split mode changes
+  
+  // Handle storage of split state when it changes
   useEffect(() => {
-    // Small delay to allow DOM updates to complete
-    const timeoutId = setTimeout(() => {
-      window.dispatchEvent(new Event('resize'));
-    }, 100);
-    
     // Ensure the split state in sessionStorage always matches the component state
     if (resumeOnReload && typeof window !== 'undefined') {
       if (isSplit) {
@@ -1358,8 +1429,6 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         }
       }
     }
-    
-    return () => clearTimeout(timeoutId);
   }, [isSplit, resumeOnReload, secondarySessionId]);
 
   // -------------------------------------------------------------
@@ -1719,13 +1788,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     >
       {/* Panes with explicit widths to prevent resize issues */}
       <div 
+        ref={outerContainerRef}
         className="flex-grow flex w-full h-full relative overflow-hidden"
         style={{ display: 'flex', flexDirection: 'row', width: '100%', height: '100%' }}
       >
-        {/* Primary terminal column with fixed width */}
+        {/* Primary terminal column with dynamic width */}
         <div 
           style={{ 
-            width: isSplit ? 'calc(50% - 1px)' : '100%',
+            width: isSplit ? `${splitPosition}%` : '100%',
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
@@ -1809,24 +1879,43 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           </div>
         </div>
 
-        {/* Vertical divider line - only visible in split mode */}
+        {/* Draggable vertical divider - only visible in split mode */}
         {isSplit && (
           <div 
+            data-testid="terminal-divider"
             style={{ 
-              width: '3px', 
+              width: '5px', 
               height: '100%', 
-              backgroundColor: '#6B7280', // Use a lighter gray color
+              backgroundColor: '#6B7280',
               flexShrink: 0,
-              flexGrow: 0
-            }} 
-          />
+              flexGrow: 0,
+              cursor: 'col-resize',
+              position: 'relative',
+              zIndex: 10
+            }}
+            onMouseDown={handleDragStart}
+          >
+            {/* Visible handle indicator in the middle of the divider */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '3px',
+                height: '30px',
+                backgroundColor: '#D1D5DB',
+                borderRadius: '1.5px'
+              }}
+            />
+          </div>
         )}
         
         {/* Secondary terminal column - only rendered when split is active */}
         {isSplit && (
           <div 
             style={{ 
-              width: 'calc(50% - 1px)',
+              width: `${100 - splitPosition}%`,
               height: '100%',
               display: 'flex',
               flexDirection: 'column',

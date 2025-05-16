@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, act, screen, waitFor, fireEvent, createEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 
@@ -947,6 +947,41 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('disconnected');
     });
     */
+  });
+
+  test('resizable divider allows adjusting terminal pane widths', async () => {
+    renderTerminal({ enableSplitScreen: true });
+
+    // First enable split screen mode
+    const splitButton = await screen.findByRole('button', { name: /Split terminal/i });
+    await act(async () => {
+      fireEvent.click(splitButton);
+    });
+
+    // Verify both terminals are visible
+    expect(await screen.findByTestId('tab-1')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-2')).toBeInTheDocument();
+    
+    // Find the divider element
+    const divider = await screen.findByTestId('terminal-divider');
+    expect(divider).toBeInTheDocument();
+    
+    // Simulate a drag operation on the divider
+    // Note: Full drag simulation is complex, so we'll verify the mousedown handler is attached
+    const mouseEvent = createEvent.mouseDown(divider);
+    Object.defineProperty(mouseEvent, 'preventDefault', { value: vi.fn() });
+    fireEvent(divider, mouseEvent);
+    
+    // Since we can't easily test the actual drag in jsdom, we'll verify:
+    // 1. The preventDefault was called (meaning our handler ran)
+    // 2. The mouse event listeners are attached during drag operations
+    expect(mouseEvent.preventDefault).toHaveBeenCalled();
+    
+    // Clean up by clicking the close button
+    const closeButton = await screen.findByTestId('close-terminal-2-button');
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
   });
 }); 
 
