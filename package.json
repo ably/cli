@@ -38,7 +38,8 @@
     "dev:terminal-server": "pnpm build:container && pnpm build && pnpm terminal-server",
     "dev:examples": "pnpm build:packages && pnpm build:examples && cd examples/web-cli && pnpm dev",
     "dev:container": "pnpm build:container && bash scripts/run-dev-container.sh",
-    "dev": "pnpm run build && pnpm link . && ably"
+    "dev": "pnpm run build && pnpm link . && ably",
+    "build:webcontainer-snapshot": "node scripts/build-webcontainer-snapshot.cjs"
   },
   "author": "Ably <support@ably.com>",
   "license": "Apache-2.0",

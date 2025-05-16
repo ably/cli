@@ -1,4 +1,19 @@
 import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
+// We will lazily import fflate only in the browser context where snapshot loading runs.
+type UntarFn = (buf: Uint8Array, cb: (name: string, data: Uint8Array) => void) => void;
+
+let gunzipSync: (b: Uint8Array) => Uint8Array;
+let strFromU8: (a: Uint8Array) => string;
+let untarSync: UntarFn;
+
+async function ensureFflate() {
+  if (gunzipSync !== undefined) return;
+  // eslint-disable-next-line @typescript-eslint/await-thenable
+  const mod: any = await import('fflate');
+  gunzipSync = mod.gunzipSync;
+  strFromU8 = mod.strFromU8;
+  untarSync = mod.untarSync ?? mod.untar; // fallback
+}
 
 export interface BootstrapResult {
   webcontainer: WebContainer;
@@ -27,6 +42,25 @@ async function getWebContainer(): Promise<WebContainer> {
   return wcPromise;
 }
 
+async function loadSnapshot(): Promise<Record<string, { file: { contents: string } }>> {
+  try {
+    await ensureFflate();
+    const resp = await fetch('/assets/webcontainer-fs.tgz');
+    if (!resp.ok) throw new Error('snapshot not found');
+    const arrayBuf = await resp.arrayBuffer();
+    const gz = new Uint8Array(arrayBuf);
+    const tarData = gunzipSync!(gz);
+    const files: Record<string, { file: { contents: string } }> = {};
+    untarSync!(tarData, (fileName: string, fileData: Uint8Array) => {
+      const path = fileName.replace(/^\.\//, '');
+      files[path] = { file: { contents: strFromU8!(fileData) } };
+    });
+    return files;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Boot a StackBlitz WebContainer instance and launch an interactive `jsh` shell.
  * The returned helper exposes `write` and `resize` utilities so the caller can
@@ -37,25 +71,30 @@ export async function bootstrapShell(options: BootstrapOptions = {}): Promise<Bo
 
   const wc = await getWebContainer();
 
-  // 2) Prepare minimal filesystem
-  const files: Parameters<WebContainer['mount']>[0] = {
-    'package.json': {
-      file: {
-        contents: JSON.stringify(
-          {
-            name: 'ably-webcli-spike',
-            private: true,
-            type: 'module',
-            dependencies: {
-              '@ably/cli': 'latest',
+  // 2) Attempt snapshot fast-path
+  let files: Parameters<WebContainer['mount']>[0] = await loadSnapshot();
+
+  if (Object.keys(files).length === 0) {
+    // Fallback minimal filesystem
+    files = {
+      'package.json': {
+        file: {
+          contents: JSON.stringify(
+            {
+              name: 'ably-webcli-spike',
+              private: true,
+              type: 'module',
+              dependencies: {
+                '@ably/cli': 'latest',
+              },
             },
-          },
-          null,
-          2,
-        ),
+            null,
+            2,
+          ),
+        },
       },
-    },
-  };
+    };
+  }
 
   await wc.mount(files);
 
