@@ -195,23 +195,14 @@ Tasks:
 
 - [ ] Bug: It appears the terminal server is "leaky" and can lose track of how many connections it has open. We should have a test that rapdily creates 30+ connections and abruptly terminates them, and we should then make sure the server reports that there are zero connections and is ready to accept new connections. Note I can see this in terminal logs "[TerminalServer 2025-05-13T12:25:36.217Z] Session ba69ef0f-74bb-49e0-8f31-4157b18f0115 removed. Active sessions: 2", with no message after that, indicating that this is indeed a problem given there are seemingly no active connections.
 - [ ] Feature: The terminal server should expose key metrics via Promotheus
-- [ ] Bug: After some amount of refreshes, following a `clear` statement, I managed to see the following: `<in":true,"stdout":true,"stderr":true,"hijack":true}` in the termianl serfver console. We need to understand how these commands are making it through the temrinal and strip them.
+- [ ] Bug: After some amount of refreshes, following a `clear` statement, I managed to see the following: `<in":true,"stdout":true,"stderr":true,"hijack":true>` in the termianl serfver console. We need to understand how these commands are making it through the temrinal and strip them.
 
 ## Phase 6: Implement Split-Screen Terminal in Web CLI Component
 
 ### Step 6.1: Basic UI for Split-Screen
 - **Task:** Implement the UI elements for split-screen mode within `AblyCliTerminal.tsx`.
-- **Details:**
-    - Add a "split" icon (e.g., using `lucide-react`) overlaid on the top-right of the terminal view when only one session is active.
-    - On clicking the split icon, the view should divide into two panes (left and right).
-    - Implement a tab bar above the terminal panes. Each tab should display a default name (e.g., "Terminal 1", "Terminal 2") and an "X" close button.
-    - The split icon should be hidden when two panes are visible and reappear if one is closed.
-    - Basic styling for panes, tabs, and borders to ensure clear visual separation (dark theme).
-- **Testing:**
-    - Unit tests for `AblyCliTerminal.tsx` verifying the rendering of the split icon, tab bar, and panes based on component state.
-    - Playwright tests: Verify the split icon appears, clicking it creates two panes and a tab bar, tabs have close buttons, and closing a pane reverts the UI correctly.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Added split-screen UI scaffolding. A new split button (using `lucide-react` `SplitSquareHorizontal` icon) appears at the top-right of the terminal when a single pane is present. Clicking the button toggles a two-pane layout with a dark-themed tab bar showing "Terminal 1" and "Terminal 2" plus an `X` close button (also from `lucide-react`). Closing pane 2 reverts to single-pane mode and restores the split icon. This change is UI-only—no second terminal session is started yet (handled in Step 6.2). Comprehensive unit tests (Vitest/RTL) and a new Playwright E2E test cover the icon visibility, pane splitting/closing, and regressions to ensure legacy tests remain green.
 
 ### Step 6.2: Second Terminal Session Logic
 - **Task:** Enable the instantiation and management of a second independent terminal session.

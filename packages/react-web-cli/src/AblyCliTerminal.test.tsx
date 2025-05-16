@@ -108,6 +108,12 @@ vi.mock('./use-terminal-visibility', () => ({
   useTerminalVisibility: () => true,
 }));
 
+// Mock lucide-react icons to simple stubs to avoid SVG complexity in tests
+vi.mock('lucide-react', () => ({
+  SplitSquareHorizontal: (props: any) => null,
+  X: (props: any) => null,
+}));
+
 // Simple minimal test component to verify hooks work in the test environment
 const MinimalHookComponent = () => {
   const [state] = React.useState('test');
@@ -663,6 +669,39 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
     await flushPromises();
     await waitFor(() => expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connected'));
+  });
+
+  // -------------------------------------------------------------
+  // Split-screen UI (Step 6.1) tests
+  // -------------------------------------------------------------
+
+  test('split icon is visible and toggles split-screen UI', async () => {
+    renderTerminal();
+
+    // Split button should be present initially
+    const splitButton = await screen.findByRole('button', { name: /Split terminal/i });
+    expect(splitButton).toBeInTheDocument();
+
+    // Click the split button to enable split-screen mode
+    await act(async () => {
+      splitButton.click();
+    });
+
+    // Tab bar and secondary pane should now be present
+    expect(await screen.findByTestId('tab-bar')).toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container-secondary')).toBeInTheDocument();
+
+    // Split button should be gone in split mode
+    expect(screen.queryByRole('button', { name: /Split terminal/i })).toBeNull();
+
+    // Close the second pane via its "X" button
+    const closeBtn = await screen.findByRole('button', { name: /Close Terminal 2/i });
+    await act(async () => { closeBtn.click(); });
+
+    // Secondary pane and tab bar should be removed, split button visible again
+    expect(screen.queryByTestId('terminal-container-secondary')).toBeNull();
+    expect(screen.queryByTestId('tab-bar')).toBeNull();
+    expect(await screen.findByRole('button', { name: /Split terminal/i })).toBeInTheDocument();
   });
 }); 
 
