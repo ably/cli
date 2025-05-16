@@ -249,7 +249,7 @@ Tasks:
     - Ensure `xterm.js` instances correctly reflow/resize when their container dimensions change.
 - **Testing:**
     - Playwright tests: Verify that the divider is draggable and that resizing correctly adjusts pane widths and terminal content rendering.
-- **Status:** `[ ] Not Started`
-- **Summary:**
+- **Status:** `[x] Done`
+- **Summary:** Added resizable panes functionality to the split-screen mode. The vertical divider is now draggable and adjusts the relative widths of the terminal panes. When dragging the divider, the terminal panes resize in real-time using percentage-based widths. The resizer includes a visible handle indicator in the middle of the divider for better UX. Added state tracking for the split position, storing it in sessionStorage when `resumeOnReload` is enabled, so the user's preferred layout persists across page reloads. Added a unit test to verify the draggable functionality and ensure both terminals resize correctly with dimension changes.
 
 **Completion:** Once all steps are marked as `Done`, have passed the mandatory workflow checks (build, lint, test, docs), **and the corresponding tasks in `docs/TODO.md` are marked complete, and all affected documentation and rules files (`/docs`, `.cursor/rules/`) have been updated,** this work plan is complete.
