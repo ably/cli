@@ -31,7 +31,7 @@
 - [ ] [feat/terminal-server-improvements] The terminal server is considered experimental at this stage as we've not "productionised" it beyond handling the anticipated traffic for Ably users, which is realistically going to be a low number of concurrent users (less than 100). As such, we expect one well resourced server can handle the web CLI needs, however it's important until we "productionise" the service that users still get a good experience, even if the server is offline or at capacity. As such, whenever the web CLI is connecting, or has been forcefully disconnected due to capacity etc. the user should be told that whilst the web CLI is curently not available, the installable CLI is operational and can be installed and used locally, with basic instructions to do that. This information should be shown to the user in the terminal itself, as opposed to any UI element on top of the web CLI interface.
 - [x] [feat/terminal-server-improvements] The terminal server now supports connection resumption using `sessionId`. When a client reconnects within 60 s with the same `sessionId` and credentials, the server re-attaches to the existing Docker exec, replays the last buffered output (≈1 000 lines) and streams stdin/stdout; the newer connection automatically supersedes any older socket.
 - [x] [feat/terminal-server-improvements] The Web CLI React component persists and re-uses `sessionId`. It exposes the value via `onSessionId`, automatically includes it in reconnects, and—when `resumeOnReload` is enabled—stores it in `sessionStorage` so a full page reload resumes the session.
-- [ ] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, and connection status indicators per-pane. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
+- [x] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, connection status indicators per-pane, and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the server
 
 ## UI/UX Improvements
@@ -105,7 +105,7 @@
 - [x] Document the folder structures and place this in a markdown file. Instruct local IDE to maintain this file.
 - [x] Ensure all changes meet the linting requirements, `pnpm exec eslint [file]`
 - [ ] Look for areas of unnecessary duplication as help.ts checking "commandId.includes('accounts login')" when the list of unsupported web CLI commands exists already in BaseCommand WEB_CLI_RESTRICTED_COMMANDS
-- [ ] [feat/terminal-server-improvements] Add inactivity timeout to the terminal server
+- [x] [feat/terminal-server-improvements] Add inactivity timeout to the terminal server
 - [ ] Release new versions automatically from Github for NPM
 - [ ] Now that we have .editorconfig, ensure all files adhere in one commit
 - [ ] We are using a PNPM workspace, but I am not convinced that's a good thing. We should consider not letting the examples or React component dependencies affect the core CLI packaging.
@@ -119,7 +119,7 @@
 
 - [ ] Running `pnpm test [filepath]` does not run the test file only, it runs all tests. The docs state this works so needs fixing.
 - [ ] Running the tests in debug mode seem to indicate here is a loop of some sort causing slowness: `DEBUG=* pnpm test test/e2e/core/basic-cli.test.ts` to replicate this issue, see how man times `config loading plugins [ './dist/src' ]` is loadedx
-- [ ] [feat/terminal-server-improvements] Running web CLI terminal has some bugs a) running a command such as `ably help status` clears the display instead of showing progress updates, b) " and ' are not recognise correctly, running the command `ably help ask "what is ably"`
+- [x] [feat/terminal-server-improvements] Running web CLI terminal has some bugs a) running a command such as `ably help status` clears the display instead of showing progress updates, b) " and ' are not recognise correctly, running the command `ably help ask "what is ably"`
 - [ ] Test filters don't appear to be working with pnpm `pnpm test --filter 'resume helpers'` shows warning 'Warning: Cannot find any files matching pattern "helpers"' and then runs all tests.
 - [ ] When the server times out due to inactivity, the message "--- Session Ended (from server): Session timed out due to inactivity ---" is shown. At this time, the CLI should have shown a dialog saying the client was disconnected and prompting the user to interact by pressing Enter to reconnect. It should not automatically reconnect to conserve resources for idle connections.
 - [ ] The text inside the web terminal is now not wrapping, but instead it's scrolling off to the left showing a "<" char to the left of teh line. THis is not what is expected and should wrap to the next line. Need to tweak the bash settings.
