@@ -20,12 +20,30 @@ import {
 import { useTerminalVisibility } from './use-terminal-visibility.js';
 import { SplitSquareHorizontal, X } from 'lucide-react';
 
+/**
+ * Simple debounce utility function to prevent rapid successive calls
+ */
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  
+  return function(...args: Parameters<T>): void {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => {
+      func(...args);
+      timeout = null;
+    }, wait);
+  };
+}
+
 export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
 const MAX_PTY_BUFFER_LENGTH = 10000; // Max 10k chars in the buffer
 
 // Prompts that indicate the terminal is ready for input
-const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Corrected prompt
+const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Basic prompt
+const TERMINAL_PROMPT_PATTERN = /\$\s$/; // Pattern matching prompt at end of line
 
 export interface AblyCliTerminalProps {
   websocketUrl: string;
@@ -45,6 +63,11 @@ export interface AblyCliTerminalProps {
    */
   resumeOnReload?: boolean;
   maxReconnectAttempts?: number;
+  /**
+   * When true, enables split-screen mode with a second independent terminal.
+   * A split icon will be displayed in the top-right corner when in single-pane mode.
+   */
+  enableSplitScreen?: boolean;
 }
 
 // Debug logging helper – disabled by default. To enable in local dev set
@@ -86,6 +109,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   onSessionId,
   resumeOnReload,
   maxReconnectAttempts,
+  enableSplitScreen = false,
 }) => {
   const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -94,11 +118,228 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const [countdownMessage, setCountdownMessage] = useState('');
   const [overlay, setOverlay] = useState<null|{variant:OverlayVariant,title:string,lines:string[]}>(null);
 
+  // -------------------------------------------------------------
+  // Split-screen UI state
+  // -------------------------------------------------------------
+
+  /**
+   * `isSplit` controls whether the UI is currently displaying a secondary pane.
+   * We now initialize a second terminal session when this is enabled.
+   */
+  const [isSplit, setIsSplit] = useState<boolean>(() => {
+    if (resumeOnReload && typeof window !== 'undefined' && enableSplitScreen) {
+      return window.sessionStorage.getItem('ably.cli.isSplit') === 'true';
+    }
+    return false;
+  });
+
+  // Updated handler to initialize the secondary terminal
+  const handleSplitScreenWithSecondTerminal = useCallback(() => {
+    // First update the UI state
+    setIsSplit(true);
+    
+    // Save split state to session storage if resume enabled
+    if (resumeOnReload && typeof window !== 'undefined') {
+      window.sessionStorage.setItem('ably.cli.isSplit', 'true');
+    }
+    
+    // Secondary terminal will be initialized in useEffect that watches isSplit
+  }, [resumeOnReload]);
+
+  /** Toggle into split-screen mode with terminal session */
+  const handleSplitScreen = useCallback(() => {
+    // We now use the handler that will initialize a second terminal session
+    handleSplitScreenWithSecondTerminal();
+  }, [handleSplitScreenWithSecondTerminal]);
+
+  /** Close both terminals and reset the split */
+  const handleCloseSplit = useCallback(() => {
+    // When closing the split, clean up the secondary terminal
+    if (secondarySocketRef.current && secondarySocketRef.current.readyState < WebSocket.CLOSING) {
+      secondarySocketRef.current.close();
+      secondarySocketRef.current = null;
+    }
+    
+    if (secondaryTerm.current) {
+      secondaryTerm.current.dispose();
+      secondaryTerm.current = null;
+    }
+    
+    // Reset secondary terminal state
+    setSecondaryConnectionStatus('initial');
+    setIsSecondarySessionActive(false);
+    setSecondaryShowManualReconnectPrompt(false);
+    setSecondarySessionId(null);
+    setSecondaryOverlay(null);
+    
+    // Return to single-pane mode
+    setIsSplit(false);
+    
+    // Clear split state in session storage
+    if (resumeOnReload && typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('ably.cli.isSplit');
+      window.sessionStorage.removeItem('ably.cli.secondarySessionId');
+    }
+    
+    // Resize the primary terminal after a delay
+    setTimeout(() => {
+      if (term.current && fitAddon.current) {
+        try {
+          fitAddon.current.fit();
+        } catch (e) {
+          console.warn("Error fitting primary terminal after closing split:", e);
+        }
+      }
+    }, 50);
+  }, []);
+
+  /** Handle clicking Close on Terminal 1 (primary) */
+  const handleClosePrimary = useCallback(() => {
+    // When closing the primary terminal but keeping the secondary one,
+    // make sure the secondary terminal is properly displayed
+    
+    if (secondaryTerm.current && secondarySocketRef.current) {
+      debugLog('[AblyCLITerminal] Closing primary terminal, keeping secondary');
+      
+      // Close the primary socket cleanly
+      if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) {
+        debugLog('[AblyCLITerminal] Closing primary socket');
+        socketRef.current.close(1000, 'user-closed-primary');
+        socketRef.current = null;
+      }
+      
+      // Store the secondary values before reset
+      const tempSocket = secondarySocketRef.current;
+      const tempTerm = secondaryTerm.current;
+      const tempFitAddon = secondaryFitAddon.current;
+      const tempSessionId = secondarySessionId;
+      const tempIsActive = isSecondarySessionActive;
+      
+      // Dispose the primary terminal if it exists
+      if (term.current) {
+        term.current.dispose();
+        term.current = null;
+      }
+      
+      // Clear the secondary terminal's state AFTER saving references
+      secondarySocketRef.current = null;
+      secondaryTerm.current = null;
+      secondaryFitAddon.current = undefined;
+      
+      // Ensure we properly transfer the DOM element
+      // This is critical - we need to move the secondary terminal's
+      // DOM element to the primary terminal's container
+      if (rootRef.current && tempTerm && secondaryRootRef.current) {
+        // Get the xterm DOM element from the secondary container
+        const xtermElement = secondaryRootRef.current.querySelector('.xterm');
+        if (xtermElement) {
+          // Clear the primary container
+          while (rootRef.current.firstChild) {
+            rootRef.current.firstChild.remove();
+          }
+          
+          // Move the xterm element to the primary container
+          rootRef.current.appendChild(xtermElement);
+          debugLog('[AblyCLITerminal] Moved secondary terminal DOM element to primary container');
+        }
+      }
+      
+      // Swap references
+      term.current = tempTerm;
+      fitAddon.current = tempFitAddon;
+      socketRef.current = tempSocket;
+      
+      // Update state
+      setIsSplit(false);
+      setSessionId(tempSessionId);
+      setIsSessionActive(tempIsActive);
+      
+      // Reset secondary terminal state
+      setSecondaryConnectionStatus('initial');
+      setIsSecondarySessionActive(false);
+      setSecondaryShowManualReconnectPrompt(false);
+      setSecondarySessionId(null);
+      setSecondaryOverlay(null);
+      
+      // Clear split state in session storage
+      if (resumeOnReload && typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('ably.cli.isSplit');
+        window.sessionStorage.removeItem('ably.cli.secondarySessionId');
+      }
+      
+      // Resize the terminal after a delay
+      setTimeout(() => {
+        if (term.current && fitAddon.current) {
+          try {
+            fitAddon.current.fit();
+          } catch (e) {
+            console.warn("Error fitting terminal after closing primary:", e);
+          }
+        }
+      }, 50);
+    } else {
+      // If there's no secondary terminal, just close everything (same as handleCloseSplit)
+      handleCloseSplit();
+    }
+  }, [handleCloseSplit, resumeOnReload]);
+
+  /** Close the secondary pane and return to single-pane mode */
+  const handleCloseSecondary = useCallback(() => {
+    // When closing the secondary terminal, clean it up but keep the primary one
+    if (secondarySocketRef.current && secondarySocketRef.current.readyState < WebSocket.CLOSING) {
+      debugLog('[AblyCLITerminal] Closing secondary socket');
+      secondarySocketRef.current.close(1000, 'user-closed-secondary');
+      secondarySocketRef.current = null;
+    }
+    
+    if (secondaryTerm.current) {
+      secondaryTerm.current.dispose();
+      secondaryTerm.current = null;
+    }
+    
+    // Reset secondary terminal state
+    setSecondaryConnectionStatus('initial');
+    setIsSecondarySessionActive(false);
+    setSecondaryShowManualReconnectPrompt(false);
+    setSecondarySessionId(null);
+    setSecondaryOverlay(null);
+    
+    // Return to single-pane mode
+    setIsSplit(false);
+    
+    // Clear split state in session storage
+    if (resumeOnReload && typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('ably.cli.isSplit');
+      window.sessionStorage.removeItem('ably.cli.secondarySessionId');
+    }
+    
+    // Resize the primary terminal after a delay
+    setTimeout(() => {
+      if (term.current && fitAddon.current) {
+        try {
+          fitAddon.current.fit();
+        } catch (e) {
+          console.warn("Error fitting primary terminal after closing split:", e);
+        }
+      }
+    }, 50);
+  }, [resumeOnReload]);
+
   // Track the current sessionId received from the server (if any)
   const [sessionId, setSessionId] = useState<string | null>(
     () => {
       if (resumeOnReload && typeof window !== 'undefined') {
         return window.sessionStorage.getItem('ably.cli.sessionId');
+      }
+      return null;
+    }
+  );
+
+  // Track the second terminal's sessionId
+  const [secondarySessionId, setSecondarySessionId] = useState<string | null>(
+    () => {
+      if (resumeOnReload && typeof window !== 'undefined' && window.sessionStorage.getItem('ably.cli.isSplit') === 'true') {
+        return window.sessionStorage.getItem('ably.cli.secondarySessionId');
       }
       return null;
     }
@@ -115,6 +356,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const ptyBuffer = useRef('');
   // Keep a ref in sync with the latest connection status so event handlers have up-to-date value
   const connectionStatusRef = useRef<ConnectionStatus>('initial');
+  // Store cleanup function for terminal resize handler
+  const termCleanupRef = useRef<() => void>(() => {});
 
   // Ref to track manual reconnect prompt visibility inside stable event handlers
   const showManualReconnectPromptRef = useRef<boolean>(false);
@@ -206,28 +449,119 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   }, [isSessionActive]);
 
   const clearPtyBuffer = useCallback(() => {
+    debugLog(`⚠️ DIAGNOSTIC: Clearing PTY buffer, current size: ${ptyBuffer.current.length}`);
+    if (ptyBuffer.current.length > 0) {
+      const sanitizedBuffer = ptyBuffer.current
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .slice(-100); // Only show last 100 chars to avoid log bloat
+      debugLog(`⚠️ DIAGNOSTIC: Buffer content before clear: "${sanitizedBuffer}"`);
+    }
     ptyBuffer.current = '';
   }, []);
   
   const handlePtyData = useCallback((data: string) => {
     if (!isSessionActive) {
       ptyBuffer.current += data;
+      
+      // Log received data in a way that makes control chars visible
+      const sanitizedData = data.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+      debugLog(`⚠️ DIAGNOSTIC: Received PTY data (session inactive): "${sanitizedData}"`);
+      
       if (ptyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
         ptyBuffer.current = ptyBuffer.current.slice(ptyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
       }
-      // Strip ANSI colour/formatting codes before looking for the literal "$ " prompt
+      
+      // Strip ANSI colour/formatting codes before looking for the prompt
       const cleanBuf = ptyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
-      if (cleanBuf.includes(TERMINAL_PROMPT_IDENTIFIER)) {
-        debugLog('Shell prompt detected – session active');
+      debugLog(`⚠️ DIAGNOSTIC: Clean buffer (${cleanBuf.length} chars): "${cleanBuf.slice(-50)}"`);
+      
+      // Only detect the prompt if it appears at the end of the buffer,
+      // not somewhere in the middle of previous output
+      if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
+        debugLog(`⚠️ DIAGNOSTIC: Shell prompt detected at end of buffer`);
         clearStatusDisplay(); // Clear the status box as per plan
-        setIsSessionActive(true);
-        grSuccessfulConnectionReset();
-        updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
-        if (term.current) term.current.focus();
+        
+        // Only set active if not already active to prevent multiple state updates
+        if (!isSessionActive) {
+          setIsSessionActive(true);
+          grSuccessfulConnectionReset();
+          updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
+          if (term.current) term.current.focus();
+        }
+        
         clearPtyBuffer();
       }
     }
   }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay]);
+
+  // Secondary terminal instance references
+  const secondaryRootRef = useRef<HTMLDivElement>(null);
+  const secondaryTerm = useRef<Terminal | null>(null);
+  const secondaryFitAddon = useRef<FitAddon>();
+  const secondarySocketRef = useRef<WebSocket | null>(null);
+  const secondaryPtyBuffer = useRef('');
+  const secondaryTermCleanupRef = useRef<() => void>(() => {});
+  
+  // Secondary terminal state
+  const [secondarySocket, setSecondarySocket] = useState<WebSocket | null>(null);
+  const [isSecondarySessionActive, setIsSecondarySessionActive] = useState(false);
+  const [secondaryOverlay, setSecondaryOverlay] = useState<null|{variant:OverlayVariant,title:string,lines:string[]}>(null);
+  
+  // Secondary terminal refs - need their own copies for event handlers
+  const secondaryConnectionStatusRef = useRef<ConnectionStatus>('initial');
+  const [secondaryConnectionStatus, setSecondaryConnectionStatus] = useState<ConnectionStatus>('initial');
+  const secondarySpinnerPrefixRef = useRef<string>('');
+  const secondarySpinnerIndexRef = useRef<number>(0);
+  const secondaryStatusBoxRef = useRef<TerminalBox | null>(null);
+  const secondarySpinnerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const secondaryShowManualReconnectPromptRef = useRef<boolean>(false);
+  const [secondaryShowManualReconnectPrompt, setSecondaryShowManualReconnectPrompt] = useState(false);
+  const secondaryReconnectScheduledThisCycleRef = useRef<boolean>(false);
+
+  // Function to clear the secondary terminal overlay and status displays
+  const clearSecondaryStatusDisplay = useCallback(() => {
+    if (secondarySpinnerIntervalRef.current) {
+      clearInterval(secondarySpinnerIntervalRef.current);
+      secondarySpinnerIntervalRef.current = null;
+    }
+    secondarySpinnerIndexRef.current = 0;
+    if (secondaryStatusBoxRef.current && secondaryTerm.current) {
+      clearBox(secondaryStatusBoxRef.current);
+      secondaryStatusBoxRef.current = null;
+    }
+    setSecondaryOverlay(null);
+    debugLog('[AblyCLITerminal] Secondary terminal status display cleared');
+  }, []);
+
+  const handleSecondaryPtyData = useCallback((data: string) => {
+    if (!isSecondarySessionActive) {
+      secondaryPtyBuffer.current += data;
+      
+      if (secondaryPtyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
+        secondaryPtyBuffer.current = secondaryPtyBuffer.current.slice(secondaryPtyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
+      }
+      
+      // Strip ANSI colour/formatting codes before looking for the prompt
+      const cleanBuf = secondaryPtyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
+      
+      // Only detect the prompt if it appears at the end of the buffer
+      if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
+        debugLog('[AblyCLITerminal] [Secondary] Shell prompt detected – session active');
+        clearSecondaryStatusDisplay(); // Clear the overlay when prompt is detected
+        
+        // Only set active if not already active
+        if (!isSecondarySessionActive) {
+          setIsSecondarySessionActive(true);
+          setSecondaryConnectionStatus('connected');
+          secondaryConnectionStatusRef.current = 'connected';
+          if (secondaryTerm.current) secondaryTerm.current.focus();
+        }
+        
+        secondaryPtyBuffer.current = '';
+      }
+    }
+  }, [clearSecondaryStatusDisplay, isSecondarySessionActive]);
 
   const clearAnimationMessages = useCallback(() => {
     setReconnectAttemptMessage('');
@@ -304,30 +638,36 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   const connectWebSocket = useCallback(() => {
     // console.log('[AblyCLITerminal] connectWebSocket called.');
+    debugLog('⚠️ DIAGNOSTIC: connectWebSocket called - start of connection process');
 
     // Skip attempt if terminal not visible to avoid unnecessary server load
     if (!isVisible) {
+      debugLog('⚠️ DIAGNOSTIC: Terminal not visible, skipping connection attempt');
       return;
     }
 
     // Prevent duplicate connections if one is already open/connecting
     if (!showManualReconnectPromptRef.current && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       if ((window as any).ABLY_CLI_DEBUG) console.warn('[AblyCLITerminal] connectWebSocket already open/connecting – skip');
+      debugLog('⚠️ DIAGNOSTIC: Socket already open/connecting, skipping connection attempt');
       return;
     } else if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
-      debugLog('Existing socket state', socketRef.current.readyState, '→ will proceed to open new socket');
+      debugLog('⚠️ DIAGNOSTIC: Existing socket state', socketRef.current.readyState, '→ will proceed to open new socket');
     }
 
     if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) {
+      debugLog('⚠️ DIAGNOSTIC: Closing existing socket before creating new one');
       socketRef.current.close();
     }
 
-    debugLog('Creating fresh WebSocket instance');
+    debugLog('⚠️ DIAGNOSTIC: Creating fresh WebSocket instance to ' + websocketUrl);
 
     updateConnectionStatusAndExpose(grIsCancelledState() || grIsMaxAttemptsReached() ? 'disconnected' : (grGetAttempts() > 0 ? 'reconnecting' : 'connecting'));
     startConnectingAnimation(grGetAttempts() > 0);
 
     const newSocket = new WebSocket(websocketUrl);
+    debugLog(`⚠️ DIAGNOSTIC: New WebSocket created with ID: ${Math.random().toString(36).substring(2, 10)}`);
+    
     (window as any).ablyCliSocket = newSocket; // For E2E tests
     socketRef.current = newSocket; // Use ref for listeners
     setSocket(newSocket); // Trigger effect to add listeners
@@ -338,7 +678,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     reconnectScheduledThisCycleRef.current = false;
 
     // new WebSocket created
-    debugLog('connectWebSocket called. sessionId:', sessionId, 'showManualReconnectPrompt:', showManualReconnectPromptRef.current);
+    debugLog('⚠️ DIAGNOSTIC: WebSocket connection initiation complete. sessionId:', sessionId, 'showManualReconnectPrompt:', showManualReconnectPromptRef.current);
 
     return;
   }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation, isVisible, sessionId, showManualReconnectPromptRef]);
@@ -351,25 +691,60 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     setShowManualReconnectPrompt(false);
     clearPtyBuffer(); // Clear buffer for new session prompt detection
 
+    debugLog('⚠️ DIAGNOSTIC: WebSocket open handler started - tracking initialization sequence');
+
     if (term.current) {
+      debugLog('⚠️ DIAGNOSTIC: Focusing terminal');
       term.current.focus();
-      if (initialCommand) {
-        setTimeout(() => { term.current?.write(`${initialCommand}\r`); }, 500);
-      }
+      // Don't send the initial command yet - wait for prompt detection
     }
+    
+    // Send auth payload - but no additional data
     const payload: any = {
-      environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } };
+      environmentVariables: { 
+        ABLY_WEB_CLI_MODE: 'true',
+        // Force explicit PS1 to ensure prompt is visible
+        PS1: '$ '
+      } 
+    };
     if (ablyApiKey) payload.apiKey = ablyApiKey; // Always required
     if (ablyAccessToken) payload.accessToken = ablyAccessToken;
     if (sessionId) payload.sessionId = sessionId;
     
+    debugLog(`⚠️ DIAGNOSTIC: Preparing to send auth payload with env vars: ${JSON.stringify(payload.environmentVariables)}`);
+    
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      debugLog('⚠️ DIAGNOSTIC: Sending auth payload to server');
       socketRef.current.send(JSON.stringify(payload));
     }
 
+    // Wait until we detect the prompt before sending an initialCommand if there is one
+    // This prevents sending commands before the shell is ready
+    if (initialCommand) {
+      debugLog(`⚠️ DIAGNOSTIC: Initial command present: "${initialCommand}" - will wait for prompt`);
+      const waitForPrompt = () => {
+        if (isSessionActive && term.current) {
+          debugLog('⚠️ DIAGNOSTIC: Session active, sending initial command');
+          setTimeout(() => { 
+            if (term.current && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+              debugLog('⚠️ DIAGNOSTIC: Sending initial command now');
+              term.current.write(`${initialCommand}\r`);
+            }
+          }, 100);
+        } else {
+          // Keep checking until the session is active
+          debugLog('⚠️ DIAGNOSTIC: Session not active yet, waiting to send initial command');
+          setTimeout(waitForPrompt, 100);
+        }
+      };
+      
+      // Start waiting for prompt
+      waitForPrompt();
+    }
+
     // persistence handled by dedicated useEffect
-    debugLog('WebSocket OPEN. Sending sessionId:', sessionId);
-  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload]);
+    debugLog('WebSocket OPEN handler completed. sessionId:', sessionId);
+  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, isSessionActive]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
@@ -378,20 +753,27 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           const msg = JSON.parse(event.data);
           if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
             // received hello
-            debugLog(`Received hello. sessionId=${msg.sessionId}`);
+            debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
             setSessionId(msg.sessionId);
             if (onSessionId) onSessionId(msg.sessionId);
             debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
+            
+            // Persist to session storage if enabled
+            if (resumeOnReload && typeof window !== 'undefined') {
+              window.sessionStorage.setItem('ably.cli.sessionId', msg.sessionId);
+            }
+            
             return;
           }
           if (msg.type === 'status') {
             // received server status message
-            debugLog(`Received server status message: ${msg.payload}`);
+            debugLog(`⚠️ DIAGNOSTIC: Received server status message: ${msg.payload}`);
 
             // Treat explicit 'connected' status from server as authoritative –
             // this avoids hanging in the "connecting" state if prompt detection
             // fails (e.g. due to coloured PS1 or locale differences).
             if (msg.payload === 'connected') {
+              debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
               clearStatusDisplay();
               setIsSessionActive(true);
               updateConnectionStatusAndExpose('connected');
@@ -401,14 +783,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               // nothing is sent to the remote shell so no stray newlines are
               // executed server-side.
               if (term.current) {
+                debugLog(`⚠️ DIAGNOSTIC: Clearing line and focusing terminal`);
                 term.current.write('\x1b[K'); // Clear from cursor to EOL, keeps "$ " intact
                 term.current.focus();
               }
 
-              // Request a fresh prompt from the container
-              if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-                socketRef.current.send('\r');
-              }
+              // Don't send a carriage return - let the server handle displaying the prompt
+              // The server already has PS1='$ ' set in its environment
+              debugLog(`⚠️ DIAGNOSTIC: NOT sending carriage return (fix applied)`);
 
               clearPtyBuffer();
               return;
@@ -517,6 +899,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     clearTerminalBoxOnly();
     setIsSessionActive(false); 
 
+    // Check if this was a user-initiated close
+    const userClosedTerminal = event.reason === 'user-closed-primary' || 
+                               event.reason === 'user-closed-secondary' ||
+                               event.reason === 'manual-reconnect';
+    
+    if (userClosedTerminal) {
+      debugLog(`[AblyCLITerminal] User closed terminal: ${event.reason} - not reconnecting`);
+      return; // Don't try to reconnect if user closed the terminal intentionally
+    }
+
     // Close codes that should *not* trigger automatic reconnection because
     // they represent explicit server-side rejections or client-initiated
     // terminations.  Codes such as 1005 (No Status) or 1006 (Abnormal
@@ -563,20 +955,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     if (grIsCancelledState() || grIsMaxAttemptsReached()) {
       updateConnectionStatusAndExpose('disconnected');
       if (term.current) {
-        let title = "ERROR: CONNECTION CLOSED";
-        let message1 = `Connection failed (Code: ${event.code}, Reason: ${event.reason || 'N/A'}).`;
+        let displayTitle = "ERROR: CONNECTION CLOSED";
+        let displayMessage = `Connection failed (Code: ${event.code}, Reason: ${event.reason || 'N/A'}).`;
         const message2 = '';
         const message3 = `Press ⏎ to try reconnecting manually.`;
 
         if (grIsMaxAttemptsReached()) {
-          title = "MAX RECONNECTS";
-          message1 = `Failed to reconnect after ${grGetMaxAttempts()} attempts.`;
+          displayTitle = "MAX RECONNECTS";
+          displayMessage = `Failed to reconnect after ${grGetMaxAttempts()} attempts.`;
         } else { // Cancelled
-          title = "RECONNECT CANCELLED";
-          message1 = `Reconnection attempts cancelled.`;
+          displayTitle = "RECONNECT CANCELLED";
+          displayMessage = `Reconnection attempts cancelled.`;
         }
-        statusBoxRef.current = drawBox(term.current, boxColour.yellow, title, [message1, message2, message3], 60);
-        setOverlay({variant:'error',title,lines:[message1, message2, message3]});
+        statusBoxRef.current = drawBox(term.current, boxColour.yellow, displayTitle, [displayMessage, message2, message3], 60);
+        setOverlay({variant:'error',title:displayTitle,lines:[displayMessage, message2, message3]});
       }
       setShowManualReconnectPrompt(true);
       return; 
@@ -597,13 +989,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Prevent any (unlikely) duplicate scheduling from other late events
       reconnectScheduledThisCycleRef.current = true;
     }
-  }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId /* removed connectWebSocketRef */]);
+  }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId]);
 
   useEffect(() => {
     // Setup terminal
     if (!term.current && rootRef.current) {
       // initializing terminal instance
       debugLog('[AblyCLITerminal] Initializing Terminal instance.');
+      debugLog('⚠️ DIAGNOSTIC: Creating new Terminal instance');
       term.current = new Terminal({
         cursorBlink: true, cursorStyle: 'block', fontFamily: 'monospace', fontSize: 14,
         theme: { background: '#000000', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
@@ -612,10 +1005,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       fitAddon.current = new FitAddon();
       term.current.loadAddon(fitAddon.current);
       
+      debugLog('⚠️ DIAGNOSTIC: Setting up onData handler');
       term.current.onData((data: string) => {
+        // Log every character sent to help debug
+        const sanitizedData = data.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+        debugLog(`⚠️ DIAGNOSTIC: Terminal onData event: "${sanitizedData}"`);
+        
         // Special handling for Enter key
         if (data === '\r') {
           const latestStatus = connectionStatusRef.current;
+          debugLog(`⚠️ DIAGNOSTIC: Enter key pressed, status: ${latestStatus}, reconnectPrompt: ${showManualReconnectPromptRef.current}`);
 
           // Manual prompt visible: attempt manual reconnect even if an old socket is open
           if (showManualReconnectPromptRef.current) {
@@ -635,6 +1034,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             // Ensure any lingering socket is fully closed before opening a new one
             if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
               try { socketRef.current.close(1000, 'manual-reconnect'); } catch { /* ignore */ }
+              socketRef.current = null; // Make sure the reference is cleared
             }
 
             // Give the browser a micro-task to mark socket CLOSED before reconnect
@@ -673,21 +1073,33 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
         // Default: forward data to server if socket open
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          debugLog(`⚠️ DIAGNOSTIC: Sending data to server: "${sanitizedData}"`);
           socketRef.current.send(data);
         } else if (data === '\r') {
+          debugLog(`⚠️ DIAGNOSTIC: Socket not open, not sending carriage return`);
           // If the connection is not open and none of the above special cases matched,
           // do nothing (prevent accidental writes to closed socket).
+        } else {
+          debugLog(`⚠️ DIAGNOSTIC: Socket not open, and not a carriage return, ignoring input`);
         }
       });
 
+      debugLog('⚠️ DIAGNOSTIC: Opening terminal in DOM element');
       term.current.open(rootRef.current);
       try {
+        // Do the initial fit only
+        debugLog('⚠️ DIAGNOSTIC: Performing initial terminal fit');
         fitAddon.current.fit();
-        const resizeObserver = new ResizeObserver(() => {
-          try { fitAddon.current?.fit(); } catch (e) { console.warn("Error fitting addon on resize:", e); }
-        });
-        if (rootRef.current) resizeObserver.observe(rootRef.current);
-        setTimeout(() => { try { fitAddon.current?.fit(); } catch(e) { console.warn("Error fitting addon initial timeout:", e);}}, 100);
+        
+        // Initial timeout fit for edge cases
+        setTimeout(() => { 
+          try { 
+            debugLog('⚠️ DIAGNOSTIC: Performing delayed terminal fit');
+            fitAddon.current?.fit(); 
+          } catch(e) { 
+            console.warn("Error fitting addon initial timeout:", e);
+          }
+        }, 100);
       } catch (e) {
         console.error("Error during initial terminal fit:", e);
       }
@@ -722,6 +1134,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
       // starting connection
       debugLog('[AblyCLITerminal] Initial effect: Starting connection.');
+      debugLog('⚠️ DIAGNOSTIC: Starting initial connection in mount effect');
       grResetState();
       clearPtyBuffer();
       connectWebSocket();
@@ -729,6 +1142,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Cleanup terminal on unmount
     return () => {
+      // Execute resize listener cleanup if it exists
+      if (termCleanupRef.current) {
+        termCleanupRef.current();
+      }
+      
       if (term.current) {
         // dispose terminal
         debugLog('[AblyCLITerminal] Disposing Terminal on unmount');
@@ -889,26 +1307,404 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const connectWebSocketRef = useRef(connectWebSocket);
   useEffect(() => { connectWebSocketRef.current = connectWebSocket; }, [connectWebSocket]);
 
+  // Single resize handler for both terminals
+  useEffect(() => {
+    const handleGlobalResize = debounce(() => {
+      try {
+        if (term.current && fitAddon.current) {
+          fitAddon.current.fit();
+        }
+        if (isSplit && secondaryTerm.current && secondaryFitAddon.current) {
+          secondaryFitAddon.current.fit();
+        }
+      } catch (e) {
+        console.warn("Error in global resize handler:", e);
+      }
+    }, 200);
+
+    // Add resize listener
+    window.addEventListener('resize', handleGlobalResize);
+    
+    // Initial resize
+    setTimeout(() => {
+      handleGlobalResize();
+    }, 50);
+    
+    return () => {
+      window.removeEventListener('resize', handleGlobalResize);
+    };
+  }, [isSplit]);
+
+  // Handle resize when split mode changes
+  useEffect(() => {
+    // Small delay to allow DOM updates to complete
+    const timeoutId = setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100);
+    
+    // Ensure the split state in sessionStorage always matches the component state
+    if (resumeOnReload && typeof window !== 'undefined') {
+      if (isSplit) {
+        window.sessionStorage.setItem('ably.cli.isSplit', 'true');
+        debugLog('[AblyCLITerminal] Setting isSplit=true in sessionStorage');
+      } else {
+        window.sessionStorage.removeItem('ably.cli.isSplit');
+        debugLog('[AblyCLITerminal] Removed isSplit from sessionStorage');
+        
+        // When exiting split mode, also clean up secondary session ID
+        if (!secondarySessionId) {
+          window.sessionStorage.removeItem('ably.cli.secondarySessionId');
+          debugLog('[AblyCLITerminal] Removed secondarySessionId from sessionStorage');
+        }
+      }
+    }
+    
+    return () => clearTimeout(timeoutId);
+  }, [isSplit, resumeOnReload, secondarySessionId]);
+
   // -------------------------------------------------------------
-  // Split-screen UI state (Step 6.1 – Basic UI only, no extra session logic)
+  // Split-screen Terminal Logic (Step 6.2 - Secondary session)
   // -------------------------------------------------------------
+  
+  // Connect secondary terminal WebSocket
+  const connectSecondaryWebSocket = useCallback(() => {
+    // Skip if secondary terminal is not available
+    if (!secondaryTerm.current || !secondaryRootRef.current) {
+      return;
+    }
 
-  /**
-   * `isSplit` controls whether the UI is currently displaying a secondary pane.
-   * In this initial Step 6.1 implementation we *only* toggle the UI – we do **not**
-   * initialise a second terminal session yet (that comes in Step 6.2).
-   */
-  const [isSplit, setIsSplit] = useState(false);
+    // Close existing socket if open
+    if (secondarySocketRef.current && secondarySocketRef.current.readyState < WebSocket.CLOSING) {
+      secondarySocketRef.current.close();
+    }
 
-  /** Toggle into split-screen mode – basic UI only */
-  const handleSplitScreen = useCallback(() => {
-    setIsSplit(true);
-  }, []);
+    debugLog('[AblyCLITerminal] Creating secondary WebSocket instance');
 
-  /** Close the secondary pane and return to single-pane mode */
-  const handleCloseSplit = useCallback(() => {
-    setIsSplit(false);
-  }, []);
+    // Update connection status
+    setSecondaryConnectionStatus('connecting');
+    secondaryConnectionStatusRef.current = 'connecting';
+
+    // Show connecting animation in secondary terminal
+    if (secondaryTerm.current) {
+      secondaryTerm.current.writeln('Connecting to Ably CLI server...');
+    }
+
+    // Create new WebSocket
+    const newSocket = new WebSocket(websocketUrl);
+    secondarySocketRef.current = newSocket;
+    setSecondarySocket(newSocket);
+    
+    // Set up event handlers - using inline functions since we can't easily reuse
+    // the handlers from the primary terminal without significant refactoring
+    
+    // WebSocket open handler
+    newSocket.addEventListener('open', () => {
+      debugLog('[AblyCLITerminal] Secondary WebSocket opened');
+      
+      // Clear any reconnect prompt
+      setSecondaryShowManualReconnectPrompt(false);
+      secondaryShowManualReconnectPromptRef.current = false;
+      
+      if (secondaryTerm.current) {
+        secondaryTerm.current.focus();
+      }
+      
+      // Send auth payload - only include necessary data
+      const payload: any = {
+        environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } 
+      };
+      if (ablyApiKey) payload.apiKey = ablyApiKey;
+      if (ablyAccessToken) payload.accessToken = ablyAccessToken;
+      if (secondarySessionId) payload.sessionId = secondarySessionId;
+      
+      if (newSocket.readyState === WebSocket.OPEN) {
+        newSocket.send(JSON.stringify(payload));
+      }
+      
+      // Don't send any other data until shell prompt is detected
+    });
+    
+    // WebSocket message handler
+    newSocket.addEventListener('message', async (event) => {
+      try {
+        if (typeof event.data === 'string') {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
+              debugLog(`[Secondary] Received hello. sessionId=${msg.sessionId}`);
+              setSecondarySessionId(msg.sessionId);
+              
+              // Persist to session storage if enabled
+              if (resumeOnReload && typeof window !== 'undefined') {
+                window.sessionStorage.setItem('ably.cli.secondarySessionId', msg.sessionId);
+              }
+              
+              return;
+            }
+            if (msg.type === 'status') {
+              debugLog(`[Secondary] Received server status message: ${msg.payload}`);
+
+              if (msg.payload === 'connected') {
+                // Clear any overlay when connected
+                clearSecondaryStatusDisplay();
+                setSecondaryConnectionStatus('connected');
+                secondaryConnectionStatusRef.current = 'connected';
+                setIsSecondarySessionActive(true);
+                
+                if (secondaryTerm.current) {
+                  secondaryTerm.current.write('\x1b[K'); // Clear from cursor to EOL
+                  secondaryTerm.current.focus();
+                }
+                
+                // Don't send a carriage return to the server
+                // The server will handle displaying the prompt
+                
+                return;
+              }
+              
+              // Handle error & disconnected
+              if (msg.payload === 'error' || msg.payload === 'disconnected') {
+                const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
+                if (secondaryTerm.current) secondaryTerm.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
+                setSecondaryConnectionStatus(msg.payload as ConnectionStatus);
+                secondaryConnectionStatusRef.current = msg.payload as ConnectionStatus;
+                
+                if (secondaryTerm.current && msg.payload === 'disconnected') {
+                  const title = "ERROR: SERVER DISCONNECT";
+                  const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
+                  const message2 = '';
+                  const message3 = `Press ⏎ to try reconnecting manually.`;
+                  
+                  if (secondaryTerm.current) {
+                    secondaryStatusBoxRef.current = drawBox(secondaryTerm.current, boxColour.red, title, [message1, message2, message3], 60);
+                    setSecondaryOverlay({ variant: 'error', title, lines:[message1, message2, message3]});
+                  }
+                  
+                  secondaryShowManualReconnectPromptRef.current = true;
+                  setSecondaryShowManualReconnectPrompt(true);
+                }
+                return;
+              }
+              return;
+            }
+            
+            // Check for PTY stream/hijack meta-message
+            if (msg.stream === true && typeof msg.hijack === 'boolean') {
+              debugLog('[AblyCLITerminal] [Secondary] Received PTY meta-message. Ignoring.');
+              return;
+            }
+          } catch (_e) { /* Not JSON, likely PTY data */ }
+        }
+        
+        // Process PTY data
+        let dataStr: string;
+        if (typeof event.data === 'string') dataStr = event.data;
+        else if (event.data instanceof Blob) dataStr = await event.data.text();
+        else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
+        else dataStr = new TextDecoder().decode(event.data);
+        
+        // Filter PTY meta JSON
+        if (isHijackMetaChunk(dataStr.trim())) {
+          debugLog('[AblyCLITerminal] [Secondary] Suppressed PTY meta-message chunk');
+        } else if (secondaryTerm.current) {
+          secondaryTerm.current.write(dataStr);
+        }
+        
+        // Use the improved prompt detection logic for the secondary terminal too
+        if (!isSecondarySessionActive) {
+          secondaryPtyBuffer.current += dataStr;
+          
+          // Log received data in a way that makes control chars visible
+          const sanitizedData = dataStr.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+          debugLog(`[AblyCLITerminal] [Secondary] Received PTY data: "${sanitizedData}"`);
+          
+          if (secondaryPtyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
+            secondaryPtyBuffer.current = secondaryPtyBuffer.current.slice(secondaryPtyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
+          }
+          
+          // Strip ANSI codes
+          const cleanBuf = secondaryPtyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
+          
+          // Only detect the prompt if it appears at the end of the buffer
+          if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
+            debugLog('[AblyCLITerminal] [Secondary] Shell prompt detected at end of buffer');
+            clearSecondaryStatusDisplay(); // Clear the overlay when prompt is detected
+            
+            // Only set active if not already active
+            if (!isSecondarySessionActive) {
+              setIsSecondarySessionActive(true);
+              setSecondaryConnectionStatus('connected');
+              secondaryConnectionStatusRef.current = 'connected';
+              if (secondaryTerm.current) secondaryTerm.current.focus();
+            }
+            
+            secondaryPtyBuffer.current = '';
+          }
+        }
+      } catch (e) { 
+        console.error('[AblyCLITerminal] [Secondary] Error processing message:', e); 
+      }
+    });
+    
+    // WebSocket error handler
+    newSocket.addEventListener('error', (event) => {
+      console.error('[AblyCLITerminal] [Secondary] WebSocket error:', event);
+      secondaryConnectionStatusRef.current = 'error';
+      setSecondaryConnectionStatus('error');
+    });
+    
+    // WebSocket close handler
+    newSocket.addEventListener('close', (event) => {
+      debugLog(`[AblyCLITerminal] [Secondary] WebSocket closed. Code: ${event.code}`);
+      setIsSecondarySessionActive(false);
+      setSecondaryConnectionStatus('disconnected');
+      secondaryConnectionStatusRef.current = 'disconnected';
+      
+      if (secondaryTerm.current) {
+        const title = "DISCONNECTED";
+        const message1 = `Connection closed (Code: ${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
+        const message2 = '';
+        const message3 = `Press ⏎ to reconnect.`;
+        
+        secondaryStatusBoxRef.current = drawBox(secondaryTerm.current, boxColour.yellow, title, [message1, message2, message3], 60);
+        setSecondaryOverlay({variant:'error', title, lines:[message1, message2, message3]});
+      }
+      
+      secondaryShowManualReconnectPromptRef.current = true;
+      setSecondaryShowManualReconnectPrompt(true);
+    });
+    
+    return newSocket;
+  }, [websocketUrl, ablyAccessToken, ablyApiKey]);
+
+  // Initialize the secondary terminal when split mode is enabled
+  useEffect(() => {
+    // Force a resize event on split mode change to ensure terminals resize correctly
+    if (isSplit) {
+      window.dispatchEvent(new Event('resize'));
+    }
+    
+    if (!isSplit || !secondaryRootRef.current || secondaryTerm.current) {
+      return; // Only initialize once when splitting and element is available
+    }
+
+    // Initialize secondary terminal
+    debugLog('[AblyCLITerminal] Initializing secondary Terminal instance.');
+    secondaryTerm.current = new Terminal({
+      cursorBlink: true, cursorStyle: 'block', fontFamily: 'monospace', fontSize: 14,
+      theme: { background: '#000000', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
+      convertEol: true,
+    });
+    secondaryFitAddon.current = new FitAddon();
+    secondaryTerm.current.loadAddon(secondaryFitAddon.current);
+    
+    // Handle data input in secondary terminal
+    secondaryTerm.current.onData((data: string) => {
+      // Special handling for Enter key
+      if (data === '\r') {
+        const latestStatus = secondaryConnectionStatusRef.current;
+
+        // Manual prompt visible: attempt manual reconnect even if an old socket is open
+        if (secondaryShowManualReconnectPromptRef.current) {
+          debugLog('[AblyCLITerminal] Secondary terminal: Enter pressed for manual reconnect.');
+          
+          // Clear overlay and status displays
+          clearSecondaryStatusDisplay();
+          secondaryShowManualReconnectPromptRef.current = false;
+          setSecondaryShowManualReconnectPrompt(false);
+
+          // Forget previous session completely so no resume is attempted
+          if (!resumeOnReload) {
+            setSecondarySessionId(null);
+          }
+
+          // Ensure any lingering socket is fully closed before opening a new one
+          if (secondarySocketRef.current && secondarySocketRef.current.readyState !== WebSocket.CLOSED) {
+            try { secondarySocketRef.current.close(1000, 'manual-reconnect'); } catch { /* ignore */ }
+            secondarySocketRef.current = null; // Make sure the reference is cleared
+          }
+
+          // Give the browser a micro-task to mark socket CLOSED before reconnect
+          setTimeout(() => {
+            debugLog('[AblyCLITerminal] [Secondary] Starting fresh reconnect sequence');
+            secondaryPtyBuffer.current = ''; // Clear buffer
+            connectSecondaryWebSocket();
+          }, 20);
+          
+          return;
+        }
+
+        // Handle other special cases like primary terminal if needed
+      }
+
+      // Default: forward data to server if socket open
+      if (secondarySocketRef.current && secondarySocketRef.current.readyState === WebSocket.OPEN) {
+        secondarySocketRef.current.send(data);
+      }
+    });
+
+    // Open terminal in the DOM
+    secondaryTerm.current.open(secondaryRootRef.current);
+
+    try {
+      // Do the initial fit only
+      secondaryFitAddon.current.fit();
+      
+      // Initial timeout fit for edge cases
+      setTimeout(() => { 
+        try { 
+          secondaryFitAddon.current?.fit(); 
+        } catch(e) { 
+          console.warn("Error fitting secondary addon initial timeout:", e);
+        }
+      }, 100);
+    } catch (e) {
+      console.error("Error during initial secondary terminal fit:", e);
+    }
+
+    // Connect to WebSocket after terminal is initialized
+    connectSecondaryWebSocket();
+
+    // Cleanup function to properly dispose
+    return () => {
+      // Execute cleanup for resize listener
+      if (secondaryTermCleanupRef.current) {
+        secondaryTermCleanupRef.current();
+      }
+      
+      // Close WebSocket if open
+      if (secondarySocketRef.current && secondarySocketRef.current.readyState < WebSocket.CLOSING) {
+        debugLog('[AblyCLITerminal] Closing secondary WebSocket on terminal cleanup.');
+        secondarySocketRef.current.close();
+        secondarySocketRef.current = null;
+      }
+      
+      // Dispose terminal
+      if (secondaryTerm.current) {
+        debugLog('[AblyCLITerminal] Disposing secondary Terminal.');
+        secondaryTerm.current.dispose();
+        secondaryTerm.current = null;
+      }
+      
+      // Reset state
+      setSecondaryConnectionStatus('initial');
+      setIsSecondarySessionActive(false);
+      setSecondaryShowManualReconnectPrompt(false);
+      setSecondarySessionId(null);
+      setSecondaryOverlay(null);
+    };
+  }, [isSplit, connectSecondaryWebSocket]);
+
+  // Persist secondary sessionId to localStorage whenever it changes (if enabled)
+  useEffect(() => {
+    if (!resumeOnReload || typeof window === 'undefined') return;
+    if (secondarySessionId) {
+      window.sessionStorage.setItem('ably.cli.secondarySessionId', secondarySessionId);
+    } else if (isSplit === false) {
+      // Only remove if split mode is disabled
+      window.sessionStorage.removeItem('ably.cli.secondarySessionId');
+    }
+  }, [secondarySessionId, resumeOnReload, isSplit]);
 
   return (
     <div
@@ -916,71 +1712,169 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       className="flex flex-col w-full h-full bg-gray-800 text-white overflow-hidden relative"
       style={{ position: 'relative' }}
     >
-      {/* Tab bar – visible only in split mode */}
-      {isSplit && (
-        <div data-testid="tab-bar" className="flex items-center bg-gray-900 border-b border-gray-700 text-sm select-none">
-          <div className="flex items-center px-3 py-2 border-r border-gray-700">
-            <span className="mr-2">Terminal 1</span>
-          </div>
-          <div className="flex items-center px-3 py-2 border-r border-gray-700">
-            <span className="mr-2">Terminal 2</span>
-            <button
-              onClick={handleCloseSplit}
-              aria-label="Close Terminal 2"
-              title="Close Terminal 2"
-              className="text-gray-400 hover:text-white ml-1 p-0.5 rounded hover:bg-gray-700"
-              data-testid="close-terminal-2-button"
+      {/* Panes with explicit widths to prevent resize issues */}
+      <div 
+        className="flex-grow flex w-full h-full relative overflow-hidden"
+        style={{ display: 'flex', flexDirection: 'row', width: '100%', height: '100%' }}
+      >
+        {/* Primary terminal column with fixed width */}
+        <div 
+          style={{ 
+            width: isSplit ? 'calc(50% - 1px)' : '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: 'relative'
+          }}
+        >
+          {/* Terminal 1 tab - only visible in split mode */}
+          {isSplit && (
+            <div 
+              data-testid="tab-1"
+              className="flex items-center bg-gray-900 text-sm select-none border-b border-gray-700"
+              style={{ width: '100%', flexShrink: 0, height: '28px' }}
             >
-              <X size={16} />
-            </button>
+              <div className="flex items-center justify-between w-full px-3 py-1">
+                <span>Terminal 1</span>
+                <button
+                  onClick={handleClosePrimary}
+                  data-testid="close-terminal-1-button"
+                  aria-label="Close Terminal 1"
+                  className="bg-transparent border-0 text-gray-400 hover:text-white cursor-pointer"
+                  style={{
+                    padding: '4px',
+                    marginLeft: '4px',
+                    marginBottom: '2px',
+                    borderRadius: '4px',
+                    transition: 'background-color 0.2s ease',
+                    background: 'transparent'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(75, 85, 99, 0.4)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Primary terminal container */}
+          <div
+            ref={rootRef}
+            data-testid="terminal-container"
+            className="Terminal-container bg-black relative overflow-hidden"
+            style={{ 
+              flex: '1',
+              padding: '12px',
+              margin: '0',
+              boxSizing: 'border-box',
+              minHeight: '0', // Important to allow flex container to shrink
+              width: '100%',
+              position: 'relative'
+            }}
+          >
+            {/* Split button – only when not already split and enableSplitScreen is true */}
+            {!isSplit && enableSplitScreen && (
+              <button
+                onClick={handleSplitScreen}
+                aria-label="Split terminal"
+                title="Split terminal"
+                data-testid="split-terminal-button"
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  zIndex: 9999,
+                  backgroundColor: '#374151',
+                  borderRadius: '0.25rem',
+                  padding: '0.4em',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <SplitSquareHorizontal size={16} />
+              </button>
+            )}
+
+            {overlay && <TerminalOverlay {...overlay} />}
           </div>
         </div>
-      )}
 
-      {/* Panes */}
-      <div className="flex-grow flex w-full h-full relative overflow-hidden">
-        {/* Primary pane */}
-        <div
-          ref={rootRef}
-          data-testid="terminal-container"
-          className="Terminal-container flex-1 w-full h-full overflow-hidden relative p-0 box-border bg-black"
-        >
-          {/* Split button – only when not already split */}
-          {!isSplit && (
-            <button
-              onClick={handleSplitScreen}
-              aria-label="Split terminal"
-              title="Split terminal"
-              data-testid="split-terminal-button"
-              style={{
-                position: 'absolute',
-                top: '8px',
-                right: '8px',
-                zIndex: 9999,
-                backgroundColor: '#374151',
-                borderRadius: '0.25rem',
-                padding: '0.4em',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
+        {/* Vertical divider line - only visible in split mode */}
+        {isSplit && (
+          <div 
+            style={{ 
+              width: '3px', 
+              height: '100%', 
+              backgroundColor: '#6B7280', // Use a lighter gray color
+              flexShrink: 0,
+              flexGrow: 0
+            }} 
+          />
+        )}
+        
+        {/* Secondary terminal column - only rendered when split is active */}
+        {isSplit && (
+          <div 
+            style={{ 
+              width: 'calc(50% - 1px)',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              position: 'relative'
+            }}
+          >
+            {/* Terminal 2 tab */}
+            <div 
+              data-testid="tab-2"
+              className="flex items-center bg-gray-900 text-sm select-none border-b border-gray-700"
+              style={{ width: '100%', flexShrink: 0, height: '28px' }}
+            >
+              <div className="flex items-center justify-between w-full px-3 py-1">
+                <span>Terminal 2</span>
+                <button
+                  onClick={handleCloseSecondary}
+                  data-testid="close-terminal-2-button"
+                  aria-label="Close Terminal 2"
+                  className="bg-transparent border-0 text-gray-400 hover:text-white cursor-pointer"
+                  style={{
+                    padding: '4px',
+                    marginLeft: '4px',
+                    marginBottom: '2px',
+                    borderRadius: '4px',
+                    transition: 'background-color 0.2s ease',
+                    background: 'transparent'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(75, 85, 99, 0.4)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            
+            {/* Secondary terminal container */}
+            <div
+              ref={secondaryRootRef}
+              data-testid="terminal-container-secondary"
+              className="Terminal-container bg-black relative overflow-hidden"
+              style={{ 
+                flex: '1',
+                padding: '12px',
+                margin: '0',
+                boxSizing: 'border-box',
+                minHeight: '0', // Important to allow flex container to shrink
+                width: '100%',
+                position: 'relative'
               }}
             >
-              <SplitSquareHorizontal size={16} />
-            </button>
-          )}
-
-          {overlay && <TerminalOverlay {...overlay} />}
-        </div>
-
-        {/* Secondary pane – UI only for now */}
-        {isSplit && (
-          <div
-            data-testid="terminal-container-secondary"
-            className="flex-1 w-full h-full overflow-hidden relative p-0 box-border bg-black border-l border-gray-700"
-          >
-            {/* Placeholder – actual terminal session to be implemented in Step 6.2 */}
+              {secondaryOverlay && <TerminalOverlay {...secondaryOverlay} />}
+            </div>
           </div>
         )}
       </div>

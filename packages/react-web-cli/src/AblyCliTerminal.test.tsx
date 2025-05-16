@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, act, screen, waitFor } from '@testing-library/react';
+import { render, act, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 
@@ -676,7 +676,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   // -------------------------------------------------------------
 
   test('split icon is visible and toggles split-screen UI', async () => {
-    renderTerminal();
+    renderTerminal({ enableSplitScreen: true });
 
     // Split button should be present initially
     const splitButton = await screen.findByRole('button', { name: /Split terminal/i });
@@ -687,21 +687,184 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       splitButton.click();
     });
 
-    // Tab bar and secondary pane should now be present
-    expect(await screen.findByTestId('tab-bar')).toBeInTheDocument();
+    // Terminal tabs and secondary pane should now be present
+    expect(await screen.findByTestId('tab-1')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-2')).toBeInTheDocument();
     expect(await screen.findByTestId('terminal-container-secondary')).toBeInTheDocument();
 
     // Split button should be gone in split mode
     expect(screen.queryByRole('button', { name: /Split terminal/i })).toBeNull();
 
-    // Close the second pane via its "X" button
-    const closeBtn = await screen.findByRole('button', { name: /Close Terminal 2/i });
+    // Close the second pane via its X icon
+    const closeBtn = await screen.findByTestId('close-terminal-2-button');
     await act(async () => { closeBtn.click(); });
 
-    // Secondary pane and tab bar should be removed, split button visible again
+    // Secondary pane and terminal 2 tab should be removed, split button visible again
     expect(screen.queryByTestId('terminal-container-secondary')).toBeNull();
-    expect(screen.queryByTestId('tab-bar')).toBeNull();
+    expect(screen.queryByTestId('tab-2')).toBeNull();
     expect(await screen.findByRole('button', { name: /Split terminal/i })).toBeInTheDocument();
+  });
+
+  test('split-screen initializes a secondary terminal with its own WebSocket session', async () => {
+    // Simply track WebSocket constructor calls without creating infinite loop
+    const webSocketInstancesMock = vi.fn();
+    const originalMock = vi.mocked(global.WebSocket).getMockImplementation();
+    vi.mocked(global.WebSocket).mockImplementation((url) => {
+      webSocketInstancesMock(url);
+      // Use the original mock implementation from the test setup
+      return (originalMock as any)(url);
+    });
+
+    renderTerminal({ enableSplitScreen: true });
+
+    // Initial WebSocket should be created
+    await waitFor(() => expect(webSocketInstancesMock).toHaveBeenCalledTimes(1));
+    webSocketInstancesMock.mockClear();
+
+    // Click the split button to enable split-screen mode
+    const splitButton = await screen.findByRole('button', { name: /Split terminal/i });
+    await act(async () => {
+      splitButton.click();
+    });
+
+    // Secondary terminal container should be present
+    expect(await screen.findByTestId('terminal-container-secondary')).toBeInTheDocument();
+
+    // A second WebSocket connection should be established
+    await waitFor(() => expect(webSocketInstancesMock).toHaveBeenCalledTimes(1));
+
+    // Close the second pane
+    const closeBtn = await screen.findByTestId('close-terminal-2-button');
+    await act(async () => { closeBtn.click(); });
+
+    // Secondary terminal should be cleaned up
+    expect(screen.queryByTestId('terminal-container-secondary')).toBeNull();
+  });
+  
+  test('split icon is not visible when enableSplitScreen is false', async () => {
+    renderTerminal({ enableSplitScreen: false });
+    
+    // Allow component to render
+    await flushPromises();
+    
+    // Split button should not be present
+    expect(screen.queryByRole('button', { name: /Split terminal/i })).toBeNull();
+  });
+
+  // -------------------------------------------------------------
+  // Terminal close behavior tests
+  // -------------------------------------------------------------
+
+  test('closing primary terminal in split mode keeps secondary terminal active and moves it to primary position', async () => {
+    renderTerminal({ enableSplitScreen: true });
+
+    // First enable split screen mode
+    const splitButton = await screen.findByRole('button', { name: /Split terminal/i });
+    await act(async () => {
+      fireEvent.click(splitButton);
+    });
+
+    // Verify both terminals are visible
+    expect(await screen.findByTestId('tab-1')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-2')).toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container')).toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container-secondary')).toBeInTheDocument();
+
+    // Close the primary terminal
+    const closeButton = await screen.findByTestId('close-terminal-1-button');
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    // Verify we're no longer in split mode and the secondary terminal is now in the primary position
+    expect(screen.queryByTestId('tab-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-2')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container')).toBeInTheDocument();
+    expect(screen.queryByTestId('terminal-container-secondary')).not.toBeInTheDocument();
+  });
+
+  test('closing secondary terminal in split mode keeps primary terminal active and exits split mode', async () => {
+    renderTerminal({ enableSplitScreen: true });
+
+    // First enable split screen mode
+    const splitButton = await screen.findByRole('button', { name: /Split terminal/i });
+    await act(async () => {
+      fireEvent.click(splitButton);
+    });
+
+    // Verify both terminals are visible
+    expect(await screen.findByTestId('tab-1')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-2')).toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container')).toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container-secondary')).toBeInTheDocument();
+
+    // Close the secondary terminal
+    const closeButton = await screen.findByTestId('close-terminal-2-button');
+    await act(async () => {
+      fireEvent.click(closeButton);
+    });
+
+    // Verify we're no longer in split mode but the primary terminal is still visible
+    expect(screen.queryByTestId('tab-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tab-2')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('terminal-container')).toBeInTheDocument();
+    expect(screen.queryByTestId('terminal-container-secondary')).not.toBeInTheDocument();
+  });
+
+  test('split mode state is preserved across reloads when resumeOnReload is true', async () => {
+    // Mock sessionStorage
+    const getItemMock = vi.spyOn(Storage.prototype, 'getItem');
+    const setItemMock = vi.spyOn(Storage.prototype, 'setItem');
+    
+    // Mock sessionStorage to pretend we have saved state with isSplit=true
+    getItemMock.mockImplementation((key: string) => {
+      if (key === 'ably.cli.isSplit') return 'true';
+      if (key === 'ably.cli.sessionId') return 'mock-session-id';
+      if (key === 'ably.cli.secondarySessionId') return 'mock-secondary-session-id';
+      return null;
+    });
+
+    renderTerminal({ enableSplitScreen: true, resumeOnReload: true });
+
+    // Check that we start in split mode based on the sessionStorage value
+    expect(await screen.findByTestId('tab-1')).toBeInTheDocument();
+    expect(await screen.findByTestId('tab-2')).toBeInTheDocument();
+    
+    // Check that the saved sessionIds are loaded
+    expect(setItemMock).toHaveBeenCalledWith(expect.any(String), expect.any(String));
+    
+    // Cleanup
+    getItemMock.mockRestore();
+    setItemMock.mockRestore();
+  });
+
+  test('prompt detection correctly handles ANSI color codes', async () => {
+    renderTerminal();
+    
+    const mockTerm = await screen.findByTestId('terminal-container');
+    expect(mockTerm).toBeInTheDocument();
+    
+    // Mock a terminal with colored prompt
+    const mockSocket = new WebSocket('ws://mock');
+    // @ts-ignore - Mocking private property
+    mockSocket.readyState = WebSocket.OPEN;
+    // @ts-ignore - Mock our internal socketRef directly 
+    const component = screen.getByTestId('terminal-outer-container').__reactFiber$;
+    const instance = component.child.stateNode;
+    instance.socketRef.current = mockSocket;
+    
+    // Simulate receiving a colored prompt like [32m$[0m 
+    const message = new MessageEvent('message', { 
+      data: '[32m$[0m ' 
+    });
+    
+    // Manually trigger the message handler
+    await act(async () => {
+      instance.handleWebSocketMessage(message);
+    });
+    
+    // The session should become active due to prompt detection
+    expect(instance.isSessionActive).toBe(true);
   });
 }); 
 

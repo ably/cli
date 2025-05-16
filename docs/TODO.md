@@ -122,6 +122,7 @@
 - [ ] [feat/terminal-server-improvements] Running web CLI terminal has some bugs a) running a command such as `ably help status` clears the display instead of showing progress updates, b) " and ' are not recognise correctly, running the command `ably help ask "what is ably"`
 - [ ] Test filters don't appear to be working with pnpm `pnpm test --filter 'resume helpers'` shows warning 'Warning: Cannot find any files matching pattern "helpers"' and then runs all tests.
 - [ ] When the server times out due to inactivity, the message "--- Session Ended (from server): Session timed out due to inactivity ---" is shown. At this time, the CLI should have shown a dialog saying the client was disconnected and prompting the user to interact by pressing Enter to reconnect. It should not automatically reconnect to conserve resources for idle connections.
+- [ ] The text inside the web terminal is now not wrapping, but instead it's scrolling off to the left showing a "<" char to the left of teh line. THis is not what is expected and should wrap to the next line. Need to tweak the bash settings.
 
 ## Test coverage
 
