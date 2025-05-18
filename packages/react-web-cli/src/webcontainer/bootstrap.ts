@@ -42,23 +42,10 @@ async function getWebContainer(): Promise<WebContainer> {
   return wcPromise;
 }
 
+// No pre-baked snapshot – we install @ably/cli at runtime.  Keeping helper
+// around for potential future snapshot support (returning empty FS for now).
 async function loadSnapshot(): Promise<Record<string, { file: { contents: string } }>> {
-  try {
-    await ensureFflate();
-    const resp = await fetch('/assets/webcontainer-fs.tgz');
-    if (!resp.ok) throw new Error('snapshot not found');
-    const arrayBuf = await resp.arrayBuffer();
-    const gz = new Uint8Array(arrayBuf);
-    const tarData = gunzipSync!(gz);
-    const files: Record<string, { file: { contents: string } }> = {};
-    untarSync!(tarData, (fileName: string, fileData: Uint8Array) => {
-      const path = fileName.replace(/^\.\//, '');
-      files[path] = { file: { contents: strFromU8!(fileData) } };
-    });
-    return files;
-  } catch {
-    return {};
-  }
+  return {};
 }
 
 /**
@@ -71,34 +58,30 @@ export async function bootstrapShell(options: BootstrapOptions = {}): Promise<Bo
 
   const wc = await getWebContainer();
 
-  // 2) Attempt snapshot fast-path
-  let files: Parameters<WebContainer['mount']>[0] = await loadSnapshot();
-
-  if (Object.keys(files).length === 0) {
-    // Fallback minimal filesystem
-    files = {
+  // 2) Attempt binary snapshot fast-path (.wcs)
+  try {
+    const resp = await fetch('/assets/ably.wcs');
+    if (!resp.ok) throw new Error('no snapshot');
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    await wc.mount(buf);
+  } catch {
+    // Fallback: minimal fs + npm install (very slow but ensures dev works)
+    const fallbackFs = {
       'package.json': {
-        file: {
-          contents: JSON.stringify(
-            {
-              name: 'ably-webcli-spike',
-              private: true,
-              type: 'module',
-              dependencies: {
-                '@ably/cli': 'latest',
-              },
-            },
-            null,
-            2,
-          ),
-        },
+        file: { contents: '{"name":"ably-webcli-fallback","private":true}' },
       },
-    };
+    } as Parameters<WebContainer['mount']>[0];
+    await wc.mount(fallbackFs);
+
+    // Install @ably/cli inside WebContainer (cold boot ~2-3 s, warm <1 s)
+    const installProc = await wc.spawn('npm', [
+      'install', '--omit=dev', '--no-audit', '--no-fund', '@ably/cli'],
+      { terminal: { cols, rows } });
+    await installProc.exit;
   }
 
-  await wc.mount(files);
-
   // 3) Spawn the shell (`jsh` is built-in). We pass env vars for credentials.
+  const spawnStart = performance.now();
   const proc = await wc.spawn('jsh', {
     terminal: {
       cols,
@@ -119,13 +102,13 @@ export async function bootstrapShell(options: BootstrapOptions = {}): Promise<Bo
     );
   }
 
+  // Single writer for session to avoid locking errors
   const writer = proc.input.getWriter();
 
   return {
     webcontainer: wc,
     process: proc,
     write(data) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       writer.write(data as any);
     },
     resize(newCols, newRows) {

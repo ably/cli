@@ -54,8 +54,15 @@ export const WebContainerTerminal: React.FC<WebContainerTerminalProps> = ({
           },
         });
 
-        // Pipe terminal input to shell
-        term.onData((d) => shell.write(d));
+        // helper to log writes
+        const safeWrite = (d: string) => {
+          // eslint-disable-next-line no-console
+          console.log('[WEBCLI] write', JSON.stringify(d));
+          shell.write(d);
+        };
+
+        // Pipe terminal input to shell with logging (first few chars)
+        term.onData((d) => safeWrite(d));
 
         // Handle resize
         const handleResize = () => {
