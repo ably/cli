@@ -8,7 +8,7 @@ import { cn } from "../lib/utils"
 
 interface CliDrawerProps {
   // This would be your actual terminal component
-  TerminalComponent?: React.ComponentType<object>
+  TerminalComponent: React.ReactNode;
 }
 
 const DRAWER_OPEN_KEY = "ablyCliDrawerOpen";
@@ -158,7 +158,7 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
 
           {/* Terminal content area */}
           <div className="flex-grow p-4 overflow-auto font-mono text-sm bg-black min-h-0 w-full">
-            {TerminalComponent && <TerminalComponent />}
+            {TerminalComponent && <div className="terminal-wrapper"> {TerminalComponent} </div>}
           </div>
         </div>
       )}

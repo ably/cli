@@ -13,5 +13,17 @@ export default defineConfig({
   server: {
     host: true,
     https: undefined,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  optimizeDeps: {
+    exclude: ["@webcontainer/api"],
+  },
+  build: {
+    rollupOptions: {
+      external: ["@webcontainer/api"],
+    },
   },
 });

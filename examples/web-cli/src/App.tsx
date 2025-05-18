@@ -1,5 +1,6 @@
+// eslint-disable-next-line import/no-unresolved
 import { AblyCliTerminal } from "@ably/react-web-cli";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 
 import "./App.css";
 import { CliDrawer } from "./components/CliDrawer";
@@ -40,14 +41,16 @@ const initialAccessToken = qsAccessToken ?? envAccessToken;
 const hasInitialCredentials = Boolean(initialApiKey || initialAccessToken);
 
 function App() {
-  // Read initial mode from URL, default to fullscreen
-  const initialMode = new URLSearchParams(window.location.search).get("mode") as ("fullscreen" | "drawer") || "fullscreen";
+  const urlParamsInit = new URLSearchParams(window.location.search);
+  const initialMode = urlParamsInit.get("mode") as ("fullscreen" | "drawer") || "fullscreen";
+  const initialBackend = (urlParamsInit.get('backend') as 'server' | 'webcontainer') || 'server';
 
   type TermStatus = 'initial' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
   const [connectionStatus, setConnectionStatus] = useState<TermStatus>('disconnected');
   const [apiKey, setApiKey] = useState<string | undefined>(initialApiKey);
   const [accessToken, setAccessToken] = useState<string | undefined>(initialAccessToken);
   const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">(initialMode);
+  const [backendMode, setBackendMode] = useState<'server' | 'webcontainer'>(initialBackend);
 
   // Remove state vars that cause remounting issues
   const [shouldConnect, setShouldConnect] = useState<boolean>(
@@ -69,14 +72,22 @@ function App() {
     console.log("Session ended:", reason);
   }, []);
 
-  // Effect to update URL when displayMode changes
+  // Effect to update URL when displayMode or backendMode changes
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("mode") !== displayMode) {
-      urlParams.set("mode", displayMode);
+    let changed = false;
+    if (urlParams.get('mode') !== displayMode) {
+      urlParams.set('mode', displayMode);
+      changed = true;
+    }
+    if (urlParams.get('backend') !== backendMode) {
+      urlParams.set('backend', backendMode);
+      changed = true;
+    }
+    if (changed) {
       window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
     }
-  }, [displayMode]);
+  }, [displayMode, backendMode]);
 
   // Set up credentials once on mount and immediately connect
   useEffect(() => {
@@ -94,8 +105,23 @@ function App() {
   const currentWebsocketUrl = getWebSocketUrl();
 
   // Prepare the terminal component instance to pass it down
-  const TerminalInstance = useCallback(() => (
-    shouldConnect && apiKey && accessToken ? (
+  const TerminalInstance = useMemo(() => {
+    if (!shouldConnect || !apiKey || !accessToken) return () => null;
+
+    if (backendMode === 'webcontainer') {
+      const AnyTerminal = AblyCliTerminal as any;
+      return () => (
+        <AnyTerminal
+          mode="webcontainer"
+          ablyAccessToken={accessToken}
+          ablyApiKey={apiKey}
+          onConnectionStatusChange={handleConnectionChange}
+          websocketUrl={currentWebsocketUrl}
+        />
+      );
+    }
+
+    return () => (
       <AblyCliTerminal
         ablyAccessToken={accessToken}
         ablyApiKey={apiKey}
@@ -105,10 +131,12 @@ function App() {
         websocketUrl={currentWebsocketUrl}
         resumeOnReload={true}
         enableSplitScreen={true}
-        maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
+        maxReconnectAttempts={5}
       />
-    ) : null
-  ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
+    );
+  }, [shouldConnect, apiKey, accessToken, backendMode, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
+
+  const TerminalElement = <TerminalInstance />;
 
   return (
     <div className="App fixed">
@@ -119,6 +147,21 @@ function App() {
           <span>Status: <span className={`status status-${connectionStatus}`}>{connectionStatus}</span></span>
           <span>Server: {currentWebsocketUrl}</span>
         </div>
+        <div className="toggle-group" style={{ marginRight: '16px' }}>
+          <button
+            className={`toggle-segment ${backendMode === 'server' ? 'active' : ''}`}
+            onClick={() => setBackendMode('server')}
+          >
+            Server
+          </button>
+          <button
+            className={`toggle-segment ${backendMode === 'webcontainer' ? 'active' : ''}`}
+            onClick={() => setBackendMode('webcontainer')}
+          >
+            WebContainer
+          </button>
+        </div>
+
         <div className="toggle-group">
           <button
             className={`toggle-segment ${displayMode === 'fullscreen' ? 'active' : ''}`}
@@ -139,11 +182,11 @@ function App() {
       {displayMode === 'fullscreen' ? (
         <main className="App-main no-padding">
           <div className="Terminal-container">
-            <TerminalInstance />
+            {TerminalElement}
           </div>
         </main>
       ) : (
-        <CliDrawer TerminalComponent={TerminalInstance} />
+        <CliDrawer TerminalComponent={TerminalElement} />
       )}
 
     </div>

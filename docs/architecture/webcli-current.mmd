@@ -1,0 +1,26 @@
+%% Mermaid diagram – render with VSCode or online viewer
+```mermaid
+graph TD
+    subgraph Browser
+        A[Xterm.js <br/> (AblyCliTerminal React component)]
+    end
+
+    subgraph Server
+        B[Node.js Terminal Server <br/> scripts/terminal-server.ts]
+    end
+
+    subgraph Sandbox
+        C[/Docker container <br/> "ably-cli-sandbox" image <br/> restricted-shell.sh + bash + @ably/cli/]
+    end
+
+    subgraph Ably
+        D[Ably REST / Realtime / Control APIs]
+    end
+
+    A -- "WebSocket (JSON status + raw TTY bytes)" --> B
+    B -- "attach()/exec() <br/> STDIN/STDOUT" --> C
+    C -- "HTTPS requests" --> D
+
+    C -- "STDOUT bytes" --> B
+    B -- "WebSocket" --> A
+``` 
