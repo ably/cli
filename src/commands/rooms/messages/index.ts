@@ -8,6 +8,7 @@ export default class MessagesIndex extends Command {
     '$ ably rooms messages send my-room "Hello world!"',
     "$ ably rooms messages subscribe my-room",
     "$ ably rooms messages get my-room",
+    '$ ably rooms messages reactions add my-room "message-id" "👍"',
   ];
 
   async run(): Promise<void> {
@@ -21,6 +22,9 @@ export default class MessagesIndex extends Command {
     );
     this.log(
       "  ably rooms messages get        - Get historical messages from a chat room",
+    );
+    this.log(
+      "  ably rooms messages reactions  - Work with message reactions in a chat room",
     );
   }
 }
