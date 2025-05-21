@@ -150,6 +150,10 @@ See [MCP Server section](#mcp-server) for more details on how to use the MCP Ser
 * [`ably rooms list`](#ably-rooms-list)
 * [`ably rooms messages`](#ably-rooms-messages)
 * [`ably rooms messages get ROOMID`](#ably-rooms-messages-get-roomid)
+* [`ably rooms messages reactions`](#ably-rooms-messages-reactions)
+* [`ably rooms messages reactions add ROOMID MESSAGESERIAL REACTION`](#ably-rooms-messages-reactions-add-roomid-messageserial-reaction)
+* [`ably rooms messages reactions remove ROOMID MESSAGESERIAL REACTION`](#ably-rooms-messages-reactions-remove-roomid-messageserial-reaction)
+* [`ably rooms messages reactions subscribe ROOMID`](#ably-rooms-messages-reactions-subscribe-roomid)
 * [`ably rooms messages send ROOMID TEXT`](#ably-rooms-messages-send-roomid-text)
 * [`ably rooms messages subscribe ROOMID`](#ably-rooms-messages-subscribe-roomid)
 * [`ably rooms occupancy`](#ably-rooms-occupancy)
@@ -3427,6 +3431,8 @@ EXAMPLES
   $ ably rooms messages subscribe my-room
 
   $ ably rooms messages get my-room
+
+  $ ably rooms messages reactions add my-room "message-id" "👍"
 ```
 
 _See code: [src/commands/rooms/messages/index.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/messages/index.ts)_
@@ -3475,6 +3481,161 @@ EXAMPLES
 ```
 
 _See code: [src/commands/rooms/messages/get.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/messages/get.ts)_
+
+## `ably rooms messages reactions`
+
+Commands for working with message reactions in chat rooms
+
+```
+USAGE
+  $ ably rooms messages reactions
+
+DESCRIPTION
+  Commands for working with message reactions in chat rooms
+
+EXAMPLES
+  $ ably rooms messages reactions add my-room "message-id" "👍"
+
+  $ ably rooms messages reactions subscribe my-room
+
+  $ ably rooms messages reactions remove my-room "message-id" "👍"
+```
+
+_See code: [src/commands/rooms/messages/reactions/index.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/messages/reactions/index.ts)_
+
+## `ably rooms messages reactions add ROOMID MESSAGESERIAL REACTION`
+
+Add a reaction to a message in a chat room
+
+```
+USAGE
+  $ ably rooms messages reactions add ROOMID MESSAGESERIAL REACTION [--access-token <value>] [--api-key <value>] [--client-id
+    <value>] [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--count <value> --type unique|distinct|multiple]
+
+ARGUMENTS
+  ROOMID         The room ID where the message is located
+  MESSAGESERIAL  The serial ID of the message to react to
+  REACTION       The reaction to add (e.g. 👍, ❤️, 😂)
+
+FLAGS
+  -v, --verbose               Output verbose logs
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --count=<value>         Count value for Multiple type reactions
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+      --type=<option>         The type of reaction (unique, distinct, or multiple)
+                              <options: unique|distinct|multiple>
+
+DESCRIPTION
+  Add a reaction to a message in a chat room
+
+EXAMPLES
+  $ ably rooms messages reactions add my-room message-serial 👍
+
+  $ ably rooms messages reactions add --api-key "YOUR_API_KEY" my-room message-serial ❤️
+
+  $ ably rooms messages reactions add my-room message-serial 👍 --type multiple --count 10
+
+  $ ably rooms messages reactions add my-room message-serial 👍 --type unique
+
+  $ ably rooms messages reactions add my-room message-serial 👍 --json
+```
+
+_See code: [src/commands/rooms/messages/reactions/add.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/messages/reactions/add.ts)_
+
+## `ably rooms messages reactions remove ROOMID MESSAGESERIAL REACTION`
+
+Remove a reaction from a message in a chat room
+
+```
+USAGE
+  $ ably rooms messages reactions remove ROOMID MESSAGESERIAL REACTION [--access-token <value>] [--api-key <value>] [--client-id
+    <value>] [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--type unique|distinct|multiple]
+
+ARGUMENTS
+  ROOMID         The room ID where the message is located
+  MESSAGESERIAL  The serial ID of the message to remove reaction from
+  REACTION       The reaction to remove (e.g. 👍, ❤️, 😂)
+
+FLAGS
+  -v, --verbose               Output verbose logs
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+      --type=<option>         The type of reaction (unique, distinct, or multiple)
+                             <options: unique|distinct|multiple>
+
+DESCRIPTION
+  Remove a reaction from a message in a chat room
+
+EXAMPLES
+  $ ably rooms messages reactions remove my-room message-serial 👍
+
+  $ ably rooms messages reactions remove --api-key "YOUR_API_KEY" my-room message-serial ❤️
+
+  $ ably rooms messages reactions remove my-room message-serial 👍 --type unique
+
+  $ ably rooms messages reactions remove my-room message-serial 👍 --json
+```
+
+_See code: [src/commands/rooms/messages/reactions/remove.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/messages/reactions/remove.ts)_
+
+## `ably rooms messages reactions subscribe ROOMID`
+
+Subscribe to message reactions in a chat room
+
+```
+USAGE
+  $ ably rooms messages reactions subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--raw]
+
+ARGUMENTS
+  ROOMID  Room ID to subscribe to message reactions in
+
+FLAGS
+  -v, --verbose               Output verbose logs
+      --access-token=<value>  Overrides any configured access token used for the Control API
+      --api-key=<value>       Overrides any configured API key used for the product APIs
+      --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
+                              set no client ID. Not applicable when using token authentication.
+      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
+      --env=<value>           Override the environment for all product API calls
+      --host=<value>          Override the host endpoint for all product API calls
+      --json                  Output in JSON format
+      --pretty-json           Output in colorized JSON format
+      --raw                   Subscribe to raw individual reaction events instead of summaries
+      --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+
+DESCRIPTION
+  Subscribe to message reactions in a chat room
+
+EXAMPLES
+  $ ably rooms messages reactions subscribe my-room
+
+  $ ably rooms messages reactions subscribe my-room --raw
+
+  $ ably rooms messages reactions subscribe my-room --json
+
+  $ ably rooms messages reactions subscribe my-room --pretty-json
+```
+
+_See code: [src/commands/rooms/messages/reactions/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/messages/reactions/subscribe.ts)_
 
 ## `ably rooms messages send ROOMID TEXT`
 
