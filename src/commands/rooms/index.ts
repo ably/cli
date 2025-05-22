@@ -9,7 +9,7 @@ export default class RoomsIndex extends Command {
     "$ ably rooms messages subscribe my-room",
     "$ ably rooms messages get my-room",
     "$ ably rooms typing subscribe my-room",
-    "$ ably rooms typing start my-room",
+    "$ ably rooms typing keystroke my-room",
   ];
 
   async run(): Promise<void> {
@@ -35,7 +35,7 @@ export default class RoomsIndex extends Command {
       "  ably rooms typing subscribe      - Subscribe to typing indicators in a chat room",
     );
     this.log(
-      "  ably rooms typing start          - Start typing in a chat room",
+      "  ably rooms typing keystroke       - Start typing in a chat room",
     );
     this.log(
       "  ably rooms presence              - Manage presence on chat rooms",

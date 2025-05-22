@@ -112,7 +112,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         `Getting room handle for ${roomId}`,
       );
       const room = await chatClient.rooms.get(roomId, {
-        occupancy: {},
+        occupancy: { enableEvents: true },
       });
       this.logCliEvent(
         flags,
@@ -284,8 +284,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
             // SIGINT/SIGTERM received, or fatal error
             this.log(chalk.yellow("Closing connection..."));
             this.ablyClient?.close();
-
-            process.exit(0);
+            process.exit(1);
           }, 5000);
 
           // Unsubscribe from occupancy events
@@ -407,8 +406,8 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
             if (!this.shouldOutputJson(flags)) {
               this.log(chalk.green("\nSuccessfully disconnected."));
             }
-
             resolve();
+            process.exit(0);
           };
 
           void releaseAndClose();
@@ -442,6 +441,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
           "finalCloseAttempt",
           "Ensuring connection is closed in finally block.",
         );
+        this.ablyClient.connection.off()
         this.ablyClient.close();
       }
     }

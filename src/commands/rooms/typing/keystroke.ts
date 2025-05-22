@@ -27,10 +27,10 @@ export default class TypingStart extends ChatBaseCommand {
     "Start typing in an Ably Chat room (will remain typing until terminated)";
 
   static override examples = [
-    "$ ably rooms typing start my-room",
-    '$ ably rooms typing start --api-key "YOUR_API_KEY" my-room',
-    "$ ably rooms typing start my-room --json",
-    "$ ably rooms typing start my-room --pretty-json",
+    "$ ably rooms typing keystroke my-room",
+    '$ ably rooms typing keystroke --api-key "YOUR_API_KEY" my-room',
+    "$ ably rooms typing keystroke my-room --json",
+    "$ ably rooms typing keystroke my-room --pretty-json",
   ];
 
   static override flags = {
@@ -162,7 +162,7 @@ export default class TypingStart extends ChatBaseCommand {
                   );
                 }
 
-                // Keep typing active by calling start() periodically
+                // Keep typing active by calling keystroke() periodically
                 if (this.typingIntervalId) clearInterval(this.typingIntervalId);
                 this.typingIntervalId = setInterval(() => {
                   room.typing.keystroke().catch((error: Error) => {
