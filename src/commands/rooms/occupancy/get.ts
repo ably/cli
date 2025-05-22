@@ -42,9 +42,7 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
       const { roomId } = args;
 
       // Get the room with occupancy enabled
-      const room = await chatClient.rooms.get(roomId, {
-        occupancy: {},
-      });
+      const room = await chatClient.rooms.get(roomId);
 
       // Attach to the room to access occupancy
       await room.attach();

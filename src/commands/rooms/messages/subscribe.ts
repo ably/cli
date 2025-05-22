@@ -121,7 +121,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${roomId}`,
       );
-      const room = await chatClient.rooms.get(roomId, {});
+      const room = await chatClient.rooms.get(roomId);
       this.logCliEvent(
         flags,
         "room",
@@ -381,8 +381,8 @@ export default class MessagesSubscribe extends ChatBaseCommand {
           }
 
           resolve();
+          process.exit(0); // Explicitly exit to ensure process terminates
         };
-
         process.on("SIGINT", () => void cleanup());
         process.on("SIGTERM", () => void cleanup());
       });
@@ -419,7 +419,8 @@ export default class MessagesSubscribe extends ChatBaseCommand {
           "finalCloseAttempt",
           "Ensuring connection is closed in finally block.",
         );
-        this.ablyClient.close();
+        this.ablyClient.connection.off(); // unsubscribe connection events
+        this.ablyClient.close(); // close client
       }
     }
   }

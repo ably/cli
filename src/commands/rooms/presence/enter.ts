@@ -139,9 +139,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${roomId}`,
       );
-      const room = await this.chatClient.rooms.get(roomId, {
-        presence: {},
-      });
+      const room = await this.chatClient.rooms.get(roomId);
       this.logCliEvent(
         flags,
         "room",

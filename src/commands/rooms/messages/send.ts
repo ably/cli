@@ -71,9 +71,7 @@ export default class MessagesSend extends ChatBaseCommand {
   };
 
   private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
-  private isPolling = false;
   private progressIntervalId: NodeJS.Timeout | null = null;
-  private typingTimeoutId: NodeJS.Timeout | null = null;
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
@@ -160,7 +158,7 @@ export default class MessagesSend extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${args.roomId}`,
       );
-      const room = await chatClient.rooms.get(args.roomId, {});
+      const room = await chatClient.rooms.get(args.roomId);
       this.logCliEvent(
         flags,
         "room",

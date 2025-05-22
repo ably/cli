@@ -74,9 +74,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${roomId}`,
       );
-      const room = await chatClient.rooms.get(roomId, {
-        presence: {},
-      });
+      const room = await chatClient.rooms.get(roomId);
       this.logCliEvent(
         flags,
         "room",

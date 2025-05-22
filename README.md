@@ -162,7 +162,7 @@ See [MCP Server section](#mcp-server) for more details on how to use the MCP Ser
 * [`ably rooms reactions send ROOMID EMOJI`](#ably-rooms-reactions-send-roomid-emoji)
 * [`ably rooms reactions subscribe ROOMID`](#ably-rooms-reactions-subscribe-roomid)
 * [`ably rooms typing`](#ably-rooms-typing)
-* [`ably rooms typing start ROOMID`](#ably-rooms-typing-start-roomid)
+* [`ably rooms typing keystroke ROOMID`](#ably-rooms-typing-keystroke-roomid)
 * [`ably rooms typing subscribe ROOMID`](#ably-rooms-typing-subscribe-roomid)
 * [`ably spaces`](#ably-spaces)
 * [`ably spaces cursors`](#ably-spaces-cursors)
@@ -3444,7 +3444,7 @@ EXAMPLES
 
   $ ably rooms typing subscribe my-room
 
-  $ ably rooms typing start my-room
+  $ ably rooms typing keystroke my-room
 ```
 
 _See code: [src/commands/rooms/index.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/index.ts)_
@@ -3966,18 +3966,18 @@ DESCRIPTION
 EXAMPLES
   $ ably rooms typing subscribe my-room
 
-  $ ably rooms typing start my-room
+  $ ably rooms typing keystroke my-room
 ```
 
 _See code: [src/commands/rooms/typing/index.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/typing/index.ts)_
 
-## `ably rooms typing start ROOMID`
+## `ably rooms typing keystroke ROOMID`
 
 Start typing in an Ably Chat room (will remain typing until terminated)
 
 ```
 USAGE
-  $ ably rooms typing start ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
+  $ ably rooms typing keystroke ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
     <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
@@ -4000,16 +4000,16 @@ DESCRIPTION
   Start typing in an Ably Chat room (will remain typing until terminated)
 
 EXAMPLES
-  $ ably rooms typing start my-room
+  $ ably rooms typing keystroke my-room
 
-  $ ably rooms typing start --api-key "YOUR_API_KEY" my-room
+  $ ably rooms typing keystroke --api-key "YOUR_API_KEY" my-room
 
-  $ ably rooms typing start my-room --json
+  $ ably rooms typing keystroke my-room --json
 
-  $ ably rooms typing start my-room --pretty-json
+  $ ably rooms typing keystroke my-room --pretty-json
 ```
 
-_See code: [src/commands/rooms/typing/start.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/typing/start.ts)_
+_See code: [src/commands/rooms/typing/keystroke.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/typing/keystroke.ts)_
 
 ## `ably rooms typing subscribe ROOMID`
 

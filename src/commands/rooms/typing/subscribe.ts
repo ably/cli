@@ -2,6 +2,7 @@ import {
   ChatClient,
   RoomStatus,
   Subscription,
+  TypingSetEvent,
   RoomStatusChange,
 } from "@ably/chat";
 import { Args } from "@oclif/core";
@@ -164,9 +165,9 @@ export default class TypingSubscribe extends ChatBaseCommand {
         "Subscribing to typing indicators",
       );
       this.unsubscribeTypingFn = room.typing.subscribe(
-        (typingEvent) => {
+        (typingSetEvent: TypingSetEvent) => {
           const timestamp = new Date().toISOString();
-          const currentlyTyping = [...(typingEvent.currentlyTyping || [])];
+          const currentlyTyping = [...(typingSetEvent.currentlyTyping || [])];
           const eventData = {
             currentlyTyping,
             roomId,
