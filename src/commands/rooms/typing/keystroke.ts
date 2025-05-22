@@ -1,5 +1,5 @@
 import { RoomStatus, ChatClient, RoomStatusChange } from "@ably/chat";
-import { Args } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
 
@@ -24,10 +24,11 @@ export default class TypingStart extends ChatBaseCommand {
   };
 
   static override description =
-    "Start typing in an Ably Chat room (will remain typing until terminated)";
+    "Send a typing indicator in an Ably Chat room (use --autoType to keep typing automatically until terminated)";
 
   static override examples = [
     "$ ably rooms typing keystroke my-room",
+    "$ ably rooms typing keystroke my-room --autoType",
     '$ ably rooms typing keystroke --api-key "YOUR_API_KEY" my-room',
     "$ ably rooms typing keystroke my-room --json",
     "$ ably rooms typing keystroke my-room --pretty-json",
@@ -35,6 +36,10 @@ export default class TypingStart extends ChatBaseCommand {
 
   static override flags = {
     ...ChatBaseCommand.globalFlags,
+    autoType: Flags.boolean({
+      description: "Automatically keep typing indicator active",
+      default: false,
+    }),
   };
 
   private chatClient: ChatClient | null = null;
@@ -157,24 +162,33 @@ export default class TypingStart extends ChatBaseCommand {
                 );
                 if (!this.shouldOutputJson(flags)) {
                   this.log(`${chalk.green("Started typing in room.")}`);
-                  this.log(
-                    `${chalk.dim("Will remain typing until this command is terminated. Press Ctrl+C to exit.")}`,
-                  );
+                  if (flags.autoType) {
+                    this.log(
+                      `${chalk.dim("Will automatically remain typing until this command is terminated. Press Ctrl+C to exit.")}`,
+                    );
+                  } else {
+                    this.log(
+                      `${chalk.dim("Sent a single typing indicator. Use --autoType flag to keep typing automatically. Press Ctrl+C to exit.")}`,
+                    );
+                  }
                 }
 
-                // Keep typing active by calling keystroke() periodically
+                // Keep typing active by calling keystroke() periodically if autoType is enabled
                 if (this.typingIntervalId) clearInterval(this.typingIntervalId);
-                this.typingIntervalId = setInterval(() => {
-                  room.typing.keystroke().catch((error: Error) => {
-                    this.logCliEvent(
-                      flags,
-                      "typing",
-                      "startErrorPeriodic",
-                      `Error refreshing typing state: ${error.message}`,
-                      { error: error.message },
-                    );
-                  });
-                }, KEYSTROKE_INTERVAL);
+
+                if (flags.autoType) {
+                  this.typingIntervalId = setInterval(() => {
+                    room.typing.keystroke().catch((error: Error) => {
+                      this.logCliEvent(
+                        flags,
+                        "typing",
+                        "startErrorPeriodic",
+                        `Error refreshing typing state: ${error.message}`,
+                        { error: error.message },
+                      );
+                    });
+                  }, KEYSTROKE_INTERVAL);
+                }
               })
               .catch((error: Error) => {
                 this.logCliEvent(
