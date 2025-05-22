@@ -38,8 +38,10 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
   // Restore useEffect for loading height from localStorage, default to 40%
   useEffect(() => {
     const savedHeight = localStorage.getItem(DRAWER_HEIGHT_KEY);
-    const defaultHeight = window.innerHeight * 0.4; // Default 40% vh
-    const initialHeight = savedHeight ? Number.parseInt(savedHeight) : defaultHeight;
+    const minTopMargin = 30; // 30px from top
+    const maxHeight = window.innerHeight - minTopMargin;
+    const defaultHeight = Math.min(window.innerHeight * 0.4, maxHeight); // Default 40% vh but respect max
+    const initialHeight = savedHeight ? Math.min(Number.parseInt(savedHeight), maxHeight) : defaultHeight;
     setHeight(initialHeight);
   }, []);
 
@@ -55,13 +57,36 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
     localStorage.setItem(DRAWER_OPEN_KEY, JSON.stringify(isOpen));
   }, [isOpen]);
 
+  // Handle viewport resize to ensure drawer respects minimum top margin
+  useEffect(() => {
+    const handleResize = () => {
+      const minTopMargin = 30; // 30px from top
+      const maxHeight = window.innerHeight - minTopMargin;
+      
+      // If current height would make drawer too tall, adjust it
+      if (height > maxHeight) {
+        setHeight(maxHeight);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Call once on mount to ensure proper sizing
+    handleResize();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [height]);
+
   // Handle mouse events for resizing
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging) return
 
       const deltaY = e.clientY - startY
-      const newHeight = Math.max(200, Math.min(window.innerHeight * 0.8, startHeight - deltaY))
+      const minTopMargin = 30; // 30px from top
+      const maxHeight = window.innerHeight - minTopMargin;
+      const newHeight = Math.max(200, Math.min(maxHeight, startHeight - deltaY))
 
       setHeight(newHeight)
     }
@@ -157,7 +182,10 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
           </div>
 
           {/* Terminal content area */}
-          <div className="flex-grow p-4 overflow-auto font-mono text-sm bg-black min-h-0 w-full">
+          <div 
+            className="overflow-hidden font-mono text-sm bg-black w-full drawer-terminal-container"
+            style={{ height: 'calc(100% - 52px)' }} // 52px = header height (40px) + margin-top (12px)
+          >
             {TerminalComponent && <TerminalComponent />}
           </div>
         </div>
