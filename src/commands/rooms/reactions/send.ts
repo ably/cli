@@ -130,7 +130,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${roomId}`,
       );
-      const room = await this.chatClient.rooms.get(roomId);
+      const room = await this.chatClient.rooms.get(roomId, {});
       this.logCliEvent(
         flags,
         "room",

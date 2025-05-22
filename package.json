@@ -74,7 +74,7 @@
     "@oclif/core": "^4.2.10",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
-    "ably": "^2.6.5",
+    "ably": "^2.9.0",
     "chalk": "5",
     "cli-table3": "^0.6.5",
     "color-json": "^3.0.5",
