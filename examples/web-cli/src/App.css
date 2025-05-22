@@ -47,6 +47,28 @@
   box-sizing: border-box;
 }
 
+/* Remove padding for terminals inside the drawer to allow dividers to extend full height */
+.drawer-terminal-container .Terminal-container {
+  padding: 0;
+}
+
+/* Remove padding from individual terminal containers inside the drawer to allow dividers to extend full height */
+.drawer-terminal-container [data-testid="terminal-container"],
+.drawer-terminal-container [data-testid="terminal-container-secondary"] {
+  padding: 0 !important;
+}
+
+/* Add padding back to just the terminal content (xterm) inside the drawer */
+.drawer-terminal-container [data-testid="terminal-container"] > div,
+.drawer-terminal-container [data-testid="terminal-container-secondary"] > div {
+  padding: 12px;
+}
+
+/* Ensure the AblyCliTerminal takes full height in drawer */
+.drawer-terminal-container > div {
+  height: 100% !important;
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;
