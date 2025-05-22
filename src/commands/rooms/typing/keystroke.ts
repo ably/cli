@@ -15,7 +15,7 @@ import { ChatBaseCommand } from "../../../chat-base-command.js";
 const KEYSTROKE_INTERVAL = 450; // ms
 
 
-export default class TypingStart extends ChatBaseCommand {
+export default class TypingKeystroke extends ChatBaseCommand {
   static override args = {
     roomId: Args.string({
       description: "The room ID to start typing in",
@@ -73,7 +73,7 @@ export default class TypingStart extends ChatBaseCommand {
   }
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(TypingStart);
+    const { args, flags } = await this.parse(TypingKeystroke);
 
     try {
       // Create Chat client
@@ -106,7 +106,7 @@ export default class TypingStart extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${roomId}`,
       );
-      const room = await this.chatClient.rooms.get(roomId);
+      const room = await this.chatClient.rooms.get(roomId, {});
       this.logCliEvent(
         flags,
         "room",

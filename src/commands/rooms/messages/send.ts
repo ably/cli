@@ -158,7 +158,7 @@ export default class MessagesSend extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${args.roomId}`,
       );
-      const room = await chatClient.rooms.get(args.roomId);
+      const room = await chatClient.rooms.get(args.roomId, {});
       this.logCliEvent(
         flags,
         "room",

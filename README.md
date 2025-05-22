@@ -3973,12 +3973,12 @@ _See code: [src/commands/rooms/typing/index.ts](https://github.com/ably/cli/blob
 
 ## `ably rooms typing keystroke ROOMID`
 
-Start typing in an Ably Chat room (will remain typing until terminated)
+Send a typing indicator in an Ably Chat room (use --autoType to keep typing automatically until terminated)
 
 ```
 USAGE
   $ ably rooms typing keystroke ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--autoType]
 
 ARGUMENTS
   ROOMID  The room ID to start typing in
@@ -3987,6 +3987,7 @@ FLAGS
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
+      --autoType              Automatically keep typing indicator active
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
@@ -3997,10 +3998,12 @@ FLAGS
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Start typing in an Ably Chat room (will remain typing until terminated)
+  Send a typing indicator in an Ably Chat room (use --autoType to keep typing automatically until terminated)
 
 EXAMPLES
   $ ably rooms typing keystroke my-room
+
+  $ ably rooms typing keystroke my-room --autoType
 
   $ ably rooms typing keystroke --api-key "YOUR_API_KEY" my-room
 
