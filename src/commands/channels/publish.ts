@@ -43,7 +43,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       char: "d",
       default: 0,
       description:
-        "Delay between messages in milliseconds (min 10ms when count > 1)",
+        "Delay between messages in milliseconds",
     }),
     encoding: Flags.string({
       char: "e",
