@@ -11,6 +11,9 @@ export interface BaseFlags {
   "control-host"?: string;
   env?: string;
   host?: string;
+  port?: number;
+  tls?: string;
+  tlsPort?: number;
   json?: boolean;
   "pretty-json"?: boolean;
   token?: string;

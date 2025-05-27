@@ -255,17 +255,6 @@ export default class ChannelsPublish extends AblyBaseCommand {
     const count = Math.max(1, flags.count as number);
     let delay = flags.delay as number;
 
-    if (count > 1 && delay < 10) {
-      delay = 10;
-      this.logCliEvent(
-        flags,
-        "publish",
-        "minDelayEnforced",
-        "Using minimum delay of 10ms for multiple messages",
-        { delay },
-      );
-    }
-
     this.logCliEvent(
       flags,
       "publish",
@@ -294,15 +283,21 @@ export default class ChannelsPublish extends AblyBaseCommand {
       () => errorCount,
     );
 
+      const publishes = [];
+
     for (let i = 0; i < count; i++) {
+      if (delay > 0 && i > 0) {
+        // Wait for the specified delay before publishing the next message
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
       const messageIndex = i + 1;
       const message = this.prepareMessage(
         args.message as string,
         flags,
         messageIndex,
       );
-      try {
-        await publisher(message);
+      const published = publisher(message)
+      .then(() => {
         publishedCount++;
         const result = { index: messageIndex, message, success: true };
         results.push(result);
@@ -322,7 +317,9 @@ export default class ChannelsPublish extends AblyBaseCommand {
             `${chalk.green("✓")} Message ${messageIndex} published successfully to channel "${args.channel}".`,
           );
         }
-      } catch (error) {
+
+      })
+      .catch((error) => {
         errorCount++;
         const errorMsg = error instanceof Error ? error.message : String(error);
         const result = { error: errorMsg, index: messageIndex, success: false };
@@ -342,12 +339,15 @@ export default class ChannelsPublish extends AblyBaseCommand {
             `${chalk.red("✗")} Error publishing message ${messageIndex}: ${errorMsg}`,
           );
         }
-      }
+      })
 
-      // Delay if needed
-      if (i < count - 1 && delay > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
+      publishes.push(published);
+    }
+
+    try {
+      await Promise.all(publishes);
+    } catch {
+      // noop
     }
 
     this.clearProgressIndicator();
