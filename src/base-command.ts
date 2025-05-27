@@ -54,6 +54,7 @@ export abstract class AblyBaseCommand extends Command {
     "control-host": Flags.string({
       description:
         "Override the host endpoint for the control API, which defaults to control.ably.net",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
     }),
     env: Flags.string({
       description: "Override the environment for all product API calls",
@@ -63,12 +64,15 @@ export abstract class AblyBaseCommand extends Command {
     }),
     port: Flags.integer({
       description: "Override the port for product API calls",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
     }),
     tlsPort: Flags.integer({
       description: "Override the TLS port for product API calls",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
     }),
     tls: Flags.string({
       description: "Use TLS for product API calls (default is true)",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
     }),
     json: Flags.boolean({
       description: "Output in JSON format",
