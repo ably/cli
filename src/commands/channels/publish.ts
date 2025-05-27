@@ -283,7 +283,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
       () => errorCount,
     );
 
-      const publishes = [];
+    const publishes = [];
 
     for (let i = 0; i < count; i++) {
       if (delay > 0 && i > 0) {
