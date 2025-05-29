@@ -3,15 +3,34 @@ import * as http from "node:http";
 import type { ClientSession } from "../types/session.types.js";
 import type { ServerStatusMessage } from "../types/websocket.types.js";
 import { 
-  DEFAULT_PORT, 
-  DEFAULT_MAX_SESSIONS, 
+  PORT,
   AUTH_TIMEOUT_MS,
-  SHUTDOWN_GRACE_PERIOD_MS 
+  SHUTDOWN_GRACE_PERIOD_MS,
+  MAX_WEBSOCKET_MESSAGE_SIZE,
+  validateConfiguration,
+  getConfigurationSummary
 } from "../config/server-config.js";
 import { logSecure, logError } from "../utils/logger.js";
 import { validateAndPurgeCredentials } from "./auth-service.js";
 import { initializeSecurity, createSecureNetwork, cleanupSecurity } from "./security-service.js";
 import { cleanupStaleContainers, ensureDockerImage, createContainer, enableAutoRemoval } from "./docker-manager.js";
+import { 
+  initializeRateLimiting,
+  shutdownRateLimiting,
+  isIPRateLimited,
+  recordConnectionAttempt,
+  isSessionResumeLimited,
+  recordSessionResumeAttempt,
+  validateMessageSize,
+  getRateLimitingStats
+} from "./rate-limiting-service.js";
+import { 
+  canCreateSession,
+  registerSession,
+  unregisterSession,
+  getSessionMetrics,
+  getSessionAlerts
+} from "./session-tracking-service.js";
 import { 
   generateSessionId, 
   terminateSession, 
@@ -32,17 +51,64 @@ const handleProtocols = (protocols: Set<string>, _request: unknown): string | fa
     return firstProtocol === undefined ? false : firstProtocol;
 };
 
+// Helper function to extract client IP address
+function getClientIP(req: http.IncomingMessage): string {
+  // Check for forwarded headers first (for proxies/load balancers)
+  const forwarded = req.headers['x-forwarded-for'] as string;
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  
+  const realIP = req.headers['x-real-ip'] as string;
+  if (realIP) {
+    return realIP;
+  }
+  
+  // Fallback to socket remote address
+  return req.socket.remoteAddress || 'unknown';
+}
+
 // Moved from startServer scope
 const verifyClient = (info: { origin: string; req: http.IncomingMessage; secure: boolean }, callback: (res: boolean, code?: number, message?: string, headers?: http.OutgoingHttpHeaders) => void) => {
     const origin = info.req.headers.origin || '*';
-    logSecure(`Client connecting from origin: ${origin}`);
+    const clientIP = getClientIP(info.req);
+    
+    logSecure(`Client connecting from origin and IP`, { 
+      origin, 
+      ip: clientIP 
+    });
+    
+    // Check IP rate limiting
+    if (isIPRateLimited(clientIP)) {
+      logSecure("Connection rejected due to IP rate limiting", { ip: clientIP });
+      callback(false, 429, 'Too Many Requests');
+      return;
+    }
+    
+    // Record connection attempt
+    if (!recordConnectionAttempt(clientIP)) {
+      logSecure("Connection rejected - IP rate limit exceeded", { ip: clientIP });
+      callback(false, 429, 'Too Many Requests');
+      return;
+    }
+    
     // Allow all connections for now, but could add origin checks here
     callback(true);
 };
 
 // --- WebSocket Server Setup (Restored & Modified) ---
 export async function startServer(): Promise<http.Server> {
-    logSecure('Starting WebSocket server with enhanced security...');
+    logSecure('Starting WebSocket server with enhanced security and DoS protection...');
+    
+    // Validate configuration first
+    const configValidation = validateConfiguration();
+    if (!configValidation.valid) {
+      logError(`Configuration validation failed: ${configValidation.issues.join(', ')}`);
+      throw new Error(`Invalid configuration: ${configValidation.issues.join(', ')}`);
+    }
+    
+    // Log configuration summary
+    logSecure('Server configuration loaded', getConfigurationSummary());
     
     // Initialize security first with fail-fast behavior
     try {
@@ -52,6 +118,9 @@ export async function startServer(): Promise<http.Server> {
         logError(`Fatal: Security initialization failed - ${error}`);
         throw new Error(`Cannot start server without proper security: ${error}`);
     }
+    
+    // Initialize rate limiting service
+    initializeRateLimiting();
     
     // Create secure network with strict enforcement
     try {
@@ -65,14 +134,23 @@ export async function startServer(): Promise<http.Server> {
     await cleanupStaleContainers();
     await ensureDockerImage(); // Ensure image exists before starting
 
-    const port = Number.parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
-    const maxSessions = Number.parseInt(process.env.MAX_SESSIONS || String(DEFAULT_MAX_SESSIONS), 10);
-
     const server = http.createServer((_req, res) => {
         // Simple health check endpoint
         if (_req.url === '/health') {
             res.writeHead(200, { 'Content-Type': 'text/plain' });
             res.end('OK');
+        } else if (_req.url === '/stats') {
+            // Basic stats endpoint
+            const sessionStats = getSessionMetrics();
+            const rateLimitStats = getRateLimitingStats();
+            const alerts = getSessionAlerts();
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              sessions: sessionStats,
+              rateLimiting: rateLimitStats,
+              alerts: alerts.alerts
+            }));
         } else {
             res.writeHead(404);
             res.end();
@@ -87,8 +165,8 @@ export async function startServer(): Promise<http.Server> {
 
     // Start the HTTP server
     await new Promise<void>((resolve) => {
-        server.listen(port, () => {
-            logSecure(`WebSocket server listening on port ${port}`);
+        server.listen(PORT, () => {
+            logSecure(`WebSocket server listening on port ${PORT}`);
             resolve();
         });
     });
@@ -98,18 +176,27 @@ export async function startServer(): Promise<http.Server> {
 
     // A keep-alive interval to prevent the process from exiting
     const keepAliveInterval = setInterval(() => {
-        // No-op, just keeps the event loop active
+        // Log session alerts if any
+        const alerts = getSessionAlerts();
+        if (alerts.alerts.length > 0) {
+          logSecure("Session capacity alerts", { alerts: alerts.alerts });
+        }
     }, 60000);
 
-    wss.on("connection", (ws: WebSocket, _req: http.IncomingMessage) => {
+    wss.on("connection", (ws: WebSocket, req: http.IncomingMessage) => {
         const sessionId = generateSessionId();
-        logSecure(`[Server] New connection. Assigned sessionId: ${sessionId}`);
+        const clientIP = getClientIP(req);
+        
+        logSecure(`[Server] New connection assigned sessionId`, { 
+          sessionId: sessionId.slice(0, 8),
+          ip: clientIP
+        });
 
         // Immediately send a "connecting" status message
         try {
           const connectingMsg: ServerStatusMessage = { type: "status", payload: "connecting" };
           ws.send(JSON.stringify(connectingMsg));
-          logSecure(`Sent 'connecting' status to new session ${sessionId}`);
+          logSecure(`Sent 'connecting' status to new session ${sessionId.slice(0, 8)}`);
         } catch (error) {
           logError(`Error sending 'connecting' status to ${sessionId}: ${error}`);
           // If we can't send 'connecting', close the connection
@@ -118,21 +205,11 @@ export async function startServer(): Promise<http.Server> {
           return;
         }
 
-        const sessions = getSessions();
-        if (sessions.size >= maxSessions) {
-            logSecure("Max session limit reached. Rejecting new connection.");
-            // Send structured error status before closing so client can handle gracefully
-            const busyMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Server busy. Please try again later." };
-            try { ws.send(JSON.stringify(busyMsg)); } catch { /* ignore */ }
-            ws.close(1013, "Server busy");
-            return;
-        }
-
         // Create a minimal initial session state for tracking
         const initialSession: Partial<ClientSession> = {
              ws: ws,
              timeoutId: setTimeout(() => {
-                 logSecure(`Authentication timeout for session ${sessionId}.`);
+                 logSecure(`Authentication timeout for session ${sessionId.slice(0, 8)}`);
                  // Ensure ws is still open before closing
                  if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                      const timeoutMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Authentication timeout" };
@@ -153,6 +230,20 @@ export async function startServer(): Promise<http.Server> {
 
         // Handle the single authentication message
         ws.once('message', async (message: Buffer) => {
+            // --- Message Size Validation ---
+            if (!validateMessageSize(message.length, MAX_WEBSOCKET_MESSAGE_SIZE)) {
+              logSecure("Authentication message too large", {
+                sessionId: sessionId.slice(0, 8),
+                size: message.length,
+                limit: MAX_WEBSOCKET_MESSAGE_SIZE
+              });
+              const sizeErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Message too large" };
+              try { ws.send(JSON.stringify(sizeErrorMsg)); } catch { /* ignore */ }
+              ws.close(4009, 'Message too large');
+              cleanupSession(sessionId);
+              return;
+            }
+
             // --- Authentication Phase ---
             try {
                 let authPayload: { apiKey?: string; accessToken?: string; environmentVariables?: Record<string, string>; sessionId?: string };
@@ -168,6 +259,21 @@ export async function startServer(): Promise<http.Server> {
                     return;
                 }
 
+                // --- Session Limit Check ---
+                const sessionCheck = canCreateSession(authPayload.accessToken);
+                if (!sessionCheck.allowed) {
+                    logSecure("Session creation denied", {
+                      sessionId: sessionId.slice(0, 8),
+                      sessionType: sessionCheck.sessionType,
+                      reason: sessionCheck.reason
+                    });
+                    const limitMsg: ServerStatusMessage = { type: "status", payload: "error", reason: sessionCheck.reason };
+                    try { ws.send(JSON.stringify(limitMsg)); } catch { /* ignore */ }
+                    ws.close(4013, 'Session limit reached');
+                    cleanupSession(sessionId);
+                    return;
+                }
+
                 // --- Credential validation logic & (optional) resume handshake ---
 
                 const resumeAttemptId = authPayload.sessionId && typeof authPayload.sessionId === 'string' ? authPayload.sessionId : null;
@@ -176,11 +282,29 @@ export async function startServer(): Promise<http.Server> {
                 const incomingCredentialHash = computeCredentialHash(authPayload.apiKey, authPayload.accessToken);
 
                 if (resumeAttemptId) {
+                    // Check session resume rate limit
+                    if (isSessionResumeLimited(resumeAttemptId)) {
+                      const rateLimitMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Too many resume attempts. Try again later." };
+                      try { ws.send(JSON.stringify(rateLimitMsg)); } catch { /* ignore */ }
+                      ws.close(4029, 'Resume rate limited');
+                      cleanupSession(sessionId);
+                      return;
+                    }
+
+                    // Record resume attempt
+                    if (!recordSessionResumeAttempt(resumeAttemptId)) {
+                      const rateLimitMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Resume rate limit exceeded" };
+                      try { ws.send(JSON.stringify(rateLimitMsg)); } catch { /* ignore */ }
+                      ws.close(4029, 'Resume rate limited');
+                      cleanupSession(sessionId);
+                      return;
+                    }
+
                     // First attempt in-memory resume
                     const sessions = getSessions();
                     if (sessions.has(resumeAttemptId)) {
                         const existing = sessions.get(resumeAttemptId)!;
-                        logSecure(`[Server] Resume attempt: incoming sessionId=${resumeAttemptId}`);
+                        logSecure(`[Server] Resume attempt: incoming sessionId=${resumeAttemptId.slice(0, 8)}`);
 
                         if (existing.credentialHash !== incomingCredentialHash) {
                             logError(`[${sessionId}] Resume rejected: credential mismatch`);
@@ -216,9 +340,9 @@ export async function startServer(): Promise<http.Server> {
                         try {
                            await attachToContainer(existing, ws);
                            ws.on('message', (msg) => handleMessage(existing, msg as Buffer));
-                           logSecure(`[Server] In-memory resume: SUCCESS. sessionId=${resumeAttemptId}`);
+                           logSecure(`[Server] In-memory resume: SUCCESS. sessionId=${resumeAttemptId.slice(0, 8)}`);
                         } catch {
-                           logError(`[Server] In-memory resume: FAILED. sessionId=${resumeAttemptId}`);
+                           logError(`[Server] In-memory resume: FAILED. sessionId=${resumeAttemptId.slice(0, 8)}`);
                            terminateSession(existing.sessionId, 'Failed in-memory resume');
                         }
                         return; // In-memory resume handled
@@ -227,7 +351,7 @@ export async function startServer(): Promise<http.Server> {
                     // Fallback: try to restore session by locating existing container
                     const restored = await attemptCrossProcessResume(resumeAttemptId, incomingCredentialHash, ws);
                     if (restored) {
-                        logSecure(`[Server] Cross-process resume: SUCCESS. sessionId=${resumeAttemptId}`);
+                        logSecure(`[Server] Cross-process resume: SUCCESS. sessionId=${resumeAttemptId.slice(0, 8)}`);
 
                         // Clean up the placeholder session for this connection just as we do in the
                         // in-memory resume path.
@@ -245,7 +369,7 @@ export async function startServer(): Promise<http.Server> {
                             await attachToContainer(restoredSession, ws);
                             ws.on('message', (msg) => handleMessage(restoredSession, msg as Buffer));
                           } catch {
-                            logError(`[Server] Cross-process resume attachment: FAILED. sessionId=${resumeAttemptId}`);
+                            logError(`[Server] Cross-process resume attachment: FAILED. sessionId=${resumeAttemptId.slice(0, 8)}`);
                             terminateSession(restoredSession.sessionId, 'Failed cross-process resume attachment');
                           }
                         }
@@ -282,10 +406,26 @@ export async function startServer(): Promise<http.Server> {
                         return;
                     }
                 }
+
+                // Register session in tracking system
+                if (!registerSession(sessionId, authPayload.accessToken)) {
+                    logSecure("Session registration failed in tracking", {
+                      sessionId: sessionId.slice(0, 8)
+                    });
+                    const trackingErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Session registration failed" };
+                    try { ws.send(JSON.stringify(trackingErrorMsg)); } catch { /* ignore */ }
+                    ws.close(4013, 'Registration failed');
+                    cleanupSession(sessionId);
+                    return;
+                }
+
                 const { apiKey, accessToken, environmentVariables } = authPayload;
 
                 // --- Auth Success -> Container Creation Phase ---
-                logSecure(`[Server] Authentication successful for session ${sessionId}`);
+                logSecure(`[Server] Authentication successful for session`, {
+                  sessionId: sessionId.slice(0, 8),
+                  sessionType: sessionCheck.sessionType
+                });
 
                 // Clear the auth timeout since we've authenticated successfully
                 clearTimeout(initialSession.timeoutId);
@@ -305,6 +445,10 @@ export async function startServer(): Promise<http.Server> {
 
                 } catch (error) {
                     logError(`[Server] Failed to create/start/configure container: ${error instanceof Error ? error.message : String(error)}`);
+                    
+                    // Unregister session from tracking
+                    unregisterSession(sessionId);
+                    
                     const containerErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Failed to create secure session environment" };
                     try { ws.send(JSON.stringify(containerErrorMsg)); } catch { /* ignore */ }
                     ws.close(1011, 'Container creation failed');
@@ -338,16 +482,35 @@ export async function startServer(): Promise<http.Server> {
 
                     // --- Set up Main Message Handler ---
                     // Only set up *after* successful attachment
-                    ws.on('message', (msg) => handleMessage(fullSession, msg as Buffer));
+                    ws.on('message', (msg: Buffer) => {
+                      // Validate message size for ongoing messages
+                      if (!validateMessageSize(msg.length, MAX_WEBSOCKET_MESSAGE_SIZE)) {
+                        logSecure("Message too large, terminating session", {
+                          sessionId: sessionId.slice(0, 8),
+                          size: msg.length
+                        });
+                        terminateSession(sessionId, 'Message size limit exceeded');
+                        return;
+                      }
+                      handleMessage(fullSession, msg);
+                    });
                     logSecure(`[Server] Main message handler attached.`);
                 } catch (_error) {
                     // Attachment failed, but we'll let the error handling in attachToContainer handle it
                     logError(`[Server] Attachment error: ${String(_error)}`);
+                    
+                    // Unregister session from tracking
+                    unregisterSession(sessionId);
+                    
                     // Don't attempt to cleanup here as attachToContainer will have done it already
                 }
             } catch (error) {
                 // Catch errors during the setup process (auth, container create, attach)
                 logError(`[Server] Error during connection setup: ${error instanceof Error ? error.message : String(error)}`);
+                
+                // Unregister session from tracking if it was registered
+                unregisterSession(sessionId);
+                
                 const setupErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Internal server error during setup" };
                 try { ws.send(JSON.stringify(setupErrorMsg)); } catch { /* ignore */ }
                 ws.close(1011, 'Setup error');
@@ -360,7 +523,11 @@ export async function startServer(): Promise<http.Server> {
         // the session immediately – instead we schedule orphan cleanup so the
         // container can be resumed within the RESUME_GRACE_MS window.
         const topLevelCloseHandler = (code: number, reason: Buffer) => {
-            logSecure(`[Server] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+            logSecure(`[Server] WebSocket closed`, {
+              sessionId: sessionId.slice(0, 8),
+              code,
+              reason: reason.toString()
+            });
 
             const existing = getSessions().get(sessionId);
             if (existing && existing.authenticated) {
@@ -368,6 +535,7 @@ export async function startServer(): Promise<http.Server> {
                 scheduleOrphanCleanup(existing);
             } else {
                 // Not yet authenticated ⇒ safe to purge immediately
+                unregisterSession(sessionId);
                 cleanupSession(sessionId);
             }
         };
@@ -380,6 +548,7 @@ export async function startServer(): Promise<http.Server> {
             if (existing && existing.authenticated) {
                 scheduleOrphanCleanup(existing);
             } else {
+                unregisterSession(sessionId);
                 cleanupSession(sessionId);
             }
         });
@@ -401,7 +570,7 @@ export async function startServer(): Promise<http.Server> {
         }
 
         isShuttingDown = true;
-        logSecure(`Received ${signal}. Shutting down server with security cleanup...`);
+        logSecure(`Received ${signal}. Shutting down server with security and rate limiting cleanup...`);
 
         // Clear the intervals
         if (keepAliveInterval) {
@@ -412,6 +581,14 @@ export async function startServer(): Promise<http.Server> {
         }
 
         await cleanupAllSessions();
+
+        // Clean up rate limiting service
+        try {
+            shutdownRateLimiting();
+            logSecure('Rate limiting service cleaned up');
+        } catch (error) {
+            logError(`Error during rate limiting cleanup: ${error}`);
+        }
 
         // Clean up security resources
         try {
@@ -473,12 +650,12 @@ export async function startServer(): Promise<http.Server> {
 }
 
 /**
- * Initialize and start the server with enhanced security
+ * Initialize and start the server with enhanced security and DoS protection
  */
 export async function initializeServer(): Promise<http.Server> {
-  logSecure("Initializing terminal server with enhanced security...");
+  logSecure("Initializing terminal server with enhanced security and DoS protection...");
   
   const server = await startServer();
-  logSecure("Terminal server started successfully with enhanced security.");
+  logSecure("Terminal server started successfully with enhanced security and DoS protection.");
   return server;
 } 
