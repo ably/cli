@@ -252,7 +252,7 @@ Environment="MAX_SESSIONS=$(grep -E '^MAX_SESSIONS=' ${ENV_CONFIG_FILE} | cut -d
 Environment="DEBUG=$(grep -E '^DEBUG=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
 
 # Use ts-node/esm loader to run the TypeScript source directly
-ExecStart=$(command -v node) --loader ts-node/esm --no-warnings ${INSTALL_DIR}/scripts/terminal-server.ts
+ExecStart=$(command -v node) --loader ts-node/esm --no-warnings ${INSTALL_DIR}/server/src/index.ts
 
 Restart=always
 RestartSec=5

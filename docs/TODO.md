@@ -56,18 +56,21 @@
   - [x] Ensure all linting, building, and testing passes for new modular structure
   - [x] Preserve diagnostics-server.ts utility for debugging/testing
   - [x] Update .gitignore to exclude server build artifacts (server/dist/, server/node_modules)
-- [ ] **Phase 3: Migrate Server Code**
-  - [ ] Move refactored code to final server locations
-  - [ ] Remove server dependencies from client code
-  - [ ] Update test configurations
+- [x] **Phase 3: Migrate Server Code**
+  - [x] Remove old server files from main repository scripts/ directory (terminal-server.ts, session-utils.ts, diagnostics-server.ts, etc.)
+  - [x] Update all test imports to use new modular server structure (server/src/index.js)
+  - [x] Update TypeScript and ESLint configurations to remove references to deleted files
+  - [x] Update server setup script to use new modular entry point (server/src/index.ts)
+  - [x] Ensure all linting, building, and testing passes after migration
+  - [x] Verify server and client code are now fully separated
 - [ ] **Phase 4: Update Client Tests**
   - [ ] Update example tests to use `web-cli.ably.com`
   - [ ] Update React component tests to use public endpoint
   - [ ] Ensure client tests have no server dependencies
 - [ ] **Phase 5: Clean Up**
-  - [ ] Remove old server files from main repository
   - [ ] Update CI/CD configurations
   - [ ] Final testing and verification
+  - [ ] Update documentation references to old file locations
 
 ## UI/UX Improvements
 
