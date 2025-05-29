@@ -24,4 +24,10 @@ export type ClientSession = {
   orphanTimer?: NodeJS.Timeout;
   // Debugging flag for incoming client keystrokes
   _debugLoggedFirstKey?: boolean;
+  // Client context for session binding and security
+  clientContext?: {
+    ip: string;
+    userAgent: string;
+    fingerprint: string;
+  };
 }; 

@@ -3,14 +3,19 @@ import * as crypto from "node:crypto";
 import { createRequire } from "node:module";
 import type { ClientSession } from "../types/session.types.js";
 import type { ServerStatusMessage } from "../types/websocket.types.js";
-import { computeCredentialHash } from "../utils/session-utils.js";
+import { 
+  computeCredentialHash, 
+  isCredentialHashEqual, 
+  shouldRateLimitResumeAttempt,
+  isClientContextCompatible 
+} from "../utils/session-utils.js";
 import { 
   MAX_IDLE_TIME_MS, 
   MAX_SESSION_DURATION_MS, 
   RESUME_GRACE_MS,
   OUTPUT_BUFFER_MAX_LINES 
 } from "../config/server-config.js";
-import { log, logError } from "../utils/logger.js";
+import { log, logError, logSecure } from "../utils/logger.js";
 
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
@@ -158,9 +163,27 @@ export function takeoverSession(existing: ClientSession, newWs: WebSocket): void
   existing.lastActivityTime = Date.now();
 }
 
-export function canResumeSession(resumeId: string | null, credentialHash: string): boolean {
+export function canResumeSession(
+  resumeId: string | null, 
+  credentialHash: string,
+  clientContext?: { fingerprint: string }
+): boolean {
   if (!resumeId || !sessions.has(resumeId)) return false;
-  return sessions.get(resumeId)!.credentialHash === credentialHash;
+  
+  const session = sessions.get(resumeId)!;
+  
+  // Use timing-safe comparison for credential hashes
+  if (!session.credentialHash || !isCredentialHashEqual(session.credentialHash, credentialHash)) {
+    return false;
+  }
+  
+  // Validate client context if available
+  if (clientContext && session.clientContext && !isClientContextCompatible(session.clientContext, clientContext)) {
+    logError(`Client context mismatch for session resume attempt: ${resumeId}`);
+    return false;
+  }
+  
+  return true;
 }
 
 /**
@@ -171,8 +194,29 @@ export function canResumeSession(resumeId: string | null, credentialHash: string
  * suitable container or credentials do not match it returns false so that the
  * caller can continue with the normal new-session flow.
  */
-export async function attemptCrossProcessResume(resumeId: string, incomingCredentialHash: string, ws: WebSocket): Promise<boolean> {
+export async function attemptCrossProcessResume(
+  resumeId: string, 
+  incomingCredentialHash: string, 
+  ws: WebSocket,
+  clientContext?: { ip: string; userAgent: string; fingerprint: string }
+): Promise<boolean> {
   try {
+    // Check rate limiting first
+    if (shouldRateLimitResumeAttempt(resumeId)) {
+      try {
+        const errMsg: ServerStatusMessage = { 
+          type: 'status', 
+          payload: 'error', 
+          reason: 'Too many resume attempts. Please wait before trying again.' 
+        };
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(errMsg));
+      } catch { /* ignore */ }
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close(4429, 'rate-limited');
+      }
+      return true; // We handled the request (rejected)
+    }
+
     const containerName = `ably-cli-session-${resumeId}`;
 
     // Look for a container whose name matches exactly (running or stopped)
@@ -217,8 +261,9 @@ export async function attemptCrossProcessResume(resumeId: string, incomingCreden
     const storedAccessToken = envMap['ABLY_ACCESS_TOKEN'] ?? '';
     const containerCredentialHash = computeCredentialHash(storedApiKey, storedAccessToken);
 
-    if (containerCredentialHash !== incomingCredentialHash) {
-      logError(`[Server] attemptCrossProcessResume: credential mismatch. containerCredentialHash=${containerCredentialHash}`);
+    // Use timing-safe comparison for credential validation
+    if (!isCredentialHashEqual(containerCredentialHash, incomingCredentialHash)) {
+      logError(`[Server] attemptCrossProcessResume: credential mismatch for session ${resumeId}`);
       try {
         const errMsg: ServerStatusMessage = { type: 'status', payload: 'error', reason: 'Credentials do not match original session' };
         ws.send(JSON.stringify(errMsg));
@@ -227,7 +272,7 @@ export async function attemptCrossProcessResume(resumeId: string, incomingCreden
       return true; // We handled the request (rejected)
     }
 
-    // Build new session object
+    // Build new session object with client context
     const newSession: ClientSession = {
       ws,
       authenticated: true,
@@ -244,6 +289,7 @@ export async function attemptCrossProcessResume(resumeId: string, incomingCreden
       credentialHash: containerCredentialHash,
       outputBuffer: [],
       orphanTimer: undefined,
+      clientContext,
     };
     clearTimeout(newSession.timeoutId);
 
@@ -265,7 +311,7 @@ export async function attemptCrossProcessResume(resumeId: string, incomingCreden
 
     // Note: The caller (websocket server) will handle attaching to container and setting up message handlers
 
-    log(`[Server] attemptCrossProcessResume: SUCCESS. sessionId=${resumeId}`);
+    logSecure(`[Server] attemptCrossProcessResume: SUCCESS.`, { sessionId: resumeId });
     return true;
   } catch (error) {
     logError(`[Server] attemptCrossProcessResume: Error during cross-process resume attempt: ${error}`);
