@@ -63,10 +63,15 @@
   - [x] Update server setup script to use new modular entry point (server/src/index.ts)
   - [x] Ensure all linting, building, and testing passes after migration
   - [x] Verify server and client code are now fully separated
-- [ ] **Phase 4: Update Client Tests**
-  - [ ] Update example tests to use `web-cli.ably.com`
-  - [ ] Update React component tests to use public endpoint
-  - [ ] Ensure client tests have no server dependencies
+- [x] **Phase 4: Update Client Tests**
+  - [x] Update example tests to use `web-cli.ably.com`
+  - [x] Update React component tests to use public endpoint
+  - [x] Ensure client tests have no server dependencies
+  - [x] Update example application to smart-default to public endpoint in production
+  - [x] Update all E2E web CLI tests to use public endpoint
+  - [x] Remove Docker dependencies from client-side testing
+  - [x] Simplify test infrastructure and improve development experience
+  - [x] Move server diagnostic tests to server test suite with proper local server testing functionality
 - [ ] **Phase 5: Clean Up**
   - [ ] Update CI/CD configurations
   - [ ] Final testing and verification
