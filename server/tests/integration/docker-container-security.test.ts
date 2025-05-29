@@ -9,6 +9,46 @@ const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function to safely clean up containers with proper waiting
+async function cleanupContainer(name: string): Promise<void> {
+  try {
+    // Check if container exists first
+    const { stdout } = await execAsync(`docker ps -a --filter name=${name} --format "{{.Names}}"`);
+    if (stdout.trim() === name) {
+      // Stop container if running
+      await execAsync(`docker stop ${name} 2>/dev/null || true`);
+      // Wait a bit for graceful shutdown
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // Force remove
+      await execAsync(`docker rm -f ${name}`);
+      // Wait for removal to complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    // Ignore cleanup errors but log them for debugging
+    console.log(`Cleanup warning for ${name}:`, (error as Error).message);
+  }
+}
+
+// Helper function to wait for container state
+async function waitForContainerState(name: string, expectedState: 'running' | 'exited' | 'created', maxWaitMs = 5000): Promise<boolean> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const { stdout } = await execAsync(`docker ps -a --filter name=${name} --format "{{.State}}"`);
+      const state = stdout.trim();
+      if (state === expectedState) {
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch {
+      // Container might not exist yet
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  return false;
+}
+
 describe('Docker Container Security Features', function() {
   // Set a longer timeout for these tests as they involve Docker
   this.timeout(process.env.CI ? 120000 : 30000); // 2 minutes in CI, 30 seconds locally
@@ -34,27 +74,30 @@ describe('Docker Container Security Features', function() {
     } catch (error) {
       console.log('Could not get Docker info:', error);
     }
+
+    // Clean up any existing test containers from previous runs
+    await cleanupContainer(containerName);
   });
 
   beforeEach(async function() {
-    // Clean up any existing test container
-    try {
-      await execAsync(`docker rm -f ${containerName} 2>/dev/null || true`);
-    } catch {
-      // Ignore errors, container might not exist
-    }
+    // Ensure container is cleaned up before each test
+    await cleanupContainer(containerName);
   });
 
   afterEach(async function() {
-    // Clean up test container
-    try {
-      await execAsync(`docker rm -f ${containerName} 2>/dev/null || true`);
-    } catch {
-      // Ignore errors
-    }
+    // Clean up test container after each test
+    await cleanupContainer(containerName);
+  });
+
+  after(async function() {
+    // Final cleanup to ensure no test containers are left behind
+    await cleanupContainer(containerName);
   });
 
   it('should ensure Docker image exists for security testing', async function() {
+    // Set a longer timeout for this test since Docker image building can be slow
+    this.timeout(120000); // 2 minutes
+    
     try {
       const { stdout } = await execAsync('docker images ably-cli-sandbox --format "{{.Repository}}"');
       expect(stdout.trim()).to.equal('ably-cli-sandbox');
@@ -249,32 +292,29 @@ describe('Docker Container Security Features', function() {
         --cap-drop=ALL \
         ably-cli-sandbox sleep 60`);
 
+      // Wait for container to be created
+      const created = await waitForContainerState(containerName, 'created', 2000);
+      expect(created, 'Container should be created').to.be.true;
+
       // Start the container
       await execAsync(`docker start ${containerName}`);
 
-      // Give container time to start
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Check if container is running
-      const { stdout: psOutput } = await execAsync(`docker ps --filter name=${containerName} --format "{{.Status}}"`);
-      const status = psOutput.trim();
-      
-      if (!status || !status.includes('Up')) {
-        // Get logs for debugging
-        try {
-          const { stdout: logs } = await execAsync(`docker logs ${containerName} 2>&1`);
-          console.log('Container logs:', logs);
-        } catch {
-          // Ignore log errors
-        }
-        throw new Error(`Container failed to start properly. Status: "${status}"`);
-      }
+      // Wait for container to be running
+      const running = await waitForContainerState(containerName, 'running', 5000);
+      expect(running, 'Container should be running').to.be.true;
 
       // Test basic command execution
       const { stdout: echoResult } = await execAsync(`docker exec ${containerName} echo "test"`);
       expect(echoResult.trim()).to.equal('test');
 
     } catch (error: any) {
+      // Get logs for debugging if container exists
+      try {
+        const { stdout: logs } = await execAsync(`docker logs ${containerName} 2>&1`);
+        console.log('Container logs:', logs);
+      } catch {
+        // Ignore log errors
+      }
       console.log('Container functionality test failed:', error.message);
       throw error;
     }
