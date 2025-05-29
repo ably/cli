@@ -240,9 +240,10 @@ describe("Connections E2E Tests", function() {
       
       const cliPath = join(process.cwd(), "bin", "run.js");
       const testChannelName = `test-live-connections-${Date.now()}`;
+      const testClientId = `test-client-${Date.now()}`;
       
-      // Step 1: Start live connection monitoring
-      const connectionsMonitor = execa("node", [cliPath, "connections", "stats", "--live", "--json"], {
+      // Step 1: Start live connection log monitoring
+      const connectionsMonitor = execa("node", [cliPath, "logs", "connection", "subscribe", "--json"], {
         env: {
           ...process.env,
           ABLY_CLI_TEST_MODE: "false", // Use real Ably operations
@@ -250,25 +251,41 @@ describe("Connections E2E Tests", function() {
       });
       
       let monitorOutput = "";
-      const connectionsSeen: Array<{ timestamp: number; count: number; opened: number }> = [];
+      const connectionEvents: Array<{ 
+        timestamp: number; 
+        eventType: string; 
+        clientId: string | null; 
+        connectionId: string | null;
+      }> = [];
       
-      // Collect output from the live connections monitor
+      // Collect output from the live connection monitor
       connectionsMonitor.stdout?.on("data", (data) => {
         const output = data.toString();
         monitorOutput += output;
         
-        // Parse JSON output to look for connection changes
+        // Parse JSON output to look for connection events
         const lines = output.split('\n');
         for (const line of lines) {
           if (line.trim()) {
             try {
-              const stats = JSON.parse(line);
-              if (stats.connections && stats.connections.all) {
-                connectionsSeen.push({
-                  timestamp: Date.now(),
-                  count: stats.connections.all.count || 0,
-                  opened: stats.connections.all.opened || 0
-                });
+              const logEvent = JSON.parse(line);
+              
+              // Look for connection events with our client ID
+              if (logEvent.transport && logEvent.transport.requestParams) {
+                const clientIdArray = logEvent.transport.requestParams.clientId;
+                const clientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
+                const connectionId = logEvent.connectionId;
+                
+                if (clientId === testClientId) {
+                  connectionEvents.push({
+                    timestamp: Date.now(),
+                    eventType: logEvent.eventType || 'connection',
+                    clientId: clientId,
+                    connectionId: connectionId
+                  });
+                  
+                  console.log(`Detected connection event for ${testClientId}: ${logEvent.eventType || 'connection'} (${connectionId})`);
+                }
               }
             } catch {
               // Ignore non-JSON lines
@@ -278,20 +295,20 @@ describe("Connections E2E Tests", function() {
       });
       
       // Wait for initial connection monitoring to start
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
-      // Step 2: Start a channel subscriber (this will create a new connection)
-      console.log("Starting channel subscriber to create new connection...");
-      const channelSubscriber = execa("node", [cliPath, "channels", "subscribe", testChannelName], {
+      // Step 2: Start a channel subscriber with specific client ID (this will create a new connection)
+      console.log(`Starting channel subscriber with clientId: ${testClientId}...`);
+      const channelSubscriber = execa("node", [cliPath, "channels", "subscribe", testChannelName, "--client-id", testClientId], {
         env: {
           ...process.env,
           ABLY_CLI_TEST_MODE: "false",
         },
-        timeout: 30000,
+        timeout: 45000, // Increased timeout for connection establishment
       });
       
       // Wait for the subscriber to establish connection and appear in monitoring
-      await new Promise(resolve => setTimeout(resolve, 10000));
+      await new Promise(resolve => setTimeout(resolve, 15000));
       
       // Step 3: Close the channel subscriber
       console.log("Closing channel subscriber...");
@@ -304,8 +321,8 @@ describe("Connections E2E Tests", function() {
         // Expected - we killed the process
       }
       
-      // Step 4: Wait up to 15 seconds for the connection to disappear from monitoring
-      console.log("Waiting for connection to disappear from monitoring...");
+      // Step 4: Wait up to 15 seconds for the disconnection event to appear
+      console.log("Waiting for disconnection event to appear in monitoring...");
       await new Promise(resolve => setTimeout(resolve, 15000));
       
       // Stop the connections monitor
@@ -317,22 +334,21 @@ describe("Connections E2E Tests", function() {
         // Expected - we killed the process
       }
       
-      // Verify we captured connection lifecycle
-      expect(connectionsSeen.length).to.be.greaterThan(0, "Should have seen connection stats");
+      // Verify we captured connection lifecycle for our specific client
+      expect(connectionEvents.length).to.be.greaterThan(0, `Should have seen connection events for clientId: ${testClientId}`);
       
-      // Check that we have some variation in connection counts (indicating lifecycle changes)
-      const connectionCounts = connectionsSeen.map(s => s.count);
-      const uniqueCounts = [...new Set(connectionCounts)];
-      
-      // We should see at least some change in connection counts over the test period
-      // (This might be subtle as other connections may be present)
-      expect(uniqueCounts.length).to.be.greaterThan(0, "Should have captured connection count changes");
+      // Log captured events for debugging
+      console.log(`Captured ${connectionEvents.length} connection events for ${testClientId}:`);
+      connectionEvents.forEach(event => {
+        console.log(`  - ${event.eventType} at ${new Date(event.timestamp).toISOString()} (${event.connectionId})`);
+      });
       
       // Verify we got valid JSON output throughout
-      expect(monitorOutput).to.include("connections", "Should have received connection stats");
+      expect(monitorOutput).to.include("connectionId", "Should have received connection log events");
       
-      console.log(`Captured ${connectionsSeen.length} connection stat updates`);
-      console.log(`Connection count range: ${Math.min(...connectionCounts)} - ${Math.max(...connectionCounts)}`);
+      // The test passes if we detected any connection events for our specific client ID
+      // This proves the live connection monitoring is working end-to-end
+      expect(connectionEvents.some(e => e.clientId === testClientId)).to.be.true;
     });
 
     it("should handle live connection monitoring gracefully on cleanup", async function() {
@@ -340,8 +356,8 @@ describe("Connections E2E Tests", function() {
       
       const cliPath = join(process.cwd(), "bin", "run.js");
       
-      // Start live connection monitoring
-      const connectionsMonitor = execa("node", [cliPath, "connections", "stats", "--live"], {
+      // Start live connection log monitoring
+      const connectionsMonitor = execa("node", [cliPath, "logs", "connection", "subscribe"], {
         env: {
           ...process.env,
           ABLY_CLI_TEST_MODE: "false",
@@ -351,13 +367,13 @@ describe("Connections E2E Tests", function() {
       let outputReceived = false;
       connectionsMonitor.stdout?.on("data", (data) => {
         const output = data.toString();
-        if (output.includes("Connections:") || output.includes("live")) {
+        if (output.includes("connectionId") || output.includes("transport")) {
           outputReceived = true;
         }
       });
       
       // Wait for some output
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 8000));
       
       // Gracefully terminate
       connectionsMonitor.kill("SIGTERM");
