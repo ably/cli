@@ -242,6 +242,19 @@ export async function attachToContainer(session: ClientSession, ws: WebSocket): 
     // shell prints its banner and prompt unconditionally, so an extra newline
     // is unnecessary and confusing.
 
+    // Helper function to handle stream errors and cleanup
+    const handleStreamError = (error: Error | null = null) => {
+        if (error) {
+            logError(`Stream error for session ${session.sessionId}: ${error.message}`);
+        }
+        safeCloseWsStream(containerStream);
+        if (session.authenticated) {
+            scheduleOrphanCleanup(session);
+        } else {
+            cleanupSession(session.sessionId);
+        }
+    };
+
     ws.on("close", async (code, reason) => {
         log(
             `WebSocket closed for session ${session.sessionId}. Code: ${code}, Reason: ${reason && reason.length > 0 ? reason.toString() : "No reason given"}. isAttaching: ${session.isAttaching}`,
@@ -257,31 +270,16 @@ export async function attachToContainer(session: ClientSession, ws: WebSocket): 
 
     ws.on("error", async (error: Error) => {
         logError(`WebSocket stream error for session ${session.sessionId}: ${error.message}`);
-        if (containerStream) safeCloseWsStream(containerStream);
-        if (session.authenticated) {
-            scheduleOrphanCleanup(session);
-        } else {
-            cleanupSession(session.sessionId);
-        }
+        handleStreamError();
     });
 
     containerStream.on('close', () => {
         log(`Container stream closed for session ${session.sessionId}`);
-        safeCloseWsStream(containerStream);
-        if (session.authenticated) {
-            scheduleOrphanCleanup(session);
-        } else {
-            cleanupSession(session.sessionId);
-        }
+        handleStreamError();
     });
+    
     containerStream.on('error', (error) => {
-        logError(`Container stream error for session ${session.sessionId}: ${error.message}`);
-        safeCloseWsStream(containerStream);
-        if (session.authenticated) {
-            scheduleOrphanCleanup(session);
-        } else {
-            cleanupSession(session.sessionId);
-        }
+        handleStreamError(error);
     });
 }
 
