@@ -24,8 +24,9 @@ let seccompProfileContent: string;
 // Initialize security configurations
 export function initializeSecurity(): void {
   // Read seccomp profile content once on startup
-  const projectRoot = process.cwd(); // Get project root
-  const seccompProfilePath = path.resolve(projectRoot, 'server/docker/seccomp-profile.json');
+  // Use __dirname to get the correct path relative to the security service location
+  // server/dist/src/services/ -> ../../../docker/seccomp-profile.json (go up to server/, then to docker/)
+  const seccompProfilePath = path.resolve(__dirname, '../../../docker/seccomp-profile.json');
   try {
     const seccompProfileContentRaw = fs.readFileSync(seccompProfilePath, 'utf8');
     seccompProfileContent = JSON.stringify(JSON.parse(seccompProfileContentRaw));

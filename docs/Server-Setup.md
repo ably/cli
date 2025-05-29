@@ -31,20 +31,20 @@ This single command downloads the setup script from the GitHub repository and ex
 ### Installing from the main branch:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ably/cli/main/scripts/setup-terminal-server.sh > /tmp/setup.sh && chmod +x /tmp/setup.sh && sudo -E /tmp/setup.sh
+curl -sSL https://raw.githubusercontent.com/ably/cli/main/server/scripts/setup-server.sh > /tmp/setup.sh && chmod +x /tmp/setup.sh && sudo -E /tmp/setup.sh
 ```
 
 ### Installing from a custom branch:
 
 ```bash
 # Replace 'your-branch-name' with the desired branch name
-BRANCH="your-branch-name" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/scripts/setup-terminal-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
+BRANCH="your-branch-name" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/server/scripts/setup-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
 ```
 
 For example, to install from a branch named `feature/container-hardening`:
 
 ```bash
-BRANCH="feature/container-hardening" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/scripts/setup-terminal-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
+BRANCH="feature/container-hardening" bash -c 'curl -sSL "https://raw.githubusercontent.com/ably/cli/${BRANCH}/server/scripts/setup-server.sh" > /tmp/setup.sh && chmod +x /tmp/setup.sh && BRANCH="${BRANCH}" sudo -E /tmp/setup.sh'
 ```
 
 The setup script will automatically use the specified branch when cloning the repository for installation.
@@ -184,7 +184,7 @@ Caddy acts as a secure entry point to your terminal server:
 -   **Automatic HTTPS:** It automatically obtains and renews TLS certificates from Let's Encrypt for the configured `SERVER_DOMAIN`.
 -   **WebSocket Proxying:** The configuration includes necessary headers for WebSocket connections to function correctly through the proxy.
 
-## Script Details (`scripts/setup-terminal-server.sh`)
+## Script Details (`server/scripts/setup-server.sh`)
 
 The setup script performs the following actions:
 

@@ -103,8 +103,8 @@ export async function ensureDockerImage(): Promise<void> {
     if (imagesPostCheck.length === 0) {
       log(`Image ${DOCKER_IMAGE_NAME} not found. Will attempt to build it.`);
 
-      // Get the location of the Dockerfile - should be in project root (two levels up from server/src)
-      const dockerfilePath = path.resolve(__dirname, "../../../", "Dockerfile");
+      // Get the location of the Dockerfile - should be in server directory (one level up from server/src)
+      const dockerfilePath = path.resolve(__dirname, "../../../", "server/Dockerfile");
 
       // Check if Dockerfile exists
       if (!fs.existsSync(dockerfilePath)) {
@@ -115,8 +115,8 @@ export async function ensureDockerImage(): Promise<void> {
 
       // Try building via Docker CLI first (more reliable than SDK)
       try {
-        log(`Building with docker command: docker build -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`);
-        const output = execSync(`docker build -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`, {
+        log(`Building with docker command: docker build -f server/Dockerfile -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`);
+        const output = execSync(`docker build -f server/Dockerfile -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`, {
           stdio: ['ignore', 'pipe', 'pipe']
         }).toString();
         log(`Docker build output: ${output.slice(0, 200)}...`);
@@ -130,8 +130,8 @@ export async function ensureDockerImage(): Promise<void> {
       try {
         log("Attempting to build image using Docker SDK...");
         const stream = await docker.buildImage(
-          { context: path.resolve(__dirname, "../../../"), src: ["Dockerfile"] },
-          { t: DOCKER_IMAGE_NAME },
+          { context: path.resolve(__dirname, "../../../"), src: ["server/Dockerfile"] },
+          { t: DOCKER_IMAGE_NAME, dockerfile: "server/Dockerfile" },
         );
 
         await new Promise((resolve, reject) => {
