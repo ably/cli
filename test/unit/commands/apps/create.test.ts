@@ -2,9 +2,9 @@ import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
 import { afterEach, beforeEach, describe, it } from 'mocha';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 
 describe('apps:create command', () => {
   const mockAccessToken = 'fake_access_token';

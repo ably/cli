@@ -125,7 +125,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
         closeAll: () => {
           activeConnections.forEach(ws => {
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-              ws.close(1006, 'Test disconnect');
+              ws.close(3000, 'Test disconnect');
             }
           });
         },
@@ -182,21 +182,45 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     await page.goto(pageUrl);
 
     // Wait for initial connection
-    await waitForPrompt(page, '.xterm');
+    await page.waitForSelector('.xterm', { timeout: 30000 });
+    await expect(page.locator('.xterm')).toContainText('ably', { timeout: 30000 });
 
-    // Test multiple disconnection/reconnection cycles
+    // Wait for prompt
+    await page.waitForFunction(() => {
+      const terminalElement = document.querySelector('.xterm');
+      return terminalElement?.textContent?.includes('$');
+    }, null, { timeout: 30000 });
+
+    // Test multiple disconnection cycles
     for (let i = 0; i < 3; i++) {
       console.log(`Testing disconnection cycle ${i + 1}/3`);
       
-      // Simulate disconnection
-      await page.evaluate(() => (window as any).__wsControl.closeAll());
-      await page.waitForTimeout(2000);
-      
-      // Wait for reconnection
-      await waitForPrompt(page, '.xterm', 60000);
-      
-      // Verify connection works
-      await page.locator('.xterm').focus();
+      // Disconnect by closing WebSocket connections
+      await page.evaluate(() => {
+        const activeConnections = (window as any).__activeWebSockets || [];
+        activeConnections.forEach((ws: WebSocket) => {
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close(3000, 'Test disconnect');
+          }
+        });
+      });
+
+      // Wait for reconnection to complete - look for a fresh terminal state
+      await page.waitForFunction(() => {
+        const s = (window as any).getAblyCliTerminalReactState?.();
+        return s?.componentConnectionStatus === 'connected';
+      }, null, { timeout: 30000 });
+
+      // Wait for the terminal to be ready for commands (look for prompt)
+      await page.waitForFunction(() => {
+        const terminalElement = document.querySelector('.xterm');
+        const content = terminalElement?.textContent || '';
+        // Look for the command prompt at the end of content
+        return content.includes('$') && !content.includes('Reconnection attempts cancelled');
+      }, null, { timeout: 30000 });
+
+      // Test that we can run commands after reconnection
+      await page.locator('.xterm').click();
       await page.keyboard.type(`echo "test-${i + 1}"`);
       await page.keyboard.press('Enter');
       await expect(page.locator('.xterm')).toContainText(`test-${i + 1}`, { timeout: 15000 });

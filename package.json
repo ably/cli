@@ -54,9 +54,6 @@
     "dirname": "ably",
     "commands": "./dist/src/commands",
     "topicSeparator": " ",
-    "plugins": [
-      "./dist"
-    ],
     "hooks": {
       "init": [
         "./dist/src/hooks/init/alias-command",

@@ -28,7 +28,7 @@ $ npm install -g @ably/cli
 $ ably COMMAND
 running command...
 $ ably (--version)
-@ably/cli/0.5.1 linux-x64 node-v22.15.0
+@ably/cli/0.5.1 darwin-arm64 node-v22.14.0
 $ ably --help [COMMAND]
 USAGE
   $ ably COMMAND
@@ -3510,8 +3510,8 @@ Add a reaction to a message in a chat room
 ```
 USAGE
   $ ably rooms messages reactions add ROOMID MESSAGESERIAL REACTION [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
-    [--count <value> --type unique|distinct|multiple]
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--count <value> --type
+    unique|distinct|multiple]
 
 ARGUMENTS
   ROOMID         The room ID where the message is located
@@ -3524,7 +3524,6 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
-      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --count=<value>         Count value for Multiple type reactions
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
@@ -3558,8 +3557,8 @@ Remove a reaction from a message in a chat room
 ```
 USAGE
   $ ably rooms messages reactions remove ROOMID MESSAGESERIAL REACTION [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--control-host <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
-    [--type unique|distinct|multiple]
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--type
+    unique|distinct|multiple]
 
 ARGUMENTS
   ROOMID         The room ID where the message is located
@@ -3572,14 +3571,13 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
-      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
       --type=<option>         The type of reaction (unique, distinct, or multiple)
-                             <options: unique|distinct|multiple>
+                              <options: unique|distinct|multiple>
 
 DESCRIPTION
   Remove a reaction from a message in a chat room
@@ -3602,8 +3600,8 @@ Subscribe to message reactions in a chat room
 
 ```
 USAGE
-  $ ably rooms messages reactions subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--control-host
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--raw]
+  $ ably rooms messages reactions subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--raw]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to message reactions in
@@ -3614,7 +3612,6 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
-      --control-host=<value>  Override the host endpoint for the control API, which defaults to control.ably.net
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
