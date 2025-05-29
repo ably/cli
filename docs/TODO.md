@@ -159,6 +159,7 @@
 - [x] Refactor terminal-server.ts as it's grown organically and become a little bit of a beast. Treating it as a "script" is no longer applicable.
   -   *Done: 2025-05-29 (Phase 2)*
   -   *Summary: Refactored monolithic 1713-line terminal-server.ts into 13 focused modules with clean separation of concerns. Created proper TypeScript architecture with services (websocket-server, docker-manager, session-manager, auth-service, security-service), utilities (logger, stream-handler), type definitions, and centralized configuration. All tests updated and passing.*
+- [ ] Implement token bearer auth for web CLI usage to minimise exposure of API keys and access tokens. This same thinking should apply to anonymous users (in spite of the API key being recycled), and the CLI needs to handle expiring tokens. See https://ably.atlassian.net/wiki/spaces/product/pages/4033511425/PDR-070+Web+CLI+technical+architecture?focusedCommentId=4051042310.
 
 ## Bugs
 
