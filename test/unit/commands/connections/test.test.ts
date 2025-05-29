@@ -7,6 +7,7 @@ import * as Ably from "ably";
 // Create a testable version of ConnectionsTest
 class TestableConnectionsTest extends ConnectionsTest {
   public logOutput: string[] = [];
+  public consoleOutput: string[] = [];
   public errorOutput: string = '';
   private _parseResult: any;
   public mockClient: any = {};
@@ -26,6 +27,13 @@ class TestableConnectionsTest extends ConnectionsTest {
   public override async createAblyClient(_flags: any): Promise<Ably.Realtime | null> {
     this.debug('Overridden createAblyClient called');
     return this.mockClient as unknown as Ably.Realtime;
+  }
+
+  // Mock console.log to capture any direct console output
+  public mockConsoleLog = (message?: any, ...optionalParams: any[]): void => {
+    if (message !== undefined) {
+      this.consoleOutput.push(message.toString());
+    }
   }
 
   // Override logging methods
@@ -60,6 +68,11 @@ class TestableConnectionsTest extends ConnectionsTest {
     this._formatJsonOutputFn = fn;
   }
 
+  // Public getter to access protected configManager for testing
+  public getConfigManager() {
+    return this.configManager;
+  }
+
   // Override ensureAppAndKey to prevent real auth checks in unit tests
   protected override async ensureAppAndKey(_flags: any): Promise<{ apiKey: string; appId: string } | null> {
     this.debug('Skipping ensureAppAndKey in test mode');
@@ -71,11 +84,19 @@ describe("ConnectionsTest", function() {
   let sandbox: sinon.SinonSandbox;
   let command: TestableConnectionsTest;
   let mockConfig: Config;
+  let originalConsoleLog: typeof console.log;
 
   beforeEach(function() {
     sandbox = sinon.createSandbox();
     mockConfig = { runHook: sinon.stub() } as unknown as Config;
     command = new TestableConnectionsTest([], mockConfig);
+
+    // Mock config manager to prevent "No API key found" errors
+    sandbox.stub(command.getConfigManager(), 'getApiKey').resolves('dummy-key:secret');
+
+    // Mock console.log to capture any direct console output
+    originalConsoleLog = console.log;
+    console.log = command.mockConsoleLog;
 
     // Set up a complete mock client structure
     const mockChannelInstance = {
@@ -113,6 +134,8 @@ describe("ConnectionsTest", function() {
   });
 
   afterEach(function() {
+    // Restore console.log
+    console.log = originalConsoleLog;
     sandbox.restore();
   });
 

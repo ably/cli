@@ -41,5 +41,8 @@ tsconfig.tsbuildinfo
 # Playwright test results
 /test-results/
 
+# Test coverage
+/coverage/
+
 # SpecStory plugin to save chats
 .specstory/

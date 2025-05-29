@@ -275,4 +275,82 @@ describe('Channels integration tests', function() {
         });
     });
   });
+
+  // Connection monitoring operations
+  describe('Connection monitoring operations', function() {
+    it('retrieves connection stats with default parameters', function() {
+      return test
+        .stdout()
+        .command(['connections', 'stats'])
+        .it('retrieves connection stats successfully', ctx => {
+          expect(ctx.stdout).to.contain('Connections:');
+          expect(ctx.stdout).to.contain('Channels:');
+          expect(ctx.stdout).to.contain('Messages:');
+        });
+    });
+
+    it('retrieves connection stats in JSON format', function() {
+      return test
+        .stdout()
+        .command(['connections', 'stats', '--json'])
+        .it('outputs connection stats in JSON format', ctx => {
+          const output = JSON.parse(ctx.stdout);
+          expect(output).to.have.property('inbound');
+          expect(output).to.have.property('outbound');
+          expect(output).to.have.property('connections');
+        });
+    });
+
+    it('retrieves connection stats with custom time range', function() {
+      const start = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
+      const end = Date.now();
+      
+      return test
+        .stdout()
+        .command(['connections', 'stats', '--start', start.toString(), '--end', end.toString()])
+        .it('retrieves stats for custom time range', ctx => {
+          expect(ctx.stdout).to.contain('Stats for');
+        });
+    });
+
+    it('retrieves connection stats with different time units', function() {
+      return test
+        .stdout()
+        .command(['connections', 'stats', '--unit', 'hour', '--limit', '5'])
+        .it('retrieves hourly stats', ctx => {
+          expect(ctx.stdout).to.contain('Connections:');
+          expect(ctx.stdout).to.contain('Channels:');
+        });
+    });
+  });
+
+  // Error recovery scenarios
+  describe('Error recovery scenarios', function() {
+    it('handles channel operations with invalid channel names gracefully', function() {
+      return test
+        .stdout()
+        .stderr()
+        .command(['channels', 'history', ''])
+        .exit(2) // Expected exit code for invalid input
+        .it('rejects empty channel name');
+    });
+
+    it('handles connection stats with invalid parameters gracefully', function() {
+      return test
+        .stdout()
+        .stderr()
+        .command(['connections', 'stats', '--start', 'invalid-timestamp'])
+        .exit(2) // Expected exit code for invalid input
+        .it('rejects invalid timestamp');
+    });
+
+    it('handles batch publish with invalid JSON gracefully', function() {
+      return test
+        .stdout()
+        .stderr()
+        .command(['channels', 'batch-publish', '--channels', 'test-channel', 'invalid-json'])
+        .exit(2) // Expected exit code for invalid JSON
+        .it('rejects invalid JSON payload');
+    });
+  });
 });
