@@ -156,13 +156,16 @@ The following tests currently depend on a local server but will be updated to us
 - All linting, building, and testing passes
 - Server and client code fully separated
 
-### 🔄 **Ready for Phase 4**: Update client tests to use public endpoint
+### ✅ **Phase 4 Complete**: Update Client Tests to Use Public Endpoint
 - Update example tests to use `web-cli.ably.com`
 - Update React component tests to use public endpoint
 - Ensure client tests have no server dependencies
+- Update example application to smart-default to public endpoint in production
+- Update all E2E web CLI tests to use public endpoint
+- Remove Docker dependencies from client-side testing
+- Simplify test infrastructure and improve development experience
 
-### 📋 **Future Phases**
-- **Phase 5**: Final cleanup and CI/CD updates
+### 🔄 **Ready for Phase 5**: Final Cleanup and CI/CD Updates
 
 ## Phase 2 Results
 
