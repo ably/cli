@@ -41,4 +41,4 @@ tsconfig.tsbuildinfo
 /test-results/
 
 # SpecStory plugin to save chats
-.specstory/
+.specstory//packages/react-web-cli/node_modules/
