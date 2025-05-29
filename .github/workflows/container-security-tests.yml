@@ -80,24 +80,42 @@ jobs:
           pnpm build
           
           # Run security tests with timeout and error handling
-          timeout 600 pnpm test tests/integration/docker-container-security.test.ts || {
-            echo "Docker container security tests failed or timed out after 10 minutes"
-            echo "This might be due to Docker limitations or resource constraints in CI environment"
+          echo "Running Docker container security tests..."
+          
+          set -e
+          
+          # Try to run the tests with timeout
+          if timeout 600 pnpm test tests/integration/docker-container-security.test.ts; then
+            echo "✅ Docker container security tests completed successfully"
+          else
+            TEST_EXIT_CODE=$?
+            echo "❌ Docker container security tests failed with exit code $TEST_EXIT_CODE"
             
             # Try to get more info about Docker state
-            echo "=== Docker Info ==="
+            echo "=== Docker Environment Info ==="
             docker --version || echo "Docker command not available"
             docker info || echo "Cannot get Docker info"
             docker ps -a || echo "Cannot list containers"
+            docker images || echo "Cannot list images"
+            
+            # Check system resources
+            echo "=== System Resources ==="
+            df -h || echo "Cannot check disk space"
+            free -m || echo "Cannot check memory"
             
             # Check if our test image exists
             echo "=== Checking test image ==="
-            docker images ably-cli-sandbox || echo "Cannot list images"
+            docker images ably-cli-sandbox || echo "Cannot list ably-cli-sandbox images"
             
-            exit 1
-          }
+            # If tests failed due to resource constraints or Docker limitations in CI,
+            # we might want to treat some failures as warnings rather than hard failures
+            echo "Tests may have been skipped due to CI environment limitations"
+            
+            exit $TEST_EXIT_CODE
+          fi
         env:
           CI: true
+          GITHUB_ACTIONS: true
 
       - name: Run vulnerability scanner
         uses: aquasecurity/trivy-action@master
