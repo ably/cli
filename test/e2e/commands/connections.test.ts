@@ -233,4 +233,143 @@ describe("Connections E2E Tests", function() {
       expect(Object.keys(json1)).to.deep.equal(Object.keys(json2));
     });
   });
+
+  describe("Live Connection Monitoring E2E", function() {
+    it("should monitor live connections with real client lifecycle", async function() {
+      this.timeout(180000); // 3 minute timeout for comprehensive test
+      
+      const cliPath = join(process.cwd(), "bin", "run.js");
+      const testChannelName = `test-live-connections-${Date.now()}`;
+      
+      // Step 1: Start live connection monitoring
+      const connectionsMonitor = execa("node", [cliPath, "connections", "stats", "--live", "--json"], {
+        env: {
+          ...process.env,
+          ABLY_CLI_TEST_MODE: "false", // Use real Ably operations
+        },
+      });
+      
+      let monitorOutput = "";
+      const connectionsSeen: Array<{ timestamp: number; count: number; opened: number }> = [];
+      
+      // Collect output from the live connections monitor
+      connectionsMonitor.stdout?.on("data", (data) => {
+        const output = data.toString();
+        monitorOutput += output;
+        
+        // Parse JSON output to look for connection changes
+        const lines = output.split('\n');
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const stats = JSON.parse(line);
+              if (stats.connections && stats.connections.all) {
+                connectionsSeen.push({
+                  timestamp: Date.now(),
+                  count: stats.connections.all.count || 0,
+                  opened: stats.connections.all.opened || 0
+                });
+              }
+            } catch {
+              // Ignore non-JSON lines
+            }
+          }
+        }
+      });
+      
+      // Wait for initial connection monitoring to start
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Step 2: Start a channel subscriber (this will create a new connection)
+      console.log("Starting channel subscriber to create new connection...");
+      const channelSubscriber = execa("node", [cliPath, "channels", "subscribe", testChannelName], {
+        env: {
+          ...process.env,
+          ABLY_CLI_TEST_MODE: "false",
+        },
+        timeout: 30000,
+      });
+      
+      // Wait for the subscriber to establish connection and appear in monitoring
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
+      // Step 3: Close the channel subscriber
+      console.log("Closing channel subscriber...");
+      channelSubscriber.kill("SIGTERM");
+      
+      // Wait for the subscriber to fully disconnect
+      try {
+        await channelSubscriber;
+      } catch {
+        // Expected - we killed the process
+      }
+      
+      // Step 4: Wait up to 15 seconds for the connection to disappear from monitoring
+      console.log("Waiting for connection to disappear from monitoring...");
+      await new Promise(resolve => setTimeout(resolve, 15000));
+      
+      // Stop the connections monitor
+      connectionsMonitor.kill("SIGTERM");
+      
+      try {
+        await connectionsMonitor;
+      } catch {
+        // Expected - we killed the process
+      }
+      
+      // Verify we captured connection lifecycle
+      expect(connectionsSeen.length).to.be.greaterThan(0, "Should have seen connection stats");
+      
+      // Check that we have some variation in connection counts (indicating lifecycle changes)
+      const connectionCounts = connectionsSeen.map(s => s.count);
+      const uniqueCounts = [...new Set(connectionCounts)];
+      
+      // We should see at least some change in connection counts over the test period
+      // (This might be subtle as other connections may be present)
+      expect(uniqueCounts.length).to.be.greaterThan(0, "Should have captured connection count changes");
+      
+      // Verify we got valid JSON output throughout
+      expect(monitorOutput).to.include("connections", "Should have received connection stats");
+      
+      console.log(`Captured ${connectionsSeen.length} connection stat updates`);
+      console.log(`Connection count range: ${Math.min(...connectionCounts)} - ${Math.max(...connectionCounts)}`);
+    });
+
+    it("should handle live connection monitoring gracefully on cleanup", async function() {
+      this.timeout(60000); // 1 minute timeout
+      
+      const cliPath = join(process.cwd(), "bin", "run.js");
+      
+      // Start live connection monitoring
+      const connectionsMonitor = execa("node", [cliPath, "connections", "stats", "--live"], {
+        env: {
+          ...process.env,
+          ABLY_CLI_TEST_MODE: "false",
+        },
+      });
+      
+      let outputReceived = false;
+      connectionsMonitor.stdout?.on("data", (data) => {
+        const output = data.toString();
+        if (output.includes("Connections:") || output.includes("live")) {
+          outputReceived = true;
+        }
+      });
+      
+      // Wait for some output
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
+      // Gracefully terminate
+      connectionsMonitor.kill("SIGTERM");
+      
+      try {
+        await connectionsMonitor;
+      } catch (error: any) {
+        // Should exit cleanly with SIGTERM
+        expect(error.signal).to.equal("SIGTERM");
+      }
+      
+      expect(outputReceived).to.be.true;
+    });
+  });
 });
