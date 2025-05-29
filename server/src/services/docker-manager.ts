@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs";
 import type { DockerContainer, DockerEvent } from "../types/docker.types.js";
 import type * as DockerodeTypes from "dockerode";
-import { DOCKER_IMAGE_NAME, DOCKER_NETWORK_NAME } from "../config/server-config.js";
+import { DOCKER_IMAGE_NAME, DOCKER_NETWORK_NAME, CONTAINER_LIMITS, FORCE_REBUILD_SANDBOX_IMAGE } from "../config/server-config.js";
 import { logSecure, logError } from "../utils/logger.js";
 import { getSecurityOptions, enforceSecureNetwork, getSecurityStatus } from "./security-service.js";
 
@@ -16,16 +16,6 @@ const Dockerode = require("dockerode");
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const docker = new Dockerode();
-
-// Container resource limits (configurable via environment)
-const CONTAINER_LIMITS = {
-  memory: Number.parseInt(process.env.CONTAINER_MEMORY_LIMIT || '268435456'), // 256MB default
-  memorySwap: Number.parseInt(process.env.CONTAINER_MEMORY_LIMIT || '268435456'), // Same as memory (no swap)
-  nanoCpus: Number.parseInt(process.env.CONTAINER_CPU_LIMIT || '1000000000'), // 1 CPU default
-  pidsLimit: Number.parseInt(process.env.CONTAINER_PIDS_LIMIT || '50'), // 50 processes default
-  tmpfsSize: Number.parseInt(process.env.CONTAINER_TMPFS_SIZE || '67108864'), // 64MB default
-  configDirSize: Number.parseInt(process.env.CONTAINER_CONFIG_SIZE || '10485760'), // 10MB default
-};
 
 /**
  * Verify container resource limits are properly applied
@@ -180,7 +170,7 @@ export async function cleanupStaleContainers(): Promise<void> {
 export async function ensureDockerImage(): Promise<void> {
   logSecure(`Ensuring Docker image ${DOCKER_IMAGE_NAME} exists...`);
   try {
-    const forceRebuild = process.env.FORCE_REBUILD_SANDBOX_IMAGE === 'true';
+    const forceRebuild = FORCE_REBUILD_SANDBOX_IMAGE;
 
     // First check if the image exists
     const images = await docker.listImages({
