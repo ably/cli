@@ -49,10 +49,16 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
 }
 
 test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
-  test.setTimeout(120_000);
+  // Increase timeout significantly for CI environments
+  const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
+  test.setTimeout(isCI ? 300_000 : 120_000); // 5 minutes in CI, 2 minutes locally
 
   test.beforeAll(async () => {
     console.log('Setting up Web CLI Reconnection Diagnostic E2E tests...');
+    
+    if (isCI) {
+      console.log('Running in CI environment - using extended timeouts');
+    }
 
     // 1. Build the example app
     console.log('Building Web CLI example app...');

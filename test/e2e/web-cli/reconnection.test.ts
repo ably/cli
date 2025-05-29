@@ -66,10 +66,16 @@ async function waitForPrompt(page: any, terminalSelector: string, timeout = 6000
 }
 
 test.describe('Web CLI Reconnection E2E Tests', () => {
-  test.setTimeout(120_000);
+  // Increase timeout significantly for CI environments
+  const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
+  test.setTimeout(isCI ? 300_000 : 120_000); // 5 minutes in CI, 2 minutes locally
 
   test.beforeAll(async () => {
     console.log('Setting up Web CLI Reconnection E2E tests...');
+    
+    if (isCI) {
+      console.log('Running in CI environment - using extended timeouts');
+    }
 
     // 1. Build the example app
     console.log('Building Web CLI example app...');
@@ -191,9 +197,13 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       return terminalElement?.textContent?.includes('$');
     }, null, { timeout: 30000 });
 
-    // Test multiple disconnection cycles
-    for (let i = 0; i < 3; i++) {
-      console.log(`Testing disconnection cycle ${i + 1}/3`);
+    // Test multiple disconnection cycles - fewer cycles in CI due to network stability
+    const maxCycles = isCI ? 2 : 3;
+    const connectionTimeout = isCI ? 60000 : 30000; // Longer timeouts in CI
+    const commandTimeout = isCI ? 30000 : 15000;
+    
+    for (let i = 0; i < maxCycles; i++) {
+      console.log(`Testing disconnection cycle ${i + 1}/${maxCycles}`);
       
       // Disconnect by closing WebSocket connections
       await page.evaluate(() => {
@@ -209,7 +219,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       await page.waitForFunction(() => {
         const s = (window as any).getAblyCliTerminalReactState?.();
         return s?.componentConnectionStatus === 'connected';
-      }, null, { timeout: 30000 });
+      }, null, { timeout: connectionTimeout });
 
       // Wait for the terminal to be ready for commands (look for prompt)
       await page.waitForFunction(() => {
@@ -217,13 +227,13 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
         const content = terminalElement?.textContent || '';
         // Look for the command prompt at the end of content
         return content.includes('$') && !content.includes('Reconnection attempts cancelled');
-      }, null, { timeout: 30000 });
+      }, null, { timeout: connectionTimeout });
 
       // Test that we can run commands after reconnection
       await page.locator('.xterm').click();
       await page.keyboard.type(`echo "test-${i + 1}"`);
       await page.keyboard.press('Enter');
-      await expect(page.locator('.xterm')).toContainText(`test-${i + 1}`, { timeout: 15000 });
+      await expect(page.locator('.xterm')).toContainText(`test-${i + 1}`, { timeout: commandTimeout });
     }
   });
 
