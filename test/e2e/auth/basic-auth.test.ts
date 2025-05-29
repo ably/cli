@@ -84,7 +84,7 @@ describe("Authentication E2E", function() {
   describe("error scenarios", function() {
     it("should handle invalid credentials gracefully", function() {
       // Skip if E2E_ABLY_API_KEY is not set
-      if (process.env.E2E_ABLY_API_KEY === undefined) {
+      if (!process.env.E2E_ABLY_API_KEY) {
         this.skip();
         return;
       }

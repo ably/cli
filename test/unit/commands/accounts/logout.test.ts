@@ -176,7 +176,7 @@ describe("AccountsLogout", function() {
     });
 
     it("should handle current account switching logic", function() {
-      const currentAccount = "account-to-remove";
+      const _currentAccount = "account-to-remove";
       const availableAccounts = ["other-account1", "other-account2"];
 
       // Test logic for determining next current account
