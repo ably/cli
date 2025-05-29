@@ -1,5 +1,37 @@
 import * as jwt from "jsonwebtoken";
-import { log, logError } from "../utils/logger.js";
+import * as crypto from "node:crypto";
+import { logSecure, logError } from "../utils/logger.js";
+
+/**
+ * Create a secure hash of sensitive data for logging purposes
+ */
+function createSecureHash(input: string): string {
+  return crypto.createHash('sha256').update(input).digest('hex').slice(0, 12);
+}
+
+/**
+ * Securely purge sensitive string from memory (best effort)
+ * Note: JavaScript strings are immutable, so this is primarily about 
+ * removing references and triggering garbage collection
+ */
+function purgeFromMemory(obj: any, key: string): void {
+  if (obj && typeof obj[key] === 'string') {
+    // Since strings are immutable in JavaScript, we can't actually overwrite memory
+    // But we can remove the reference and encourage garbage collection
+    const originalValue = obj[key];
+    delete obj[key];
+    
+    // Set to undefined to help GC
+    obj[key] = undefined;
+    delete obj[key];
+    
+    // Create some temporary objects to encourage garbage collection
+    // This is a best-effort approach to memory security
+    for (let i = 0; i < 10; i++) {
+      const _temp = crypto.randomBytes(originalValue.length);
+    }
+  }
+}
 
 export function isValidToken(token: string): boolean {
   if (!token || typeof token !== "string") {
@@ -7,9 +39,12 @@ export function isValidToken(token: string): boolean {
     return false;
   }
 
+  // Create a hash of the token for secure logging (instead of logging prefix)
+  const tokenHash = createSecureHash(token);
+
   // Basic JWT structure check (three parts separated by dots)
   if (token.split(".").length !== 3) {
-    logError("Token validation failed: Invalid JWT structure.");
+    logSecure("Token validation failed: Invalid JWT structure.", { tokenHash });
     return false;
   }
 
@@ -18,36 +53,96 @@ export function isValidToken(token: string): boolean {
     const decoded = jwt.decode(token);
 
     if (!decoded || typeof decoded !== "object") {
-      logError("Token validation failed: Could not decode token payload.");
+      logSecure("Token validation failed: Could not decode token payload.", { tokenHash });
       return false;
     }
 
     // Check for expiration claim (exp)
     if (typeof decoded.exp !== "number") {
-      logError(
-        "Token validation failed: Missing or invalid expiration claim (exp).",
-      );
+      logSecure("Token validation failed: Missing or invalid expiration claim (exp).", { tokenHash });
       // Allow tokens without expiry for now, but log it.
       // Consider making this stricter if Control API tokens always have expiry.
-      log("Warning: Provided token does not have a standard expiration claim.");
+      logSecure("Warning: Provided token does not have a standard expiration claim.", { tokenHash });
       return true; // Allow for now
     }
 
     // Check if the token is expired
     const nowInSeconds = Date.now() / 1000;
     if (decoded.exp < nowInSeconds) {
-      logError("Token validation failed: Token has expired.");
+      logSecure("Token validation failed: Token has expired.", { 
+        tokenHash, 
+        expiry: new Date(decoded.exp * 1000).toISOString() 
+      });
       return false;
     }
 
-    log(
-      `Token structure and expiry check passed for token starting with: ${token.slice(0, 10)}... (Expiry: ${new Date(decoded.exp * 1000).toISOString()})`,
-    );
+    logSecure("Token structure and expiry check passed.", { 
+      tokenHash, 
+      expiry: new Date(decoded.exp * 1000).toISOString() 
+    });
     return true;
   } catch (error: unknown) {
-    logError(
-      `Token validation failed with unexpected decoding error: ${String(error)}`,
-    );
+    logSecure("Token validation failed with unexpected decoding error.", { 
+      tokenHash, 
+      error: String(error) 
+    });
     return false;
+  }
+}
+
+/**
+ * Securely validate and then purge credentials from memory
+ * Returns the credential hash for session tracking
+ */
+export function validateAndPurgeCredentials(
+  authPayload: { apiKey?: string; accessToken?: string; [key: string]: any }
+): { valid: boolean; credentialHash?: string } {
+  try {
+    const hasApiKey = typeof authPayload.apiKey === 'string' && authPayload.apiKey.trim().length > 0;
+    const hasAccessToken = typeof authPayload.accessToken === 'string' && authPayload.accessToken.trim().length > 0;
+
+    // If neither credential is supplied, return invalid
+    if (!hasApiKey && !hasAccessToken) {
+      logError("No credentials supplied in auth payload.");
+      return { valid: false };
+    }
+
+    let tokenValid = true;
+    
+    // If an access token is supplied and looks like a JWT, validate it
+    if (hasAccessToken && authPayload.accessToken!.split('.').length === 3) {
+      tokenValid = isValidToken(authPayload.accessToken!);
+    }
+
+    if (!tokenValid) {
+      // Purge invalid credentials from memory
+      purgeFromMemory(authPayload, 'apiKey');
+      purgeFromMemory(authPayload, 'accessToken');
+      return { valid: false };
+    }
+
+    // Create credential hash before purging
+    const credentialHash = crypto.createHash('sha256')
+      .update(`${authPayload.apiKey ?? ''}|${authPayload.accessToken ?? ''}`)
+      .digest('hex');
+
+    // Log successful validation with secure hash
+    logSecure("Credentials validated successfully.", { 
+      credentialHash: credentialHash.slice(0, 12) + '...',
+      hasApiKey: Boolean(hasApiKey),
+      hasAccessToken: Boolean(hasAccessToken)
+    });
+
+    // Purge credentials from memory after validation
+    purgeFromMemory(authPayload, 'apiKey');
+    purgeFromMemory(authPayload, 'accessToken');
+
+    return { valid: true, credentialHash };
+  } catch (error) {
+    logError(`Error during credential validation: ${String(error)}`);
+    // Ensure cleanup even on error
+    purgeFromMemory(authPayload, 'apiKey');
+    purgeFromMemory(authPayload, 'accessToken');
+    return { valid: false };
   }
 } 

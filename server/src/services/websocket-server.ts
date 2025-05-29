@@ -8,8 +8,8 @@ import {
   AUTH_TIMEOUT_MS,
   SHUTDOWN_GRACE_PERIOD_MS 
 } from "../config/server-config.js";
-import { log, logError } from "../utils/logger.js";
-import { isValidToken } from "./auth-service.js";
+import { logSecure, logError } from "../utils/logger.js";
+import { validateAndPurgeCredentials } from "./auth-service.js";
 import { initializeSecurity, createSecureNetwork } from "./security-service.js";
 import { cleanupStaleContainers, ensureDockerImage, createContainer } from "./docker-manager.js";
 import { 
@@ -22,10 +22,11 @@ import {
   getSessions,
   setSession,
   takeoverSession,
-  attemptCrossProcessResume
+  attemptCrossProcessResume,
+  canResumeSession
 } from "./session-manager.js";
 import { attachToContainer, handleMessage } from "../utils/stream-handler.js";
-import { computeCredentialHash } from "../utils/session-utils.js";
+import { extractClientContext, shouldRateLimitResumeAttempt, computeCredentialHash } from "../utils/session-utils.js";
 
 const handleProtocols = (protocols: Set<string>, _request: unknown): string | false => {
     const firstProtocol = protocols.values().next().value;
@@ -35,14 +36,14 @@ const handleProtocols = (protocols: Set<string>, _request: unknown): string | fa
 // Moved from startServer scope
 const verifyClient = (info: { origin: string; req: http.IncomingMessage; secure: boolean }, callback: (res: boolean, code?: number, message?: string, headers?: http.OutgoingHttpHeaders) => void) => {
     const origin = info.req.headers.origin || '*';
-    log(`Client connecting from origin: ${origin}`);
+    logSecure(`Client connecting from origin: ${origin}`);
     // Allow all connections for now, but could add origin checks here
     callback(true);
 };
 
 // --- WebSocket Server Setup (Restored & Modified) ---
 export async function startServer(): Promise<http.Server> {
-    log('Starting WebSocket server...');
+    logSecure('Starting WebSocket server...');
     
     // Initialize security first
     initializeSecurity();
@@ -73,7 +74,7 @@ export async function startServer(): Promise<http.Server> {
     // Start the HTTP server
     await new Promise<void>((resolve) => {
         server.listen(port, () => {
-            log(`WebSocket server listening on port ${port}`);
+            logSecure(`WebSocket server listening on port ${port}`);
             resolve();
         });
     });
@@ -88,13 +89,13 @@ export async function startServer(): Promise<http.Server> {
 
     wss.on("connection", (ws: WebSocket, _req: http.IncomingMessage) => {
         const sessionId = generateSessionId();
-        log(`[Server] New connection. Assigned sessionId: ${sessionId}`);
+        logSecure(`[Server] New connection. Assigned sessionId: ${sessionId}`);
 
         // Immediately send a "connecting" status message
         try {
           const connectingMsg: ServerStatusMessage = { type: "status", payload: "connecting" };
           ws.send(JSON.stringify(connectingMsg));
-          log(`Sent 'connecting' status to new session ${sessionId}`);
+          logSecure(`Sent 'connecting' status to new session ${sessionId}`);
         } catch (error) {
           logError(`Error sending 'connecting' status to ${sessionId}: ${error}`);
           // If we can't send 'connecting', close the connection
@@ -105,7 +106,7 @@ export async function startServer(): Promise<http.Server> {
 
         const sessions = getSessions();
         if (sessions.size >= maxSessions) {
-            log("Max session limit reached. Rejecting new connection.");
+            logSecure("Max session limit reached. Rejecting new connection.");
             // Send structured error status before closing so client can handle gracefully
             const busyMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Server busy. Please try again later." };
             try { ws.send(JSON.stringify(busyMsg)); } catch { /* ignore */ }
@@ -117,7 +118,7 @@ export async function startServer(): Promise<http.Server> {
         const initialSession: Partial<ClientSession> = {
              ws: ws,
              timeoutId: setTimeout(() => {
-                 log(`Authentication timeout for session ${sessionId}.`);
+                 logSecure(`Authentication timeout for session ${sessionId}.`);
                  // Ensure ws is still open before closing
                  if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                      const timeoutMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Authentication timeout" };
@@ -165,7 +166,7 @@ export async function startServer(): Promise<http.Server> {
                     const sessions = getSessions();
                     if (sessions.has(resumeAttemptId)) {
                         const existing = sessions.get(resumeAttemptId)!;
-                        log(`[Server] Resume attempt: incoming sessionId=${resumeAttemptId}, credentialHash=${incomingCredentialHash}`);
+                        logSecure(`[Server] Resume attempt: incoming sessionId=${resumeAttemptId}`);
 
                         if (existing.credentialHash !== incomingCredentialHash) {
                             logError(`[${sessionId}] Resume rejected: credential mismatch`);
@@ -201,7 +202,7 @@ export async function startServer(): Promise<http.Server> {
                         try {
                            await attachToContainer(existing, ws);
                            ws.on('message', (msg) => handleMessage(existing, msg as Buffer));
-                           log(`[Server] In-memory resume: SUCCESS. sessionId=${resumeAttemptId}`);
+                           logSecure(`[Server] In-memory resume: SUCCESS. sessionId=${resumeAttemptId}`);
                         } catch {
                            logError(`[Server] In-memory resume: FAILED. sessionId=${resumeAttemptId}`);
                            terminateSession(existing.sessionId, 'Failed in-memory resume');
@@ -212,7 +213,7 @@ export async function startServer(): Promise<http.Server> {
                     // Fallback: try to restore session by locating existing container
                     const restored = await attemptCrossProcessResume(resumeAttemptId, incomingCredentialHash, ws);
                     if (restored) {
-                        log(`[Server] Cross-process resume: SUCCESS. sessionId=${resumeAttemptId}`);
+                        logSecure(`[Server] Cross-process resume: SUCCESS. sessionId=${resumeAttemptId}`);
 
                         // Clean up the placeholder session for this connection just as we do in the
                         // in-memory resume path.
@@ -256,18 +257,21 @@ export async function startServer(): Promise<http.Server> {
 
                 // If an access token is supplied and *looks* like a JWT, run structural validation; otherwise accept as-is.
                 const accessTokenStr = hasAccessToken ? String(authPayload.accessToken) : null;
-                if (accessTokenStr && accessTokenStr.split('.').length === 3 && !isValidToken(accessTokenStr as string)) {
-                    logError(`[${sessionId}] Supplied JWT access token failed validation.`);
-                    const invalidTokenMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Invalid or expired access token" };
-                    try { ws.send(JSON.stringify(invalidTokenMsg)); } catch { /* ignore */ }
-                    ws.close(4001, 'Invalid token');
-                    if (sessionId) cleanupSession(sessionId);
-                    return;
+                if (accessTokenStr && accessTokenStr.split('.').length === 3) {
+                    const validation = validateAndPurgeCredentials({ accessToken: accessTokenStr });
+                    if (!validation.valid) {
+                        logError(`[${sessionId}] Supplied JWT access token failed validation.`);
+                        const invalidTokenMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Invalid or expired access token" };
+                        try { ws.send(JSON.stringify(invalidTokenMsg)); } catch { /* ignore */ }
+                        ws.close(4001, 'Invalid token');
+                        if (sessionId) cleanupSession(sessionId);
+                        return;
+                    }
                 }
                 const { apiKey, accessToken, environmentVariables } = authPayload;
 
                 // --- Auth Success -> Container Creation Phase ---
-                log(`[Server] Authentication successful.`);
+                logSecure(`[Server] Authentication successful.`);
 
                 // Clear the auth timeout since we've authenticated successfully
                 clearTimeout(initialSession.timeoutId);
@@ -276,11 +280,11 @@ export async function startServer(): Promise<http.Server> {
                 try {
                    // Pass credentials to createContainer
                    container = await createContainer(apiKey ?? '', accessToken ?? '', environmentVariables || {}, sessionId);
-                   log(`[Server] Container created successfully: ${container.id}`);
+                   logSecure(`[Server] Container created successfully: ${container.id}`);
 
                    // Start the container before attempting to attach
                    await container.start();
-                   log(`[Server] Container started successfully: ${container.id}`);
+                   logSecure(`[Server] Container started successfully: ${container.id}`);
 
                 } catch (error) {
                     logError(`[Server] Failed to create or start container: ${error instanceof Error ? error.message : String(error)}`);
@@ -293,7 +297,7 @@ export async function startServer(): Promise<http.Server> {
 
                 // Compute credential hash for later resume validation
                 const credentialHash = computeCredentialHash(apiKey, accessToken);
-                log(`[Server] credentialHash=${credentialHash.slice(0, 8)}...`);
+                logSecure(`[Server] credentialHash=${credentialHash.slice(0, 8)}...`);
 
                 // --- Create Full Session Object ---
                 const fullSession: ClientSession = {
@@ -307,18 +311,18 @@ export async function startServer(): Promise<http.Server> {
                 };
                 clearTimeout(fullSession.timeoutId); // Clear the dummy timeout
                 setSession(sessionId, fullSession); // Update session map with full data
-                log(`[Server] Full session object created.`);
+                logSecure(`[Server] Full session object created.`);
 
                 // --- Attachment Phase ---
                 try {
                     // Wait for attachment to complete before setting up message handlers
                     await attachToContainer(fullSession, ws);
-                    log(`[Server] Successfully attached to container.`);
+                    logSecure(`[Server] Successfully attached to container.`);
 
                     // --- Set up Main Message Handler ---
                     // Only set up *after* successful attachment
                     ws.on('message', (msg) => handleMessage(fullSession, msg as Buffer));
-                    log(`[Server] Main message handler attached.`);
+                    logSecure(`[Server] Main message handler attached.`);
                 } catch (_error) {
                     // Attachment failed, but we'll let the error handling in attachToContainer handle it
                     logError(`[Server] Attachment error: ${String(_error)}`);
@@ -339,7 +343,7 @@ export async function startServer(): Promise<http.Server> {
         // the session immediately – instead we schedule orphan cleanup so the
         // container can be resumed within the RESUME_GRACE_MS window.
         const topLevelCloseHandler = (code: number, reason: Buffer) => {
-            log(`[Server] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
+            logSecure(`[Server] WebSocket closed. Code: ${code}, Reason: ${reason.toString()}`);
 
             const existing = getSessions().get(sessionId);
             if (existing && existing.authenticated) {
@@ -375,12 +379,12 @@ export async function startServer(): Promise<http.Server> {
     const shutdown = async (signal: string) => {
         // Prevent multiple shutdown attempts
         if (isShuttingDown) {
-            log(`Already shutting down, ignoring additional ${signal} signal`);
+            logSecure(`Already shutting down, ignoring additional ${signal} signal`);
             return;
         }
 
         isShuttingDown = true;
-        log(`Received ${signal}. Shutting down server...`);
+        logSecure(`Received ${signal}. Shutting down server...`);
 
         // Clear the intervals
         if (keepAliveInterval) {
@@ -392,7 +396,7 @@ export async function startServer(): Promise<http.Server> {
 
         await cleanupAllSessions();
 
-        log('Closing WebSocket server...');
+        logSecure('Closing WebSocket server...');
 
         // Set a timeout to force exit if cleanup takes too long
         const forceExitTimeout = setTimeout(() => {
@@ -408,7 +412,7 @@ export async function startServer(): Promise<http.Server> {
                         reject(err);
                         return;
                     }
-                    log('WebSocket server closed.');
+                    logSecure('WebSocket server closed.');
                     resolve();
                 });
             });
@@ -420,14 +424,14 @@ export async function startServer(): Promise<http.Server> {
                         reject(err);
                         return;
                     }
-                    log('HTTP server closed.');
+                    logSecure('HTTP server closed.');
                     resolve();
                 });
             });
 
             // Clear the force exit timeout
             clearTimeout(forceExitTimeout);
-            log('Shutdown complete.');
+            logSecure('Shutdown complete.');
 
             // Exit with success code
             process.exit(0);
@@ -452,10 +456,10 @@ export async function initializeServer(): Promise<http.Server> {
     await createSecureNetwork();
   } catch (error) {
     logError(`Failed to create secure network: ${error}`);
-    log('Continuing with default network configuration');
+    logSecure('Continuing with default network configuration');
   }
 
   const server = await startServer();
-  log("Terminal server started successfully.");
+  logSecure("Terminal server started successfully.");
   return server;
 } 
