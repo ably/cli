@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
 import { afterEach, beforeEach, describe, it } from 'mocha';
-import { ConfigManager } from '../../../src/services/config-manager';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -27,13 +26,17 @@ describe('apps:create command', () => {
     originalConfigDir = process.env.ABLY_CLI_CONFIG_DIR || '';
     process.env.ABLY_CLI_CONFIG_DIR = testConfigDir;
     
-    // Set up a fake account in the config
-    const configManager = new ConfigManager();
-    configManager.storeAccount(mockAccessToken, 'default', {
-      accountId: mockAccountId,
-      accountName: 'Test Account',
-      userEmail: 'test@example.com'
-    });
+    // Create a minimal config file with a default account
+    const configContent = `[current]
+account = "default"
+
+[accounts.default]
+accessToken = "${mockAccessToken}"
+accountId = "${mockAccountId}"
+accountName = "Test Account"
+userEmail = "test@example.com"
+`;
+    fs.writeFileSync(path.join(testConfigDir, 'config'), configContent);
   });
 
   afterEach(() => {
@@ -87,6 +90,7 @@ describe('apps:create command', () => {
         expect(ctx.stdout).to.include('App created successfully');
         expect(ctx.stdout).to.include(mockAppId);
         expect(ctx.stdout).to.include(mockAppName);
+        expect(ctx.stdout).to.include('Automatically switched to app');
       });
 
     test
@@ -119,7 +123,8 @@ describe('apps:create command', () => {
       .command(['apps:create', '--name', mockAppName, '--tls-only'])
       .it('should create an app with TLS only flag', ctx => {
         expect(ctx.stdout).to.include('App created successfully');
-        expect(ctx.stdout).to.include('TLS Only: true');
+        expect(ctx.stdout).to.include('TLS Only: Yes');
+        expect(ctx.stdout).to.include('Automatically switched to app');
       });
 
     test
@@ -194,6 +199,43 @@ describe('apps:create command', () => {
       .command(['apps:create', '--name', mockAppName, '--access-token', 'custom_access_token'])
       .it('should use custom access token when provided', ctx => {
         expect(ctx.stdout).to.include('App created successfully');
+        expect(ctx.stdout).to.include('Automatically switched to app');
+      });
+
+    test
+      .stdout()
+      .do(() => {
+        // Mock the /me endpoint
+        nock('https://control.ably.net')
+          .get('/v1/me')
+          .reply(200, {
+            account: { id: mockAccountId, name: 'Test Account' },
+            user: { email: 'test@example.com' }
+          });
+
+        // Mock the app creation endpoint
+        nock('https://control.ably.net')
+          .post(`/v1/accounts/${mockAccountId}/apps`)
+          .reply(201, {
+            id: mockAppId,
+            accountId: mockAccountId,
+            name: mockAppName,
+            status: 'active',
+            created: Date.now(),
+            modified: Date.now(),
+            tlsOnly: false
+          });
+      })
+      .command(['apps:create', '--name', mockAppName])
+      .it('should automatically switch to the newly created app', ctx => {
+        expect(ctx.stdout).to.include('App created successfully');
+        expect(ctx.stdout).to.include(`Automatically switched to app: ${mockAppName} (${mockAppId})`);
+        
+        // Verify the config file was updated with the new app
+        const configPath = path.join(testConfigDir, 'config');
+        const configContent = fs.readFileSync(configPath, 'utf8');
+        expect(configContent).to.include(`currentAppId = "${mockAppId}"`);
+        expect(configContent).to.include(`appName = "${mockAppName}"`);
       });
   });
 

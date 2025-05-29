@@ -82,12 +82,13 @@ describe('apps:list command', () => {
       .command(['apps:list', '--json'])
       .it('should output JSON format when --json flag is used', ctx => {
         const result = JSON.parse(ctx.stdout);
-        expect(result).to.be.an('array');
-        expect(result).to.have.length(2);
-        expect(result[0]).to.have.property('id', '550e8400-e29b-41d4-a716-446655440000');
-        expect(result[0]).to.have.property('name', 'Test App 1');
-        expect(result[1]).to.have.property('id', '550e8400-e29b-41d4-a716-446655440001');
-        expect(result[1]).to.have.property('name', 'Test App 2');
+        expect(result).to.have.property('apps');
+        expect(result.apps).to.be.an('array');
+        expect(result.apps).to.have.length(2);
+        expect(result.apps[0]).to.have.property('id', '550e8400-e29b-41d4-a716-446655440000');
+        expect(result.apps[0]).to.have.property('name', 'Test App 1');
+        expect(result.apps[1]).to.have.property('id', '550e8400-e29b-41d4-a716-446655440001');
+        expect(result.apps[1]).to.have.property('name', 'Test App 2');
       });
 
     test
