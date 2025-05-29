@@ -10,8 +10,8 @@ import {
 } from "../config/server-config.js";
 import { logSecure, logError } from "../utils/logger.js";
 import { validateAndPurgeCredentials } from "./auth-service.js";
-import { initializeSecurity, createSecureNetwork } from "./security-service.js";
-import { cleanupStaleContainers, ensureDockerImage, createContainer } from "./docker-manager.js";
+import { initializeSecurity, createSecureNetwork, cleanupSecurity } from "./security-service.js";
+import { cleanupStaleContainers, ensureDockerImage, createContainer, enableAutoRemoval } from "./docker-manager.js";
 import { 
   generateSessionId, 
   terminateSession, 
@@ -22,11 +22,10 @@ import {
   getSessions,
   setSession,
   takeoverSession,
-  attemptCrossProcessResume,
-  canResumeSession
+  attemptCrossProcessResume
 } from "./session-manager.js";
 import { attachToContainer, handleMessage } from "../utils/stream-handler.js";
-import { extractClientContext, shouldRateLimitResumeAttempt, computeCredentialHash } from "../utils/session-utils.js";
+import { computeCredentialHash } from "../utils/session-utils.js";
 
 const handleProtocols = (protocols: Set<string>, _request: unknown): string | false => {
     const firstProtocol = protocols.values().next().value;
@@ -43,10 +42,25 @@ const verifyClient = (info: { origin: string; req: http.IncomingMessage; secure:
 
 // --- WebSocket Server Setup (Restored & Modified) ---
 export async function startServer(): Promise<http.Server> {
-    logSecure('Starting WebSocket server...');
+    logSecure('Starting WebSocket server with enhanced security...');
     
-    // Initialize security first
-    initializeSecurity();
+    // Initialize security first with fail-fast behavior
+    try {
+        initializeSecurity();
+        logSecure('Security profiles initialized successfully');
+    } catch (error) {
+        logError(`Fatal: Security initialization failed - ${error}`);
+        throw new Error(`Cannot start server without proper security: ${error}`);
+    }
+    
+    // Create secure network with strict enforcement
+    try {
+        await createSecureNetwork();
+        logSecure('Secure network verified and ready');
+    } catch (error) {
+        logError(`Fatal: Secure network setup failed - ${error}`);
+        throw new Error(`Cannot start server without secure network: ${error}`);
+    }
     
     await cleanupStaleContainers();
     await ensureDockerImage(); // Ensure image exists before starting
@@ -271,24 +285,27 @@ export async function startServer(): Promise<http.Server> {
                 const { apiKey, accessToken, environmentVariables } = authPayload;
 
                 // --- Auth Success -> Container Creation Phase ---
-                logSecure(`[Server] Authentication successful.`);
+                logSecure(`[Server] Authentication successful for session ${sessionId}`);
 
                 // Clear the auth timeout since we've authenticated successfully
                 clearTimeout(initialSession.timeoutId);
 
                 let container;
                 try {
-                   // Pass credentials to createContainer
+                   // Pass credentials to createContainer with enhanced security
                    container = await createContainer(apiKey ?? '', accessToken ?? '', environmentVariables || {}, sessionId);
-                   logSecure(`[Server] Container created successfully: ${container.id}`);
+                   logSecure(`[Server] Enhanced security container created: ${container.id.slice(0, 12)}`);
 
                    // Start the container before attempting to attach
                    await container.start();
-                   logSecure(`[Server] Container started successfully: ${container.id}`);
+                   logSecure(`[Server] Container started successfully: ${container.id.slice(0, 12)}`);
+
+                   // Enable auto-removal for cleanup after session ends
+                   await enableAutoRemoval(container);
 
                 } catch (error) {
-                    logError(`[Server] Failed to create or start container: ${error instanceof Error ? error.message : String(error)}`);
-                    const containerErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Failed to create session environment" };
+                    logError(`[Server] Failed to create/start/configure container: ${error instanceof Error ? error.message : String(error)}`);
+                    const containerErrorMsg: ServerStatusMessage = { type: "status", payload: "error", reason: "Failed to create secure session environment" };
                     try { ws.send(JSON.stringify(containerErrorMsg)); } catch { /* ignore */ }
                     ws.close(1011, 'Container creation failed');
                     if (sessionId) cleanupSession(sessionId); // Cleanup partial session
@@ -384,7 +401,7 @@ export async function startServer(): Promise<http.Server> {
         }
 
         isShuttingDown = true;
-        logSecure(`Received ${signal}. Shutting down server...`);
+        logSecure(`Received ${signal}. Shutting down server with security cleanup...`);
 
         // Clear the intervals
         if (keepAliveInterval) {
@@ -395,6 +412,14 @@ export async function startServer(): Promise<http.Server> {
         }
 
         await cleanupAllSessions();
+
+        // Clean up security resources
+        try {
+            cleanupSecurity();
+            logSecure('Security resources cleaned up');
+        } catch (error) {
+            logError(`Error during security cleanup: ${error}`);
+        }
 
         logSecure('Closing WebSocket server...');
 
@@ -448,18 +473,12 @@ export async function startServer(): Promise<http.Server> {
 }
 
 /**
- * Initialize and start the server
+ * Initialize and start the server with enhanced security
  */
 export async function initializeServer(): Promise<http.Server> {
-  // Create secure network before server starts
-  try {
-    await createSecureNetwork();
-  } catch (error) {
-    logError(`Failed to create secure network: ${error}`);
-    logSecure('Continuing with default network configuration');
-  }
-
+  logSecure("Initializing terminal server with enhanced security...");
+  
   const server = await startServer();
-  logSecure("Terminal server started successfully.");
+  logSecure("Terminal server started successfully with enhanced security.");
   return server;
 } 
