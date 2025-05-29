@@ -1,0 +1,57 @@
+{
+  "name": "@ably/terminal-server",
+  "version": "0.1.0",
+  "description": "WebSocket terminal server for Ably CLI web interface",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "mocha 'tests/**/*.test.ts'",
+    "test:unit": "mocha 'tests/unit/**/*.test.ts'",
+    "test:integration": "mocha 'tests/integration/**/*.test.ts'",
+    "test:e2e": "mocha 'tests/e2e/**/*.test.ts'",
+    "lint": "eslint src/ tests/",
+    "clean": "rm -rf dist/"
+  },
+  "dependencies": {
+    "ws": "^8.17.1",
+    "dockerode": "^4.0.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
+    "@types/dockerode": "^3.3.23",
+    "@types/jsonwebtoken": "^9.0.6",
+    "typescript": "^5.0.0",
+    "tsx": "^4.7.1",
+    "ts-node": "^10.9.0",
+    "mocha": "^10.0.0",
+    "@types/mocha": "^10.0.0",
+    "chai": "^4.3.0",
+    "@types/chai": "^4.3.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ably",
+    "cli",
+    "terminal",
+    "websocket",
+    "docker",
+    "server"
+  ],
+  "author": "Ably",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ably/cli.git",
+    "directory": "server"
+  }
+} 
