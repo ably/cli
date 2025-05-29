@@ -8,16 +8,17 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "rm -rf dist && rm -f tsconfig.tsbuildinfo && tsc",
+    "build": "shx rm -rf dist && tsc -b",
     "build:packages": "pnpm -r --filter './packages/*' build",
     "build:examples": "pnpm -r --filter './examples/*' build",
     "build:all": "pnpm build && pnpm build:packages && pnpm build:examples",
     "clean": "rm -rf dist node_modules/.cache tsconfig.tsbuildinfo oclif.manifest.json",
-    "lint": "eslint .",
+    "lint": "eslint . --ext .ts --config .eslintrc",
     "lint:fix": "eslint . --fix",
     "lint:docker": "docker run --rm -i hadolint/hadolint < Dockerfile",
-    "postpack": "rm -f oclif.manifest.json",
+    "postpack": "shx rm -f oclif.manifest.json",
     "pretest": "pnpm build && chmod +x bin/run.js",
+<<<<<<< HEAD
     "test": "./scripts/run-tests.sh \"test/**/*.test.ts\" --timeout 30000",
     "test:unit": "./scripts/run-tests.sh \"test/unit/**/*.test.ts\" --timeout 10000",
     "test:integration": "./scripts/run-tests.sh \"test/integration/**/*.test.ts\" --timeout 10000",
@@ -29,6 +30,17 @@
     "test:coverage:report": "nyc report --reporter=html --reporter=text",
     "test:coverage:check": "nyc check-coverage --lines 75 --functions 75 --branches 65 --statements 75",
     "prepack": "pnpm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
+=======
+    "test": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:unit": "mocha 'test/unit/**/*.test.ts' --timeout 10000",
+    "test:integration": "mocha 'test/integration/**/*.test.ts' --timeout 30000",
+    "test:e2e": "mocha 'test/e2e/**/*.test.ts' --timeout 60000",
+    "test:coverage": "nyc npm run test:unit",
+    "test:coverage:full": "nyc npm run test",
+    "test:watch": "mocha 'test/unit/**/*.test.ts' --watch",
+    "test:ci": "npm run test:coverage && npm run test:integration",
+    "prepack": "pnpm run build && oclif manifest && oclif readme",
+>>>>>>> 73f1d80 (Add comprehensive test coverage for Control API with unit, integration, and E2E tests)
     "prepare": "pnpm run build && oclif manifest && oclif readme --no-aliases",
     "postinstall": "[ \"$CI\" = \"true\" ] || (test -f ./dist/scripts/postinstall-welcome.js && node ./dist/scripts/postinstall-welcome.js || echo \"Skipping welcome script (not found)\")",
     "preversion": "pnpm run prepare",
