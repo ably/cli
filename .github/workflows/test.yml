@@ -33,6 +33,15 @@ jobs:
       - name: Run React Web CLI Unit Tests
         run: pnpm --filter @ably/react-web-cli test
 
+      - name: Run Server Tests
+        run: |
+          cd server
+          pnpm install
+          pnpm build
+          pnpm test
+        env:
+          E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+
       - name: Run tests
         run: pnpm test
         env:
