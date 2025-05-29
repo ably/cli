@@ -31,7 +31,7 @@
     "posttest": "./scripts/lint-test-paths.sh",
     "prepack": "pnpm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
     "prepare": "pnpm run build && oclif manifest && oclif readme --no-aliases",
-    "postinstall": "[[ \"$CI\" == \"true\" ]] || (test -f ./dist/scripts/postinstall-welcome.js && node ./dist/scripts/postinstall-welcome.js || echo \"Skipping welcome script (not found)\")",
+    "postinstall": "[ \"$CI\" = \"true\" ] || (test -f ./dist/scripts/postinstall-welcome.js && node ./dist/scripts/postinstall-welcome.js || echo \"Skipping welcome script (not found)\")",
     "preversion": "pnpm run prepare",
     "version": "oclif readme && git add README.md",
     "cli": "bin/run.js",
