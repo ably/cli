@@ -74,7 +74,7 @@ describe('Docker Container Security Features', function() {
     }
     
     // Create a test container with explicitly set security parameters
-    const seccompProfilePath = path.resolve(__dirname, '../../docker/seccomp-profile.json');
+    const seccompProfilePath = path.resolve(__dirname, '../../server/docker/seccomp-profile.json');
 
     await execAsync(`docker create --name ${containerName} \
       --read-only \

@@ -176,7 +176,7 @@ describe("LogsConnectionSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -213,7 +213,7 @@ describe("LogsConnectionSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -239,7 +239,7 @@ describe("LogsConnectionSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -272,7 +272,7 @@ describe("LogsConnectionSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -325,7 +325,7 @@ describe("LogsConnectionSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -372,7 +372,7 @@ describe("LogsConnectionSubscribe", function() {
     try {
       await command.run();
       expect.fail('Command should have handled connection failure');
-    } catch (error: any) {
+    } catch {
       // The command should handle connection failures gracefully
       // Check that error was logged appropriately
       const output = command.logOutput.join('\n');

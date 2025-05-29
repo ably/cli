@@ -38,9 +38,15 @@ jobs:
           cd server
           pnpm install
           pnpm build
-          pnpm test
+          # Run server tests with timeout and error handling
+          timeout 300 pnpm test || {
+            echo "Server tests failed or timed out after 5 minutes"
+            echo "This might be due to Docker limitations in CI environment"
+            exit 1
+          }
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CI: true
 
       - name: Run tests
         run: pnpm test

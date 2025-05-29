@@ -174,7 +174,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -211,7 +211,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -238,7 +238,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -271,7 +271,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -325,7 +325,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -390,7 +390,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 
@@ -444,7 +444,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
           controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
         )
       ]);
-    } catch (error: any) {
+    } catch {
       // Expected timeout
     }
 

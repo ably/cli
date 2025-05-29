@@ -126,7 +126,7 @@ test.describe('Session Resume E2E Tests', () => {
       const activeConnections = (window as any).__activeWebSockets || [];
       activeConnections.forEach((ws: WebSocket) => {
         if (ws.readyState === WebSocket.OPEN) {
-          ws.close(1006, 'Test disconnect');
+          ws.close(3000, 'Test disconnect');
         }
       });
     });
