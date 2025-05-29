@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { __testHooks } from '../../../scripts/terminal-server.js';
+import { __testHooks } from '../../../server/src/index.js';
 
 // Minimal ClientSession type for testing purposes (duplicate subset)
 interface MiniSession {

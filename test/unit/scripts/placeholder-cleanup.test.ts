@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { __testHooks, __deleteSessionForTest } from '../../../scripts/terminal-server.js';
+import { __testHooks, __deleteSessionForTest } from '../../../server/src/index.js';
 
 interface MiniSession {
   sessionId: string;

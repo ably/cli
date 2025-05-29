@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { computeCredentialHash } from '../../../scripts/session-utils.js';
+import { computeCredentialHash } from '../../../server/src/utils/session-utils.js';
 
 describe('session-utils: computeCredentialHash', function () {
   it('produces a deterministic SHA-256 hash', function () {
