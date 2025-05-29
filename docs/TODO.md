@@ -34,6 +34,34 @@
 - [x] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, connection status indicators per-pane, and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the server
 
+## Server Migration
+
+- [x] **Phase 1: Identify and Categorize Components**
+  - [x] Move all server-related code into `server/` folder structure
+  - [x] Copy Docker configurations to `server/docker/`
+  - [x] Copy server scripts to `server/scripts/`
+  - [x] Copy server-related tests to `server/tests/`
+  - [x] Identify client-side components that remain in main repository
+  - [x] Create comprehensive migration plan documentation
+  - [x] Set up proper directory structure for future refactoring
+- [ ] **Phase 2: Refactor terminal-server.ts**
+  - [ ] Create modular service files from monolithic terminal-server.ts
+  - [ ] Split into websocket-server, docker-manager, session-manager, etc.
+  - [ ] Update import paths and dependencies
+  - [ ] Create server package.json and tsconfig.json
+- [ ] **Phase 3: Migrate Server Code**
+  - [ ] Move refactored code to final server locations
+  - [ ] Remove server dependencies from client code
+  - [ ] Update test configurations
+- [ ] **Phase 4: Update Client Tests**
+  - [ ] Update example tests to use `web-cli.ably.com`
+  - [ ] Update React component tests to use public endpoint
+  - [ ] Ensure client tests have no server dependencies
+- [ ] **Phase 5: Clean Up**
+  - [ ] Remove old server files from main repository
+  - [ ] Update CI/CD configurations
+  - [ ] Final testing and verification
+
 ## UI/UX Improvements
 
 - [ ] The CLI should standardise on how commands are shown when running the topic such as `ably accounts` where all sub-commands are shown, and only when `--help` is used examples are shown along with all commands.

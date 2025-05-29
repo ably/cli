@@ -1,0 +1,25 @@
+FROM node:22-alpine
+
+# Install bash with readline support for better terminal interaction
+RUN apk add --no-cache bash coreutils iptables bc curl
+
+# Create directory for security logs
+RUN mkdir -p /var/log/ably-cli-security
+
+# Create a non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Create tmp directory with correct permissions
+RUN mkdir -p /tmp/appuser && chown -R appuser:appgroup /tmp/appuser
+
+# Add a basic script for testing
+RUN echo '#!/bin/bash\necho "Container security test passed"' > /test.sh && \
+    chmod +x /test.sh
+
+# Give proper ownership to log directory
+RUN chown -R appuser:appgroup /var/log/ably-cli-security
+
+# Switch to the non-root user
+USER appuser
+
+CMD ["/test.sh"]
