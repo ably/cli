@@ -174,77 +174,67 @@ describe("ChannelsSubscribe (Simplified)", function() {
 
   // Helper function to manage test run with timeout/abort
   async function runCommandAndSimulateLifecycle(timeoutMs = 100) {
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    // Simulate connection shortly after run()
+    // Store original listeners to restore them later
+    const originalListeners = process.listeners('SIGINT');
+    
+    // Set up connection simulation
     command.mockClient.connection.once.callsFake((event: string, callback: () => void) => {
       if (event === 'connected') {
         setTimeout(() => {
-          if (signal.aborted) return;
           command.mockClient.connection.state = 'connected';
-          // Simulate the connection 'on' handler being called as well
           if (command.mockClient.connection.on.called) {
             const onConnectionArgs = command.mockClient.connection.on.args[0];
             if (onConnectionArgs && typeof onConnectionArgs[0] === 'function') {
                onConnectionArgs[0]({ current: 'connected' });
             }
           }
-          callback(); // Resolve the 'once' listener
+          callback();
         }, 10);
+      } else if (event === 'closed') {
+        // Simulate connection close after a short delay
+        setTimeout(() => {
+          command.mockClient.connection.state = 'closed';
+          callback();
+        }, 30);
       }
     });
 
     // Simulate channel attach after connection
     const originalGet = command.mockClient.channels.get;
     command.mockClient.channels.get = sandbox.stub().callsFake((name, options) => {
-        const channelMock = originalGet(name, options); // Get the actual mock channel
+        const channelMock = originalGet(name, options);
         if (channelMock && channelMock.on) {
-            // Simulate attach after a short delay, only if not aborted
             setTimeout(() => {
-                if (signal.aborted) return;
-                // Find the handler for 'attached' state if it exists
                  const onAttachArgs = channelMock.on.args.find((args: any[]) => args[0] === 'attached');
                  if (onAttachArgs && typeof onAttachArgs[1] === 'function') {
                       onAttachArgs[1]({ current: 'attached' });
-      }
-                 // Also simulate calling the subscribe callback immediately after attach
-                 // This assumes subscribe is called right after successful attach in the command
-                 if (channelMock.subscribe.called) {
-                     const subscribeCallback = channelMock.subscribe.getCall(0).args[0];
-                     if (typeof subscribeCallback === 'function') {
-                         // Simulate receiving a dummy message shortly after subscribing
-                         // setTimeout(() => {
-                         //     if (!signal.aborted) {
-                         //        subscribeCallback({ name: 'test-event', data: 'test-data' });
-                         //     }
-                         // }, 5);
-                     }
                  }
             }, 20);
         }
         return channelMock;
     });
 
+    // Start the command
     const runPromise = command.run();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    
+    // Send SIGINT after a short delay to trigger proper cleanup
+    const cleanup = setTimeout(() => {
+      process.emit('SIGINT', 'SIGINT');
+    }, timeoutMs);
 
     try {
-      await Promise.race([
-        runPromise,
-        new Promise((_, reject) => signal.addEventListener('abort', () => reject(new Error('Aborted'))))
-      ]);
+      await runPromise;
     } catch (error: any) {
-      if (error.name !== 'AbortError' && !error.message?.includes("Listening for messages")) {
-        // console.error("Caught unexpected error:", error);
-        // Decide whether to rethrow or just let the test check the state
-      }
+      // Expected for some tests
     } finally {
-      clearTimeout(timeout);
-      if (!signal.aborted) {
-        controller.abort(); // Ensure abort is called
+      clearTimeout(cleanup);
+      // Clean up any SIGINT listeners that weren't properly removed
+      const newListeners = process.listeners('SIGINT');
+      for (const listener of newListeners) {
+        if (!originalListeners.includes(listener)) {
+          process.removeListener('SIGINT', listener);
+        }
       }
-      await new Promise(resolve => setImmediate(resolve));
     }
   }
 
