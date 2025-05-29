@@ -34,7 +34,7 @@ describe("ContactCommand", function() {
 
     it("should have appropriate examples", function() {
       const examples = ContactCommand.examples;
-      expect(examples[0]).to.include("contact");
+      expect(examples[0]).to.include("command.id");
     });
   });
 
