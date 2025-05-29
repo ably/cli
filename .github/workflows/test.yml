@@ -38,15 +38,36 @@ jobs:
           cd server
           pnpm install
           pnpm build
-          # Run server tests with timeout and error handling
-          timeout 300 pnpm test || {
+          
+          echo "Running server tests in CI environment..."
+          
+          # Run server tests with timeout and improved error handling
+          if timeout 300 pnpm test; then
+            echo "✅ Server tests completed successfully"
+          else
+            TEST_EXIT_CODE=$?
+            echo "❌ Server tests failed with exit code $TEST_EXIT_CODE"
+            
+            # Provide diagnostic info for debugging
+            echo "=== Server Test Environment Info ==="
+            docker --version || echo "Docker not available"
+            node --version || echo "Node not available"
+            pnpm --version || echo "pnpm not available"
+            
+            # Check if this is a Docker-related failure
+            echo "=== Docker State ==="
+            docker ps || echo "Cannot list running containers"
+            docker images || echo "Cannot list images"
+            
             echo "Server tests failed or timed out after 5 minutes"
-            echo "This might be due to Docker limitations in CI environment"
-            exit 1
-          }
+            echo "This might be due to Docker limitations or resource constraints in CI environment"
+            
+            exit $TEST_EXIT_CODE
+          fi
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
           CI: true
+          GITHUB_ACTIONS: true
 
       - name: Run tests
         run: pnpm test
