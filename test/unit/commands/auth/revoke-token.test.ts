@@ -176,7 +176,7 @@ describe("RevokeTokenCommand", function() {
   describe("debug output", function() {
     it("should log debug information when debug flag is enabled", function() {
       const _command = new RevokeTokenCommand([], {} as any);
-      const _logSpy = sandbox.spy(command, 'log');
+      const _logSpy = sandbox.spy(_command, 'log');
       
       const debugFlag = true;
       const apiKey = "appId.keyId:keySecret";
@@ -219,7 +219,7 @@ describe("RevokeTokenCommand", function() {
   describe("warning messages", function() {
     it("should warn about token revocation limitations", function() {
       const _command = new RevokeTokenCommand([], {} as any);
-      const _warnSpy = sandbox.spy(command, 'warn');
+      const _warnSpy = sandbox.spy(_command, 'warn');
       
       const expectedWarnings = [
         "Revoking a specific token is only possible if it has a client ID or revocation key",
@@ -266,7 +266,7 @@ describe("RevokeTokenCommand", function() {
 
     it("should handle successful text output", function() {
       const _command = new RevokeTokenCommand([], {} as any);
-      const _logSpy = sandbox.spy(command, 'log');
+      const _logSpy = sandbox.spy(_command, 'log');
       
       const successMessage = "Token successfully revoked";
       expect(successMessage).to.equal("Token successfully revoked");
@@ -290,7 +290,7 @@ describe("RevokeTokenCommand", function() {
 
     it("should handle network errors", function() {
       const _command = new RevokeTokenCommand([], {} as any);
-      const _errorSpy = sandbox.spy(command, 'error');
+      const _errorSpy = sandbox.spy(_command, 'error');
       
       const networkError = new Error("Network connection failed");
       const errorMessage = `Error revoking token: ${networkError.message}`;
