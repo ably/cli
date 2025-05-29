@@ -7,34 +7,16 @@ import * as Ably from 'ably';
 // Ensure we're in test mode for all tests
 process.env.ABLY_CLI_TEST_MODE = 'true';
 
-// // Suppress known Ably errors that are expected in tests - REMOVED as handlers are commented out
-// const KNOWN_ABLY_ERRORS = [
-//   'unable to handle request; no application id found in request',
-//   'Socket connection timed out',
-//   'Unable to establish a socket connection',
-//   'Connection failed'
-// ];
-
 // Track active resources for cleanup
 const activeClients: (Ably.Rest | Ably.Realtime)[] = [];
 const activeTimers: NodeJS.Timeout[] = [];
 
-// We can't modify the Ably.Realtime constructor directly as it's readonly
-// Instead, we'll use explicit tracking in our helper functions
-
 // Set Ably log level to only show errors
 if (process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
-    // If output is shown, also make it verbose for debugging
-    // console.warn('ABLY_CLI_TEST_SHOW_OUTPUT is set, enabling Ably verbose logging...');
-    // (Ably.Realtime as unknown as { logLevel: number }).logLevel = 4;
-    // Keep default error level if showing output
     (Ably.Realtime as unknown as { logLevel: number }).logLevel = 3;
 } else {
   // Set Ably log level to suppress non-error messages
   (Ably.Realtime as unknown as { logLevel: number }).logLevel = 3; // 3 corresponds to Ably.LogLevel.Error
-  // TEMPORARILY ENABLE VERBOSE LOGGING FOR DEBUGGING
-  // console.warn('TEMPORARILY enabling Ably verbose logging for debugging...');
-  // (Ably.Realtime as unknown as { logLevel: number }).logLevel = 4; // 4 corresponds to Ably.LogLevel.Verbose
 }
 
 // Suppress console output unless ABLY_CLI_TEST_SHOW_OUTPUT is set
@@ -91,149 +73,82 @@ if (!process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
  */
 export function trackAblyClient(client: Ably.Rest | Ably.Realtime): void {
   if (!activeClients.includes(client)) {
-    const clientType = client instanceof Ably.Realtime ? 'Realtime' : 'REST';
-    let clientId = 'N/A';
-    if (client instanceof Ably.Realtime && client.auth?.clientId) {
-        clientId = client.auth.clientId;
-    } else {
-        const clientWithOptions = client as Ably.Rest & { options?: { clientId?: string } };
-        if (clientWithOptions.options?.clientId) {
-             clientId = clientWithOptions.options.clientId;
-        }
-    }
-    console.log(`[Client Lifecycle] Tracking Ably ${clientType} client (ID: ${clientId}) at ${new Date().toISOString()}`);
     activeClients.push(client);
   }
 }
 
-// Global cleanup function to ensure all resources are released
+// Simplified global cleanup function
 async function globalCleanup() {
-  const cleanupPromises: Promise<void>[] = [];
   const clientCount = activeClients.length;
-  console.log(`Cleaning up ${clientCount} active Ably clients and resources...`);
-
-  while (activeClients.length > 0) {
-    const client = activeClients.shift();
-    if (!client) continue;
-
-    let clientId = 'N/A';
-    if (client instanceof Ably.Realtime && client.auth?.clientId) {
-        clientId = client.auth.clientId;
-    } else {
-        const clientWithOptions = client as Ably.Rest & { options?: { clientId?: string } };
-        if (clientWithOptions.options?.clientId) {
-             clientId = clientWithOptions.options.clientId;
-        }
-    }
-
-    const cleanupPromise = new Promise<void>((resolve, reject) => {
-        // Introduce a timeout for the entire close operation
-        const timeoutId = setTimeout(() => {
-            console.warn(`[Cleanup] Timeout closing client (ID: ${clientId}), forcing resolve.`);
-            reject(new Error(`Timeout closing client (ID: ${clientId})`));
-        }, 5000); // 5-second timeout
-
-        try {
-            if (client instanceof Ably.Realtime && client.connection) {
-                const currentState = client.connection.state;
-                console.log(`[Cleanup] Processing Realtime client (ID: ${clientId}, State: ${currentState})`);
-
-                if (currentState === 'closed' || currentState === 'failed' || currentState === 'suspended') {
-                    console.log(`[Cleanup] Client (ID: ${clientId}) already in final state, skipping close.`);
-                    clearTimeout(timeoutId);
-                    resolve();
-                } else {
-                    // Add listeners for close and failed events
-                    const closeListener = () => {
-                        console.log(`[Cleanup] Client (ID: ${clientId}) closed successfully.`);
-                        clearTimeout(timeoutId);
-                        // Remove listeners to prevent memory leaks
-                        client.connection.off('closed', closeListener);
-                        client.connection.off('failed', failedListener);
-                        resolve();
-                    };
-
-                    const failedListener = (stateChange: Ably.ConnectionStateChange) => {
-                        const errorInfo = stateChange.reason || new Ably.ErrorInfo('Unknown error during close', 50000, 500); // Provide a default if reason is missing
-                        console.warn(`[Cleanup] Client (ID: ${clientId}) connection failed during close:`, errorInfo);
-                        clearTimeout(timeoutId);
-                         // Remove listeners to prevent memory leaks
-                        client.connection.off('closed', closeListener);
-                        client.connection.off('failed', failedListener);
-                        // Resolve anyway, as we attempted cleanup
-                        resolve();
-                    };
-
-                    client.connection.once('closed', closeListener);
-                    client.connection.once('failed', failedListener);
-
-                    // Initiate close
-                    client.close();
-                    console.log(`[Cleanup] Initiated close for client (ID: ${clientId})`);
-                }
-            } else if (client instanceof Ably.Rest) {
-                console.log(`[Cleanup] Tracking REST client (ID: ${clientId}) - no action needed.`);
-                clearTimeout(timeoutId);
-                resolve();
-            } else {
-                console.warn(`[Cleanup] Unknown client type encountered.`);
-                clearTimeout(timeoutId);
-                resolve();
-            }
-        } catch (error) {
-            clearTimeout(timeoutId);
-            const clientIdOnError = clientId; // Already determined above
-            console.error(`[Client Lifecycle] Error during client processing (ID: ${clientIdOnError}):`, error);
-            resolve();
-        }
-    });
-
-    cleanupPromises.push(cleanupPromise.catch(error => {
-        // Catch potential promise rejections (e.g., from timeout)
-        // Log the error but don't prevent Promise.all from settling
-        // Use the clientId captured in the outer scope for logging
-        console.error(`[Client Lifecycle] Promise rejection during cleanup for client (ID: ${clientId}):`, error);
-    }));
+  if (clientCount > 0) {
+    console.log(`Cleaning up ${clientCount} active Ably clients...`);
   }
 
-  // Use Promise.allSettled to wait for all cleanup attempts
-  const results = await Promise.allSettled(cleanupPromises);
-  console.log(`[Client Lifecycle] Finished processing ${clientCount} client cleanup attempts at ${new Date().toISOString()}.`);
-  results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-          // Errors are already logged within the promise/catch block
-          console.warn(`[Client Lifecycle] Cleanup attempt ${index + 1} failed (see previous logs).`);
+  // Close all clients with timeout
+  const cleanup = activeClients.map(async (client) => {
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(); // Force resolve after timeout
+      }, 2000); // 2 second timeout per client
+
+      try {
+        if (client instanceof Ably.Realtime && client.connection) {
+          if (client.connection.state === 'closed' || client.connection.state === 'failed') {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            client.connection.once('closed', () => {
+              clearTimeout(timeout);
+              resolve();
+            });
+            client.connection.once('failed', () => {
+              clearTimeout(timeout);
+              resolve();
+            });
+            client.close();
+          }
+        } else {
+          clearTimeout(timeout);
+          resolve();
+        }
+      } catch {
+        clearTimeout(timeout);
+        resolve();
       }
+    });
   });
 
-  // activeClients array should be empty now due to shift()
+  // Wait for all cleanups with overall timeout
+  try {
+    await Promise.race([
+      Promise.all(cleanup),
+      new Promise(resolve => setTimeout(resolve, 5000)) // 5 second overall timeout
+    ]);
+  } catch {
+    // Ignore cleanup errors
+  }
 
+  // Clear arrays
+  activeClients.length = 0;
+  
   // Clear all active timers
   for (const timer of activeTimers) {
     clearTimeout(timer);
   }
-
-  // Clear the active timers array
   activeTimers.length = 0;
 
-  // Attempt to force garbage collection if available
+  // Force garbage collection if available
   if (globalThis.gc) {
-    console.log('Forcing garbage collection...');
     globalThis.gc();
   }
 }
 
 try {
-  // Force exit after 2 minutes maximum to prevent hanging
-  const MAX_TEST_RUNTIME = 2 * 60 * 1000; // 2 minutes
+  // Force exit after 90 seconds maximum to prevent hanging
+  const MAX_TEST_RUNTIME = 90 * 1000; // 90 seconds - shorter timeout
   const exitTimer = setTimeout(() => {
-    console.error('Tests exceeded maximum runtime of 2 minutes. Force exiting.');
-    // Run global cleanup before exiting
-    globalCleanup().then(() => {
-      process.exit(1);
-    }).catch(() => {
-      process.exit(1);
-    });
+    console.error('Tests exceeded maximum runtime. Force exiting.');
+    process.exit(1);
   }, MAX_TEST_RUNTIME);
 
   // Track timer for cleanup
@@ -246,82 +161,18 @@ try {
   ['SIGINT', 'SIGTERM'].forEach(signal => {
     process.on(signal, () => {
       console.log(`\nReceived ${signal}, cleaning up and exiting tests...`);
-      globalCleanup().then(() => {
-        process.exit(0);
-      }).catch(() => {
+      globalCleanup().finally(() => {
         process.exit(0);
       });
     });
   });
 
-  // Handle unhandled promise rejections
-  /* // Temporarily disable for debugging _ErrorInfo
-  process.on('unhandledRejection', (reason) => {
-    // Only log unhandled rejections if not a known test-related issue
-    if (reason instanceof Error) {
-      // Don't log known Ably errors
-      const isKnownAblyError = KNOWN_ABLY_ERRORS.some(errMsg =>
-        reason.message.includes(errMsg)
-      );
-
-      if (!isKnownAblyError && process.exitCode !== 0) {
-    console.error('Unhandled rejection:', reason);
-      }
-    } else if (process.exitCode !== 0) {
-      console.error('Unhandled rejection (non-Error):', reason);
-    }
-    // Don't exit, but log for debugging purposes
-  });
-  */
-
-  // Handle uncaught errors to ensure tests don't hang
-  /* // Temporarily disable for debugging _ErrorInfo
-  process.on('uncaughtException', (err) => {
-    // Only log uncaught exceptions if not a known test-related issue
-    const isKnownAblyError = KNOWN_ABLY_ERRORS.some(errMsg =>
-      err.message.includes(errMsg)
-    );
-
-    if (!isKnownAblyError && process.exitCode !== 0) {
-    console.error('Uncaught exception:', err);
-    }
-    // Don't exit, but log for debugging purposes
-  });
-  */
-
-  // Handle Node.js process errors
-  process.on('exit', (code) => {
-    if (code !== 0) {
-      console.error(`Process exited with code ${code}`);
-    }
-  });
-
-  // Handle Node.js process warnings
-  process.on('warning', (warning) => {
-    console.warn('Process warning:', warning);
-  });
-
   // Register a global cleanup function that can be used in tests
   (globalThis as { forceTestExit?: (code?: number) => void }).forceTestExit = (code = 0) => {
-    globalCleanup().then(() => {
-      process.exit(code);
-    }).catch(() => {
+    globalCleanup().finally(() => {
       process.exit(code);
     });
   };
-
-  // Run cleanup when tests finish
-  /* // Relying on Mocha root hook instead
-  process.on('beforeExit', () => {
-    globalCleanup().catch(error => {
-      console.error('Error during global cleanup:', error);
-    });
-    // Explicit GC call at the very end too
-    if (globalThis.gc) {
-      globalThis.gc();
-    }
-  });
-  */
 
   // Load environment variables from .env
   const envPath = resolve(process.cwd(), '.env');

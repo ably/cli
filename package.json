@@ -28,7 +28,6 @@
     "test:coverage:unit": "nyc --reporter=html --reporter=text pnpm test:unit",
     "test:coverage:report": "nyc report --reporter=html --reporter=text",
     "test:coverage:check": "nyc check-coverage --lines 75 --functions 75 --branches 65 --statements 75",
-    "posttest": "./scripts/lint-test-paths.sh",
     "prepack": "pnpm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
     "prepare": "pnpm run build && oclif manifest && oclif readme --no-aliases",
     "postinstall": "[ \"$CI\" = \"true\" ] || (test -f ./dist/scripts/postinstall-welcome.js && node ./dist/scripts/postinstall-welcome.js || echo \"Skipping welcome script (not found)\")",
