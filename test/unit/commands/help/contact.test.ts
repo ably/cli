@@ -62,7 +62,7 @@ describe("ContactCommand", function() {
 
   describe("static configuration", function() {
     it("should not require arguments", function() {
-      expect(ContactCommand.args).to.be.undefined;
+      expect(ContactCommand.args).to.deep.equal({});
     });
 
     it("should have minimal flag configuration", function() {
