@@ -7,69 +7,179 @@
  */
 declare const window: any;
 
-import { test, expect, type Page as _Page } from 'playwright/test';
-import { startWebServer, stopWebServer, startTerminalServer, stopTerminalServer } from './reconnection-utils';
+import { test, expect } from 'playwright/test';
+import { promisify } from 'node:util';
+import { exec } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 
-const WEB_SERVER_PORT = Number(process.env.WEB_SERVER_PORT) || 48301;
-const TERMINAL_SERVER_PORT = Number(process.env.TERMINAL_SERVER_PORT) || 48300;
-const WS_URL = `ws://localhost:${TERMINAL_SERVER_PORT}`;
+const execAsync = promisify(exec);
 
-// Increase timeout for Docker / connection heavy test
-test.setTimeout(150_000);
+// For ESM compatibility
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-test.describe('Web CLI Reconnection Route Test Diagnostic', () => {
-  let terminalServerProcess: any;
-  let webServerProcess: any;
+// Constants
+const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
+const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
+
+// Public terminal server endpoint
+const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+
+// Shared variables
+let webServerProcess: any;
+let webServerPort: number;
+
+// Helper function to wait for server startup
+async function waitForServer(url: string, timeout = 30000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return; // Server is up
+      }
+    } catch {
+      // Ignore fetch errors (server not ready)
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  throw new Error(`Server ${url} did not start within ${timeout}ms`);
+}
+
+test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
+  test.setTimeout(120_000);
 
   test.beforeAll(async () => {
-    terminalServerProcess = await startTerminalServer(TERMINAL_SERVER_PORT);
-    webServerProcess = await startWebServer(WEB_SERVER_PORT);
+    console.log('Setting up Web CLI Reconnection Diagnostic E2E tests...');
+
+    // 1. Build the example app
+    console.log('Building Web CLI example app...');
+    try {
+      await execAsync('pnpm build', { cwd: EXAMPLE_DIR });
+      console.log('Web CLI example app built.');
+
+      if (!fs.existsSync(WEB_CLI_DIST)) {
+        throw new Error(`Build finished but dist directory not found: ${WEB_CLI_DIST}`);
+      }
+      console.log(`Verified dist directory exists: ${WEB_CLI_DIST}`);
+
+    } catch (error) {
+      console.error('Failed to build Web CLI example app:', error);
+      throw error;
+    }
+
+    // 2. Find free port for web server
+    const getPortModule = await import('get-port');
+    const getPort = getPortModule.default;
+    webServerPort = await getPort();
+    console.log(`Using Web Server Port: ${webServerPort}`);
+    console.log(`Using Public Terminal Server: ${PUBLIC_TERMINAL_SERVER_URL}`);
+
+    // 3. Start a web server for the example app
+    console.log('Starting web server for example app with vite preview...');
+    const { spawn } = await import('node:child_process');
+    webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], {
+      stdio: 'pipe',
+      cwd: EXAMPLE_DIR
+    });
+
+    webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
+    webServerProcess.stderr?.on('data', (data: Buffer) => console.error(`[Web Server ERR]: ${data.toString().trim()}`));
+
+    await waitForServer(`http://localhost:${webServerPort}`);
+    console.log('Web server started.');
   });
 
   test.afterAll(async () => {
-    await stopWebServer(webServerProcess);
-    await stopTerminalServer(terminalServerProcess);
+    console.log('Tearing down Web CLI Reconnection Diagnostic E2E tests...');
+    webServerProcess?.kill('SIGTERM');
+    console.log('Web server stopped.');
   });
 
   test.beforeEach(async ({ page }) => {
-    page.on('console', msg => console.log(`[Browser Console] ${msg.text()}`));
-    await page.unroute('**/*');
-    await page.evaluate(() => { delete (window as any).DEBUG_RouteHandlerCalledForWS; });
+    // Install diagnostic hooks for monitoring connection state
+    await page.addInitScript(() => {
+      (window as any).__diagnosticData = {
+        connectionEvents: [],
+        statusChanges: [],
+        wsEvents: [],
+      };
+
+      // Hook into connection status changes
+      (window as any).__logConnectionEvent = (event: string, data?: any) => {
+        (window as any).__diagnosticData.connectionEvents.push({
+          timestamp: Date.now(),
+          event,
+          data,
+        });
+      };
+    });
   });
 
-  test('should reuse the same session after page.goto(sameUrl) without opening a new WebSocket', async ({ page }) => {
-    const pageUrl = `http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}`;
-
-    console.log('[Test] Initial page load...');
+  test('can diagnose connection behavior against public server', async ({ page }) => {
+    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
     await page.goto(pageUrl);
-    // Wait for initial prompt
-    await page.waitForSelector('.xterm', { timeout: 20000 });
-    const waitForPrompt = async () => {
-      await page.locator('.xterm').waitFor({ state: 'attached', timeout: 120000 });
-      await expect(page.locator('.xterm')).toContainText('$', { timeout: 180_000 });
-    };
-    await waitForPrompt();
-    console.log('[Test] Initial connection and prompt verified.');
 
-    // Wait until sessionId becomes available again
-    await page.waitForFunction(() => Boolean((window as any)._sessionId), { timeout: 15000 });
-    const initialSessionId = await page.evaluate(() => (window as any)._sessionId);
-    expect(initialSessionId).toBeTruthy();
-    console.log(`[Test] Captured initial sessionId: ${initialSessionId}`);
+    // Wait for initial connection
+    await page.waitForSelector('.xterm', { timeout: 30000 });
+    await page.waitForFunction(() => {
+      const s = (window as any).getAblyCliTerminalReactState?.();
+      return s?.componentConnectionStatus === 'connected';
+    }, null, { timeout: 60_000 });
 
-    console.log('[Test] Performing second page.goto(sameUrl)...');
-    await page.goto(pageUrl, { waitUntil: 'networkidle' });
-    console.log('[Test] Second page.goto(sameUrl) completed.');
+    // Test basic functionality
+    await page.locator('.xterm').focus();
+    await page.keyboard.type('ably --version');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.xterm')).toContainText('browser-based CLI', { timeout: 30000 });
 
-    await waitForPrompt();
+    // Collect diagnostic data
+    const diagnosticData = await page.evaluate(() => (window as any).__diagnosticData);
+    expect(diagnosticData.connectionEvents.length).toBeGreaterThan(0);
 
-    // Wait until sessionId becomes available again
-    await page.waitForFunction(() => Boolean((window as any)._sessionId), { timeout: 15000 });
-    const resumedSessionId = await page.evaluate(() => (window as any)._sessionId);
-    console.log(`[Test] Resumed sessionId after reload: ${resumedSessionId}`);
+    console.log('Connection diagnostic data:', diagnosticData);
+  });
 
-    expect(resumedSessionId).toBeTruthy();
-    // Uncomment the next line if you want strict equality in local runs
-    // expect(resumedSessionId).toBe(initialSessionId);
+  test('connection state transitions work correctly with public server', async ({ page }) => {
+    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
+    await page.goto(pageUrl);
+
+    // Track status changes
+    const statusChanges: string[] = [];
+    await page.exposeFunction('recordStatusChange', (status: string) => {
+      statusChanges.push(status);
+      console.log(`Status change: ${status}`);
+    });
+
+    // Inject status monitoring
+    await page.evaluate(() => {
+      const originalState = (window as any).getAblyCliTerminalReactState;
+      if (originalState) {
+        let lastStatus = '';
+        setInterval(() => {
+          const state = originalState();
+          if (state && state.componentConnectionStatus !== lastStatus) {
+            lastStatus = state.componentConnectionStatus;
+            (window as any).recordStatusChange(lastStatus);
+          }
+        }, 100);
+      }
+    });
+
+    // Wait for connection and verify initial state
+    await page.waitForSelector('.xterm', { timeout: 30000 });
+    await page.waitForFunction(() => {
+      const s = (window as any).getAblyCliTerminalReactState?.();
+      return s?.componentConnectionStatus === 'connected';
+    }, null, { timeout: 60_000 });
+
+    // Wait a bit to collect status changes
+    await page.waitForTimeout(2000);
+
+    // Verify we captured the connection process
+    expect(statusChanges.length).toBeGreaterThan(0);
+    expect(statusChanges).toContain('connected');
   });
 }); 

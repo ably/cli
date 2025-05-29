@@ -4,7 +4,6 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import getPort from 'get-port';
-// import * as http from 'node:http'; // Removed unused import
 
 const execAsync = promisify(exec);
 
@@ -13,8 +12,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- Helper Functions ---
-// Removed log/logError as they are not used and clean up test output
-
 // Helper to wait for server health endpoint
 async function waitForServer(url: string, timeout = 30000): Promise<void> {
   const start = Date.now();
@@ -34,7 +31,7 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
   throw new Error(`Server at ${url} did not become ready within ${timeout}ms`);
 }
 
-describe('Diagnostic Scripts E2E Tests', function() {
+describe('Server Diagnostic Tests', function() {
   this.timeout(180000); // 3 minutes overall timeout
 
   let terminalServerProcess: ChildProcess | null = null;
@@ -45,9 +42,9 @@ describe('Diagnostic Scripts E2E Tests', function() {
     // Check Docker
     try {
       await execAsync('docker ps');
-      // console.log('Docker is running, proceeding with diagnostic tests.'); // Removed log
+      console.log('Docker is running, proceeding with server diagnostic tests.');
     } catch {
-      console.log('Docker not running, skipping diagnostic tests.'); // Keep this skip log
+      console.log('Docker not running, skipping server diagnostic tests.');
       this.skip();
       return;
     }
@@ -63,10 +60,10 @@ describe('Diagnostic Scripts E2E Tests', function() {
 
     // Start the terminal server for the server diagnostics test
     terminalServerPort = await getPort();
-    // console.log(`Starting terminal server for diagnostics test on port ${terminalServerPort}...`); // Removed log
-    const serverScriptPath = path.resolve(__dirname, '../../../dist/scripts/terminal-server.js'); // Use compiled JS
+    console.log(`Starting terminal server for diagnostics test on port ${terminalServerPort}...`);
+    const serverScriptPath = path.resolve(__dirname, '../../dist/index.js'); // Use built server
 
-    terminalServerProcess = spawn('node', [serverScriptPath], { // Run compiled JS directly
+    terminalServerProcess = spawn('node', [serverScriptPath], {
         env: {
             ...process.env,
             PORT: terminalServerPort.toString(),
@@ -75,7 +72,7 @@ describe('Diagnostic Scripts E2E Tests', function() {
             ABLY_ACCESS_TOKEN: 'dummy'
         },
         stdio: ['ignore', 'pipe', 'pipe'],
-        cwd: path.resolve(__dirname, '../../..')
+        cwd: path.resolve(__dirname, '../..')
     });
 
     // Capture logs internally but don't print them unless test fails
@@ -86,7 +83,7 @@ describe('Diagnostic Scripts E2E Tests', function() {
 
     try {
       await waitForServer(`http://localhost:${terminalServerPort}/health`);
-      // console.log(`Terminal server started successfully on port ${terminalServerPort}.`); // Removed log
+      console.log(`Terminal server started successfully on port ${terminalServerPort}.`);
     } catch (error) {
       console.error('Failed to start terminal server for tests.');
       console.error('Server logs:'); // Log server output ONLY on setup failure
@@ -104,12 +101,6 @@ describe('Diagnostic Scripts E2E Tests', function() {
       cleanupPromises.push(new Promise(resolve => terminalServerProcess?.once('exit', resolve)));
       terminalServerProcess = null;
     }
-    // Add webServerProcess cleanup if it were used globally (it's not in this specific test file)
-    // if (webServerProcess) {
-    //    webServerProcess.kill('SIGTERM');
-    //    cleanupPromises.push(new Promise(resolve => webServerProcess?.once('exit', resolve)));
-    //    webServerProcess = null;
-    // }
     if (cleanupPromises.length > 0) {
       await Promise.allSettled(cleanupPromises);
       console.log('Test server processes stopped.');
@@ -118,7 +109,10 @@ describe('Diagnostic Scripts E2E Tests', function() {
 
   it('diagnostics:container script should complete successfully', async function() {
     try {
-      const { stdout, stderr } = await execAsync('pnpm diagnostics:container', { timeout: 120000 });
+      const { stdout, stderr } = await execAsync('pnpm diagnostics:container', { 
+        timeout: 120000,
+        cwd: path.resolve(__dirname, '../../..') // Run from main CLI directory
+      });
       // Only log stderr if it exists and isn't just a warning
       if (stderr && !stderr.includes('deprecated') && !stderr.includes('Warning:')) {
           // console.error('--- diagnostics:container stderr (non-fatal) ---'); // Commented out non-fatal logging
@@ -133,12 +127,14 @@ describe('Diagnostic Scripts E2E Tests', function() {
     }
   });
 
-  it('diagnostics:server script should complete successfully against test server', async function() {
+  it('diagnostics:server script should complete successfully against local test server', async function() {
     if (!terminalServerProcess) this.skip(); // Skip if server failed to start in before hook
 
     const targetUrl = `ws://localhost:${terminalServerPort}`;
     try {
-      const { stdout, stderr } = await execAsync(`pnpm diagnostics:server ${targetUrl}`);
+      const { stdout, stderr } = await execAsync(`pnpm diagnostics:server ${targetUrl}`, {
+        cwd: path.resolve(__dirname, '../../..') // Run from main CLI directory
+      });
       if (stderr && !stderr.includes('Debugger')) {
         // console.error('--- diagnostics:server stderr (non-fatal) ---'); // Commented out non-fatal logging
         // console.error(stderr);
@@ -153,4 +149,4 @@ describe('Diagnostic Scripts E2E Tests', function() {
       throw error;
     }
   });
-});
+}); 

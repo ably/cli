@@ -1,9 +1,7 @@
 import { test, expect, type Page as _Page, type Browser as _Browser } from 'playwright/test';
-import { spawn, ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import { exec } from 'node:child_process';
 import path from 'node:path';
-import getPort from 'get-port';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 
@@ -22,13 +20,13 @@ const __dirname = path.dirname(__filename);
 // Constants
 const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
 const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
-const TERMINAL_SERVER_SCRIPT = path.resolve(__dirname, '../../../dist/scripts/terminal-server.js');
 const DRAWER_OPEN_KEY = "ablyCliDrawerOpen";
 
+// Public terminal server endpoint
+const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+
 // Shared variables
-let terminalServerProcess: ChildProcess | null = null;
-let terminalServerPort: number;
-let webServerProcess: ChildProcess;
+let webServerProcess: any;
 let webServerPort: number;
 
 // Helper function to wait for server startup
@@ -81,18 +79,7 @@ test.describe('Web CLI E2E Tests', () => {
   test.beforeAll(async () => {
     console.log('Setting up Web CLI E2E tests...');
 
-    // 1. Check Docker availability
-    try {
-      await execAsync('docker ps');
-      console.log('Docker is running.');
-    } catch {
-      console.error('Docker is not running or accessible. Skipping Web CLI E2E tests.');
-      // Mark the test as conditionally skipped but in a way that doesn't trigger the lint warning
-      process.env.DOCKER_UNAVAILABLE = 'true';
-      return;
-    }
-
-    // 2. Build the example app
+    // 1. Build the example app
     console.log('Building Web CLI example app...');
     try {
       // Run build directly in the example directory
@@ -111,47 +98,24 @@ test.describe('Web CLI E2E Tests', () => {
       throw error; // Fail fast if build fails
     }
 
-    // 3. Find free ports
-    terminalServerPort = await getPort();
+    // 2. Find free port for web server
+    const getPortModule = await import('get-port');
+    const getPort = getPortModule.default;
     webServerPort = await getPort();
-    console.log(`Using Terminal Server Port: ${terminalServerPort}`);
     console.log(`Using Web Server Port: ${webServerPort}`);
+    console.log(`Using Public Terminal Server: ${PUBLIC_TERMINAL_SERVER_URL}`);
 
-    // 4. Start the terminal server
-    console.log('Starting terminal server...');
-    // Run the compiled JS script directly with node
-    terminalServerProcess = spawn('node', [
-      TERMINAL_SERVER_SCRIPT
-    ], {
-      env: {
-        ...process.env,
-        PORT: terminalServerPort.toString(),
-        NODE_ENV: 'test',
-        // Provide credentials for tests (use env vars if set)
-        ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || 'dummy.key:secret',
-        ABLY_ACCESS_TOKEN: 'dummy-token',
-        TS_NODE_PROJECT: 'tsconfig.json' // Ensure ts-node uses the correct config
-      },
-      stdio: 'pipe',
-      // Need to run from the root to resolve paths correctly in server script
-      cwd: path.resolve(__dirname, '../../..')
-    });
-
-    terminalServerProcess.stdout?.on('data', (data) => console.log(`[Terminal Server]: ${data.toString().trim()}`));
-    terminalServerProcess.stderr?.on('data', (data) => console.error(`[Terminal Server ERR]: ${data.toString().trim()}`));
-    await waitForServer(`http://localhost:${terminalServerPort}/health`);
-    console.log('Terminal server started.');
-
-    // 5. Start a web server for the example app using 'vite preview'
+    // 3. Start a web server for the example app using 'vite preview'
     console.log('Starting web server for example app with vite preview...');
+    const { spawn } = await import('node:child_process');
     // Use npx vite preview directly
     webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], { // Using npx vite preview
       stdio: 'pipe',
       cwd: EXAMPLE_DIR // Run command within the example directory
     });
 
-    webServerProcess.stdout?.on('data', (data) => console.log(`[Web Server]: ${data.toString().trim()}`));
-    webServerProcess.stderr?.on('data', (data) => console.error(`[Web Server ERR]: ${data.toString().trim()}`));
+    webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
+    webServerProcess.stderr?.on('data', (data: Buffer) => console.error(`[Web Server ERR]: ${data.toString().trim()}`));
 
     // Use the original waitForServer for the root URL with 'serve'
     await waitForServer(`http://localhost:${webServerPort}`);
@@ -162,26 +126,17 @@ test.describe('Web CLI E2E Tests', () => {
 
   test.afterAll(async () => {
     console.log('Tearing down Web CLI E2E tests...');
-    terminalServerProcess?.kill('SIGTERM');
     webServerProcess?.kill('SIGTERM');
-    // No need to clean up dist-test anymore
-    console.log('Servers stopped.');
+    console.log('Web server stopped.');
   });
 
-  test('should load the terminal, connect, and run basic commands', async ({ page }) => {
+  test('should load the terminal, connect to public server, and run basic commands', async ({ page }) => {
     // Capture browser console messages
     page.on('console', msg => console.log(`[Browser Console] ${msg.type()}: ${msg.text()}`));
     page.on('pageerror', error => console.error(`[Browser Page Error]: ${error}`));
 
-    // Skip test if Docker is not available (determined in beforeAll)
-    if (process.env.DOCKER_UNAVAILABLE === 'true' || !terminalServerProcess) {
-      console.log('Skipping test because Docker was not available');
-      return; // Simply return instead of calling test.skip()
-    }
-
-    const wsUrl = `ws://localhost:${terminalServerPort}`;
-    // Use the correct query parameter name expected by the example app
-    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(wsUrl)}`;
+    // Use the public terminal server
+    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
     console.log(`Navigating to: ${pageUrl}`);
 
     await page.goto(pageUrl);
@@ -247,15 +202,8 @@ test.describe('Web CLI E2E Tests', () => {
     const terminalSelector = '.xterm'; // Common terminal selector
 
     test.beforeEach(async ({ page }) => {
-      // Ensure Docker is available (check set in outer beforeAll)
-      if (process.env.DOCKER_UNAVAILABLE === 'true' || !terminalServerProcess) {
-        console.log('Skipping drawer tests because Docker was not available');
-        // eslint-disable-next-line mocha/no-skipped-tests
-        test.skip(); // Skip this specific test if Docker unavailable
-        return;
-      }
       // Start fresh for each test in this group
-      await page.goto(`http://localhost:${webServerPort}`);
+      await page.goto(`http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`);
       await page.waitForSelector(fullscreenButtonSelector);
       // Clear localStorage before each test
       await page.evaluate(() => {
@@ -382,8 +330,8 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('should handle connection interruptions gracefully', async ({ page }) => {
-    // Connect to the terminal
-    const url = `http://localhost:${webServerPort}?serverUrl=ws%3A%2F%2Flocalhost%3A${terminalServerPort}`;
+    // Connect to the terminal using the public server
+    const url = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
     await page.goto(url);
     
     // Wait for the terminal to connect and show a prompt
