@@ -54,12 +54,25 @@ export abstract class AblyBaseCommand extends Command {
     "control-host": Flags.string({
       description:
         "Override the host endpoint for the control API, which defaults to control.ably.net",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
     }),
     env: Flags.string({
       description: "Override the environment for all product API calls",
     }),
     host: Flags.string({
       description: "Override the host endpoint for all product API calls",
+    }),
+    port: Flags.integer({
+      description: "Override the port for product API calls",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
+    }),
+    tlsPort: Flags.integer({
+      description: "Override the TLS port for product API calls",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
+    }),
+    tls: Flags.string({
+      description: "Use TLS for product API calls (default is true)",
+      hidden: process.env.ABLY_SHOW_DEV_FLAGS !== 'true',
     }),
     json: Flags.boolean({
       description: "Output in JSON format",
@@ -630,6 +643,18 @@ export abstract class AblyBaseCommand extends Command {
 
     if (flags.env) {
       options.environment = flags.env;
+    }
+
+    if (flags.port) {
+      options.port = flags.port;
+    }
+
+    if (flags.tlsPort) {
+      options.tlsPort = flags.tlsPort;
+    }
+
+    if (flags.tls) {
+      options.tls = flags.tls === "true";
     }
 
     // Always add a log handler to control SDK output formatting and destination

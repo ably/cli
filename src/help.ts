@@ -38,7 +38,21 @@ export default class CustomHelp extends Help {
 
   // Override the display method to clean up trailing whitespace and exit cleanly
   async showHelp(argv: string[]): Promise<void> {
-    const command = this.config.findCommand(argv[0]);
+    // Get the help subject which is the last argument that is not a flag
+    if (argv.length === 0) {
+      return super.showHelp(argv); // No command provided, show general help
+    }
+
+    let subject: string = "";
+    for (let arg of argv) {
+      if (arg.startsWith("-")) {
+        // If it's a flag, skip it
+        continue;
+      }
+      subject = arg; // The last non-flag argument is the subject
+    }
+
+    const command = this.config.findCommand(subject);
     if (!command) return super.showHelp(argv);
 
     // Get formatted output
