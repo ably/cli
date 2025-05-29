@@ -4,8 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ConfigManager } from "../../../src/services/config-manager.js";
-import AccountsLogin from "../../../src/commands/accounts/login.js";
-import AccountsLogout from "../../../src/commands/accounts/logout.js";
+import _AccountsLogin from "../../../src/commands/accounts/login.js";
+import _AccountsLogout from "../../../src/commands/accounts/logout.js";
 
 describe("Authentication Flow Integration", function() {
   let sandbox: sinon.SinonSandbox;

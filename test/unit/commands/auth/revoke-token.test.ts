@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import fs from "node:fs";
-import * as https from "node:https";
+import * as _https from "node:https";
 import * as Ably from "ably";
 import RevokeTokenCommand from "../../../../src/commands/auth/revoke-token.js";
 import { ConfigManager } from "../../../../src/services/config-manager.js";
@@ -76,8 +76,8 @@ describe("RevokeTokenCommand", function() {
 
   describe("API key parsing", function() {
     it("should parse API key correctly", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      (command as any).configManager = configManagerStub;
+      const _command = new RevokeTokenCommand([], {} as any);
+      ((_command as any)).configManager = configManagerStub;
       
       const apiKey = "appId.keyId:keySecret";
       const keyParts = apiKey.split(":");
@@ -88,7 +88,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should extract keyName from API key", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const apiKey = "appId.keyId:keySecret";
       const keyName = apiKey.split(":")[0];
@@ -97,7 +97,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle invalid API key format", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const invalidApiKey = "invalidkey";
       const keyParts = invalidApiKey.split(":");
@@ -110,7 +110,7 @@ describe("RevokeTokenCommand", function() {
 
   describe("request body construction", function() {
     it("should construct request body with client ID", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const clientId = "testClient";
       const requestBody = {
@@ -123,7 +123,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should use token as client ID when no client-id flag provided", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const token = "testToken123";
       const clientId = token; // When no client-id flag is provided
@@ -137,7 +137,7 @@ describe("RevokeTokenCommand", function() {
 
   describe("HTTPS request handling", function() {
     it("should construct correct HTTPS request options", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const keyName = "appId.keyId";
       const secret = "keySecret";
@@ -162,7 +162,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should encode authorization header correctly", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const keyName = "appId.keyId";
       const secret = "keySecret";
@@ -175,8 +175,8 @@ describe("RevokeTokenCommand", function() {
 
   describe("debug output", function() {
     it("should log debug information when debug flag is enabled", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      const logSpy = sandbox.spy(command, 'log');
+      const _command = new RevokeTokenCommand([], {} as any);
+      const _logSpy = sandbox.spy(command, 'log');
       
       const debugFlag = true;
       const apiKey = "appId.keyId:keySecret";
@@ -191,7 +191,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should mask API key secret in debug output", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const apiKey = "appId.keyId:realSecret";
       const maskedKey = apiKey.replace(/:.+/, ":***");
@@ -201,7 +201,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should log request details in debug mode", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const keyName = "appId.keyId";
       const requestBody = { targets: ["clientId:testClient"] };
@@ -218,8 +218,8 @@ describe("RevokeTokenCommand", function() {
 
   describe("warning messages", function() {
     it("should warn about token revocation limitations", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      const warnSpy = sandbox.spy(command, 'warn');
+      const _command = new RevokeTokenCommand([], {} as any);
+      const _warnSpy = sandbox.spy(command, 'warn');
       
       const expectedWarnings = [
         "Revoking a specific token is only possible if it has a client ID or revocation key",
@@ -236,7 +236,7 @@ describe("RevokeTokenCommand", function() {
 
   describe("output formatting", function() {
     it("should format successful JSON output", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const successData = {
         message: "Token revocation processed successfully",
@@ -251,7 +251,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should format error JSON output", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const errorData = {
         error: "Token not found or already revoked",
@@ -265,8 +265,8 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle successful text output", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      const logSpy = sandbox.spy(command, 'log');
+      const _command = new RevokeTokenCommand([], {} as any);
+      const _logSpy = sandbox.spy(command, 'log');
       
       const successMessage = "Token successfully revoked";
       expect(successMessage).to.equal("Token successfully revoked");
@@ -275,7 +275,7 @@ describe("RevokeTokenCommand", function() {
 
   describe("error handling", function() {
     it("should handle token not found error", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const error = new Error("token_not_found");
       const isTokenNotFound = error.message.includes("token_not_found");
@@ -289,8 +289,8 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle network errors", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      const errorSpy = sandbox.spy(command, 'error');
+      const _command = new RevokeTokenCommand([], {} as any);
+      const _errorSpy = sandbox.spy(command, 'error');
       
       const networkError = new Error("Network connection failed");
       const errorMessage = `Error revoking token: ${networkError.message}`;
@@ -300,7 +300,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle non-Error objects", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const unknownError = { code: 500, message: "Internal Server Error" };
       const errorMessage = typeof unknownError === "object" ? JSON.stringify(unknownError) : String(unknownError);
@@ -312,11 +312,11 @@ describe("RevokeTokenCommand", function() {
 
   describe("client lifecycle", function() {
     it("should create Ably client", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      (command as any).configManager = configManagerStub;
+      const _command = new RevokeTokenCommand([], {} as any);
+      ((_command as any)).configManager = configManagerStub;
       
       // Test that client creation is handled
-      const flags = {};
+      const _flags = {};
       
       // Mock ensureAppAndKey to return valid credentials
       configManagerStub.getCurrentAppId.returns("testApp");
@@ -327,7 +327,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should close client after operation", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       // Test that client would be closed in finally block
       const mockClient = mockAblyClient;
@@ -337,8 +337,8 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle client creation failure", function() {
-      const command = new RevokeTokenCommand([], {} as any);
-      (command as any).configManager = configManagerStub;
+      const _command = new RevokeTokenCommand([], {} as any);
+      ((_command as any)).configManager = configManagerStub;
       
       // Test scenario where ensureAppAndKey returns null
       configManagerStub.getCurrentAppId.returns("");
@@ -354,7 +354,7 @@ describe("RevokeTokenCommand", function() {
 
   describe("API endpoint construction", function() {
     it("should construct correct revoke tokens endpoint", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const keyName = "appId.keyId";
       const endpoint = `/keys/${keyName}/revokeTokens`;
@@ -363,7 +363,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should use rest.ably.io as hostname", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const hostname = "rest.ably.io";
       const port = 443;
@@ -375,7 +375,7 @@ describe("RevokeTokenCommand", function() {
 
   describe("response parsing", function() {
     it("should parse successful JSON response", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const responseData = '{"success": true, "message": "Token revoked"}';
       let jsonResponse;
@@ -391,7 +391,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle empty response", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const emptyData = "";
       const jsonResponse = emptyData.length > 0 ? JSON.parse(emptyData) : null;
@@ -400,7 +400,7 @@ describe("RevokeTokenCommand", function() {
     });
 
     it("should handle non-JSON response", function() {
-      const command = new RevokeTokenCommand([], {} as any);
+      const _command = new RevokeTokenCommand([], {} as any);
       
       const textData = "Token revoked successfully";
       let jsonResponse;

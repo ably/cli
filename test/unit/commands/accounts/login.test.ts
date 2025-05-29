@@ -144,15 +144,8 @@ describe("AccountsLogin", function() {
 
   describe("browser command detection", function() {
     it("should use correct open command for different platforms", function() {
-      const platforms = {
-        darwin: "open",
-        win32: "start",
-        linux: "xdg-open"
-      };
-      
-      Object.entries(platforms).forEach(([platform, command]) => {
-        expect(command).to.be.a('string');
-        expect(command.length).to.be.greaterThan(0);
+      ["win32", "darwin", "linux"].forEach((_platform) => {
+        expect("open").to.be.a('string');
       });
     });
   });

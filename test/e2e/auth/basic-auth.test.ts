@@ -96,15 +96,15 @@ describe("Authentication E2E", function() {
       const apiKey = process.env.ABLY_API_KEY;
       const keyParts = apiKey.split(":");
       
-      if (keyParts.length !== 2) {
-        expect(true).to.be.true; // Invalid format detected
-      } else {
+      if (keyParts.length === 2) {
         const keyName = keyParts[0];
         const secret = keyParts[1];
         
         // Should have proper app.key format
         expect(keyName.includes(".")).to.be.true;
         expect(secret.length).to.be.greaterThan(0);
+      } else {
+        expect(true).to.be.true; // Invalid format detected
       }
     });
 
