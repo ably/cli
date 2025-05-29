@@ -2,24 +2,62 @@ import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
 import { afterEach, beforeEach, describe, it } from 'mocha';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 describe('queues:create command', () => {
   const mockAccessToken = 'fake_access_token';
+  const mockAccountId = 'test-account-id';
   const mockAppId = '550e8400-e29b-41d4-a716-446655440000';
   const mockQueueName = 'test-queue';
   const mockQueueId = 'queue-550e8400-e29b-41d4-a716-446655440000';
+  let testConfigDir: string;
+  let originalConfigDir: string;
 
   beforeEach(() => {
     // Set environment variable for access token
     process.env.ABLY_ACCESS_TOKEN = mockAccessToken;
-    process.env.ABLY_APP_ID = mockAppId;
+    
+    // Create a temporary config directory for testing
+    testConfigDir = path.join(os.tmpdir(), `ably-cli-test-${Date.now()}`);
+    fs.mkdirSync(testConfigDir, { recursive: true, mode: 0o700 });
+    
+    // Store original config dir and set test config dir
+    originalConfigDir = process.env.ABLY_CLI_CONFIG_DIR || '';
+    process.env.ABLY_CLI_CONFIG_DIR = testConfigDir;
+    
+    // Create a minimal config file with a default account and current app
+    const configContent = `[current]
+account = "default"
+currentAppId = "${mockAppId}"
+appName = "Test App"
+
+[accounts.default]
+accessToken = "${mockAccessToken}"
+accountId = "${mockAccountId}"
+accountName = "Test Account"
+userEmail = "test@example.com"
+`;
+    fs.writeFileSync(path.join(testConfigDir, 'config'), configContent);
   });
 
   afterEach(() => {
     // Clean up nock interceptors
     nock.cleanAll();
     delete process.env.ABLY_ACCESS_TOKEN;
-    delete process.env.ABLY_APP_ID;
+    
+    // Restore original config directory
+    if (originalConfigDir) {
+      process.env.ABLY_CLI_CONFIG_DIR = originalConfigDir;
+    } else {
+      delete process.env.ABLY_CLI_CONFIG_DIR;
+    }
+    
+    // Clean up test config directory
+    if (fs.existsSync(testConfigDir)) {
+      fs.rmSync(testConfigDir, { recursive: true, force: true });
+    }
   });
 
   describe('successful queue creation', () => {
@@ -178,6 +216,29 @@ describe('queues:create command', () => {
       .do(() => {
         const customAppId = 'custom-app-id';
 
+        // Mock the /me endpoint to get account info
+        nock('https://control.ably.net')
+          .get('/v1/me')
+          .reply(200, {
+            account: { id: mockAccountId, name: 'Test Account' },
+            user: { email: 'test@example.com' }
+          });
+
+        // Mock the apps listing endpoint to find the custom app
+        nock('https://control.ably.net')
+          .get(`/v1/accounts/${mockAccountId}/apps`)
+          .reply(200, [
+            {
+              id: customAppId,
+              accountId: mockAccountId,
+              name: 'Custom App',
+              status: 'active',
+              created: Date.now(),
+              modified: Date.now(),
+              tlsOnly: false
+            }
+          ]);
+
         nock('https://control.ably.net')
           .post(`/v1/apps/${customAppId}/queues`)
           .reply(201, {
@@ -221,6 +282,8 @@ describe('queues:create command', () => {
       .do(() => {
         const customToken = 'custom_access_token';
 
+        // Mock the /me endpoint to get account info (not called when using config app)
+        // But the command should use the existing config app directly
         nock('https://control.ably.net', {
           reqheaders: {
             'authorization': `Bearer ${customToken}`
@@ -326,7 +389,21 @@ describe('queues:create command', () => {
       .it('should require name parameter');
 
     test
-      .env({ ABLY_APP_ID: '' })
+      .env({ ABLY_CLI_CONFIG_DIR: '' })
+      .do(() => {
+        // Mock the /me endpoint to get account info
+        nock('https://control.ably.net')
+          .get('/v1/me')
+          .reply(200, {
+            account: { id: mockAccountId, name: 'Test Account' },
+            user: { email: 'test@example.com' }
+          });
+
+        // Mock empty apps list to trigger "no app specified" error
+        nock('https://control.ably.net')
+          .get(`/v1/accounts/${mockAccountId}/apps`)
+          .reply(200, []);
+      })
       .command(['queues:create', '--name', mockQueueName])
       .catch(error => {
         expect(error.message).to.include('No app specified');
