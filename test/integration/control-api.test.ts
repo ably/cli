@@ -391,7 +391,7 @@ describe('Control API Integration Tests', () => {
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error).to.be.an('error');
-        expect(error.message).to.include('not found');
+        expect((error as Error).message).to.include('not found');
       }
     });
 
@@ -406,7 +406,7 @@ describe('Control API Integration Tests', () => {
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error).to.be.an('error');
-        expect(error.message).to.include('401');
+        expect((error as Error).message).to.include('401');
       }
     });
 
