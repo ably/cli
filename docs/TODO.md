@@ -44,11 +44,18 @@
   - [x] Identify client-side components that remain in main repository
   - [x] Create comprehensive migration plan documentation
   - [x] Set up proper directory structure for future refactoring
-- [ ] **Phase 2: Refactor terminal-server.ts**
-  - [ ] Create modular service files from monolithic terminal-server.ts
-  - [ ] Split into websocket-server, docker-manager, session-manager, etc.
-  - [ ] Update import paths and dependencies
-  - [ ] Create server package.json and tsconfig.json
+- [x] **Phase 2: Refactor terminal-server.ts**
+  - [x] Create modular service files from monolithic terminal-server.ts (1713 lines → 13 modules)
+  - [x] Split into websocket-server, docker-manager, session-manager, auth-service, security-service, etc.
+  - [x] Update import paths and dependencies across all modules
+  - [x] Create server package.json and tsconfig.json with proper TypeScript configuration
+  - [x] Refactor types into dedicated type definition files (docker, session, websocket)
+  - [x] Centralize configuration in server-config.ts
+  - [x] Update all server tests with new modular import structure
+  - [x] Implement proper ESLint configuration for server directory
+  - [x] Ensure all linting, building, and testing passes for new modular structure
+  - [x] Preserve diagnostics-server.ts utility for debugging/testing
+  - [x] Update .gitignore to exclude server build artifacts (server/dist/, server/node_modules)
 - [ ] **Phase 3: Migrate Server Code**
   - [ ] Move refactored code to final server locations
   - [ ] Remove server dependencies from client code
@@ -141,7 +148,9 @@
 - [x] Review the Cursor rules and Docs to ensure they are effective for prompting
   -   *Done: 2025-04-27*
   -   *Summary: Refactored `.cursor/rules`, updated `docs/Testing.md`, added `CONTRIBUTING.md` and `docs/DEBUGGING.md` based on analysis of the `.specstory` files and Anthropic best practices. Added code examples, troubleshooting guide, and agent-agnostic AI assistance rules. Enhanced visual hierarchy and progressive disclosure in documentation. Created `WORKFLOW.mdc` to centralize mandatory steps.*
-- [ ] Refactor terminal-server.ts as it's grown organically and become a little bit of a beast. Treating it as a "script" is no longer applicable.
+- [x] Refactor terminal-server.ts as it's grown organically and become a little bit of a beast. Treating it as a "script" is no longer applicable.
+  -   *Done: 2025-05-29 (Phase 2)*
+  -   *Summary: Refactored monolithic 1713-line terminal-server.ts into 13 focused modules with clean separation of concerns. Created proper TypeScript architecture with services (websocket-server, docker-manager, session-manager, auth-service, security-service), utilities (logger, stream-handler), type definitions, and centralized configuration. All tests updated and passing.*
 
 ## Bugs
 
