@@ -61,7 +61,7 @@ describe('Server Diagnostic Tests', function() {
     // Start the terminal server for the server diagnostics test
     terminalServerPort = await getPort();
     console.log(`Starting terminal server for diagnostics test on port ${terminalServerPort}...`);
-    const serverScriptPath = path.resolve(__dirname, '../../dist/index.js'); // Use built server
+    const serverScriptPath = path.resolve(__dirname, '../../dist/src/index.js'); // Use built server
 
     terminalServerProcess = spawn('node', [serverScriptPath], {
         env: {

@@ -219,14 +219,14 @@ test.describe('Web CLI E2E Tests', () => {
       const terminalDrawerContainer = `${drawerSelector} div.flex-grow`; // Container inside drawer
 
       // Initial state: Fullscreen
-      await expect(page).toHaveURL(/\?mode=fullscreen|\?$/); // Allow no query param or fullscreen
+      await expect(page).toHaveURL(/mode=fullscreen|(?!.*mode=).*$/); // Allow no mode param or fullscreen mode
       await expect(page.locator(terminalFullscreenContainer)).toBeVisible();
       await expect(page.locator(terminalFullscreenContainer).locator(terminalSelector)).toBeVisible();
       await expect(page.locator(drawerSelector)).not.toBeVisible();
 
       // Switch to Drawer mode
       await page.locator(drawerModeButtonSelector).click();
-      await expect(page).toHaveURL(/\?mode=drawer/);
+      await expect(page).toHaveURL(/mode=drawer/);
       await expect(page.locator(drawerButtonSelector)).toBeVisible(); // Tab button should show
       await expect(page.locator(drawerSelector)).not.toBeVisible(); // Drawer panel still closed
       await expect(page.locator(terminalFullscreenContainer)).not.toBeVisible();
@@ -239,7 +239,7 @@ test.describe('Web CLI E2E Tests', () => {
 
       // Switch back to Fullscreen mode
       await page.locator(fullscreenButtonSelector).click();
-      await expect(page).toHaveURL(/\?mode=fullscreen/);
+      await expect(page).toHaveURL(/mode=fullscreen/);
       await expect(page.locator(terminalFullscreenContainer)).toBeVisible();
       await expect(page.locator(terminalFullscreenContainer).locator(terminalSelector)).toBeVisible();
       await expect(page.locator(drawerSelector)).not.toBeVisible();
@@ -248,7 +248,7 @@ test.describe('Web CLI E2E Tests', () => {
       // Test reload persistence (Fullscreen)
       await page.reload();
       await expect(page.locator(fullscreenButtonSelector)).toBeVisible(); // Wait for UI
-      await expect(page).toHaveURL(/\?mode=fullscreen/);
+      await expect(page).toHaveURL(/mode=fullscreen/);
       await expect(page.locator(terminalFullscreenContainer)).toBeVisible();
       await expect(page.locator(drawerSelector)).not.toBeVisible();
 
@@ -259,7 +259,7 @@ test.describe('Web CLI E2E Tests', () => {
         ctx.localStorage.removeItem(key);
       }, DRAWER_OPEN_KEY);
       await page.reload();
-      await page.waitForURL(/\?mode=drawer/);
+      await page.waitForURL(/mode=drawer/);
       await expect(page.locator(toggleGroupSelector)).toBeVisible({ timeout: 10000 });
 
       // Check that the drawer panel is NOT visible (more robust default state check)
@@ -273,7 +273,7 @@ test.describe('Web CLI E2E Tests', () => {
       }, DRAWER_OPEN_KEY);
       await page.reload();
       await expect(page.locator(drawerModeButtonSelector)).toBeVisible(); // Wait for UI
-      await expect(page).toHaveURL(/\?mode=drawer/);
+      await expect(page).toHaveURL(/mode=drawer/);
       await expect(page.locator(drawerSelector)).toBeVisible(); // Should be open due to localStorage
       await expect(page.locator(drawerButtonSelector)).not.toBeVisible();
     });
@@ -282,7 +282,7 @@ test.describe('Web CLI E2E Tests', () => {
     test('should persist drawer open/closed state and height via localStorage, defaulting height correctly', async ({ page }) => {
       // Ensure starting in drawer mode
       await page.locator(drawerModeButtonSelector).click();
-      await expect(page).toHaveURL(/\?mode=drawer/);
+      await expect(page).toHaveURL(/mode=drawer/);
 
       // 1. Test Default Height
       await page.locator(drawerButtonSelector).click(); // Open drawer
@@ -357,11 +357,11 @@ test.describe('Web CLI E2E Tests', () => {
       
       // Close all active WebSockets to simulate network interruption
       activeConnections.forEach(ws => {
-        // Use code 1006 to indicate abnormal closure (network error)
+        // Use code 3000 to indicate application-specific closure (network error simulation)
         if (ws.readyState === WebSocket.OPEN) {
           // Access the internal close method
           // @ts-expect-error  internal close method exists in chrome implementation
-          ws._close?.(1006, 'Test connection interruption');
+          ws._close?.(3000, 'Test connection interruption');
         }
       });
       

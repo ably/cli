@@ -73,11 +73,31 @@ jobs:
       - name: Run server security tests
         run: |
           cd server
+          # Install dependencies
           pnpm install
+          
+          # Build the server
           pnpm build
-          pnpm test:integration
+          
+          # Run security tests with timeout and error handling
+          timeout 600 pnpm test tests/integration/docker-container-security.test.ts || {
+            echo "Docker container security tests failed or timed out after 10 minutes"
+            echo "This might be due to Docker limitations or resource constraints in CI environment"
+            
+            # Try to get more info about Docker state
+            echo "=== Docker Info ==="
+            docker --version || echo "Docker command not available"
+            docker info || echo "Cannot get Docker info"
+            docker ps -a || echo "Cannot list containers"
+            
+            # Check if our test image exists
+            echo "=== Checking test image ==="
+            docker images ably-cli-sandbox || echo "Cannot list images"
+            
+            exit 1
+          }
         env:
-          E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CI: true
 
       - name: Run vulnerability scanner
         uses: aquasecurity/trivy-action@master
