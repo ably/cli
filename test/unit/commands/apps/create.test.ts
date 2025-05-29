@@ -2,22 +2,56 @@ import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
 import { afterEach, beforeEach, describe, it } from 'mocha';
+import { ConfigManager } from '../../../src/services/config-manager';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 describe('apps:create command', () => {
   const mockAccessToken = 'fake_access_token';
   const mockAccountId = 'test-account-id';
   const mockAppId = '550e8400-e29b-41d4-a716-446655440000';
   const mockAppName = 'Test App';
+  let testConfigDir: string;
+  let originalConfigDir: string;
 
   beforeEach(() => {
     // Set environment variable for access token
     process.env.ABLY_ACCESS_TOKEN = mockAccessToken;
+    
+    // Create a temporary config directory for testing
+    testConfigDir = path.join(os.tmpdir(), `ably-cli-test-${Date.now()}`);
+    fs.mkdirSync(testConfigDir, { recursive: true, mode: 0o700 });
+    
+    // Store original config dir and set test config dir
+    originalConfigDir = process.env.ABLY_CLI_CONFIG_DIR || '';
+    process.env.ABLY_CLI_CONFIG_DIR = testConfigDir;
+    
+    // Set up a fake account in the config
+    const configManager = new ConfigManager();
+    configManager.storeAccount(mockAccessToken, 'default', {
+      accountId: mockAccountId,
+      accountName: 'Test Account',
+      userEmail: 'test@example.com'
+    });
   });
 
   afterEach(() => {
     // Clean up nock interceptors
     nock.cleanAll();
     delete process.env.ABLY_ACCESS_TOKEN;
+    
+    // Restore original config directory
+    if (originalConfigDir) {
+      process.env.ABLY_CLI_CONFIG_DIR = originalConfigDir;
+    } else {
+      delete process.env.ABLY_CLI_CONFIG_DIR;
+    }
+    
+    // Clean up test config directory
+    if (fs.existsSync(testConfigDir)) {
+      fs.rmSync(testConfigDir, { recursive: true, force: true });
+    }
   });
 
   describe('successful app creation', () => {
@@ -117,8 +151,10 @@ describe('apps:create command', () => {
       .command(['apps:create', '--name', mockAppName, '--json'])
       .it('should output JSON format when --json flag is used', ctx => {
         const result = JSON.parse(ctx.stdout);
-        expect(result).to.have.property('id', mockAppId);
-        expect(result).to.have.property('name', mockAppName);
+        expect(result).to.have.property('app');
+        expect(result.app).to.have.property('id', mockAppId);
+        expect(result.app).to.have.property('name', mockAppName);
+        expect(result).to.have.property('success', true);
       });
 
     test
