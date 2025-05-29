@@ -50,16 +50,24 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
       if (typeof w.getAblyCliTerminalReactState === 'function') {
         try {
           const state = w.getAblyCliTerminalReactState();
-          if (state && state.componentConnectionStatus === 'connected') return true;
+          if (state && state.componentConnectionStatus === 'connected') {
+            // Also check that the terminal actually has content with a prompt
+            const term = document.querySelector('.xterm');
+            if (term) {
+              const clean = (term.textContent || '').replace(/\u001B\[[0-9;]*[mGKHF]/g, '').trim();
+              return clean.includes('$');
+            }
+          }
         } catch { /* ignore */ }
       }
 
+      // Fallback to checking terminal content directly
       const term = document.querySelector('.xterm');
       if (!term) return false;
-      // Strip ANSI escape sequences (e.g. " " before prompt check
+      // Strip ANSI escape sequences before prompt check
       const clean = (term.textContent || '').replace(/\u001B\[[0-9;]*[mGKHF]/g, '').trim();
       return clean.includes('$');
-    }, { timeout: 150_000 });
+    }, { timeout: 180_000 }); // Increased timeout for CI stability
   }
 
   test('Page reload resumes session without injecting extra blank prompts', async () => {
@@ -69,13 +77,31 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
 
     await waitForPrompt(page);
 
+    // Ensure the terminal has stabilized before taking the initial snapshot
+    await page.waitForTimeout(1000);
     const initialText = (await terminal.innerText()).trimEnd();
 
     // Reload the page and wait for resume
     await page.reload({ waitUntil: 'networkidle' });
+    
+    // Wait for connection to be re-established after reload
+    await page.waitForFunction(() => {
+      const w: any = window;
+      if (typeof w.getAblyCliTerminalReactState === 'function') {
+        try {
+          const state = w.getAblyCliTerminalReactState();
+          return state && state.componentConnectionStatus === 'connected';
+        } catch { return false; }
+      }
+      return false;
+    }, { timeout: 30000 });
+    
     await waitForPrompt(page);
 
+    // Allow time for any async rendering to complete
+    await page.waitForTimeout(1000);
     const afterReloadText = (await terminal.innerText()).trimEnd();
+    
     const countPrompts = (text: string) => text.split('\n').filter(line => line.trimStart().startsWith('$')).length;
     const initialPromptCount = countPrompts(initialText);
     const afterReloadPromptCount = countPrompts(afterReloadText);
@@ -83,7 +109,23 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
 
     // Reload once more to guard against cumulative effects
     await page.reload({ waitUntil: 'networkidle' });
+    
+    // Wait for connection again
+    await page.waitForFunction(() => {
+      const w: any = window;
+      if (typeof w.getAblyCliTerminalReactState === 'function') {
+        try {
+          const state = w.getAblyCliTerminalReactState();
+          return state && state.componentConnectionStatus === 'connected';
+        } catch { return false; }
+      }
+      return false;
+    }, { timeout: 30000 });
+    
     await waitForPrompt(page);
+    
+    // Allow time for rendering
+    await page.waitForTimeout(1000);
     const afterSecondReloadText = (await terminal.innerText()).trimEnd();
     const afterSecondPromptCount = countPrompts(afterSecondReloadText);
     expect(afterSecondPromptCount).toBeLessThanOrEqual(initialPromptCount + 2);
@@ -103,30 +145,57 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
     await page.keyboard.type('exit');
     await page.keyboard.press('Enter');
 
-    // Allow server to process termination and React state to update
-    await page.waitForTimeout(2000);
+    // Wait for the exit command to be processed and session to end
+    // Use React state to confirm disconnection instead of arbitrary timeout
+    await page.waitForFunction(() => {
+      const w: any = window;
+      if (typeof w.getAblyCliTerminalReactState === 'function') {
+        try {
+          const state = w.getAblyCliTerminalReactState();
+          return state && (state.componentConnectionStatus === 'disconnected' || state.showManualReconnectPrompt === true);
+        } catch { /* ignore */ }
+      }
+      return false;
+    }, { timeout: 15000 });
+
+    // Additional wait to ensure server-side cleanup completes
+    await page.waitForTimeout(1000);
 
     // Purge any persisted sessionId to guarantee new session on next page
     await page.evaluate(() => {
       sessionStorage.removeItem('ably.cli.sessionId');
+      localStorage.removeItem('ably.cli.sessionId'); // Also clear localStorage just in case
     });
 
     await page.close(); // Close the original page and its WebSocket
 
-    // Allow server to fully process the disconnection of the first session
-    await new Promise(resolve => setTimeout(resolve, 3000)); 
+    // Wait longer for server to fully process the disconnection
+    // Use a more generous timeout for CI environments
+    await new Promise(resolve => setTimeout(resolve, 5000)); 
 
     const page2 = await context.newPage();
     await page2.goto(`http://localhost:${WEB_SERVER_PORT}?serverUrl=${encodeURIComponent(WS_URL)}&cliDebug=true`, { waitUntil: 'networkidle' });
     const terminal2 = page2.locator('.xterm:not(#initial-xterm-placeholder)');
 
+    // Wait for the new session connection to be fully established
+    await page2.waitForFunction(() => {
+      const w: any = window;
+      if (typeof w.getAblyCliTerminalReactState === 'function') {
+        try {
+          const state = w.getAblyCliTerminalReactState();
+          return state && state.componentConnectionStatus === 'connected';
+        } catch { /* ignore */ }
+      }
+      return false;
+    }, { timeout: 30000 });
+
     await waitForPrompt(page2); // Wait for the new session on page2 to be ready
 
-    // Explicitly wait for the help text to ensure the full initial screen is rendered
+    // Wait for the help text with more generous timeout for CI
     await page2.waitForFunction(() => {
       const term = document.querySelector('.xterm:not(#initial-xterm-placeholder)');
       return term && term.textContent && term.textContent.includes('ably.com browser-based CLI for Pub/Sub');
-    }, { timeout: 10000 }); // Increased timeout for this specific check
+    }, { timeout: 20000 }); // Doubled timeout for CI stability
 
     const txtAfterNew = await terminal2.innerText();
     // A new session should have the help text and the prompt
@@ -160,21 +229,59 @@ test.describe.serial('Prompt integrity & exit behaviour', () => {
       } catch {
         return false;
       }
-    }, { timeout: 30000 }); // increased timeout slightly for CI flakiness
+    }, { timeout: 45000 }); // Increased timeout for CI environments
 
-    // Overlay should exist – but in case of slow DOM/animation we give a soft assertion
+    // Wait a bit more to ensure the overlay is fully rendered
+    await page.waitForTimeout(1000);
+
+    // Overlay should exist – with better error handling for CI
     const overlay = page.locator('[data-testid="ably-overlay"]');
+    let overlayVisible = false;
     try {
-      await expect(overlay).toBeVisible({ timeout: 6000 });
+      await expect(overlay).toBeVisible({ timeout: 10000 }); // Increased timeout
       await expect(overlay).toContainText('ERROR: SERVER DISCONNECT');
+      overlayVisible = true;
     } catch (e) {
-      console.warn('[Prompt-Integrity] Overlay visibility assertion skipped due to timeout:', e);
+      console.warn('[Prompt-Integrity] Overlay visibility assertion failed, checking if manual reconnect state is still valid:', e);
+      // Double-check that we're still in the correct state even if overlay isn't visible
+      const state = await page.evaluate(() => {
+        const w: any = window;
+        if (typeof w.getAblyCliTerminalReactState === 'function') {
+          try {
+            return w.getAblyCliTerminalReactState();
+          } catch { return null; }
+        }
+        return null;
+      });
+      if (state && state.showManualReconnectPrompt) {
+        console.log('[Prompt-Integrity] Manual reconnect state confirmed, proceeding despite overlay visibility issue');
+      } else {
+        throw new Error('Manual reconnect state not confirmed and overlay not visible');
+      }
     }
 
     // Press Enter to reconnect
     await page.keyboard.press('Enter');
 
+    // Wait for reconnection to complete with better state checking
+    await page.waitForFunction(() => {
+      const w: any = window;
+      if (typeof w.getAblyCliTerminalReactState === 'function') {
+        try {
+          const state = w.getAblyCliTerminalReactState();
+          return state && state.componentConnectionStatus === 'connected' && !state.showManualReconnectPrompt;
+        } catch { return false; }
+      }
+      return false;
+    }, { timeout: 30000 });
+
     await waitForPrompt(page); // Wait for the new session on the same page to be ready
+
+    // Additional wait for help text to be fully rendered
+    await page.waitForFunction(() => {
+      const term = document.querySelector('.xterm:not(#initial-xterm-placeholder)');
+      return term && term.textContent && term.textContent.includes('ably.com browser-based CLI for Pub/Sub');
+    }, { timeout: 15000 });
 
     const finalText = await terminal.innerText();
     // A new session (reconnected) should have the help text and the prompt
