@@ -68,7 +68,7 @@ Enhanced session management with proper timeout mechanisms:
 
 User namespace remapping provides enhanced security by mapping the container's root user to a non-privileged user on the host system:
 
-- Added explicit configuration for user namespace remapping in `docker/User-Namespace-Remapping.md`
+- Added explicit configuration for user namespace remapping in `server/docker/User-Namespace-Remapping.md`
 - Updated container creation to be fully compatible with user namespaces
 - Set proper file permissions for remapped container user
 - See detailed instructions in `docs/User-Namespace-Remapping.md`
@@ -79,8 +79,8 @@ User namespace remapping provides enhanced security by mapping the container's r
 
 An AppArmor profile restricts the container's access to the filesystem and system resources:
 
-- Created a custom AppArmor profile in `docker/apparmor-profile.conf`
-- Implemented an AppArmor installation script in `docker/install-apparmor.sh`
+- Created a custom AppArmor profile in `server/docker/apparmor-profile.conf`
+- Implemented an AppArmor installation script in `server/docker/install-apparmor.sh`
 - Added dynamic AppArmor profile detection in container creation process
 - The profile limits executable binaries to only those required and restricts filesystem access
 
@@ -90,7 +90,7 @@ An AppArmor profile restricts the container's access to the filesystem and syste
 
 Comprehensive monitoring and logging for security events:
 
-- Created a security monitoring script in `docker/security-monitor.sh`
+- Created a security monitoring script in `server/docker/security-monitor.sh`
 - Implemented logging for:
   - AppArmor violations and denied actions
   - Seccomp blocked syscalls

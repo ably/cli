@@ -14,7 +14,7 @@ RUN apk add --no-cache \
     curl=8.12.1-r1 \
     jq=1.7.1-r0
 
-# Copy package.json to extract version
+# Copy package.json to extract version (from root directory since build context is root)
 COPY package.json .
 
 # Install Ably CLI globally using version from package.json
@@ -36,14 +36,14 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 # Create directory for our custom scripts
 RUN mkdir -p /scripts /var/log/ably-cli-security
 
-# Copy scripts into the image
-COPY docker/enhanced-restricted-shell.sh /scripts/restricted-shell.sh
-COPY docker/network-security.sh /scripts/network-security.sh
-COPY docker/run-ably-command.sh /scripts/run-ably-command.sh
-COPY docker/seccomp-profile.json /scripts/seccomp-profile.json
-COPY docker/apparmor-profile.conf /scripts/apparmor-profile.conf
-COPY docker/install-apparmor.sh /scripts/install-apparmor.sh
-COPY docker/security-monitor.sh /scripts/security-monitor.sh
+# Copy scripts into the image (from server/docker subdirectory)
+COPY server/docker/enhanced-restricted-shell.sh /scripts/restricted-shell.sh
+COPY server/docker/network-security.sh /scripts/network-security.sh
+COPY server/docker/run-ably-command.sh /scripts/run-ably-command.sh
+COPY server/docker/seccomp-profile.json /scripts/seccomp-profile.json
+COPY server/docker/apparmor-profile.conf /scripts/apparmor-profile.conf
+COPY server/docker/install-apparmor.sh /scripts/install-apparmor.sh
+COPY server/docker/security-monitor.sh /scripts/security-monitor.sh
 
 # Make scripts executable
 RUN chmod +x /scripts/restricted-shell.sh && \
@@ -83,4 +83,4 @@ ENV PATH=/usr/local/lib/node_modules/.bin:/scripts:$PATH
 ENTRYPOINT ["/scripts/network-security.sh"]
 
 # Default to starting the restricted shell in interactive mode
-CMD ["/scripts/run-ably-command.sh"]
+CMD ["/scripts/run-ably-command.sh"] 

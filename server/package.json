@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "description": "WebSocket terminal server for Ably CLI web interface",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "test": "mocha 'tests/**/*.test.ts'",
     "test:unit": "mocha 'tests/unit/**/*.test.ts'",
     "test:integration": "mocha 'tests/integration/**/*.test.ts'",

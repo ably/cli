@@ -4,13 +4,15 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'Dockerfile'
-      - 'docker/**'
+      - 'server/Dockerfile'
+      - 'server/docker/**'
+      - 'server/**'
   pull_request:
     branches: [ main ]
     paths:
-      - 'Dockerfile'
-      - 'docker/**'
+      - 'server/Dockerfile'
+      - 'server/docker/**'
+      - 'server/**'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
@@ -24,7 +26,7 @@ jobs:
       - name: Lint Dockerfile with hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: Dockerfile
+          dockerfile: server/Dockerfile
 
   shellcheck:
     name: Lint Shell Scripts
@@ -38,7 +40,8 @@ jobs:
 
       - name: Run ShellCheck on all shell scripts
         run: |
-          find ./docker -type f -name "*.sh" -exec shellcheck {} \;
+          find ./server/docker -type f -name "*.sh" -exec shellcheck {} \;
+          find ./server/scripts -type f -name "*.sh" -exec shellcheck {} \;
 
   security-tests:
     name: Docker Container Security Tests
@@ -48,18 +51,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build Docker image
         run: |
-          docker build -t ably-cli-sandbox:test .
+          docker build -f server/Dockerfile -t ably-cli-sandbox:test .
           echo "✅ Image built successfully"
 
-      - name: Run security tests
+      - name: Run server security tests
         run: |
-          # Make script executable
-          chmod +x docker/test-security.sh
-
-          # Run the security test script
-          cd docker && ./test-security.sh
+          cd server
+          pnpm install
+          pnpm build
+          pnpm test:integration
+        env:
+          E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
 
       - name: Run vulnerability scanner
         uses: aquasecurity/trivy-action@master
