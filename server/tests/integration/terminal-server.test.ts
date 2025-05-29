@@ -12,7 +12,7 @@ describe('Terminal Server Tests', function() {
   it('should have the correct test file location', function() {
     // Verify test file exists and is in the correct location
     const testFilePath = __filename;
-    expect(testFilePath).to.include('test/integration/terminal-server.test.ts');
+    expect(testFilePath).to.include('server/tests/integration/terminal-server.test.ts');
   });
 
   it('should have the required dependencies available', function() {

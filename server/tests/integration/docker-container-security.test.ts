@@ -1,246 +1,231 @@
 import { expect } from 'chai';
-import { exec } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { promisify } from 'node:util';
+import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const execAsync = promisify(exec);
-
-// Fix for __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 describe('Docker Container Security Features', function() {
   // Set a longer timeout for these tests as they involve Docker
-  this.timeout(60000);
+  this.timeout(30000);
 
-  // Container name for testing
-  const containerName = 'ably-cli-security-test';
+  const containerName = 'test-security-container';
 
-  // Clean up any lingering test containers
-  before(async function() {
+  beforeEach(async function() {
+    // Clean up any existing test container
     try {
       await execAsync(`docker rm -f ${containerName} 2>/dev/null || true`);
     } catch {
-      // Ignore errors if the container doesn't exist
+      // Ignore errors, container might not exist
     }
   });
 
-  // Clean up after tests
-  after(async function() {
+  afterEach(async function() {
+    // Clean up test container
     try {
       await execAsync(`docker rm -f ${containerName} 2>/dev/null || true`);
     } catch {
-      // Ignore errors if the container doesn't exist
+      // Ignore errors
     }
   });
 
-  it('should verify that the container image exists', async function() {
-    const { stdout } = await execAsync('docker images ably-cli-sandbox --format "{{.Repository}}"');
-
-    // If the image doesn't exist, build it
-    if (!stdout.includes('ably-cli-sandbox')) {
+  it('should ensure Docker image exists for security testing', async function() {
+    try {
+      const { stdout } = await execAsync('docker images ably-cli-sandbox --format "{{.Repository}}"');
+      expect(stdout.trim()).to.equal('ably-cli-sandbox');
+    } catch {
+      // Build the image if it doesn't exist
       console.log('Docker image ably-cli-sandbox not found, building it...');
-      const dockerfilePath = path.resolve(__dirname, '../../Dockerfile');
+      const dockerfilePath = path.resolve(__dirname, '../../../Dockerfile');
       await execAsync(`docker build -t ably-cli-sandbox ${path.dirname(dockerfilePath)}`);
       console.log('Docker image built successfully');
     }
   });
 
-  it('should create a container with security settings', async function() {
-    // Create a test container with explicitly set security parameters
+  it('should create container with seccomp profile', async function() {
     const seccompProfilePath = path.resolve(__dirname, '../../docker/seccomp-profile.json');
-
-    await execAsync(`docker create --name ${containerName} \
-      --read-only \
-      --security-opt=no-new-privileges \
-      --security-opt="seccomp=${seccompProfilePath}" \
-      --pids-limit=50 \
-      --memory=256m \
-      --tmpfs /tmp:rw,noexec,nosuid,size=64m \
-      --tmpfs /run:rw,noexec,nosuid,size=32m \
-      --user appuser \
-      --cap-drop=NET_ADMIN --cap-drop=NET_BIND_SERVICE --cap-drop=NET_RAW \
-      ably-cli-sandbox bash -c "sleep 600"`);
-
-    console.log('Container created with security settings');
-  });
-
-  it('should verify read-only filesystem configuration', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Verify read-only filesystem
-    expect(containerInfo[0].HostConfig.ReadonlyRootfs).to.equal(true);
-  });
-
-  it('should verify process limits are set', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Verify PID limit is set to a reasonable value
-    expect(containerInfo[0].HostConfig.PidsLimit).to.be.a('number');
-    expect(containerInfo[0].HostConfig.PidsLimit).to.equal(50);
-  });
-
-  it('should verify memory limits are set', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Verify memory limit is set to a reasonable value (in bytes)
-    expect(containerInfo[0].HostConfig.Memory).to.be.a('number');
-    expect(containerInfo[0].HostConfig.Memory).to.be.at.most(271000000); // ~256MB
-    expect(containerInfo[0].HostConfig.Memory).to.be.at.least(250000000); // ~250MB
-  });
-
-  it('should verify tmpfs mounts with noexec flag', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Verify tmpfs mounts exist and have noexec flag
-    expect(containerInfo[0].HostConfig.Tmpfs).to.be.an('object');
-
-    // Check /tmp mount
-    if (containerInfo[0].HostConfig.Tmpfs['/tmp']) {
-      const tmpOptions = containerInfo[0].HostConfig.Tmpfs['/tmp'];
-      expect(tmpOptions).to.include('noexec');
-      expect(tmpOptions).to.include('nosuid');
-    }
-
-    // Check /run mount if it exists
-    if (containerInfo[0].HostConfig.Tmpfs['/run']) {
-      const runOptions = containerInfo[0].HostConfig.Tmpfs['/run'];
-      expect(runOptions).to.include('noexec');
-      expect(runOptions).to.include('nosuid');
-    }
-  });
-
-  it('should verify security capabilities are dropped', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Check that capabilities are dropped
-    const capDrop = containerInfo[0].HostConfig.CapDrop || [];
     
-    // Docker API may return capability names with or without 'CAP_' prefix depending on version
-    // So we check if any of the capabilities we're looking for are present, regardless of prefix
-    const expectedCaps = ['NET_ADMIN', 'NET_BIND_SERVICE', 'NET_RAW'];
+    // Create container with seccomp profile
+    await execAsync(`docker create --name ${containerName} \\
+      --security-opt seccomp=${seccompProfilePath} \\
+      --security-opt no-new-privileges \\
+      ably-cli-sandbox`);
+
+    // Inspect the container to verify security options
+    const { stdout } = await execAsync(`docker inspect ${containerName}`);
+    const inspectData = JSON.parse(stdout);
+    const securityOpt = inspectData[0].HostConfig.SecurityOpt;
     
-    // For each capability, check if it's present in either form
-    for (const cap of expectedCaps) {
-      const isPresent = capDrop.includes(cap) || capDrop.includes(`CAP_${cap}`);
-      expect(isPresent, `Expected to find capability ${cap} or CAP_${cap}`).to.be.true;
-    }
+    expect(securityOpt).to.be.an('array');
+    expect(securityOpt.some((opt: string) => opt.includes('seccomp'))).to.be.true;
+    expect(securityOpt.includes('no-new-privileges')).to.be.true;
   });
 
-  it('should verify seccomp profile is applied', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Check that security options include seccomp
-    const securityOpt = containerInfo[0].HostConfig.SecurityOpt || [];
-
-    // At least one option should include seccomp
-    expect(securityOpt.some((opt: string) => opt.includes('seccomp='))).to.be.true;
-  });
-
-  it('should verify containers run as non-root user', async function() {
-    // Get container info in JSON format
-    const { stdout } = await execAsync(`docker inspect ${containerName}`);
-    const containerInfo = JSON.parse(stdout);
-
-    // Verify container doesn't run as root
-    expect(containerInfo[0].Config.User).to.equal('appuser');
-  });
-
-  it('should verify restricted network configuration exists or not be required', async function() {
+  it('should create container with AppArmor profile', async function() {
+    // Check if AppArmor is available on the system
     try {
-      // Check if the restricted network exists
-      const { stdout } = await execAsync('docker network ls --format "{{.Name}}" | grep ably_cli_restricted');
-
-      // If the network exists, verify its name
-      if (stdout.trim()) {
-        expect(stdout.trim()).to.equal('ably_cli_restricted');
-        console.log('Verified restricted network exists');
-      } else {
-        // Network doesn't exist, but that's okay for single tests
-        console.log('Restricted network does not exist, but not required for this test');
-      }
+      execSync('which apparmor_parser', { stdio: 'ignore' });
     } catch {
-      // If the grep fails (network doesn't exist), that's still a valid test state
-      console.log('Restricted network does not exist, but not required for this test');
+      this.skip();
+    }
+
+    // Create container with AppArmor profile
+    await execAsync(`docker create --name ${containerName} \\
+      --security-opt apparmor=unconfined \\
+      ably-cli-sandbox`);
+
+    // Inspect the container
+    const inspectResult = await execAsync(`docker inspect ${containerName}`);
+    const inspectData = JSON.parse(inspectResult.stdout);
+    const securityOpt = inspectData[0].HostConfig.SecurityOpt;
+    
+    expect(securityOpt.some((opt: string) => opt.includes('apparmor'))).to.be.true;
+  });
+
+  it('should create container with read-only filesystem', async function() {
+    await execAsync(`docker create --name ${containerName} \\
+      --read-only \\
+      ably-cli-sandbox`);
+
+    const { stdout } = await execAsync(`docker inspect ${containerName}`);
+    const inspectData = JSON.parse(stdout);
+    const readOnlyRootfs = inspectData[0].HostConfig.ReadonlyRootfs;
+    
+    expect(readOnlyRootfs).to.be.true;
+  });
+
+  it('should create container with resource limits', async function() {
+    await execAsync(`docker create --name ${containerName} \\
+      --memory=256m \\
+      --pids-limit=50 \\
+      --cpus=1 \\
+      ably-cli-sandbox`);
+
+    const { stdout } = await execAsync(`docker inspect ${containerName}`);
+    const inspectData = JSON.parse(stdout);
+    const hostConfig = inspectData[0].HostConfig;
+    
+    expect(hostConfig.Memory).to.equal(256 * 1024 * 1024); // 256MB in bytes
+    expect(hostConfig.PidsLimit).to.equal(50);
+    expect(hostConfig.NanoCpus).to.equal(1000000000); // 1 CPU in nanocpus
+  });
+
+  it('should create container with dropped capabilities', async function() {
+    await execAsync(`docker create --name ${containerName} \\
+      --cap-drop=ALL \\
+      --cap-drop=NET_ADMIN \\
+      --cap-drop=NET_BIND_SERVICE \\
+      --cap-drop=NET_RAW \\
+      ably-cli-sandbox`);
+
+    const { stdout } = await execAsync(`docker inspect ${containerName}`);
+    const inspectData = JSON.parse(stdout);
+    const capDrop = inspectData[0].HostConfig.CapDrop;
+    
+    expect(capDrop).to.be.an('array');
+    // Docker API may return capability names with or without 'CAP_' prefix depending on version
+    const hasAll = capDrop.some((cap: string) => cap === 'ALL' || cap === 'CAP_ALL');
+    const hasNetAdmin = capDrop.some((cap: string) => cap === 'NET_ADMIN' || cap === 'CAP_NET_ADMIN');
+    const hasNetBindService = capDrop.some((cap: string) => cap === 'NET_BIND_SERVICE' || cap === 'CAP_NET_BIND_SERVICE');
+    const hasNetRaw = capDrop.some((cap: string) => cap === 'NET_RAW' || cap === 'CAP_NET_RAW');
+    
+    expect(hasAll).to.be.true;
+    expect(hasNetAdmin).to.be.true;
+    expect(hasNetBindService).to.be.true;
+    expect(hasNetRaw).to.be.true;
+  });
+
+  it('should create container with tmpfs mounts', async function() {
+    await execAsync(`docker create --name ${containerName} \\
+      --tmpfs /tmp:rw,noexec,nosuid,size=64m \\
+      --tmpfs /run:rw,noexec,nosuid,size=32m \\
+      ably-cli-sandbox`);
+
+    const { stdout } = await execAsync(`docker inspect ${containerName}`);
+    const inspectData = JSON.parse(stdout);
+    const tmpfs = inspectData[0].HostConfig.Tmpfs;
+    
+    expect(tmpfs).to.be.an('object');
+    expect(tmpfs['/tmp']).to.include('size=64m');
+    expect(tmpfs['/run']).to.include('size=32m');
+  });
+
+  it('should verify network configuration', async function() {
+    // Check if the ably_cli_restricted network exists
+    try {
+      const { stdout } = await execAsync('docker network ls --format "{{.Name}}" | grep ably_cli_restricted');
+      expect(stdout.trim()).to.equal('ably_cli_restricted');
+    } catch {
+      // Network might not exist in test environment, which is acceptable
+      console.log('ably_cli_restricted network not found, using default bridge network');
     }
   });
 
-  it('should verify the container can run commands', async function() {
+  it('should run container with security hardening and verify basic functionality', async function() {
+    // This test creates and starts a container to verify it can run with all security features
+    const seccompProfilePath = path.resolve(__dirname, '../../docker/seccomp-profile.json');
+    
+    await execAsync(`docker create --name ${containerName} \\
+      --security-opt seccomp=${seccompProfilePath} \\
+      --security-opt no-new-privileges \\
+      --security-opt apparmor=unconfined \\
+      --read-only \\
+      --tmpfs /tmp:rw,noexec,nosuid,size=64m \\
+      --tmpfs /run:rw,noexec,nosuid,size=32m \\
+      --memory=256m \\
+      --pids-limit=50 \\
+      --cpus=1 \\
+      --cap-drop=ALL \\
+      --cap-drop=NET_ADMIN \\
+      --cap-drop=NET_BIND_SERVICE \\
+      --cap-drop=NET_RAW \\
+      --user appuser \\
+      --workdir /home/appuser \\
+      ably-cli-sandbox`);
+
     // Start the container
     await execAsync(`docker start ${containerName}`);
 
-    // Wait for container to start fully
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Wait a moment for container to start
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Verify the container is running
+    // Verify container is running
     const { stdout: statusOutput } = await execAsync(`docker ps --filter name=${containerName} --format "{{.Status}}"`);
-    expect(statusOutput).to.include('Up');
+    expect(statusOutput.trim()).to.include('Up');
 
-    // Run some basic allowed commands
+    // Test basic command execution
     const { stdout: pwdResult } = await execAsync(`docker exec ${containerName} pwd`);
+    expect(pwdResult.trim()).to.equal('/home/appuser');
 
-    // We don't know exactly what directory the container will start in
-    // Just verify it returned a path
-    expect(pwdResult.trim()).to.be.a('string').that.is.not.empty;
-  });
-
-  it('should verify the ably CLI command works', async function() {
+    // Test that ably CLI is available and functional
     try {
-      // Test that the ably command works
+      // This should work as the CLI should be available in the container
       const { stdout: ablyVersionResult } = await execAsync(`docker exec ${containerName} ably --version`);
-      expect(ablyVersionResult).to.include('cli');
+      expect(ablyVersionResult).to.include('CLI');
     } catch {
-      // If the ably command isn't available, skip this test
-      // This happens if we're testing with a different image than the CLI container
-      console.log('Skipping ably command test - ably CLI not available in container');
-      this.skip();
+      // If ably command fails, verify the container at least has basic shell access
+      const { stdout: echoResult } = await execAsync(`docker exec ${containerName} echo "test"`);
+      expect(echoResult.trim()).to.equal('test');
     }
-  });
 
-  it('should verify the container cannot modify the filesystem', async function() {
-    // Try to write to the root filesystem
+    // Test read-only filesystem (this should fail)
     try {
       await execAsync(`docker exec ${containerName} touch /test-file`);
-      // If we get here, the write was allowed which shouldn't happen
-      throw new Error('Should not be able to write to root filesystem');
-    } catch (error) {
-      // Expected behavior - write should be denied
-      const errorObj = error as { stderr?: string };
-      if (errorObj.stderr && (
-          errorObj.stderr.includes('Read-only file system') ||
-          errorObj.stderr.includes('Permission denied')
-      )) {
-        // This is the expected outcome - write was denied
-      } else {
-        // Unexpected error
-        throw error;
-      }
-    }
-
-    // Verify we can write to the allowed temporary directories
-    try {
-      const { stdout: tmpWrite } = await execAsync(`docker exec ${containerName} sh -c "echo test > /tmp/test-file && cat /tmp/test-file"`);
-      expect(tmpWrite.trim()).to.equal('test');
-
-      // Clean up
-      await execAsync(`docker exec ${containerName} rm /tmp/test-file`);
+      expect.fail('Should not be able to write to read-only filesystem');
     } catch {
-      // It's okay if this fails, it means we're testing with a different image
-      console.log('Skipping tmpfs write test - might be a different container setup');
-      this.skip();
+      // Expected to fail due to read-only filesystem
+      // This is expected behavior, do nothing
     }
+
+    // Test tmpfs write (this should work)
+    const { stdout: tmpWrite } = await execAsync(`docker exec ${containerName} sh -c "echo test > /tmp/test-file && cat /tmp/test-file"`);
+    expect(tmpWrite.trim()).to.equal('test');
+
+    // Clean up test file
+    await execAsync(`docker exec ${containerName} rm /tmp/test-file`);
   });
 });

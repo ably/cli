@@ -151,6 +151,34 @@ export default [
       "mocha/no-skipped-tests": "warn",
     },
   },
+  {
+    // Configuration specific to server test files
+    files: ["server/tests/**/*.test.ts"],
+    plugins: {
+      mocha: eslintPluginMocha,
+    },
+    languageOptions: {
+      globals: {
+        ...globals.mocha,
+        describe: "readonly",
+        it: "readonly",
+        before: "readonly",
+        after: "readonly",
+        beforeEach: "readonly",
+        afterEach: "readonly",
+      },
+    },
+    rules: {
+      // Apply recommended mocha rules which include globals
+      ...eslintPluginMocha.configs.recommended.rules,
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-expressions": "off",
+      "mocha/no-exclusive-tests": "error",
+      "mocha/no-skipped-tests": "warn",
+      "unicorn/prefer-optional-catch-binding": "off", // Allow catch (error) in tests
+      "n/no-unpublished-import": "off", // Allow dev dependencies like chai in tests
+    },
+  },
   // Configuration for MCP files with ModelContextProtocol SDK imports
   {
     files: ["src/mcp/**/*.ts"],
