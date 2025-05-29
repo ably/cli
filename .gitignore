@@ -21,7 +21,8 @@ tmp
 /examples/*/lib/
 
 # Dependency directories
-/node_modules
+node_modules/
+**/node_modules/
 
 # Optional Deps
 /package-lock.json
@@ -41,4 +42,4 @@ tsconfig.tsbuildinfo
 /test-results/
 
 # SpecStory plugin to save chats
-.specstory//packages/react-web-cli/node_modules/
+.specstory/
