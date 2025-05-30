@@ -3,12 +3,34 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const execAsync = promisify(exec);
 
 // Fix for __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Skip these tests if Docker is not available or we're in a general test run
+const shouldSkipDockerTests = () => {
+  // Skip if explicitly set to skip Docker tests
+  if (process.env.SKIP_DOCKER_TESTS === 'true') {
+    return true;
+  }
+  
+  // Skip if running general CLI tests (not specifically container security tests)
+  if (process.env.CLI_GENERAL_TESTS === 'true') {
+    return true;
+  }
+  
+  // Try to check if Docker is available
+  try {
+    execSync('docker info', { stdio: 'ignore', timeout: 5000 });
+    return false;
+  } catch {
+    return true;
+  }
+};
 
 describe('Docker Container Security Features', function() {
   // Set a longer timeout for these tests as they involve Docker
@@ -22,6 +44,12 @@ describe('Docker Container Security Features', function() {
 
   // Check if Docker is available before running any tests
   before(async function() {
+    // First check if we should skip Docker tests entirely
+    if (shouldSkipDockerTests()) {
+      this.skip();
+      return;
+    }
+
     try {
       await execAsync('docker --version');
       dockerAvailable = true;
