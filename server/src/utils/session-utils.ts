@@ -1,5 +1,4 @@
 import * as crypto from 'node:crypto';
-import type { WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import { log, logError } from './logger.js';
 
@@ -16,43 +15,30 @@ export function computeCredentialHash(apiKey: string | undefined, accessToken: s
 /**
  * Timing-safe comparison of credential hashes to prevent timing attacks
  */
-export function isCredentialHashEqual(storedHash: string, incomingHash: string): boolean {
-  if (storedHash.length !== incomingHash.length) {
+export function isCredentialHashEqual(hash1: string, hash2: string): boolean {
+  if (hash1.length !== hash2.length) {
     return false;
   }
   
-  try {
-    const storedBuffer = Buffer.from(storedHash, 'hex');
-    const incomingBuffer = Buffer.from(incomingHash, 'hex');
-    return crypto.timingSafeEqual(storedBuffer, incomingBuffer);
-  } catch {
-    // If conversion fails, fall back to false
-    return false;
-  }
+  // Use crypto.timingSafeEqual for constant-time comparison
+  const buffer1 = Buffer.from(hash1, 'utf8');
+  const buffer2 = Buffer.from(hash2, 'utf8');
+  
+  return crypto.timingSafeEqual(buffer1, buffer2);
 }
 
 /**
- * Extract client context for session binding
+ * Extract client context for session fingerprinting
  */
-export function extractClientContext(req: IncomingMessage): {
-  ip: string;
-  userAgent: string;
-  fingerprint: string;
-} {
-  // Extract real IP considering proxies
-  const ip = (
-    req.headers['x-forwarded-for'] as string ||
-    req.headers['x-real-ip'] as string ||
-    req.connection.remoteAddress ||
-    req.socket.remoteAddress ||
-    'unknown'
-  ).split(',')[0].trim();
-
-  const userAgent = req.headers['user-agent'] || 'unknown';
+export function extractClientContext(request: IncomingMessage): { ip: string; userAgent: string; fingerprint: string } {
+  const ip = request.socket.remoteAddress || 'unknown';
+  const userAgent = request.headers['user-agent'] || 'unknown';
   
-  // Create a fingerprint for this client context
-  const contextInput = `${ip}|${userAgent}`;
-  const fingerprint = crypto.createHash('sha256').update(contextInput).digest('hex').slice(0, 16);
+  // Create a simple fingerprint from IP and User-Agent
+  const fingerprint = crypto.createHash('sha256')
+    .update(`${ip}:${userAgent}`)
+    .digest('hex')
+    .slice(0, 16); // Use first 16 chars for readability
   
   return { ip, userAgent, fingerprint };
 }
@@ -62,59 +48,59 @@ export function extractClientContext(req: IncomingMessage): {
  */
 const resumeAttempts = new Map<string, {
   count: number;
+  firstAttempt: number;
   lastAttempt: number;
-  windowStart: number;
 }>();
 
 const RESUME_RATE_LIMIT = {
-  maxAttempts: 3,          // Max 3 attempts
-  windowMs: 60 * 1000,     // Per 60 seconds
-  cooldownMs: 5 * 60 * 1000, // 5 minute cooldown after limit exceeded
+  maxAttempts: 3,
+  windowMs: 60 * 1000, // 1 minute
+  cooldownMs: 5 * 60 * 1000, // 5 minutes after exceeding limit
 };
 
 /**
- * Check if resume attempt should be rate limited
+ * Check if a resume attempt should be rate limited
  */
 export function shouldRateLimitResumeAttempt(sessionId: string): boolean {
   const now = Date.now();
-  const attempts = resumeAttempts.get(sessionId);
+  const existing = resumeAttempts.get(sessionId);
   
-  if (!attempts) {
+  if (!existing) {
     // First attempt for this session
     resumeAttempts.set(sessionId, {
       count: 1,
-      lastAttempt: now,
-      windowStart: now,
+      firstAttempt: now,
+      lastAttempt: now
     });
     return false;
   }
   
-  // Check if we're still in cooldown period
-  if (attempts.count >= RESUME_RATE_LIMIT.maxAttempts) {
-    const timeSinceLimit = now - attempts.lastAttempt;
-    if (timeSinceLimit < RESUME_RATE_LIMIT.cooldownMs) {
-      log(`Resume attempt rate limited for session ${sessionId}: still in cooldown (${Math.round((RESUME_RATE_LIMIT.cooldownMs - timeSinceLimit) / 1000)}s remaining)`);
-      return true;
-    }
-    // Cooldown expired, reset counter
-    attempts.count = 0;
-    attempts.windowStart = now;
-  }
+  const windowAge = now - existing.firstAttempt;
   
-  // Check if we need to reset the window
-  const windowAge = now - attempts.windowStart;
+  // If we're outside the window, reset the counter
   if (windowAge > RESUME_RATE_LIMIT.windowMs) {
-    attempts.count = 0;
-    attempts.windowStart = now;
+    resumeAttempts.set(sessionId, {
+      count: 1,
+      firstAttempt: now,
+      lastAttempt: now
+    });
+    return false;
   }
   
-  // Increment counter
-  attempts.count++;
-  attempts.lastAttempt = now;
+  // If we're in cooldown period after exceeding limit, block all attempts
+  const timeSinceLastAttempt = now - existing.lastAttempt;
+  if (existing.count > RESUME_RATE_LIMIT.maxAttempts && timeSinceLastAttempt < RESUME_RATE_LIMIT.cooldownMs) {
+    logError(`Resume attempt blocked during cooldown for session ${sessionId}: ${Math.round(timeSinceLastAttempt / 1000)}s remaining`);
+    return true;
+  }
+  
+  // Update the attempt count
+  existing.count++;
+  existing.lastAttempt = now;
   
   // Check if we've exceeded the limit
-  if (attempts.count > RESUME_RATE_LIMIT.maxAttempts) {
-    logError(`Resume attempt rate limit exceeded for session ${sessionId}: ${attempts.count} attempts in ${Math.round(windowAge / 1000)}s`);
+  if (existing.count > RESUME_RATE_LIMIT.maxAttempts) {
+    logError(`Resume attempt rate limit exceeded for session ${sessionId}: ${existing.count} attempts in ${Math.round(windowAge / 1000)}s`);
     return true;
   }
   
@@ -160,4 +146,4 @@ export function isClientContextCompatible(
   }
   
   return true;
-} 
+}

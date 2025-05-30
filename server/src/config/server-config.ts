@@ -57,6 +57,25 @@ export const MAX_IDLE_TIME_MS = process.env.TERMINAL_IDLE_TIMEOUT_MS
   ? Number(process.env.TERMINAL_IDLE_TIMEOUT_MS)
   : DEFAULT_TERMINAL_IDLE_TIMEOUT_MS;
 
+// Session duration limits
+export const DEFAULT_MAX_SESSION_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
+export const MAX_SESSION_DURATION_MS = process.env.MAX_SESSION_DURATION_MS
+  ? Number(process.env.MAX_SESSION_DURATION_MS)
+  : DEFAULT_MAX_SESSION_DURATION_MS;
+
+// Session resume configuration
+export const DEFAULT_RESUME_GRACE_MS = 5 * 60 * 1000; // 5 minutes
+export const RESUME_GRACE_MS = process.env.RESUME_GRACE_MS
+  ? Number(process.env.RESUME_GRACE_MS)
+  : DEFAULT_RESUME_GRACE_MS;
+
+// Output buffer configuration
+export const DEFAULT_OUTPUT_BUFFER_MAX_LINES = 1000;
+export const OUTPUT_BUFFER_MAX_LINES = Number.parseInt(
+  process.env.OUTPUT_BUFFER_MAX_LINES || String(DEFAULT_OUTPUT_BUFFER_MAX_LINES),
+  10
+);
+
 // Authentication timeout
 export const AUTH_TIMEOUT_MS = 10000; // 10 seconds for authentication
 
@@ -122,6 +141,22 @@ export const IS_CI = !!(
   process.env.GITHUB_ACTIONS || 
   process.env.TRAVIS || 
   process.env.CIRCLECI
+);
+
+// Development mode detection (includes CI and local development)
+export const IS_DEVELOPMENT = !!(
+  IS_CI ||
+  process.env.NODE_ENV === 'development' ||
+  process.env.NODE_ENV === 'test' ||
+  DEBUG_MODE ||
+  // Detect common development indicators
+  process.env.npm_lifecycle_event === 'test' ||
+  process.env.npm_command === 'test' ||
+  // Detect if running from source (not production build)
+  process.argv[1]?.includes('ts-node') ||
+  process.argv[1]?.includes('mocha') ||
+  // Detect macOS development environment (AppArmor not available)
+  process.platform === 'darwin'
 );
 
 // =============================================================================

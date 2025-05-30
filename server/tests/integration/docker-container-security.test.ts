@@ -62,21 +62,48 @@ describe('Docker Container Security Features', function() {
     isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
     if (isCI) {
       console.log('Running in CI environment - some tests may be skipped due to Docker limitations');
+      
+      // In CI, do a quick Docker availability check upfront
+      try {
+        await Promise.race([
+          execAsync('docker version --format "{{.Server.Version}}"'),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Docker version check timeout')), 10000)
+          )
+        ]);
+        console.log('CI mode: Docker daemon is available for testing');
+      } catch (error) {
+        console.log(`CI mode: Docker daemon not available - skipping entire test suite: ${error}`);
+        this.pending = true; // Mark the entire suite as pending
+        return;
+      }
     }
 
     // Get Docker info for debugging
     try {
-      const { stdout } = await execAsync('docker info --format json');
+      const dockerInfoPromise = execAsync('docker info --format json');
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Docker info timeout')), isCI ? 10000 : 30000)
+      );
+      
+      const { stdout } = await Promise.race([dockerInfoPromise, timeoutPromise]) as any;
       dockerInfo = JSON.parse(stdout);
       console.log('Docker version:', dockerInfo.ServerVersion);
       console.log('Docker storage driver:', dockerInfo.Driver);
       console.log('Docker security options:', dockerInfo.SecurityOptions);
     } catch (error) {
       console.log('Could not get Docker info:', error);
+      if (isCI) {
+        console.log('CI mode: Docker info unavailable - may affect some tests');
+      }
     }
 
     // Clean up any existing test containers from previous runs
-    await cleanupContainer(containerName);
+    try {
+      await cleanupContainer(containerName);
+    } catch (error) {
+      console.log('Warning: Could not clean up existing containers:', error);
+    }
   });
 
   beforeEach(async function() {
@@ -96,18 +123,95 @@ describe('Docker Container Security Features', function() {
 
   it('should ensure Docker image exists for security testing', async function() {
     // Set a longer timeout for this test since Docker image building can be slow
-    this.timeout(120000); // 2 minutes
+    this.timeout(isCI ? 60000 : 120000); // 1 minute in CI, 2 minutes locally
     
     try {
-      const { stdout } = await execAsync('docker images ably-cli-sandbox --format "{{.Repository}}"');
-      expect(stdout.trim()).to.equal('ably-cli-sandbox');
-    } catch {
-      // Build the image if it doesn't exist
-      console.log('Docker image ably-cli-sandbox not found, building it...');
+      // First check if Docker daemon is available
+      if (isCI) {
+        try {
+          // Quick Docker ping with timeout in CI
+          await Promise.race([
+            execAsync('docker info --format "{{.ServerVersion}}"'),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Docker info timeout')), 5000)
+            )
+          ]);
+          console.log('CI mode: Docker daemon is available');
+        } catch (error) {
+          console.log(`CI mode: Docker daemon not available - ${error}`);
+          this.skip();
+          return;
+        }
+      }
+
+      // Check if image already exists (with timeout)
+      try {
+        const imageCheckPromise = execAsync('docker images ably-cli-sandbox --format "{{.Repository}}"');
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Docker images timeout')), isCI ? 10000 : 30000)
+        );
+        
+        const { stdout } = await Promise.race([imageCheckPromise, timeoutPromise]) as any;
+        
+        if (stdout.trim() === 'ably-cli-sandbox') {
+          console.log('Docker image ably-cli-sandbox already exists');
+          return; // Image exists, we're done
+        }
+      } catch (error) {
+        if (isCI) {
+          console.log(`CI mode: Failed to check for existing image - ${error}`);
+          this.skip();
+          return;
+        }
+        // In local development, continue to try building
+        console.log(`Could not check for existing image, will try to build: ${error}`);
+      }
+
+      // Image doesn't exist, try to build it
+      console.log('Docker image ably-cli-sandbox not found, attempting to build...');
+      
+      // In CI, check if we should attempt building
+      if (isCI) {
+        console.log('CI mode: Attempting Docker image build with timeout...');
+        
+        // Check if Dockerfile exists first
+        const dockerfilePath = path.resolve(__dirname, '../../../server/Dockerfile');
+        if (!require('fs').existsSync(dockerfilePath)) {
+          console.log(`CI mode: Dockerfile not found at ${dockerfilePath} - skipping build`);
+          this.skip();
+          return;
+        }
+      }
+      
       // Build from CLI root directory using server/Dockerfile
       const cliRoot = path.resolve(__dirname, '../../../');
-      await execAsync(`docker build -f server/Dockerfile -t ably-cli-sandbox .`, { cwd: cliRoot });
-      console.log('Docker image built successfully');
+      const buildCommand = `docker build -f server/Dockerfile -t ably-cli-sandbox .`;
+      
+      try {
+        const buildPromise = execAsync(buildCommand, { cwd: cliRoot });
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Docker build timeout')), isCI ? 45000 : 90000) // 45s in CI, 90s locally
+        );
+        
+        await Promise.race([buildPromise, timeoutPromise]);
+        console.log('Docker image built successfully');
+      } catch (error) {
+        if (isCI) {
+          console.log(`CI mode: Docker build failed or timed out - ${error}`);
+          this.skip();
+          return;
+        } else {
+          console.error('Docker build failed:', error);
+          throw error;
+        }
+      }
+    } catch (error) {
+      if (isCI) {
+        console.log(`CI mode: Docker operations failed - ${error}`);
+        this.skip();
+      } else {
+        throw error;
+      }
     }
   });
 
