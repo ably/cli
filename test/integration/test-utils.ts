@@ -43,6 +43,95 @@ interface MockOptions {
   [key: string]: any; // Allow additional properties
 }
 
+// --- Chat Mock Interfaces ---
+
+interface MockChatRoom {
+  id: string;
+  attach: () => Promise<void>;
+  detach: () => Promise<void>;
+  messages: {
+    send: (message: any) => Promise<void>;
+    subscribe: (callback: (message: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+    get: (options?: any) => Promise<any>;
+  };
+  presence: {
+    enter: (data?: any) => Promise<void>;
+    leave: () => Promise<void>;
+    get: () => Promise<any[]>;
+    subscribe: (callback: (member: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  reactions: {
+    send: (emoji: string, metadata?: any) => Promise<void>;
+    subscribe: (callback: (reaction: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  typing: {
+    start: () => Promise<void>;
+    stop: () => Promise<void>;
+    subscribe: (callback: (event: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  occupancy: {
+    get: () => Promise<any>;
+    subscribe: (callback: (occupancy: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+interface MockChatClient {
+  rooms: {
+    get: (roomId: string) => MockChatRoom;
+    release: (roomId: string) => Promise<void>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+// --- Spaces Mock Interfaces ---
+
+interface MockSpace {
+  name: string;
+  members: {
+    enter: (memberData?: any) => Promise<void>;
+    leave: (data?: any) => Promise<void>;
+    getAll: () => Promise<any[]>;
+    subscribe: (callback: (memberUpdate: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  locations: {
+    set: (location: any) => Promise<void>;
+    subscribe: (callback: (locationUpdate: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  cursors: {
+    set: (cursorData: any) => Promise<void>;
+    subscribe: (callback: (cursorUpdate: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  locks: {
+    acquire: (lockId: string, lockData?: any) => Promise<void>;
+    release: (lockId: string) => Promise<void>;
+    getAll: () => Promise<any[]>;
+    subscribe: (callback: (lockUpdate: any) => void) => Promise<any>;
+    unsubscribe: () => Promise<void>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+interface MockSpacesClient {
+  spaces: {
+    get: (spaceName: string) => MockSpace;
+    release: (spaceName: string) => Promise<void>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
 // --- Main Mock Interfaces ---
 
 // Type declaration for global mocks
@@ -51,14 +140,14 @@ interface AblyRestMock {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   request: (...args: any[]) => any;
   channels: {
-    get: (channelName: string) => MockChannel; // Use MockChannel interface
+    get: (channelName: string) => MockChannel; // Fix: takes channelName parameter
   };
   auth: MockAuth; // Use MockAuth interface
   options: MockOptions; // Use MockOptions interface
   close: () => void;
   connection?: {
     once: (event: string, cb: (...args: unknown[]) => void) => void; // Use unknown[]
-    on: (event: string, cb: (...args: unknown[]) => void) => void; // Use unknown[]
+    on: (event: string, cb: (...args: unknown[]) => void) => void; // Add missing 'on' method
     off: (event: string, cb: (...args: unknown[]) => void) => void; // Use unknown[]
     close: () => void;
     state: string;
@@ -69,8 +158,23 @@ interface AblyRestMock {
   [key: string]: any; // Keep index signature for flexibility
 }
 
+interface AblyRealtimeMock {
+  connection: {
+    once: (event: string, cb: () => void) => void;
+    on: (callback: (stateChange: any) => void) => void; // Add 'on' method
+    state: string;
+    id: string;
+  };
+  close: () => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
 interface TestMocks {
   ablyRestMock: AblyRestMock;
+  ablyChatMock?: MockChatClient;
+  ablySpacesMock?: MockSpacesClient;
+  ablyRealtimeMock?: AblyRealtimeMock;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // Keep index signature for flexibility
 }
