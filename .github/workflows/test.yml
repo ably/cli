@@ -2,11 +2,25 @@ name: Run Tests
 
 on:
   push:
-    # Trigger on pushes to any branch
-    branches: ["**"]
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - 'scripts/**'
+      - '.github/workflows/test.yml'
   pull_request:
-    # Trigger on pull requests targeting any branch
-    branches: ["**"]
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - 'scripts/**'
+      - '.github/workflows/test.yml'
 
 jobs:
   test:
@@ -33,75 +47,9 @@ jobs:
       - name: Run React Web CLI Unit Tests
         run: pnpm --filter @ably/react-web-cli test
 
-      - name: Build Docker test image
-        run: |
-          echo "Building Docker image for server tests..."
-          docker build -f server/Dockerfile -t ably-cli-sandbox:test . || true
-          docker images | grep ably-cli-sandbox || true
-
-      - name: Run Server Tests
-        run: |
-          cd server
-          pnpm install
-          pnpm build
-          
-          echo "Running server tests in CI environment..."
-          
-          # Set environment variables
-          export CI=true
-          export GITHUB_ACTIONS=true
-          
-          # Run server tests with timeout and improved error handling
-          set +e  # Don't exit immediately on error
-          
-          timeout 300 pnpm test
-          TEST_EXIT_CODE=$?
-          
-          if [ $TEST_EXIT_CODE -eq 0 ]; then
-            echo "✅ Server tests completed successfully"
-            exit 0
-          elif [ $TEST_EXIT_CODE -eq 124 ]; then
-            echo "❌ Server tests timed out after 5 minutes"
-            
-            # Provide diagnostic info
-            echo "=== Test Process Info ==="
-            ps aux | grep -E "(node|mocha|test)" || true
-            
-            echo "=== Docker Info ==="
-            docker ps -a || true
-            
-            exit 1
-          else
-            echo "⚠️ Server tests completed with exit code $TEST_EXIT_CODE"
-            
-            # Provide diagnostic info for debugging
-            echo "=== Server Test Environment Info ==="
-            echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker not available')"
-            echo "Node version: $(node --version 2>/dev/null || echo 'Node not available')"
-            echo "pnpm version: $(pnpm --version 2>/dev/null || echo 'pnpm not available')"
-            
-            echo "=== Docker State ==="
-            docker ps -a 2>/dev/null || echo "Cannot list running containers"
-            docker images 2>/dev/null | grep -E "(ably-cli|node)" || echo "Cannot list relevant images"
-            
-            echo "=== System Resources ==="
-            df -h 2>/dev/null || echo "Cannot check disk space"
-            free -m 2>/dev/null || echo "Cannot check memory"
-            
-            # Exit with original exit code unless it's a known acceptable code
-            # (Exit codes 0-10 might indicate some tests were skipped)
-            if [ $TEST_EXIT_CODE -le 10 ]; then
-              echo "Server tests completed with acceptable exit code (some tests may have been skipped)"
-              exit 0
-            else
-              echo "Server tests failed with exit code $TEST_EXIT_CODE"
-              exit $TEST_EXIT_CODE
-            fi
-          fi
+      - name: Run CLI Tests
+        run: pnpm test:cli
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
-
-      - name: Run tests
-        run: pnpm test
-        env:
-          E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CLI_GENERAL_TESTS: true
+          SKIP_DOCKER_TESTS: true

@@ -2,12 +2,27 @@ name: E2E Tests
 
 on:
   push:
-    # Trigger on pushes to any branch
-    branches: ["**"]
-  # Run on pull requests targeting main
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/e2e/**'
+      - 'examples/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - '.github/workflows/e2e-tests.yml'
   pull_request:
-    # Trigger on pushes to any branch
-    branches: ["**"]
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/e2e/**'
+      - 'examples/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - '.github/workflows/e2e-tests.yml'
   # Allow manual trigger
   workflow_dispatch:
 
@@ -51,6 +66,8 @@ jobs:
         run: pnpm test:e2e
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CLI_GENERAL_TESTS: true
+          SKIP_DOCKER_TESTS: true
 
       - name: Run Playwright E2E tests
         run: pnpm test:playwright

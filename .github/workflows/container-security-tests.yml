@@ -100,8 +100,9 @@ jobs:
           # Run tests with error handling
           set +e  # Don't exit on error
           
-          # Run the tests
-          timeout 600 pnpm test tests/integration/docker-container-security.test.ts
+          # Run the specific Docker security tests from the root
+          cd ..
+          timeout 600 pnpm test:docker
           TEST_EXIT_CODE=$?
           
           # Capture exit code and handle results
