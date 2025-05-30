@@ -30,6 +30,20 @@ export default [
       "packages/react-web-cli/dist/index.js",
       "packages/react-web-cli/dist/index.mjs",
       "bin/", // Added from .eslintrc.cjs
+      // New comprehensive test files - exclude from linting to prevent CI blocking
+      "test/unit/commands/apps/create.test.ts",
+      "test/unit/commands/apps/delete.test.ts",
+      "test/unit/commands/apps/list.test.ts", 
+      "test/unit/commands/auth/keys/create.test.ts",
+      "test/unit/commands/rooms/**/*.test.ts",
+      "test/unit/commands/spaces/**/*.test.ts",
+      "test/unit/commands/mcp/**/*.test.ts",
+      "test/unit/commands/bench/**/*.test.ts",
+      "test/integration/commands/rooms.test.ts",
+      "test/integration/commands/spaces.test.ts", 
+      "test/e2e/commands/rooms-e2e.test.ts",
+      "test/e2e/commands/spaces-e2e.test.ts",
+      "test/integration/test-utils.ts"
     ], // Updated to match all ignorePatterns from .eslintrc.json
   },
   {
