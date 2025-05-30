@@ -10,9 +10,21 @@ The Terminal Server is a WebSocket server that allows users to interact with the
 
 1. The server runs a secure Docker container (`ably-cli-sandbox`) that encapsulates the Ably CLI and its dependencies.
 2. It establishes WebSocket connections (via WSS when using Caddy) to handle client requests.
-3. Authentication is performed using credentials passed by the client.
-4. Commands sent by authenticated clients are executed within the restricted container environment.
+3. **Authentication passthrough**: The server passes credentials directly to the Ably CLI without validation - authentication is handled by the Ably SDK within the container.
+4. Commands sent by clients are executed within the restricted container environment.
 5. Output from the commands is streamed back to the client in real-time.
+
+### Authentication Model
+
+**Important**: The terminal server does **NOT** verify Ably API keys or tokens. Instead:
+
+- Credentials are passed directly from the client to the Ably CLI within the container
+- Authentication and authorization are handled by the Ably SDK/API
+- The server validates the session integrity and prevents session hijacking
+- Rate limiting protects against abuse, but doesn't validate API credentials
+- Invalid credentials will result in Ably API errors being returned to the client
+
+This design allows the server to support all Ably authentication methods (API keys, tokens, client certificates) without needing to understand or validate them.
 
 ## Prerequisites
 
@@ -205,3 +217,268 @@ The setup script performs the following actions:
 15. **Configure Firewall:** Allows SSH, HTTP (port 80), and HTTPS (port 443) through UFW.
 16. **Enable Services:** Reloads systemd and enables both `ably-terminal-server` and `caddy` services to start on boot.
 17. Provides Instructions.
+
+## Operational Runbook
+
+This section provides operational procedures for managing the terminal server in production.
+
+### Daily Operations
+
+#### Health Checks
+```bash
+# Check service status
+sudo systemctl status ably-terminal-server
+sudo systemctl status caddy
+
+# Check service logs for errors
+sudo journalctl -u ably-terminal-server --since "1 hour ago" | grep -i error
+sudo journalctl -u caddy --since "1 hour ago" | grep -i error
+
+# Verify HTTPS certificate status
+curl -I https://your-domain.example.com/health
+
+# Check container resource usage
+docker stats --no-stream | grep ably-cli-sandbox
+```
+
+#### Rate Limiting Monitoring
+```bash
+# Check for rate limiting events
+sudo journalctl -u ably-terminal-server --since "1 hour ago" | grep -i "rate"
+
+# Monitor active sessions
+sudo journalctl -u ably-terminal-server --since "1 hour ago" | grep "session_created\|session_terminated"
+
+# Check for security events
+sudo journalctl -u ably-terminal-server --since "1 hour ago" | grep "AUDIT"
+```
+
+### Weekly Operations
+
+#### Performance Review
+```bash
+# Analyze session duration patterns
+sudo journalctl -u ably-terminal-server --since "1 week ago" | grep "session_duration" | awk '{print $NF}' | sort -n
+
+# Check memory and CPU trends
+# (Requires monitoring system integration)
+
+# Review rate limiting effectiveness
+sudo journalctl -u ably-terminal-server --since "1 week ago" | grep "rate_limit" | wc -l
+```
+
+#### Security Audit
+```bash
+# Review security events
+sudo journalctl -u ably-terminal-server --since "1 week ago" | grep "severity.*high\|severity.*critical"
+
+# Check for failed authentication attempts
+sudo journalctl -u ably-terminal-server --since "1 week ago" | grep "authentication_failed"
+
+# Verify container security settings
+docker inspect ably-cli-sandbox | jq '.[]|{SecurityOpt,ReadonlyRootfs,HostConfig.PidsLimit}'
+```
+
+### Monthly Operations
+
+#### Configuration Review
+- Review and update rate limiting thresholds based on usage patterns
+- Update security configurations if needed
+- Check for software updates (Node.js, Docker, Caddy)
+- Review SSL certificate renewal (automated but verify)
+
+#### Backup and Recovery
+```bash
+# Backup configuration
+sudo cp /etc/ably-terminal-server/config.env /backup/ably-config-$(date +%Y%m%d).env
+
+# Test disaster recovery procedures
+# (Should be documented separately)
+```
+
+### Incident Response
+
+#### High CPU/Memory Usage
+```bash
+# Identify resource-heavy containers
+docker stats --no-stream
+
+# Check for runaway processes
+sudo journalctl -u ably-terminal-server --since "30 minutes ago" | grep "memory\|cpu"
+
+# Emergency container cleanup
+docker container prune -f
+
+# Restart service if necessary
+sudo systemctl restart ably-terminal-server
+```
+
+#### SSL Certificate Issues
+```bash
+# Check certificate status
+sudo caddy validate --config /etc/caddy/Caddyfile
+
+# Force certificate renewal
+sudo systemctl restart caddy
+
+# Check Let's Encrypt rate limits
+sudo journalctl -u caddy | grep -i "rate limit"
+```
+
+#### Security Incidents
+```bash
+# Emergency: Disable service
+sudo systemctl stop ably-terminal-server
+
+# Review recent connections
+sudo journalctl -u ably-terminal-server --since "1 hour ago" | grep "connection_established"
+
+# Block specific IPs (if needed)
+sudo ufw deny from <suspicious-ip>
+
+# Generate incident report
+sudo journalctl -u ably-terminal-server --since "2 hours ago" > incident-$(date +%Y%m%d-%H%M).log
+```
+
+### Scaling Operations
+
+#### Horizontal Scaling
+The terminal server can be scaled horizontally by:
+
+1. **Load Balancer Setup**
+   - Deploy multiple server instances
+   - Use sticky sessions for WebSocket connections
+   - Configure health checks on `/health` endpoint
+
+2. **Session Persistence**
+   - Consider external session storage (Redis) for multi-instance deployments
+   - Update rate limiting to use shared storage
+
+3. **Container Orchestration**
+   - Use Docker Swarm or Kubernetes for container management
+   - Implement auto-scaling based on CPU/memory metrics
+
+#### Vertical Scaling
+```bash
+# Increase container resource limits
+# Edit /etc/ably-terminal-server/config.env
+MAX_MEMORY_MB=512
+MAX_SESSIONS_PER_USER=5
+
+# Update Docker daemon settings for more containers
+sudo systemctl edit docker.service
+# Add:
+# [Service]
+# ExecStart=
+# ExecStart=/usr/bin/dockerd --max-concurrent-downloads=6 --default-ulimit nofile=65536:65536
+```
+
+### Monitoring Integration
+
+#### Prometheus Metrics
+The server can expose metrics for Prometheus monitoring:
+
+```bash
+# Enable metrics endpoint
+ENABLE_METRICS=true
+METRICS_PORT=9090
+
+# Add to /etc/ably-terminal-server/config.env
+```
+
+#### Log Aggregation
+For centralized logging:
+
+```bash
+# Configure log forwarding to ELK/Grafana
+# Add to systemd service:
+sudo systemctl edit ably-terminal-server
+
+[Service]
+Environment=LOG_LEVEL=2
+Environment=STRUCTURED_LOGGING=true
+```
+
+### Backup and Recovery
+
+#### Configuration Backup
+```bash
+# Daily backup script
+#!/bin/bash
+BACKUP_DIR="/backup/ably-terminal-server"
+DATE=$(date +%Y%m%d)
+
+mkdir -p "$BACKUP_DIR"
+sudo cp -r /etc/ably-terminal-server/ "$BACKUP_DIR/config-$DATE/"
+sudo cp /etc/caddy/Caddyfile "$BACKUP_DIR/caddy-$DATE.conf"
+sudo systemctl status ably-terminal-server > "$BACKUP_DIR/status-$DATE.txt"
+```
+
+#### Disaster Recovery
+```bash
+# Restore from backup
+sudo systemctl stop ably-terminal-server caddy
+sudo cp -r /backup/ably-terminal-server/config-latest/* /etc/ably-terminal-server/
+sudo cp /backup/ably-terminal-server/caddy-latest.conf /etc/caddy/Caddyfile
+sudo systemctl start caddy ably-terminal-server
+```
+
+### Performance Tuning
+
+#### Node.js Optimization
+```bash
+# Add to /etc/ably-terminal-server/config.env
+NODE_OPTIONS="--max-old-space-size=2048 --gc-interval=100"
+UV_THREADPOOL_SIZE=16
+```
+
+#### Docker Optimization
+```bash
+# Optimize Docker daemon
+sudo nano /etc/docker/daemon.json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2"
+}
+```
+
+### Troubleshooting Guide
+
+#### Common Issues
+
+**WebSocket Connection Failures**
+1. Check Caddy proxy configuration
+2. Verify SSL certificate validity
+3. Check firewall rules (ports 80, 443)
+4. Review WebSocket upgrade headers
+
+**Container Creation Failures**
+1. Check Docker daemon status
+2. Verify image availability: `docker images | grep ably-cli-sandbox`
+3. Check resource limits and available memory
+4. Review security profile conflicts
+
+**High Resource Usage**
+1. Monitor container resource consumption
+2. Check for memory leaks in long-running sessions
+3. Review rate limiting effectiveness
+4. Consider session timeout adjustments
+
+**Authentication Issues**
+Remember: The server doesn't validate Ably credentials
+1. Check if Ably API is accessible from container
+2. Verify network connectivity to Ably endpoints
+3. Review client-side credential passing
+4. Check for API key format issues in client
+
+## References
+
+For more detailed information, see:
+- [Rate Limiting Documentation](Rate-Limiting.md)
+- [Security Hardening](Security-Hardening.md)
+- [Container Security](Container-Security.md)
+- [Troubleshooting Guide](Troubleshooting.md)
