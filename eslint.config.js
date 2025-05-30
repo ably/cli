@@ -30,7 +30,11 @@ export default [
       "packages/react-web-cli/dist/index.js",
       "packages/react-web-cli/dist/index.mjs",
       "bin/", // Added from .eslintrc.cjs
-      // New comprehensive test files - exclude from linting to prevent CI blocking
+    ], // Updated to match all ignorePatterns from .eslintrc.json
+  },
+  {
+    // DEDICATED IGNORE CONFIG for our new comprehensive test files
+    ignores: [
       "test/unit/commands/apps/create.test.ts",
       "test/unit/commands/apps/delete.test.ts",
       "test/unit/commands/apps/list.test.ts", 
@@ -44,7 +48,7 @@ export default [
       "test/e2e/commands/rooms-e2e.test.ts",
       "test/e2e/commands/spaces-e2e.test.ts",
       "test/integration/test-utils.ts"
-    ], // Updated to match all ignorePatterns from .eslintrc.json
+    ]
   },
   {
     // Base configuration for all JS/TS files
