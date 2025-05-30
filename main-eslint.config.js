@@ -30,20 +30,6 @@ export default [
       "packages/react-web-cli/dist/index.js",
       "packages/react-web-cli/dist/index.mjs",
       "bin/", // Added from .eslintrc.cjs
-      // New comprehensive test files - ignore to prevent CI blocking
-      "test/unit/commands/apps/create.test.ts",
-      "test/unit/commands/apps/delete.test.ts",
-      "test/unit/commands/apps/list.test.ts", 
-      "test/unit/commands/auth/keys/create.test.ts",
-      "test/unit/commands/rooms/**/*.test.ts",
-      "test/unit/commands/spaces/**/*.test.ts",
-      "test/unit/commands/mcp/**/*.test.ts",
-      "test/unit/commands/bench/**/*.test.ts",
-      "test/integration/commands/rooms.test.ts",
-      "test/integration/commands/spaces.test.ts", 
-      "test/e2e/commands/rooms-e2e.test.ts",
-      "test/e2e/commands/spaces-e2e.test.ts",
-      "test/integration/test-utils.ts"
     ], // Updated to match all ignorePatterns from .eslintrc.json
   },
   {
@@ -131,6 +117,15 @@ export default [
     },
   },
   {
+    // Configuration for the standalone terminal-server script (large, experimental – allow relaxed typing)
+    files: ["scripts/terminal-server.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "unicorn/prefer-optional-catch-binding": "off",
+    },
+  },
+  {
     // Configuration specific to test files
     files: ["test/**/*.test.ts"],
     plugins: {
@@ -154,34 +149,6 @@ export default [
       "@typescript-eslint/no-unused-expressions": "off",
       "mocha/no-exclusive-tests": "error",
       "mocha/no-skipped-tests": "warn",
-    },
-  },
-  {
-    // Configuration specific to server test files
-    files: ["server/tests/**/*.test.ts"],
-    plugins: {
-      mocha: eslintPluginMocha,
-    },
-    languageOptions: {
-      globals: {
-        ...globals.mocha,
-        describe: "readonly",
-        it: "readonly",
-        before: "readonly",
-        after: "readonly",
-        beforeEach: "readonly",
-        afterEach: "readonly",
-      },
-    },
-    rules: {
-      // Apply recommended mocha rules which include globals
-      ...eslintPluginMocha.configs.recommended.rules,
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-expressions": "off",
-      "mocha/no-exclusive-tests": "error",
-      "mocha/no-skipped-tests": "warn",
-      "unicorn/prefer-optional-catch-binding": "off", // Allow catch (error) in tests
-      "n/no-unpublished-import": "off", // Allow dev dependencies like chai in tests
     },
   },
   // Configuration for MCP files with ModelContextProtocol SDK imports
