@@ -224,7 +224,7 @@ describe("ChannelsSubscribe (Simplified)", function() {
 
     try {
       await runPromise;
-    } catch (error: any) {
+    } catch {
       // Expected for some tests
     } finally {
       clearTimeout(cleanup);

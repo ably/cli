@@ -251,7 +251,7 @@ If a data plane command is run without explicit auth flags/env vars and no app/k
     - Proxies WebSocket stream to the container's stdin/stdout.
     - Terminates Docker container on WebSocket disconnect or after timeout (e.g., 30 mins).
     - Limits concurrent sessions.
-    - Includes security measures (see [docker/README.md](../docker/README.md)).
+    - Includes security measures (see [server/docker/README.md](../server/docker/README.md)).
 - **Docker Container**:
     - Based on `node:22-alpine` (or similar).
     - Installs `@ably/cli`.

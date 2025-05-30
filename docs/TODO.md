@@ -34,6 +34,49 @@
 - [x] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, connection status indicators per-pane, and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the server
 
+## Server Migration
+
+- [x] **Phase 1: Identify and Categorize Components**
+  - [x] Move all server-related code into `server/` folder structure
+  - [x] Copy Docker configurations to `server/docker/`
+  - [x] Copy server scripts to `server/scripts/`
+  - [x] Copy server-related tests to `server/tests/`
+  - [x] Identify client-side components that remain in main repository
+  - [x] Create comprehensive migration plan documentation
+  - [x] Set up proper directory structure for future refactoring
+- [x] **Phase 2: Refactor terminal-server.ts**
+  - [x] Create modular service files from monolithic terminal-server.ts (1713 lines → 13 modules)
+  - [x] Split into websocket-server, docker-manager, session-manager, auth-service, security-service, etc.
+  - [x] Update import paths and dependencies across all modules
+  - [x] Create server package.json and tsconfig.json with proper TypeScript configuration
+  - [x] Refactor types into dedicated type definition files (docker, session, websocket)
+  - [x] Centralize configuration in server-config.ts
+  - [x] Update all server tests with new modular import structure
+  - [x] Implement proper ESLint configuration for server directory
+  - [x] Ensure all linting, building, and testing passes for new modular structure
+  - [x] Preserve diagnostics-server.ts utility for debugging/testing
+  - [x] Update .gitignore to exclude server build artifacts (server/dist/, server/node_modules)
+- [x] **Phase 3: Migrate Server Code**
+  - [x] Remove old server files from main repository scripts/ directory (terminal-server.ts, session-utils.ts, diagnostics-server.ts, etc.)
+  - [x] Update all test imports to use new modular server structure (server/src/index.js)
+  - [x] Update TypeScript and ESLint configurations to remove references to deleted files
+  - [x] Update server setup script to use new modular entry point (server/src/index.ts)
+  - [x] Ensure all linting, building, and testing passes after migration
+  - [x] Verify server and client code are now fully separated
+- [x] **Phase 4: Update Client Tests**
+  - [x] Update example tests to use `web-cli.ably.com`
+  - [x] Update React component tests to use public endpoint
+  - [x] Ensure client tests have no server dependencies
+  - [x] Update example application to smart-default to public endpoint in production
+  - [x] Update all E2E web CLI tests to use public endpoint
+  - [x] Remove Docker dependencies from client-side testing
+  - [x] Simplify test infrastructure and improve development experience
+  - [x] Move server diagnostic tests to server test suite with proper local server testing functionality
+- [x] **Phase 5: Clean Up**
+  - [x] Update CI/CD configurations
+  - [x] Final testing and verification
+  - [x] Update documentation references to old file locations
+
 ## UI/UX Improvements
 
 - [ ] The CLI should standardise on how commands are shown when running the topic such as `ably accounts` where all sub-commands are shown, and only when `--help` is used examples are shown along with all commands.
@@ -113,7 +156,10 @@
 - [x] Review the Cursor rules and Docs to ensure they are effective for prompting
   -   *Done: 2025-04-27*
   -   *Summary: Refactored `.cursor/rules`, updated `docs/Testing.md`, added `CONTRIBUTING.md` and `docs/DEBUGGING.md` based on analysis of the `.specstory` files and Anthropic best practices. Added code examples, troubleshooting guide, and agent-agnostic AI assistance rules. Enhanced visual hierarchy and progressive disclosure in documentation. Created `WORKFLOW.mdc` to centralize mandatory steps.*
-- [ ] Refactor terminal-server.ts as it's grown organically and become a little bit of a beast. Treating it as a "script" is no longer applicable.
+- [x] Refactor terminal-server.ts as it's grown organically and become a little bit of a beast. Treating it as a "script" is no longer applicable.
+  -   *Done: 2025-05-29 (Phase 2)*
+  -   *Summary: Refactored monolithic 1713-line terminal-server.ts into 13 focused modules with clean separation of concerns. Created proper TypeScript architecture with services (websocket-server, docker-manager, session-manager, auth-service, security-service), utilities (logger, stream-handler), type definitions, and centralized configuration. All tests updated and passing.*
+- [ ] Implement token bearer auth for web CLI usage to minimise exposure of API keys and access tokens. This same thinking should apply to anonymous users (in spite of the API key being recycled), and the CLI needs to handle expiring tokens. See https://ably.atlassian.net/wiki/spaces/product/pages/4033511425/PDR-070+Web+CLI+technical+architecture?focusedCommentId=4051042310.
 
 ## Bugs
 

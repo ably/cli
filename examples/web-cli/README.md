@@ -1,89 +1,89 @@
 # Ably Web CLI Example
 
-This example demonstrates how to use the `@ably/react-web-cli` component to embed an interactive Ably CLI session within a React web application.
-
-It connects to a local `terminal-server` (provided in the main CLI package) via WebSocket, handles authentication using environment variables or user input, and provides a functional terminal interface powered by Xterm.js.
-
-![Ably Web CLI demo screenshot](public/ably-web-cli-demo-screenshot.png)
+This example demonstrates how to integrate the Ably Web CLI React component into a web application.
+It connects to the Ably terminal server via WebSocket, handles authentication using environment variables or user input, and provides a functional terminal interface powered by Xterm.js.
 
 ## Features
 
-- Connects to a WebSocket endpoint for the terminal server.
-- Authenticates using `VITE_ABLY_API_KEY` and `VITE_ABLY_ACCESS_TOKEN` environment variables.
-- Prompts for API Key and Access Token if environment variables are not set.
-- Uses the `@ably/react-web-cli` component to render the terminal.
-- Provides a basic "Restart Session" button when the session ends.
+- Connects to a WebSocket endpoint for the terminal server (defaults to public endpoint in production, localhost in development).
+- Authentication using environment variables or interactive input.
+- Full terminal interface with command execution.
+- Auto-completion and command history.
+- Fullscreen and drawer modes.
+- Session persistence across page reloads.
+- Connection status indicators and reconnection handling.
 
-## Prerequisites
+## Quick Start
 
-- Node.js and pnpm installed.
-- Docker Desktop running (required by the `terminal-server`).
-- The main Ably CLI package built (`pnpm install && pnpm prepare` in the project root).
-- The Ably CLI Docker image built (`docker build --no-cache -t ably-cli-sandbox .` in the project root).
+### Development Mode
 
-## Setup
+For local development, the example will connect to `ws://localhost:8080` by default. You'll need to run the terminal server locally:
 
-1. **Environment Variables:**
+```bash
+# In the main CLI repository
+pnpm dev:server
 
-   - Create a `.env` file in this directory (`examples/web-cli`).
-   - Add your Ably credentials:
-     ```env
-     VITE_ABLY_API_KEY=YOUR_ABLY_API_KEY
-     VITE_ABLY_ACCESS_TOKEN=YOUR_ABLY_ACCESS_TOKEN
-     VITE_TERMINAL_SERVER_URL=ws://your-custom-server:8080
-     ```
-   - Replace `YOUR_ABLY_API_KEY` and `YOUR_ABLY_ACCESS_TOKEN` with your actual Ably credentials. You can obtain these from your [Ably dashboard](https://ably.com/dashboard).
-   - Optionally specify a custom terminal server URL with `VITE_TERMINAL_SERVER_URL` (defaults to `ws://localhost:8080` if not provided).
-   - _Alternatively, you can skip this step and enter the credentials directly in the web UI when prompted._
+# In another terminal, run the example
+cd examples/web-cli
+pnpm dev
+```
 
-2. **Install Dependencies:**
-   - Navigate to this directory (`examples/web-cli`) in your terminal.
-   - Run `pnpm install`. This will also link the local `@ably/react-web-cli` package due to the pnpm workspace setup.
+### Production Mode
 
-## Running the Example
+In production builds, the example automatically connects to the public Ably terminal server at `wss://web-cli.ably.com`:
 
-1. **Start the Terminal Server:**
+```bash
+cd examples/web-cli
+pnpm build
+pnpm preview
+```
 
-   - Open a terminal in the **root** of `ably/cli`.
-   - Run the command: `pnpm terminal-server`
-   - Keep this server running in the background. Ensure Docker Desktop is running.
+## Configuration
 
-2. **Start the Web Application:**
+You can override the default server URL in several ways:
 
-   - Open another terminal in **this directory** (`examples/web-cli`).
-   - Run the command: `pnpm dev`
-   - This will start the Vite development server.
+### Environment Variables
 
-3. **Access the Application:**
-   - Open your web browser and navigate to the URL provided by Vite (usually `http://localhost:5173`).
-   - If you didn't provide credentials via `.env`, you will be prompted to enter them.
-   - Once authenticated, the terminal should connect and display the `$ ` prompt.
-   - You can now interact with the Ably CLI (e.g., try `ably --version`). Only `ably` and `exit` commands are permitted.
+Set a custom terminal server URL with `VITE_TERMINAL_SERVER_URL`:
 
-## Customizing the Terminal Server URL
+```bash
+VITE_TERMINAL_SERVER_URL=wss://your-custom-server:8080
+```
 
-You can customize the terminal server URL in several ways:
+### URL Parameters
 
-1. **Environment Variable:**
-   - Set `VITE_TERMINAL_SERVER_URL` in your `.env` file:
-     ```
-     VITE_TERMINAL_SERVER_URL=ws://your-custom-server:8080
-     ```
+- Append the `serverUrl` parameter to the URL:
 
-2. **Query Parameter:**
-   - Append the `serverUrl` parameter to the URL:
-     ```
-     http://localhost:5173?serverUrl=ws://your-custom-server:8080
-     ```
-   - This parameter takes precedence over the environment variable.
+```
+http://localhost:5173?serverUrl=wss://your-custom-server:8080
+```
 
-3. **Default Behavior:**
-   - If neither option is provided, the application will default to `ws://localhost:8080`.
+### Default Behavior
 
-This allows for flexible deployment scenarios, including connecting to remote terminal servers or using different ports.
+- **Development** (`pnpm dev`): Defaults to `ws://localhost:8080`
+- **Production** (`pnpm build`): Defaults to `wss://web-cli.ably.com`
+- **URL parameter takes precedence** over environment variables
+- **Environment variables take precedence** over defaults
+
+If neither option is provided, the application will use the appropriate default based on the build mode.
+
+## Authentication
+
+Set your Ably credentials as environment variables:
+
+```bash
+VITE_ABLY_API_KEY=your-api-key
+VITE_ABLY_ACCESS_TOKEN=your-access-token
+```
+
+Or pass them as URL parameters:
+
+```
+http://localhost:5173?apiKey=your-api-key&accessToken=your-access-token
+```
+
+Note: The example app connects to the `terminal-server` via WebSockets.
 
 # Using the React Web CLI Component (`@ably/react-web-cli`)
 
-This repository also contains a React component (`@ably/react-web-cli`) that allows you to embed an interactive Ably CLI session directly into your web application. It provides an Xterm.js-based terminal interface that connects to the `terminal-server` via WebSockets.
-
-## Installation
+This repository also contains a React component (`

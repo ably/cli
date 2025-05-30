@@ -26,7 +26,10 @@ log "Starting container test..."
 # 1. Build the image (ensure it's up-to-date)
 log "Building image ${IMAGE_NAME}..."
 # Redirect build output to /dev/null to keep test output clean
-if docker build -t "${IMAGE_NAME}" . > /dev/null 2>&1; then
+# Build from current directory if run from CLI root, or parent directories if run from server/scripts
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+if docker build -f server/Dockerfile -t "${IMAGE_NAME}" "${CLI_ROOT}" > /dev/null 2>&1; then
   log "Image built successfully."
 else
   log_error "Failed to build Docker image."

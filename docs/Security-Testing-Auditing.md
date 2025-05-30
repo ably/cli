@@ -20,7 +20,7 @@ The `.github/workflows/container-security-tests.yml` workflow implements automat
 
 ### Local Testing Script
 
-A bash script `docker/test-security.sh` has been created to allow developers to run the same security tests locally. This script:
+A bash script `server/docker/test-security.sh` has been created to allow developers to run the same security tests locally. This script:
 
 1. Builds the Docker image if it doesn't exist
 2. Runs a comprehensive set of tests to verify security configurations
@@ -82,9 +82,9 @@ Regular manual audits complement automated testing.
     *   Review this document (`docs/Security-Testing-Auditing.md`) for relevance and completeness.
 2.  **Review Configuration Files:**
     *   Manually inspect the `Dockerfile`.
-    *   Review `docker/network-security.sh`, `docker/enhanced-restricted-shell.sh`, `docker/security-monitor.sh`.
-    *   Review `docker/seccomp-profile.json`.
-    *   Review `docker/apparmor-profile.conf` (if AppArmor is active).
+    *   Review `server/docker/network-security.sh`, `server/docker/enhanced-restricted-shell.sh`, `server/docker/security-monitor.sh`.
+    *   Review `server/docker/seccomp-profile.json`.
+    *   Review `server/docker/apparmor-profile.conf` (if AppArmor is active).
 3.  **Review Automated Test Results:**
     *   Analyze recent CI/CD test runs for failures or warnings related to security tests.
 4.  **Dependency Vulnerability Check:**

@@ -1,6 +1,6 @@
 # Docker Container Security
 
-Following the simple shell restrictions added in [../scripts/restricted-shell.sh](../scripts/restricted-shell.sh), the following security hardening strategy is being put in place to prevent abuse and risk of security compromises of the host.
+Following the simple shell restrictions added in [../server/docker/enhanced-restricted-shell.sh](../server/docker/enhanced-restricted-shell.sh), the following security hardening strategy is being put in place to prevent abuse and risk of security compromises of the host.
 
 ## Phase 1: Essential Security Enhancements
 

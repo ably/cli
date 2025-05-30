@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { describe, it, before, after, beforeEach } from 'mocha';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { ControlApi } from '../../src/services/control-api.js';
 
 const execAsync = promisify(exec);
@@ -270,7 +270,7 @@ describe('Control API E2E Workflow Tests', () => {
       
       // Remove from cleanup list since we deleted it
       const index = createdResources.queues.indexOf(queueName);
-      if (index > -1) {
+      if (index !== -1) {
         createdResources.queues.splice(index, 1);
       }
     });

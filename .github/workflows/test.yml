@@ -2,11 +2,25 @@ name: Run Tests
 
 on:
   push:
-    # Trigger on pushes to any branch
-    branches: ["**"]
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - 'scripts/**'
+      - '.github/workflows/test.yml'
   pull_request:
-    # Trigger on pull requests targeting any branch
-    branches: ["**"]
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - 'scripts/**'
+      - '.github/workflows/test.yml'
 
 jobs:
   test:
@@ -33,7 +47,9 @@ jobs:
       - name: Run React Web CLI Unit Tests
         run: pnpm --filter @ably/react-web-cli test
 
-      - name: Run tests
-        run: pnpm test
+      - name: Run CLI Tests
+        run: pnpm test:cli
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CLI_GENERAL_TESTS: true
+          SKIP_DOCKER_TESTS: true
