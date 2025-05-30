@@ -222,7 +222,7 @@ describe("rooms messages commands", function () {
         await command.run();
         expect.fail("Should have thrown an error");
       } catch (error) {
-        expect(error.message).to.include("Invalid metadata JSON");
+        expect((error as Error).message).to.include("Invalid metadata JSON");
       }
     });
   });

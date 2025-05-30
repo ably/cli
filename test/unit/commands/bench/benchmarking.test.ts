@@ -331,7 +331,7 @@ describe("benchmarking commands", function () {
       try {
         await command.run();
       } catch (error) {
-        expect(error.message).to.include("Subscription failed");
+        expect((error as Error).message).to.include("Subscription failed");
       }
     });
 

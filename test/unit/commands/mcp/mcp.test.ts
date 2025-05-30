@@ -131,7 +131,7 @@ describe("mcp commands", function () {
         await command.run();
         expect.fail("Should have thrown an error");
       } catch (error) {
-        expect(error.message).to.include("Failed to start MCP server");
+        expect((error as Error).message).to.include("Failed to start MCP server");
       }
     });
   });

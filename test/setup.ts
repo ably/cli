@@ -4,6 +4,17 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import * as Ably from 'ably';
 
+// Global type declarations for test mocks
+declare global {
+  var __TEST_MOCKS__: {
+    ablyRestMock: any; // Keep simple 'any' type to match base-command.ts expectations
+    ablyChatMock?: any;
+    ablySpacesMock?: any; 
+    ablyRealtimeMock?: any;
+    [key: string]: any;
+  } | undefined;
+}
+
 // Ensure we're in test mode for all tests
 process.env.ABLY_CLI_TEST_MODE = 'true';
 
