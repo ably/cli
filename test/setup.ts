@@ -7,10 +7,15 @@ import * as Ably from 'ably';
 // Global type declarations for test mocks
 declare global {
   var __TEST_MOCKS__: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ablyRestMock: any; // Keep simple 'any' type to match base-command.ts expectations
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ablyChatMock?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ablySpacesMock?: any; 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ablyRealtimeMock?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   } | undefined;
 }

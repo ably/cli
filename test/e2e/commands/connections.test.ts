@@ -330,8 +330,9 @@ describe("Connections E2E Tests", function() {
       
       try {
         await connectionsMonitor;
-      } catch (_error) {
-        // Expected - we killed the process
+      } catch (_error: any) {
+        // Should exit cleanly with SIGTERM
+        expect(_error.signal).to.equal("SIGTERM");
       }
       
       // Verify we captured connection lifecycle for our specific client
@@ -380,9 +381,9 @@ describe("Connections E2E Tests", function() {
       
       try {
         await connectionsMonitor;
-      } catch (_error) {
+      } catch (_error: any) {
         // Should exit cleanly with SIGTERM
-        expect(outputReceived).to.be.true;
+        expect(_error.signal).to.equal("SIGTERM");
       }
     });
   });

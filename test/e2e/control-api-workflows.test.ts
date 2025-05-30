@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { describe, it, before, after, beforeEach } from 'mocha';
+import { describe, it, before, after } from 'mocha';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ControlApi } from '../../src/services/control-api.js';
