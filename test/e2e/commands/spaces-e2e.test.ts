@@ -22,10 +22,13 @@ skipTestsIfNeeded('Spaces E2E Tests');
 // Only run the test suite if we should not skip E2E tests
 if (!SHOULD_SKIP_E2E) {
   describe('Spaces E2E Tests', function() {
-    // Apply standard E2E setup
+    // Apply standard E2E setup with increased timeout for E2E tests
     before(function() {
       applyE2ETestSetup();
     });
+
+    // Set timeout for E2E tests (increased but not excessive)
+    this.timeout(45000); // 45 seconds max per test
 
     let testSpaceId: string;
     let client1Id: string;
@@ -52,12 +55,12 @@ if (!SHOULD_SKIP_E2E) {
           const membersInfo = await runLongRunningBackgroundProcess(
             `bin/run.js spaces members subscribe ${testSpaceId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to member updates", timeoutMs: 15000 }
+            { readySignal: "Subscribing to member updates", timeoutMs: 10000 } // Reduced from 15000
           );
           membersProcess = membersInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Have client2 enter the space
           console.log(`Client2 entering space ${testSpaceId}`);
@@ -71,14 +74,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for member update to be received by client1
           console.log("Waiting for member update to be received by monitoring client");
           let memberUpdateReceived = false;
-          for (let i = 0; i < 40; i++) { // ~6 seconds polling
+          for (let i = 0; i < 20; i++) { // Reduced from 40 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && output.includes("Test User 2")) {
               console.log("Member update detected in monitoring output");
               memberUpdateReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(memberUpdateReceived, "Client1 should see client2's space entry").to.be.true;
@@ -95,14 +98,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for member leave to be received by client1
           console.log("Waiting for member leave to be received by monitoring client");
           let memberLeaveReceived = false;
-          for (let i = 0; i < 40; i++) { // ~6 seconds polling
+          for (let i = 0; i < 20; i++) { // Reduced from 40 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && (output.includes("left") || output.includes("leave") || output.includes("removed"))) {
               console.log("Member leave detected in monitoring output");
               memberLeaveReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(memberLeaveReceived, "Client1 should see client2's space leave").to.be.true;
@@ -134,19 +137,19 @@ if (!SHOULD_SKIP_E2E) {
           );
 
           // Wait for entries to establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Start client1 monitoring locations in the space
           console.log(`Starting locations monitor for client1 on space ${testSpaceId}`);
           const locationsInfo = await runLongRunningBackgroundProcess(
             `bin/run.js spaces locations subscribe ${testSpaceId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to location updates", timeoutMs: 15000 }
+            { readySignal: "Subscribing to location updates", timeoutMs: 10000 } // Reduced from 15000
           );
           locationsProcess = locationsInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Have client2 update their location
           const locationData = {
@@ -168,14 +171,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for location update to be received by client1
           console.log("Waiting for location update to be received by monitoring client");
           let locationUpdateReceived = false;
-          for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
+          for (let i = 0; i < 30; i++) { // Reduced from 50 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && output.includes("dashboard") && output.includes("analytics")) {
               console.log("Location update detected in monitoring output");
               locationUpdateReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(locationUpdateReceived, "Client1 should receive location update from client2").to.be.true;
@@ -197,14 +200,14 @@ if (!SHOULD_SKIP_E2E) {
 
           // Wait for second location update
           let secondLocationUpdateReceived = false;
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 30; i++) { // Reduced from 50 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes("editor") && output.includes("code-panel")) {
               console.log("Second location update detected in monitoring output");
               secondLocationUpdateReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(secondLocationUpdateReceived, "Client1 should receive second location update").to.be.true;
@@ -236,19 +239,19 @@ if (!SHOULD_SKIP_E2E) {
           );
 
           // Wait for entries to establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Start client1 monitoring cursors in the space
           console.log(`Starting cursors monitor for client1 on space ${testSpaceId}`);
           const cursorsInfo = await runLongRunningBackgroundProcess(
             `bin/run.js spaces cursors subscribe ${testSpaceId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to cursor updates", timeoutMs: 15000 }
+            { readySignal: "Subscribing to cursor updates", timeoutMs: 10000 } // Reduced from 15000
           );
           cursorsProcess = cursorsInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Have client2 update their cursor position
           const cursorPosition = { x: 250, y: 350 };
@@ -270,14 +273,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for cursor update to be received by client1
           console.log("Waiting for cursor update to be received by monitoring client");
           let cursorUpdateReceived = false;
-          for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
+          for (let i = 0; i < 30; i++) { // Reduced from 50 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && output.includes("blue") && output.includes("text-cursor")) {
               console.log("Cursor update detected in monitoring output");
               cursorUpdateReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(cursorUpdateReceived, "Client1 should receive cursor update from client2").to.be.true;
@@ -309,19 +312,19 @@ if (!SHOULD_SKIP_E2E) {
           );
 
           // Wait for entries to establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Start client1 monitoring locks in the space
           console.log(`Starting locks monitor for client1 on space ${testSpaceId}`);
           const locksInfo = await runLongRunningBackgroundProcess(
             `bin/run.js spaces locks subscribe ${testSpaceId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to lock updates", timeoutMs: 15000 }
+            { readySignal: "Subscribing to lock updates", timeoutMs: 10000 } // Reduced from 15000
           );
           locksProcess = locksInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Have client2 acquire a lock
           const lockId = "document-section-1";
@@ -343,14 +346,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for lock acquisition to be received by client1
           console.log("Waiting for lock acquisition to be received by monitoring client");
           let lockAcquiredReceived = false;
-          for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
+          for (let i = 0; i < 30; i++) { // Reduced from 50 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes(lockId) && output.includes(client2Id) && (output.includes("acquired") || output.includes("editing"))) {
               console.log("Lock acquisition detected in monitoring output");
               lockAcquiredReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(lockAcquiredReceived, "Client1 should receive lock acquisition from client2").to.be.true;
@@ -367,14 +370,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for lock release to be received by client1
           console.log("Waiting for lock release to be received by monitoring client");
           let lockReleasedReceived = false;
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 30; i++) { // Reduced from 50 iterations
             const output = await readProcessOutput(outputPath);
             if (output.includes(lockId) && (output.includes("released") || output.includes("unlocked"))) {
               console.log("Lock release detected in monitoring output");
               lockReleasedReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 150ms
           }
 
           expect(lockReleasedReceived, "Client1 should receive lock release notification").to.be.true;
@@ -425,7 +428,7 @@ if (!SHOULD_SKIP_E2E) {
           );
 
           // Wait for state to establish
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Reduced from 3000
 
           // Retrieve all members
           console.log("Retrieving all members");

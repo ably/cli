@@ -22,10 +22,13 @@ skipTestsIfNeeded('Rooms E2E Tests');
 // Only run the test suite if we should not skip E2E tests
 if (!SHOULD_SKIP_E2E) {
   describe('Rooms E2E Tests', function() {
-    // Apply standard E2E setup
+    // Apply standard E2E setup with increased timeout for E2E tests
     before(function() {
       applyE2ETestSetup();
     });
+
+    // Set timeout for E2E tests (increased but not excessive)
+    this.timeout(45000); // 45 seconds max per test
 
     let testRoomId: string;
     let client1Id: string;
@@ -52,12 +55,12 @@ if (!SHOULD_SKIP_E2E) {
           const presenceInfo = await runLongRunningBackgroundProcess(
             `bin/run.js rooms presence subscribe ${testRoomId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to presence updates", timeoutMs: 15000 }
+            { readySignal: "Subscribing to presence updates", timeoutMs: 10000 }
           );
           presenceProcess = presenceInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Have client2 enter presence on the same room
           console.log(`Client2 entering presence on room ${testRoomId}`);
@@ -71,14 +74,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for presence update to be received by client1
           console.log("Waiting for presence update to be received by monitoring client");
           let presenceUpdateReceived = false;
-          for (let i = 0; i < 40; i++) { // ~6 seconds polling
+          for (let i = 0; i < 20; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && output.includes("Test User 2")) {
               console.log("Presence update detected in monitoring output");
               presenceUpdateReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(presenceUpdateReceived, "Client1 should see client2's presence entry").to.be.true;
@@ -95,14 +98,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for presence leave to be received by client1
           console.log("Waiting for presence leave to be received by monitoring client");
           let presenceLeaveReceived = false;
-          for (let i = 0; i < 40; i++) { // ~6 seconds polling
+          for (let i = 0; i < 20; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && (output.includes("left") || output.includes("leave"))) {
               console.log("Presence leave detected in monitoring output");
               presenceLeaveReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(presenceLeaveReceived, "Client1 should see client2's presence leave").to.be.true;
@@ -129,12 +132,12 @@ if (!SHOULD_SKIP_E2E) {
           const subscribeInfo = await runLongRunningBackgroundProcess(
             `bin/run.js rooms messages subscribe ${testRoomId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to messages", timeoutMs: 15000 }
+            { readySignal: "Subscribing to messages", timeoutMs: 10000 }
           );
           subscribeProcess = subscribeInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Have client2 send a message to the room
           const testMessage = `E2E test message from ${client2Id} at ${new Date().toISOString()}`;
@@ -150,14 +153,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for message to be received by client1
           console.log("Waiting for message to be received by subscribing client");
           let messageReceived = false;
-          for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
+          for (let i = 0; i < 30; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(testMessage) && output.includes(client2Id)) {
               console.log("Message received in subscription output");
               messageReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(messageReceived, "Client1 should receive the message sent by client2").to.be.true;
@@ -174,14 +177,14 @@ if (!SHOULD_SKIP_E2E) {
 
           // Wait for second message
           let secondMessageReceived = false;
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 30; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(secondMessage)) {
               console.log("Second message received in subscription output");
               secondMessageReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(secondMessageReceived, "Client1 should receive the second message").to.be.true;
@@ -208,12 +211,12 @@ if (!SHOULD_SKIP_E2E) {
           const reactionsInfo = await runLongRunningBackgroundProcess(
             `bin/run.js rooms reactions subscribe ${testRoomId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to reactions", timeoutMs: 15000 }
+            { readySignal: "Subscribing to reactions", timeoutMs: 10000 }
           );
           reactionsProcess = reactionsInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Have client2 send a reaction
           const emoji = "👍";
@@ -229,14 +232,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for reaction to be received by client1
           console.log("Waiting for reaction to be received by subscribing client");
           let reactionReceived = false;
-          for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
+          for (let i = 0; i < 25; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(emoji) && output.includes(client2Id)) {
               console.log("Reaction received in subscription output");
               reactionReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(reactionReceived, "Client1 should receive the reaction sent by client2").to.be.true;
@@ -253,14 +256,14 @@ if (!SHOULD_SKIP_E2E) {
 
           // Wait for second reaction
           let secondReactionReceived = false;
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 25; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(secondEmoji)) {
               console.log("Second reaction received in subscription output");
               secondReactionReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(secondReactionReceived, "Client1 should receive the second reaction").to.be.true;
@@ -287,12 +290,12 @@ if (!SHOULD_SKIP_E2E) {
           const typingInfo = await runLongRunningBackgroundProcess(
             `bin/run.js rooms typing subscribe ${testRoomId} --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Subscribing to typing events", timeoutMs: 15000 }
+            { readySignal: "Subscribing to typing events", timeoutMs: 10000 }
           );
           typingProcess = typingInfo.process;
 
           // Wait a moment for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Have client2 start typing
           console.log(`Client2 starting typing in room ${testRoomId}`);
@@ -307,14 +310,14 @@ if (!SHOULD_SKIP_E2E) {
           // Wait for typing indicator to be received by client1
           console.log("Waiting for typing indicator to be received by subscribing client");
           let typingReceived = false;
-          for (let i = 0; i < 50; i++) { // ~7.5 seconds polling
+          for (let i = 0; i < 25; i++) {
             const output = await readProcessOutput(outputPath);
             if (output.includes(client2Id) && (output.includes("typing") || output.includes("start"))) {
               console.log("Typing indicator received in subscription output");
               typingReceived = true;
               break;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           expect(typingReceived, "Client1 should receive typing indicator from client2").to.be.true;
@@ -338,8 +341,8 @@ if (!SHOULD_SKIP_E2E) {
 
           expect(enterResult.exitCode).to.equal(0);
 
-          // Wait a moment for presence to establish
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Wait a moment for presence to establish - reduced timeout
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Reduced from 2000
 
           // Check occupancy metrics
           console.log(`Checking occupancy metrics for room ${testRoomId}`);
