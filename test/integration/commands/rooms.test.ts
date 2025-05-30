@@ -39,8 +39,8 @@ const mockOccupancy = {
 // Create comprehensive mock for Chat client and room
 const createMockRoom = (roomId: string) => ({
   id: roomId,
-  attach: async () => Promise.resolve(),
-  detach: async () => Promise.resolve(),
+  attach: async () => {},
+  detach: async () => {},
   
   // Messages functionality
   messages: {
@@ -51,7 +51,7 @@ const createMockRoom = (roomId: string) => ({
         timestamp: new Date(),
         metadata: message.metadata || {},
       });
-      return Promise.resolve();
+      return;
     },
     subscribe: (callback: (message: any) => void) => {
       // Simulate receiving messages
@@ -64,7 +64,7 @@ const createMockRoom = (roomId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
     get: async (options?: any) => {
       const limit = options?.limit || 50;
       const direction = options?.direction || "backwards";
@@ -89,9 +89,9 @@ const createMockRoom = (roomId: string) => ({
         clientId: "test-client",
         data: data || { status: "online" },
       });
-      return Promise.resolve();
+      return;
     },
-    leave: async () => Promise.resolve(),
+    leave: async () => {},
     get: async () => [...mockPresenceMembers],
     subscribe: (callback: (member: any) => void) => {
       setTimeout(() => {
@@ -103,7 +103,7 @@ const createMockRoom = (roomId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Reactions functionality
@@ -120,7 +120,7 @@ const createMockRoom = (roomId: string) => ({
           clientIds: ["test-client"],
         });
       }
-      return Promise.resolve();
+      return;
     },
     subscribe: (callback: (reaction: any) => void) => {
       setTimeout(() => {
@@ -132,13 +132,13 @@ const createMockRoom = (roomId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Typing functionality
   typing: {
-    start: async () => Promise.resolve(),
-    stop: async () => Promise.resolve(),
+    start: async () => {},
+    stop: async () => {},
     subscribe: (callback: (event: any) => void) => {
       setTimeout(() => {
         callback({
@@ -149,7 +149,7 @@ const createMockRoom = (roomId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Occupancy functionality
@@ -164,14 +164,14 @@ const createMockRoom = (roomId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
 });
 
 const mockChatClient = {
   rooms: {
     get: (roomId: string) => createMockRoom(roomId),
-    release: async (roomId: string) => Promise.resolve(),
+    release: async (roomId: string) => {},
   },
 };
 
@@ -332,8 +332,8 @@ describe('Rooms integration tests', function() {
       return test
         .stderr()
         .command(['rooms', 'messages', 'send', '', 'test message'])
-        .catch(err => {
-          expect(err.message).to.include('Room ID is required');
+        .catch(error => {
+          expect(error.message).to.include('Room ID is required');
         })
         .it('fails with empty room ID');
     });
@@ -342,8 +342,8 @@ describe('Rooms integration tests', function() {
       return test
         .stderr()
         .command(['rooms', 'messages', 'send', 'test-room', 'test message', '--metadata', 'invalid-json'])
-        .catch(err => {
-          expect(err.message).to.include('Invalid metadata JSON');
+        .catch(error => {
+          expect(error.message).to.include('Invalid metadata JSON');
         })
         .it('fails with invalid metadata');
     });
@@ -352,8 +352,8 @@ describe('Rooms integration tests', function() {
       return test
         .stderr()
         .command(['rooms', 'messages', 'send', 'test-room'])
-        .catch(err => {
-          expect(err.message).to.include('Missing required argument');
+        .catch(error => {
+          expect(error.message).to.include('Missing required argument');
         })
         .it('fails with missing message text');
     });

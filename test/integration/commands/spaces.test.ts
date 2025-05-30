@@ -77,9 +77,9 @@ const createMockSpace = (spaceId: string) => ({
         isConnected: true,
         lastEvent: { name: "enter" },
       });
-      return Promise.resolve();
+      return;
     },
-    leave: async () => Promise.resolve(),
+    leave: async () => {},
     getAll: async () => [...mockMembers],
     subscribe: (eventType: string, callback: (member: any) => void) => {
       setTimeout(() => {
@@ -93,7 +93,7 @@ const createMockSpace = (spaceId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Locations functionality
@@ -106,12 +106,12 @@ const createMockSpace = (spaceId: string) => ({
         timestamp: Date.now(),
       };
       
-      if (existingIndex >= 0) {
-        mockLocations[existingIndex] = locationData;
-      } else {
+      if (existingIndex === -1) {
         mockLocations.push(locationData);
+      } else {
+        mockLocations[existingIndex] = locationData;
       }
-      return Promise.resolve();
+      return;
     },
     getAll: async () => [...mockLocations],
     subscribe: (callback: (location: any) => void) => {
@@ -124,7 +124,7 @@ const createMockSpace = (spaceId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Cursors functionality
@@ -138,12 +138,12 @@ const createMockSpace = (spaceId: string) => ({
         timestamp: Date.now(),
       };
       
-      if (existingIndex >= 0) {
-        mockCursors[existingIndex] = cursorData;
-      } else {
+      if (existingIndex === -1) {
         mockCursors.push(cursorData);
+      } else {
+        mockCursors[existingIndex] = cursorData;
       }
-      return Promise.resolve();
+      return;
     },
     getAll: async () => [...mockCursors],
     subscribe: (callback: (cursor: any) => void) => {
@@ -157,7 +157,7 @@ const createMockSpace = (spaceId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Locks functionality
@@ -170,14 +170,14 @@ const createMockSpace = (spaceId: string) => ({
         attributes: attributes || {},
       };
       mockLocks.push(lockData);
-      return Promise.resolve(lockData);
+      return lockData;
     },
     release: async (lockId: string) => {
       const index = mockLocks.findIndex(l => l.id === lockId);
-      if (index >= 0) {
+      if (index !== -1) {
         mockLocks.splice(index, 1);
       }
-      return Promise.resolve();
+      return;
     },
     get: async (lockId: string) => {
       return mockLocks.find(l => l.id === lockId) || null;
@@ -194,20 +194,20 @@ const createMockSpace = (spaceId: string) => ({
       }, 100);
       return Promise.resolve();
     },
-    unsubscribe: async () => Promise.resolve(),
+    unsubscribe: async () => {},
   },
   
   // Space lifecycle
   enter: async (profileData?: any) => {
     return mockMembers[0]; // Return first member as entered member
   },
-  leave: async () => Promise.resolve(),
+  leave: async () => {},
 });
 
 const mockSpacesClient = {
   spaces: {
     get: (spaceId: string) => createMockSpace(spaceId),
-    release: async (spaceId: string) => Promise.resolve(),
+    release: async (spaceId: string) => {},
   },
 };
 
@@ -391,8 +391,8 @@ describe('Spaces integration tests', function() {
       return test
         .stderr()
         .command(['spaces', 'members', 'enter', ''])
-        .catch(err => {
-          expect(err.message).to.include('Space ID is required');
+        .catch(error => {
+          expect(error.message).to.include('Space ID is required');
         })
         .it('fails with empty space ID');
     });
@@ -401,8 +401,8 @@ describe('Spaces integration tests', function() {
       return test
         .stderr()
         .command(['spaces', 'members', 'enter', 'test-space', '--profile', 'invalid-json'])
-        .catch(err => {
-          expect(err.message).to.include('Invalid profile JSON');
+        .catch(error => {
+          expect(error.message).to.include('Invalid profile JSON');
         })
         .it('fails with invalid profile');
     });
@@ -411,8 +411,8 @@ describe('Spaces integration tests', function() {
       return test
         .stderr()
         .command(['spaces', 'locations', 'set', 'test-space', '--location', 'invalid-json'])
-        .catch(err => {
-          expect(err.message).to.include('Invalid location JSON');
+        .catch(error => {
+          expect(error.message).to.include('Invalid location JSON');
         })
         .it('fails with invalid location');
     });
@@ -421,8 +421,8 @@ describe('Spaces integration tests', function() {
       return test
         .stderr()
         .command(['spaces', 'cursors', 'set', 'test-space', '--position', 'invalid-json'])
-        .catch(err => {
-          expect(err.message).to.include('Invalid position JSON');
+        .catch(error => {
+          expect(error.message).to.include('Invalid position JSON');
         })
         .it('fails with invalid position');
     });

@@ -2,9 +2,9 @@ import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
 import { afterEach, beforeEach, describe } from 'mocha';
-import * as path from 'node:path';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
+import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 /* eslint-disable mocha/no-setup-in-describe */
 
@@ -21,8 +21,8 @@ describe('apps:create command', () => {
     process.env.ABLY_ACCESS_TOKEN = mockAccessToken;
     
     // Create a temporary config directory for testing
-    testConfigDir = path.join(os.tmpdir(), `ably-cli-test-${Date.now()}`);
-    fs.mkdirSync(testConfigDir, { recursive: true, mode: 0o700 });
+    testConfigDir = resolve(tmpdir(), `ably-cli-test-${Date.now()}`);
+    mkdirSync(testConfigDir, { recursive: true, mode: 0o700 });
     
     // Store original config dir and set test config dir
     originalConfigDir = process.env.ABLY_CLI_CONFIG_DIR || '';
@@ -38,7 +38,7 @@ accountId = "${mockAccountId}"
 accountName = "Test Account"
 userEmail = "test@example.com"
 `;
-    fs.writeFileSync(path.join(testConfigDir, 'config'), configContent);
+    writeFileSync(resolve(testConfigDir, 'config'), configContent);
   });
 
   afterEach(() => {
@@ -54,8 +54,8 @@ userEmail = "test@example.com"
     }
     
     // Clean up test config directory
-    if (fs.existsSync(testConfigDir)) {
-      fs.rmSync(testConfigDir, { recursive: true, force: true });
+    if (existsSync(testConfigDir)) {
+      rmSync(testConfigDir, { recursive: true, force: true });
     }
   });
 
@@ -234,8 +234,8 @@ userEmail = "test@example.com"
         expect(ctx.stdout).to.include(`Automatically switched to app: ${mockAppName} (${mockAppId})`);
         
         // Verify the config file was updated with the new app
-        const configPath = path.join(testConfigDir, 'config');
-        const configContent = fs.readFileSync(configPath, 'utf8');
+        const configPath = resolve(testConfigDir, 'config');
+        const configContent = readFileSync(configPath, 'utf8');
         expect(configContent).to.include(`currentAppId = "${mockAppId}"`);
         expect(configContent).to.include(`appName = "${mockAppName}"`);
       });

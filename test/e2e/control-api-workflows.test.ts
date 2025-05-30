@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { describe, it } from 'mocha';
+import { describe, it, before, after, beforeEach } from 'mocha';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ControlApi } from '../../src/services/control-api.js';
@@ -279,7 +279,14 @@ describe('Control API E2E Workflow Tests', () => {
         env: { ...process.env, ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
       });
       
-      expect(deleteResult.stdout).to.include('Queue deleted successfully');
+      expect(deleteResult.stderr).to.be.empty;
+      expect(deleteResult.stdout).to.include('deleted successfully');
+      
+      // Remove from cleanup list since we deleted it
+      const index = createdResources.queues.indexOf(queueName);
+      if (index !== -1) {
+        createdResources.queues.splice(index, 1);
+      }
     });
   });
 
