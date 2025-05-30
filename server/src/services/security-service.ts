@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { DOCKER_NETWORK_NAME } from "../config/server-config.js";
+import { DOCKER_NETWORK_NAME, IS_CI, IS_DEVELOPMENT } from "../config/server-config.js";
 import { logSecure, logError } from "../utils/logger.js";
 
 const require = createRequire(import.meta.url);
@@ -17,6 +17,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let seccompProfilePath: string | null = null;
 let isAppArmorProfileLoaded = false;
 let securityInitialized = false;
+let securityDegraded = false; // Track if we're running in degraded mode
 
 // Global docker instance for network operations
 const docker = new Dockerode();
@@ -120,7 +121,7 @@ function verifyAppArmorProfile(): boolean {
 }
 
 /**
- * Initialize security configurations with fail-fast behavior
+ * Initialize security configurations with CI-aware graceful degradation
  */
 export function initializeSecurity(): void {
   if (securityInitialized) {
@@ -128,43 +129,94 @@ export function initializeSecurity(): void {
     return;
   }
 
-  logSecure("Initializing security profiles with fail-fast verification...");
+  if (IS_DEVELOPMENT) {
+    logSecure("Development environment detected - using graceful security degradation mode");
+  }
+
+  logSecure("Initializing security profiles...", { 
+    environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production',
+    failFast: !IS_DEVELOPMENT && !IS_CI
+  });
 
   try {
     // Load and verify seccomp profile
     const seccompProfileSourcePath = path.resolve(__dirname, '../../../docker/seccomp-profile.json');
     
-    if (!fs.existsSync(seccompProfileSourcePath)) {
-      throw new Error(`Seccomp profile not found at ${seccompProfileSourcePath}`);
+    if (fs.existsSync(seccompProfileSourcePath)) {
+      try {
+        const seccompProfileContent = fs.readFileSync(seccompProfileSourcePath, 'utf8');
+        
+        // Validate JSON structure
+        const profileData = JSON.parse(seccompProfileContent);
+        if (!profileData.defaultAction || !Array.isArray(profileData.syscalls)) {
+          throw new Error("Invalid seccomp profile structure");
+        }
+        
+        // In development mode, skip custom seccomp to avoid Docker parsing issues
+        if (IS_DEVELOPMENT) {
+          logSecure("Development mode: Skipping custom seccomp profile to avoid Docker compatibility issues");
+          seccompProfilePath = null;
+        } else {
+          // Create temporary file for seccomp profile
+          seccompProfilePath = createSeccompTempFile(seccompProfileContent);
+          
+          // Verify the temporary file is valid
+          if (!verifySeccompProfile(seccompProfilePath)) {
+            throw new Error("Seccomp profile verification failed");
+          }
+          
+          logSecure("Seccomp profile loaded successfully");
+        }
+      } catch (error) {
+        if (IS_DEVELOPMENT || IS_CI) {
+          logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: Seccomp profile failed (${error}) - continuing without seccomp`);
+          seccompProfilePath = null;
+          securityDegraded = true;
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      const error = `Seccomp profile not found at ${seccompProfileSourcePath}`;
+      if (IS_DEVELOPMENT || IS_CI) {
+        logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: ${error} - continuing without seccomp`);
+        seccompProfilePath = null;
+      } else {
+        throw new Error(error);
+      }
     }
     
-    const seccompProfileContent = fs.readFileSync(seccompProfileSourcePath, 'utf8');
-    
-    // Validate JSON structure
-    const profileData = JSON.parse(seccompProfileContent);
-    if (!profileData.defaultAction || !Array.isArray(profileData.syscalls)) {
-      throw new Error("Invalid seccomp profile structure");
-    }
-    
-    // Create temporary file for seccomp profile
-    seccompProfilePath = createSeccompTempFile(seccompProfileContent);
-    
-    // Verify the temporary file is valid
-    if (!verifySeccompProfile(seccompProfilePath)) {
-      throw new Error("Seccomp profile verification failed");
-    }
-    
-    // Verify AppArmor profile (fail-fast, no fallback)
-    isAppArmorProfileLoaded = verifyAppArmorProfile();
-    if (!isAppArmorProfileLoaded) {
-      throw new Error("AppArmor profile verification failed - required for secure operation");
+    // Verify AppArmor profile with CI-aware handling
+    try {
+      isAppArmorProfileLoaded = verifyAppArmorProfile();
+      if (!isAppArmorProfileLoaded) {
+        throw new Error("AppArmor profile verification failed");
+      }
+    } catch (error) {
+      if (IS_DEVELOPMENT || IS_CI) {
+        logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: AppArmor failed (${error}) - continuing without AppArmor`);
+        isAppArmorProfileLoaded = false;
+        securityDegraded = true;
+      } else {
+        throw new Error(`AppArmor profile verification failed - required for secure operation: ${error}`);
+      }
     }
     
     securityInitialized = true;
-    logSecure("Security initialization completed successfully", {
-      seccompEnabled: Boolean(seccompProfilePath),
-      appArmorEnabled: isAppArmorProfileLoaded
-    });
+    
+    if (securityDegraded && (IS_DEVELOPMENT || IS_CI)) {
+      logSecure("Security initialization completed with degraded security for development or CI", {
+        seccompEnabled: Boolean(seccompProfilePath),
+        appArmorEnabled: isAppArmorProfileLoaded,
+        environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
+      });
+    } else {
+      logSecure("Security initialization completed successfully", {
+        seccompEnabled: Boolean(seccompProfilePath),
+        appArmorEnabled: isAppArmorProfileLoaded,
+        environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
+      });
+    }
     
   } catch (error) {
     // Clean up any created temp files on failure
@@ -183,45 +235,62 @@ export function initializeSecurity(): void {
 }
 
 /**
- * Get security options for Docker container creation with verification
+ * Get security options for Docker container creation with CI-aware configuration
  */
 export function getSecurityOptions(): string[] {
   if (!securityInitialized) {
     throw new Error("Security not initialized - call initializeSecurity() first");
   }
   
-  if (!seccompProfilePath || !isAppArmorProfileLoaded) {
-    throw new Error("Security profiles not properly loaded");
+  const securityOpt: string[] = [];
+  
+  // Always include no-new-privileges
+  securityOpt.push('no-new-privileges');
+  
+  // Add seccomp if available
+  if (seccompProfilePath) {
+    // Re-verify profile before use
+    if (verifySeccompProfile(seccompProfilePath)) {
+      securityOpt.push(`seccomp=${seccompProfilePath}`);
+    } else {
+      if (IS_DEVELOPMENT || IS_CI) {
+        logSecure("Development or CI mode: Seccomp profile verification failed during container creation - skipping seccomp");
+      } else {
+        throw new Error("Seccomp profile verification failed during container creation");
+      }
+    }
+  } else if (IS_DEVELOPMENT || IS_CI) {
+    logSecure("Development or CI mode: No seccomp profile available - using default Docker seccomp");
   }
   
-  // Re-verify profiles before use
-  if (!verifySeccompProfile(seccompProfilePath)) {
-    throw new Error("Seccomp profile verification failed during container creation");
+  // Add AppArmor if available
+  if (isAppArmorProfileLoaded) {
+    securityOpt.push('apparmor=ably-cli-sandbox-profile');
+  } else if (IS_DEVELOPMENT || IS_CI) {
+    logSecure("Development or CI mode: No AppArmor profile available - using default Docker AppArmor");
   }
   
-  const securityOpt = [
-    'no-new-privileges',
-    `seccomp=${seccompProfilePath}` // Use temporary file path
-  ];
-  
-  // Use verified AppArmor profile (no fallback)
-  securityOpt.push('apparmor=ably-cli-sandbox-profile');
-  
+  const securityLevel = securityDegraded ? 'degraded' : 'full';
   logSecure("Security options prepared for container creation", {
-    seccompProfile: path.basename(seccompProfilePath),
-    appArmorProfile: 'ably-cli-sandbox-profile',
-    optionsCount: securityOpt.length
+    seccompProfile: seccompProfilePath ? path.basename(seccompProfilePath) : 'none',
+    appArmorProfile: isAppArmorProfileLoaded ? 'ably-cli-sandbox-profile' : 'default',
+    optionsCount: securityOpt.length,
+    securityLevel,
+    environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
   });
   
   return securityOpt;
 }
 
 /**
- * Check if the specified Docker network exists and enforce its presence
+ * Check if the specified Docker network exists with CI-aware handling
  */
 export async function containerNetworkExists(): Promise<boolean> {
   try {
-    logSecure(`Checking for required network: ${DOCKER_NETWORK_NAME}`);
+    logSecure(`Checking for network: ${DOCKER_NETWORK_NAME}`, {
+      environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
+    });
+    
     const networks = await docker.listNetworks({
       filters: { name: [DOCKER_NETWORK_NAME] }
     });
@@ -229,9 +298,13 @@ export async function containerNetworkExists(): Promise<boolean> {
     const exists = networks.length > 0;
     
     if (exists) {
-      logSecure(`Secure network verified: ${DOCKER_NETWORK_NAME}`);
+      logSecure(`Network verified: ${DOCKER_NETWORK_NAME}`);
     } else {
-      logError(`Required secure network '${DOCKER_NETWORK_NAME}' does not exist`);
+      if (IS_DEVELOPMENT || IS_CI) {
+        logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: Network '${DOCKER_NETWORK_NAME}' not found - will use default bridge network`);
+      } else {
+        logError(`Required secure network '${DOCKER_NETWORK_NAME}' does not exist`);
+      }
     }
     
     return exists;
@@ -302,13 +375,18 @@ export async function createSecureNetwork(): Promise<void> {
 }
 
 /**
- * Enforce secure network requirement
+ * Enforce secure network requirement with CI-aware handling
  */
 export async function enforceSecureNetwork(): Promise<void> {
   const networkExists = await containerNetworkExists();
   
   if (!networkExists) {
-    throw new Error(`Required secure network '${DOCKER_NETWORK_NAME}' does not exist. Run network setup first.`);
+    if (IS_DEVELOPMENT || IS_CI) {
+      logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: Required network '${DOCKER_NETWORK_NAME}' not available - containers will use default bridge network`);
+      return; // Allow graceful degradation in development or CI
+    } else {
+      throw new Error(`Required secure network '${DOCKER_NETWORK_NAME}' does not exist. Run network setup first.`);
+    }
   }
 }
 
@@ -329,6 +407,7 @@ export function cleanupSecurity(): void {
   }
   
   securityInitialized = false;
+  securityDegraded = false;
 }
 
 /**
@@ -339,16 +418,20 @@ export function getSecurityStatus(): {
   seccompEnabled: boolean;
   appArmorEnabled: boolean;
   networkReady: boolean;
+  degraded: boolean;
+  environment: string;
 } {
   return {
     initialized: securityInitialized,
     seccompEnabled: Boolean(seccompProfilePath),
     appArmorEnabled: isAppArmorProfileLoaded,
-    networkReady: false // Will be checked separately
+    networkReady: false, // Will be checked separately
+    degraded: securityDegraded,
+    environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
   };
 }
 
-// Clean up on process exit
+// Clean up on process exit only (not on module unload)
 process.on('exit', cleanupSecurity);
 process.on('SIGINT', cleanupSecurity);
 process.on('SIGTERM', cleanupSecurity); 

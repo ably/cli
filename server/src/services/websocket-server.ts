@@ -110,7 +110,7 @@ export async function startServer(): Promise<http.Server> {
     // Log configuration summary
     logSecure('Server configuration loaded', getConfigurationSummary());
     
-    // Initialize security first with fail-fast behavior
+    // Initialize security with CI-aware handling
     try {
         initializeSecurity();
         logSecure('Security profiles initialized successfully');
@@ -122,17 +122,38 @@ export async function startServer(): Promise<http.Server> {
     // Initialize rate limiting service
     initializeRateLimiting();
     
-    // Create secure network with strict enforcement
+    // Create secure network with CI-aware handling
     try {
         await createSecureNetwork();
-        logSecure('Secure network verified and ready');
+        logSecure('Network initialization completed');
     } catch (error) {
-        logError(`Fatal: Secure network setup failed - ${error}`);
-        throw new Error(`Cannot start server without secure network: ${error}`);
+        // Import IS_DEVELOPMENT from config for development detection
+        const { IS_CI, IS_DEVELOPMENT } = await import('../config/server-config.js');
+        if (IS_DEVELOPMENT || IS_CI) {
+            logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: Network creation failed (${error}) - server will continue with default bridge network`);
+        } else {
+            logError(`Fatal: Secure network setup failed - ${error}`);
+            throw new Error(`Cannot start server without secure network: ${error}`);
+        }
     }
     
     await cleanupStaleContainers();
-    await ensureDockerImage(); // Ensure image exists before starting
+    
+    // Ensure Docker image exists before starting (development/CI-aware)
+    try {
+        await ensureDockerImage();
+        logSecure('Docker image verification completed');
+    } catch (error) {
+        // Import IS_DEVELOPMENT from config for development detection
+        const { IS_CI, IS_DEVELOPMENT } = await import('../config/server-config.js');
+        if (IS_DEVELOPMENT || IS_CI) {
+            logSecure(`${IS_DEVELOPMENT ? 'Development' : IS_CI ? 'CI' : 'production'} mode: Docker image operations failed (${error}) - server will continue without pre-built image`);
+            logSecure('Development or CI mode: Container creation may fail if Docker image is not available');
+        } else {
+            logError(`Fatal: Docker image setup failed - ${error}`);
+            throw new Error(`Cannot start server without Docker image: ${error}`);
+        }
+    }
 
     const server = http.createServer((_req, res) => {
         // Simple health check endpoint

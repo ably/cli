@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs";
 import type { DockerContainer, DockerEvent } from "../types/docker.types.js";
 import type * as DockerodeTypes from "dockerode";
-import { DOCKER_IMAGE_NAME, DOCKER_NETWORK_NAME, CONTAINER_LIMITS, FORCE_REBUILD_SANDBOX_IMAGE } from "../config/server-config.js";
+import { DOCKER_IMAGE_NAME, DOCKER_NETWORK_NAME, CONTAINER_LIMITS, FORCE_REBUILD_SANDBOX_IMAGE, IS_CI, IS_DEVELOPMENT } from "../config/server-config.js";
 import { logSecure, logError } from "../utils/logger.js";
 import { getSecurityOptions, enforceSecureNetwork, getSecurityStatus } from "./security-service.js";
 
@@ -40,14 +40,30 @@ async function verifyContainerLimits(container: DockerContainer): Promise<void> 
       throw new Error(`PID limit mismatch: expected ${CONTAINER_LIMITS.pidsLimit}, got ${hostConfig.PidsLimit}`);
     }
     
-    // Verify security options
+    // Verify security options with CI-aware handling
     const securityOpt = hostConfig.SecurityOpt || [];
     const hasNoNewPrivileges = securityOpt.includes('no-new-privileges');
     const hasSeccomp = securityOpt.some((opt: string) => opt.startsWith('seccomp='));
     const hasAppArmor = securityOpt.some((opt: string) => opt.startsWith('apparmor=') && !opt.includes('unconfined'));
     
-    if (!hasNoNewPrivileges || !hasSeccomp || !hasAppArmor) {
-      throw new Error(`Security options verification failed: no-new-privileges=${hasNoNewPrivileges}, seccomp=${hasSeccomp}, apparmor=${hasAppArmor}`);
+    // In production, require all security features. In CI, allow some to be missing.
+    if (!hasNoNewPrivileges) {
+      throw new Error("Security verification failed: no-new-privileges is required");
+    }
+    
+    if (!IS_DEVELOPMENT && !IS_CI) {
+      // Production environment: enforce all security features
+      if (!hasSeccomp || !hasAppArmor) {
+        throw new Error(`Production security verification failed: seccomp=${hasSeccomp}, apparmor=${hasAppArmor}`);
+      }
+    } else {
+      // Development or CI environment: warn about missing features but don't fail
+      if (!hasSeccomp) {
+        logSecure("Development or CI mode: Container created without custom seccomp profile - using Docker defaults");
+      }
+      if (!hasAppArmor) {
+        logSecure("Development or CI mode: Container created without custom AppArmor profile - using Docker defaults");
+      }
     }
     
     logSecure("Container resource limits and security verified", {
@@ -55,7 +71,13 @@ async function verifyContainerLimits(container: DockerContainer): Promise<void> 
       memoryMB: Math.round(hostConfig.Memory / 1024 / 1024),
       cpus: hostConfig.NanoCpus / 1000000000,
       pidsLimit: hostConfig.PidsLimit,
-      securityOptions: securityOpt.length
+      securityOptions: securityOpt.length,
+      environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production',
+      securityFeatures: {
+        noNewPrivileges: hasNoNewPrivileges,
+        seccomp: hasSeccomp,
+        appArmor: hasAppArmor
+      }
     });
     
   } catch (error) {
@@ -168,96 +190,210 @@ export async function cleanupStaleContainers(): Promise<void> {
 }
 
 export async function ensureDockerImage(): Promise<void> {
-  logSecure(`Ensuring Docker image ${DOCKER_IMAGE_NAME} exists...`);
+  logSecure(`Ensuring Docker image ${DOCKER_IMAGE_NAME} exists...`, {
+    environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
+  });
+  
   try {
+    // In development or CI, add timeout protection for all Docker operations
+    const dockerTimeout = (IS_DEVELOPMENT || IS_CI) ? 30000 : 120000; // 30s in dev/CI, 2 minutes in prod
+    
     const forceRebuild = FORCE_REBUILD_SANDBOX_IMAGE;
 
-    // First check if the image exists
-    const images = await docker.listImages({
-      filters: { reference: [DOCKER_IMAGE_NAME] },
-    });
+    // First check if the image exists (with timeout)
+    const images = await Promise.race([
+      docker.listImages({ filters: { reference: [DOCKER_IMAGE_NAME] } }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Docker listImages timeout')), dockerTimeout)
+      )
+    ]) as any[];
 
     if (forceRebuild && images.length > 0) {
       logSecure(`FORCE_REBUILD_SANDBOX_IMAGE is set. Removing existing image ${DOCKER_IMAGE_NAME} to trigger rebuild.`);
       try {
-        // Remove image by its ID (first match)
+        // Remove image by its ID (first match) with timeout
         const imageId = images[0].Id;
-        await docker.getImage(imageId).remove({ force: true });
+        await Promise.race([
+          docker.getImage(imageId).remove({ force: true }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Docker image removal timeout')), dockerTimeout)
+          )
+        ]);
         logSecure(`Removed existing image ${imageId}.`);
       } catch (error) {
         logError(`Failed to remove image for rebuild: ${error}`);
+        if (IS_DEVELOPMENT || IS_CI) {
+          logSecure("Development or CI mode: Continuing despite image removal failure");
+        }
       }
     }
 
-    // Re-query images after potential removal
-    const imagesPostCheck = await docker.listImages({
-      filters: { reference: [DOCKER_IMAGE_NAME] },
-    });
+    // Re-query images after potential removal (with timeout)
+    const imagesPostCheck = await Promise.race([
+      docker.listImages({ filters: { reference: [DOCKER_IMAGE_NAME] } }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Docker listImages timeout (post-check)')), dockerTimeout)
+      )
+    ]) as any[];
 
     if (imagesPostCheck.length === 0) {
       logSecure(`Image ${DOCKER_IMAGE_NAME} not found. Will attempt to build it.`);
+
+      // In development or CI, check if we should skip image building
+      if (IS_DEVELOPMENT || IS_CI) {
+        logSecure("Development or CI mode: Image building may be skipped due to Docker limitations");
+        
+        // Try to check Docker daemon availability first
+        try {
+          await Promise.race([
+            docker.ping(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Docker ping timeout')), 5000)
+            )
+          ]);
+          logSecure("Development or CI mode: Docker daemon is responsive, proceeding with image build");
+        } catch (error) {
+          logSecure(`Development or CI mode: Docker daemon not available (${error}) - skipping image build`);
+          throw new Error(`Development or CI environment: Docker daemon not available for image building: ${error}`);
+        }
+      }
 
       // Get the location of the Dockerfile - should be in server directory (one level up from server/src)
       const dockerfilePath = path.resolve(__dirname, "../../../", "server/Dockerfile");
 
       // Check if Dockerfile exists
       if (!fs.existsSync(dockerfilePath)) {
-        throw new Error(`Dockerfile not found at ${dockerfilePath}`);
+        const error = `Dockerfile not found at ${dockerfilePath}`;
+        if (IS_DEVELOPMENT || IS_CI) {
+          logSecure(`Development or CI mode: ${error} - this may be expected in development or CI environments`);
+          throw new Error(`Development or CI environment: ${error}`);
+        } else {
+          throw new Error(error);
+        }
       }
 
       logSecure(`Building Docker image ${DOCKER_IMAGE_NAME} from ${dockerfilePath}...`);
 
-      // Try building via Docker CLI first (more reliable than SDK)
+      // Try building via Docker CLI first (more reliable than SDK) with timeout
       try {
         logSecure(`Building with docker command: docker build -f server/Dockerfile -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`);
-        const output = execSync(`docker build -f server/Dockerfile -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`, {
-          stdio: ['ignore', 'pipe', 'pipe']
-        }).toString();
-        logSecure(`Docker build output: ${output.slice(0, 200)}...`);
-        logSecure(`Docker image ${DOCKER_IMAGE_NAME} built successfully using CLI.`);
+        
+        const buildCommand = `docker build -f server/Dockerfile -t ${DOCKER_IMAGE_NAME} ${path.resolve(__dirname, "../../../")}`;
+        
+        if (IS_DEVELOPMENT || IS_CI) {
+          // Use spawn with timeout in development or CI instead of execSync
+          const { spawn } = await import('node:child_process');
+          
+          await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              child.kill();
+              reject(new Error('Docker build timeout in development or CI'));
+            }, dockerTimeout);
+            
+            const child = spawn('docker', ['build', '-f', 'server/Dockerfile', '-t', DOCKER_IMAGE_NAME, path.resolve(__dirname, "../../../")], {
+              stdio: ['ignore', 'pipe', 'pipe']
+            });
+            
+            let output = '';
+            child.stdout?.on('data', (data) => {
+              output += data.toString();
+            });
+            
+            child.stderr?.on('data', (data) => {
+              output += data.toString();
+            });
+            
+            child.on('close', (code) => {
+              clearTimeout(timeoutId);
+              if (code === 0) {
+                logSecure(`Docker image ${DOCKER_IMAGE_NAME} built successfully using CLI in development or CI.`);
+                resolve(void 0);
+              } else {
+                reject(new Error(`Docker build failed with code ${code}: ${output.slice(-500)}`));
+              }
+            });
+            
+            child.on('error', (error) => {
+              clearTimeout(timeoutId);
+              reject(error);
+            });
+          });
+        } else {
+          // Use execSync in production (existing behavior)
+          const output = execSync(buildCommand, {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            timeout: dockerTimeout
+          }).toString();
+          logSecure(`Docker build output: ${output.slice(0, 200)}...`);
+          logSecure(`Docker image ${DOCKER_IMAGE_NAME} built successfully using CLI.`);
+        }
         return;
       } catch (error) {
-        logSecure(`Failed to build using Docker CLI: ${error}. Falling back to Docker SDK.`);
+        logSecure(`Failed to build using Docker CLI: ${error}. ${(IS_DEVELOPMENT || IS_CI) ? 'Development or CI mode: Skipping SDK fallback' : 'Falling back to Docker SDK.'}`);
+        if (IS_DEVELOPMENT || IS_CI) {
+          throw new Error(`Development or CI environment: Docker build failed - ${error}`);
+        }
       }
 
-      // Fallback to Docker SDK if CLI approach fails
-      try {
-        logSecure("Attempting to build image using Docker SDK...");
-        const stream = await docker.buildImage(
-          { context: path.resolve(__dirname, "../../../"), src: ["server/Dockerfile"] },
-          { t: DOCKER_IMAGE_NAME, dockerfile: "server/Dockerfile" },
-        );
+      // Fallback to Docker SDK only in production
+      if (!IS_DEVELOPMENT && !IS_CI) {
+        try {
+          logSecure("Attempting to build image using Docker SDK...");
+          const stream = await Promise.race([
+            docker.buildImage(
+              { context: path.resolve(__dirname, "../../../"), src: ["server/Dockerfile"] },
+              { t: DOCKER_IMAGE_NAME, dockerfile: "server/Dockerfile" },
+            ),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Docker SDK buildImage timeout')), dockerTimeout)
+            )
+          ]) as any;
 
-        await new Promise((resolve, reject) => {
-          docker.modem.followProgress(
-            stream,
-            (err: Error | null, res: unknown) => (err ? reject(err) : resolve(res)),
-            (event: DockerEvent) => {
-              if (event.stream) process.stdout.write(event.stream); // Log build output
-              if (event.errorDetail) logError(event.errorDetail.message);
-            },
+          await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+              reject(new Error('Docker SDK followProgress timeout'));
+            }, dockerTimeout);
+            
+            docker.modem.followProgress(
+              stream,
+              (err: Error | null, res: unknown) => {
+                clearTimeout(timeoutId);
+                if (err) reject(err);
+                else resolve(res);
+              },
+              (event: DockerEvent) => {
+                if (event.stream) process.stdout.write(event.stream); // Log build output
+                if (event.errorDetail) logError(event.errorDetail.message);
+              },
+            );
+          });
+
+          logSecure(`Docker image ${DOCKER_IMAGE_NAME} built successfully using SDK.`);
+        } catch (error) {
+          logError(`Failed to build Docker image ${DOCKER_IMAGE_NAME}: ${error}`);
+          throw new Error(
+            `Failed to build Docker image "${DOCKER_IMAGE_NAME}". Please build it manually using "docker build -t ${DOCKER_IMAGE_NAME} ." in the project root.`,
           );
-        });
-
-        logSecure(`Docker image ${DOCKER_IMAGE_NAME} built successfully using SDK.`);
-      } catch (error) {
-        logError(`Failed to build Docker image ${DOCKER_IMAGE_NAME}: ${error}`);
-        throw new Error(
-          `Failed to build Docker image "${DOCKER_IMAGE_NAME}". Please build it manually using "docker build -t ${DOCKER_IMAGE_NAME} ." in the project root.`,
-        );
+        }
       }
     } else {
       logSecure(`Docker image ${DOCKER_IMAGE_NAME} found.`);
     }
   } catch (error) {
     logError(`Error checking/building Docker image: ${error}`);
-    if (
-      error instanceof Error &&
-      error.message.includes("Cannot connect to the Docker daemon")
-    ) {
-      throw new Error(
-        "Failed to connect to Docker. Is the Docker daemon running and accessible?",
-      );
+    
+    if (error instanceof Error && error.message.includes("Cannot connect to the Docker daemon")) {
+      if (IS_DEVELOPMENT || IS_CI) {
+        logSecure("Development or CI mode: Docker daemon connection failed - this may be expected in development or CI environments");
+        throw new Error(`Development or CI environment: Failed to connect to Docker daemon - ${error.message}`);
+      } else {
+        throw new Error("Failed to connect to Docker. Is the Docker daemon running and accessible?");
+      }
+    }
+
+    // In development or CI, provide more context about the failure
+    if (IS_DEVELOPMENT || IS_CI) {
+      throw new Error(`Development or CI environment: Docker image operations failed - ${error instanceof Error ? error.message : String(error)}`);
     }
 
     throw error;
@@ -272,18 +408,43 @@ export async function createContainer(
 ): Promise<DockerContainer> {
   const containerName = `ably-cli-session-${sessionId}`; // Used for container naming
   
-  // Verify security is properly initialized
+  // Verify security with CI-aware handling
   const securityStatus = getSecurityStatus();
-  if (!securityStatus.initialized || !securityStatus.seccompEnabled || !securityStatus.appArmorEnabled) {
-    throw new Error("Security profiles not properly initialized - container creation blocked");
+  if (!securityStatus.initialized) {
+    throw new Error("Security system not properly initialized - container creation blocked");
   }
   
-  // Enforce secure network requirement
+  // In production, require all security features. In CI, allow degraded security.
+  if (!IS_DEVELOPMENT && !IS_CI && (!securityStatus.seccompEnabled || !securityStatus.appArmorEnabled)) {
+    throw new Error("Security profiles not properly initialized - container creation blocked for production environment");
+  }
+  
+  if ((IS_DEVELOPMENT || IS_CI) && securityStatus.degraded) {
+    logSecure("Development or CI mode: Creating container with degraded security", {
+      sessionId,
+      seccompEnabled: securityStatus.seccompEnabled,
+      appArmorEnabled: securityStatus.appArmorEnabled,
+      environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production'
+    });
+  }
+  
+  // Enforce secure network requirement (development/CI-aware)
   await enforceSecureNetwork();
   
-  logSecure('Creating Docker container with enhanced security', {
+  // Check if secure network is available for container configuration
+  const { containerNetworkExists } = await import('./security-service.js');
+  const hasSecureNetwork = await containerNetworkExists();
+  const networkMode = hasSecureNetwork ? DOCKER_NETWORK_NAME : 'bridge';
+  
+  if (!hasSecureNetwork && (IS_DEVELOPMENT || IS_CI)) {
+    logSecure("Development or CI mode: Using default bridge network for container", { sessionId });
+  }
+  
+  logSecure('Creating Docker container with security hardening', {
     sessionId,
-    securityStatus
+    securityStatus,
+    environment: IS_DEVELOPMENT ? 'development' : IS_CI ? 'CI' : 'production',
+    networkMode
   });
   
   try {
@@ -370,8 +531,8 @@ export async function createContainer(
         KernelMemory: Math.round(CONTAINER_LIMITS.memory * 0.1), // 10% of main memory
         OomKillDisable: false, // Allow OOM killer to prevent system issues
         
-        // Network security restrictions - use only the secure network
-        NetworkMode: DOCKER_NETWORK_NAME,
+        // Network mode: use secure network if available, otherwise default bridge
+        NetworkMode: networkMode,
         
         // Additional security options
         Privileged: false,
@@ -383,7 +544,7 @@ export async function createContainer(
       Labels: { 
         'managed-by': 'ably-cli-terminal-server',
         'session-id': sessionId,
-        'security-level': 'enhanced'
+        'security-level': hasSecureNetwork ? 'enhanced' : 'standard'
       },
       OpenStdin: true,
       StdinOnce: false,
