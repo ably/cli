@@ -45,7 +45,7 @@ export const MAX_CONNECTIONS_PER_IP_PER_MINUTE = Number.parseInt(
   10
 );
 
-export const DEFAULT_MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE = 3;
+export const DEFAULT_MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE = 5;
 export const MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE = Number.parseInt(
   process.env.MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE || String(DEFAULT_MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE),
   10
@@ -180,6 +180,32 @@ export const CLEANUP_GRACE_PERIOD_MS = Number.parseInt(
 
 // JWT validation mode
 export const JWT_VALIDATION_MODE = process.env.JWT_VALIDATION_MODE || 'strict';
+
+// =============================================================================
+// PROXY AND REVERSE PROXY CONFIGURATION
+// =============================================================================
+
+/**
+ * Whether the server is running behind a trusted reverse proxy (like Caddy)
+ * When true, the server will trust X-Forwarded-For headers for rate limiting
+ */
+export const TRUSTED_PROXY_ENABLED = process.env.TRUSTED_PROXY_ENABLED === 'true';
+
+/**
+ * Comma-separated list of trusted proxy IP addresses
+ * Only these IPs are allowed to set X-Forwarded-For headers
+ * Default includes common local proxy IPs
+ */
+export const TRUSTED_PROXY_IPS = (process.env.TRUSTED_PROXY_IPS || '127.0.0.1,::1,::ffff:127.0.0.1')
+  .split(',')
+  .map(ip => ip.trim())
+  .filter(Boolean);
+
+/**
+ * Whether to disable localhost rate limit exemptions in production
+ * Should be true when deployed behind a reverse proxy
+ */
+export const DISABLE_LOCALHOST_EXEMPTIONS = process.env.DISABLE_LOCALHOST_EXEMPTIONS === 'true';
 
 // =============================================================================
 // SESSION TYPE HELPER FUNCTIONS
