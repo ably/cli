@@ -210,16 +210,63 @@ SERVER_DOMAIN=your-domain.example.com
 # The email address Caddy will use for Let's Encrypt registration (REQUIRED)
 ADMIN_EMAIL=your-email@example.com
 
+# == CRITICAL SECURITY SETTINGS for Reverse Proxy Deployment ==
+# IMPORTANT: Configure these to prevent rate limiting bypass vulnerabilities
+
+# Enable trusted proxy mode (REQUIRED when behind Caddy/nginx/Apache)
+# Set to true for production deployments behind reverse proxy
+TRUSTED_PROXY_ENABLED=true
+
+# Comma-separated list of trusted proxy IP addresses
+# Only these IPs are allowed to set X-Forwarded-For headers
+# For Caddy on same server: 127.0.0.1,::1
+TRUSTED_PROXY_IPS=127.0.0.1,::1
+
+# Disable localhost rate limiting exemptions (RECOMMENDED for production)
+# Set to true when behind reverse proxy to prevent security bypass
+DISABLE_LOCALHOST_EXEMPTIONS=true
+
+# == Rate Limiting Configuration ==
+# Maximum connections per IP per minute
+MAX_CONNECTIONS_PER_IP_PER_MINUTE=10
+
+# Connection throttle window in milliseconds
+CONNECTION_THROTTLE_WINDOW_MS=60000
+
+# Maximum session resume attempts per minute
+MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE=5
+
+# == Session Limits ==
+# Maximum anonymous sessions
+MAX_ANONYMOUS_SESSIONS=50
+
+# Maximum authenticated sessions
+MAX_AUTHENTICATED_SESSIONS=50
+
 # == Optional Terminal Server Settings ==
 # Docker Image Name (defaults within the script if not set)
 # DOCKER_IMAGE_NAME=ably-cli-sandbox
-# Max concurrent sessions (defaults within the script if not set)
-# MAX_SESSIONS=50
-# Enable debug logging if needed
-# DEBUG=true
+
+# Container resource limits
+CONTAINER_MEMORY_MB=256
+CONTAINER_CPUS=1
+CONTAINER_PIDS_LIMIT=50
+
+# Enable debug logging if needed (set to true for debugging)
+# DEBUG_MODE=false
+
+# Enable security audit logging (recommended for production)
+# SECURITY_AUDIT_LOG=true
+
+# JWT validation mode (strict recommended for production)
+# JWT_VALIDATION_MODE=strict
 EOF
 else
   log "Environment file ${ENV_CONFIG_FILE} already exists, preserving existing configuration"
+  log "SECURITY NOTE: If upgrading, please review the new proxy security settings:"
+  log "  - TRUSTED_PROXY_ENABLED (should be true for production)"
+  log "  - TRUSTED_PROXY_IPS (whitelist your proxy IPs)"
+  log "  - DISABLE_LOCALHOST_EXEMPTIONS (should be true for production)"
 fi
 
 log "Setting permissions for environment file..."
@@ -245,11 +292,32 @@ WorkingDirectory=${INSTALL_DIR}
 
 # Load ONLY the Terminal Server Port from the config file
 # Caddy will use its own environment loading mechanism if needed
-Environment="PORT=$(grep -E '^TERMINAL_SERVER_PORT=' ${ENV_CONFIG_FILE} | cut -d '=' -f2)"
-# Pass other optional env vars if they exist in the file
-Environment="DOCKER_IMAGE_NAME=$(grep -E '^DOCKER_IMAGE_NAME=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
-Environment="MAX_SESSIONS=$(grep -E '^MAX_SESSIONS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
-Environment="DEBUG=$(grep -E '^DEBUG=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
+Environment="PORT=\$(grep -E '^TERMINAL_SERVER_PORT=' ${ENV_CONFIG_FILE} | cut -d '=' -f2)"
+
+# Security configuration for reverse proxy deployment (CRITICAL)
+Environment="TRUSTED_PROXY_ENABLED=\$(grep -E '^TRUSTED_PROXY_ENABLED=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo 'false')"
+Environment="TRUSTED_PROXY_IPS=\$(grep -E '^TRUSTED_PROXY_IPS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '127.0.0.1,::1,::ffff:127.0.0.1')"
+Environment="DISABLE_LOCALHOST_EXEMPTIONS=\$(grep -E '^DISABLE_LOCALHOST_EXEMPTIONS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo 'false')"
+
+# Rate limiting configuration  
+Environment="MAX_CONNECTIONS_PER_IP_PER_MINUTE=\$(grep -E '^MAX_CONNECTIONS_PER_IP_PER_MINUTE=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '10')"
+Environment="CONNECTION_THROTTLE_WINDOW_MS=\$(grep -E '^CONNECTION_THROTTLE_WINDOW_MS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '60000')"
+Environment="MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE=\$(grep -E '^MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '3')"
+
+# Session limits
+Environment="MAX_ANONYMOUS_SESSIONS=\$(grep -E '^MAX_ANONYMOUS_SESSIONS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '50')"
+Environment="MAX_AUTHENTICATED_SESSIONS=\$(grep -E '^MAX_AUTHENTICATED_SESSIONS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '50')"
+
+# Container configuration
+Environment="CONTAINER_MEMORY_MB=\$(grep -E '^CONTAINER_MEMORY_MB=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '256')"
+Environment="CONTAINER_CPUS=\$(grep -E '^CONTAINER_CPUS=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '1')"
+Environment="CONTAINER_PIDS_LIMIT=\$(grep -E '^CONTAINER_PIDS_LIMIT=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '50')"
+
+# Optional configuration (with fallbacks)
+Environment="DOCKER_IMAGE_NAME=\$(grep -E '^DOCKER_IMAGE_NAME=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo '')"
+Environment="DEBUG_MODE=\$(grep -E '^DEBUG_MODE=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo 'false')"
+Environment="SECURITY_AUDIT_LOG=\$(grep -E '^SECURITY_AUDIT_LOG=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo 'false')"
+Environment="JWT_VALIDATION_MODE=\$(grep -E '^JWT_VALIDATION_MODE=' ${ENV_CONFIG_FILE} | cut -d '=' -f2 || echo 'strict')"
 
 # Use ts-node/esm loader to run the TypeScript source directly
 ExecStart=$(command -v node) --loader ts-node/esm --no-warnings ${INSTALL_DIR}/server/src/index.ts
@@ -371,6 +439,12 @@ if [ ! -f "${ENV_CONFIG_FILE}" ]; then
   log "IMPORTANT: You MUST edit the environment file to configure required settings:"
   log "  sudo nano ${ENV_CONFIG_FILE}"
   log "Set AT LEAST 'SERVER_DOMAIN' and 'ADMIN_EMAIL'. Ensure 'TERMINAL_SERVER_PORT' is correct."
+  log ""
+  log "⚠️  CRITICAL SECURITY: Review proxy security settings in the config file:"
+  log "  - TRUSTED_PROXY_ENABLED (should be true for production behind Caddy)"
+  log "  - TRUSTED_PROXY_IPS (whitelist your proxy server IPs)"
+  log "  - DISABLE_LOCALHOST_EXEMPTIONS (should be true for production)"
+  log ""
   log "Ensure your domain's DNS A/AAAA record points to this server's public IP address."
   log ""
   log "After editing the file, START the services for the first time:"
@@ -379,6 +453,11 @@ if [ ! -f "${ENV_CONFIG_FILE}" ]; then
 else
   log "Existing configuration preserved. If you need to update settings:"
   log "  sudo nano ${ENV_CONFIG_FILE}"
+  log ""
+  log "⚠️  SECURITY NOTE: If upgrading, please review the new proxy security settings:"
+  log "  - TRUSTED_PROXY_ENABLED (should be true for production)"
+  log "  - TRUSTED_PROXY_IPS (whitelist your proxy IPs)"
+  log "  - DISABLE_LOCALHOST_EXEMPTIONS (should be true for production)"
   log ""
   log "To restart the services with new configuration:"
   log "  sudo systemctl restart ${NODE_SERVICE_NAME}"
@@ -394,6 +473,11 @@ log "To check the Caddy service status (for HTTPS/proxy issues):"
 log "  sudo systemctl status ${CADDY_SERVICE_NAME}"
 log "To view Caddy logs:"
 log "  sudo journalctl -f -u ${CADDY_SERVICE_NAME}"
+log ""
+log "🔒 SECURITY VERIFICATION:"
+log "  After starting services, test your proxy security configuration:"
+log "  curl -H \"X-Forwarded-For: 203.0.113.1\" https://${SERVER_DOMAIN_VALUE:-your-domain.example.com}/stats"
+log "  Check logs for: 'Using X-Forwarded-For IP from trusted proxy'"
 log "-----------------------------------------------------"
 
 exit 0

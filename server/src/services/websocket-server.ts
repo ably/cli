@@ -22,7 +22,8 @@ import {
   isSessionResumeLimited,
   recordSessionResumeAttempt,
   validateMessageSize,
-  getRateLimitingStats
+  getRateLimitingStats,
+  getClientIPFromRequest
 } from "./rate-limiting-service.js";
 import { 
   canCreateSession,
@@ -41,7 +42,8 @@ import {
   getSessions,
   setSession,
   takeoverSession,
-  attemptCrossProcessResume
+  attemptCrossProcessResume,
+  canResumeSession
 } from "./session-manager.js";
 import { attachToContainer, handleMessage } from "../utils/stream-handler.js";
 import { computeCredentialHash } from "../utils/session-utils.js";
@@ -51,43 +53,36 @@ const handleProtocols = (protocols: Set<string>, _request: unknown): string | fa
     return firstProtocol === undefined ? false : firstProtocol;
 };
 
-// Helper function to extract client IP address
-function getClientIP(req: http.IncomingMessage): string {
-  // Check for forwarded headers first (for proxies/load balancers)
-  const forwarded = req.headers['x-forwarded-for'] as string;
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-  
-  const realIP = req.headers['x-real-ip'] as string;
-  if (realIP) {
-    return realIP;
-  }
-  
-  // Fallback to socket remote address
-  return req.socket.remoteAddress || 'unknown';
-}
-
 // Moved from startServer scope
 const verifyClient = (info: { origin: string; req: http.IncomingMessage; secure: boolean }, callback: (res: boolean, code?: number, message?: string, headers?: http.OutgoingHttpHeaders) => void) => {
     const origin = info.req.headers.origin || '*';
-    const clientIP = getClientIP(info.req);
+    const clientIP = getClientIPFromRequest(info.req); // Use secure IP extraction
     
     logSecure(`Client connecting from origin and IP`, { 
       origin, 
-      ip: clientIP 
+      ip: clientIP,
+      proxyHeaders: {
+        xForwardedFor: info.req.headers['x-forwarded-for'],
+        xRealIp: info.req.headers['x-real-ip']
+      }
     });
     
-    // Check IP rate limiting
-    if (isIPRateLimited(clientIP)) {
-      logSecure("Connection rejected due to IP rate limiting", { ip: clientIP });
+    // Check IP rate limiting with request context
+    if (isIPRateLimited(clientIP, info.req)) {
+      logSecure("Connection rejected due to IP rate limiting", { 
+        ip: clientIP,
+        userAgent: info.req.headers['user-agent']
+      });
       callback(false, 429, 'Too Many Requests');
       return;
     }
     
-    // Record connection attempt
-    if (!recordConnectionAttempt(clientIP)) {
-      logSecure("Connection rejected - IP rate limit exceeded", { ip: clientIP });
+    // Record connection attempt with request context
+    if (!recordConnectionAttempt(clientIP, info.req)) {
+      logSecure("Connection rejected - IP rate limit exceeded", { 
+        ip: clientIP,
+        userAgent: info.req.headers['user-agent']
+      });
       callback(false, 429, 'Too Many Requests');
       return;
     }
@@ -206,11 +201,16 @@ export async function startServer(): Promise<http.Server> {
 
     wss.on("connection", (ws: WebSocket, req: http.IncomingMessage) => {
         const sessionId = generateSessionId();
-        const clientIP = getClientIP(req);
+        const clientIP = getClientIPFromRequest(req); // Use secure IP extraction
         
         logSecure(`[Server] New connection assigned sessionId`, { 
           sessionId: sessionId.slice(0, 8),
-          ip: clientIP
+          ip: clientIP,
+          userAgent: req.headers['user-agent'],
+          proxyHeaders: {
+            xForwardedFor: req.headers['x-forwarded-for'],
+            xRealIp: req.headers['x-real-ip']
+          }
         });
 
         // Immediately send a "connecting" status message

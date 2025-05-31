@@ -123,8 +123,11 @@ export function cleanupResumeAttemptTracking(): void {
 
 /**
  * Periodic cleanup of resume attempt tracking (call every 10 minutes)
+ * Only runs in production environments to avoid keeping test processes alive
  */
-setInterval(cleanupResumeAttemptTracking, 10 * 60 * 1000);
+if (process.env.NODE_ENV === 'production') {
+  setInterval(cleanupResumeAttemptTracking, 10 * 60 * 1000);
+}
 
 /**
  * Check if client context matches for session security

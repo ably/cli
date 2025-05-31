@@ -2,9 +2,144 @@ import {
   ENABLE_CONNECTION_THROTTLING,
   MAX_CONNECTIONS_PER_IP_PER_MINUTE,
   CONNECTION_THROTTLE_WINDOW_MS,
-  MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE
+  MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE,
+  TRUSTED_PROXY_ENABLED,
+  TRUSTED_PROXY_IPS,
+  DISABLE_LOCALHOST_EXEMPTIONS
 } from "../config/server-config.js";
 import { logSecure } from "../utils/logger.js";
+import type { IncomingMessage } from 'http';
+
+// =============================================================================
+// RATE LIMITING CONFIGURATION
+// =============================================================================
+
+// Check if rate limiting should be disabled for tests
+const DISABLE_FOR_TESTS = process.env.DISABLE_RATE_LIMITING_FOR_TESTS === 'true';
+
+// Localhost exemption settings - much higher limits for local development/testing
+const LOCALHOST_EXEMPTION_ENABLED = !DISABLE_LOCALHOST_EXEMPTIONS && !TRUSTED_PROXY_ENABLED;
+const LOCALHOST_CONNECTION_LIMIT = MAX_CONNECTIONS_PER_IP_PER_MINUTE * 50; // 50x higher limit
+const LOCALHOST_RESUME_LIMIT = MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE * 50; // 50x higher limit
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+/**
+ * Extract the real client IP address from request, handling proxies securely
+ */
+function extractClientIP(request?: IncomingMessage): string {
+  if (!request) {
+    return '0.0.0.0';
+  }
+
+  // If we're behind a trusted proxy, check X-Forwarded-For
+  if (TRUSTED_PROXY_ENABLED) {
+    const proxyIP = request.socket.remoteAddress || '0.0.0.0';
+    
+    // Only trust X-Forwarded-For from whitelisted proxy IPs
+    if (TRUSTED_PROXY_IPS.includes(proxyIP)) {
+      const forwardedFor = request.headers['x-forwarded-for'];
+      
+      if (forwardedFor) {
+        // Take the first IP in the chain (original client)
+        const ips = typeof forwardedFor === 'string' 
+          ? forwardedFor.split(',').map(ip => ip.trim())
+          : forwardedFor;
+        
+        const clientIP = ips[0];
+        
+        if (clientIP && clientIP !== '127.0.0.1' && clientIP !== '::1') {
+          logSecure('Using X-Forwarded-For IP from trusted proxy', {
+            proxyIP,
+            clientIP,
+            forwardedFor
+          });
+          return clientIP;
+        }
+      }
+    } else {
+      logSecure('Ignoring X-Forwarded-For from untrusted proxy', {
+        proxyIP,
+        trustedIPs: TRUSTED_PROXY_IPS
+      });
+    }
+  }
+
+  // Fall back to direct connection IP
+  return request.socket.remoteAddress || '0.0.0.0';
+}
+
+/**
+ * Check if an IP address is localhost
+ */
+function isLocalhostIP(ipAddress: string): boolean {
+  const localhost = [
+    '127.0.0.1',
+    '::1',
+    'localhost',
+    '::ffff:127.0.0.1', // IPv6-mapped IPv4 localhost
+    '0.0.0.0' // Sometimes used in containers
+  ];
+  return localhost.includes(ipAddress) || ipAddress.startsWith('127.') || ipAddress.startsWith('::ffff:127.');
+}
+
+/**
+ * Check if localhost exemptions should be applied for this IP and request
+ * SECURITY: Only apply exemptions for direct localhost connections, not proxied ones
+ */
+function shouldApplyLocalhostExemption(ipAddress: string, request?: IncomingMessage): boolean {
+  // Never apply exemptions if disabled or behind proxy
+  if (!LOCALHOST_EXEMPTION_ENABLED) {
+    return false;
+  }
+
+  // If we're behind a trusted proxy, never apply localhost exemptions
+  // (all traffic appears to come from proxy IP)
+  if (TRUSTED_PROXY_ENABLED) {
+    return false;
+  }
+
+  // Only apply if it's actually localhost AND we have no proxy headers
+  if (!isLocalhostIP(ipAddress)) {
+    return false;
+  }
+
+  // Extra security: if we see proxy headers, don't apply exemptions
+  if (request?.headers['x-forwarded-for'] || request?.headers['x-real-ip']) {
+    logSecure('Refusing localhost exemption due to proxy headers detected', {
+      ip: ipAddress,
+      xForwardedFor: request.headers['x-forwarded-for'],
+      xRealIp: request.headers['x-real-ip']
+    });
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Get the effective rate limit for an IP address
+ */
+function getEffectiveConnectionLimit(ipAddress: string, request?: IncomingMessage): number {
+  if (shouldApplyLocalhostExemption(ipAddress, request)) {
+    logSecure('Applying localhost rate limit exemption', {
+      ip: ipAddress,
+      limit: LOCALHOST_CONNECTION_LIMIT,
+      baseLimit: MAX_CONNECTIONS_PER_IP_PER_MINUTE
+    });
+    return LOCALHOST_CONNECTION_LIMIT;
+  }
+  return MAX_CONNECTIONS_PER_IP_PER_MINUTE;
+}
+
+/**
+ * Get the effective resume limit for sessions (same for all currently)
+ */
+function getEffectiveResumeLimit(): number {
+  return LOCALHOST_RESUME_LIMIT; // Apply higher limits globally for resume attempts
+}
 
 // =============================================================================
 // RATE LIMITING DATA STRUCTURES
@@ -37,13 +172,15 @@ let sessionCleanupInterval: NodeJS.Timeout | null = null;
 /**
  * Check if an IP address is rate limited for connections
  */
-export function isIPRateLimited(ipAddress: string): boolean {
-  if (!ENABLE_CONNECTION_THROTTLING) {
+export function isIPRateLimited(ipAddress: string, request?: IncomingMessage): boolean {
+  if (!ENABLE_CONNECTION_THROTTLING || DISABLE_FOR_TESTS) {
     return false;
   }
 
+  // Use secure IP extraction
+  const clientIP = request ? extractClientIP(request) : ipAddress;
   const now = Date.now();
-  const entry = ipRateLimits.get(ipAddress);
+  const entry = ipRateLimits.get(clientIP);
 
   if (!entry) {
     return false;
@@ -51,8 +188,11 @@ export function isIPRateLimited(ipAddress: string): boolean {
 
   // Check if currently blocked
   if (entry.blockedUntil && now < entry.blockedUntil) {
+    const isLocalhost = shouldApplyLocalhostExemption(clientIP, request);
     logSecure("IP connection blocked due to rate limit", {
-      ip: ipAddress,
+      ip: clientIP,
+      originalIP: ipAddress,
+      isLocalhost,
       blockedFor: Math.round((entry.blockedUntil - now) / 1000)
     });
     return true;
@@ -64,13 +204,17 @@ export function isIPRateLimited(ipAddress: string): boolean {
 /**
  * Record a connection attempt from an IP address
  */
-export function recordConnectionAttempt(ipAddress: string): boolean {
-  if (!ENABLE_CONNECTION_THROTTLING) {
-    return true; // Allow if throttling disabled
+export function recordConnectionAttempt(ipAddress: string, request?: IncomingMessage): boolean {
+  if (!ENABLE_CONNECTION_THROTTLING || DISABLE_FOR_TESTS) {
+    return true; // Allow if throttling disabled or in test mode
   }
 
+  // Use secure IP extraction
+  const clientIP = request ? extractClientIP(request) : ipAddress;
   const now = Date.now();
-  let entry = ipRateLimits.get(ipAddress);
+  const effectiveLimit = getEffectiveConnectionLimit(clientIP, request);
+  const isLocalhost = shouldApplyLocalhostExemption(clientIP, request);
+  let entry = ipRateLimits.get(clientIP);
 
   if (!entry) {
     // First connection from this IP
@@ -78,7 +222,7 @@ export function recordConnectionAttempt(ipAddress: string): boolean {
       count: 1,
       windowStart: now
     };
-    ipRateLimits.set(ipAddress, entry);
+    ipRateLimits.set(clientIP, entry);
     return true;
   }
 
@@ -94,15 +238,19 @@ export function recordConnectionAttempt(ipAddress: string): boolean {
   entry.count++;
 
   // Check if limit exceeded
-  if (entry.count > MAX_CONNECTIONS_PER_IP_PER_MINUTE) {
+  if (entry.count > effectiveLimit) {
     // Block for the remainder of the current window + one additional window
     entry.blockedUntil = entry.windowStart + (2 * CONNECTION_THROTTLE_WINDOW_MS);
     
     logSecure("IP rate limit exceeded - blocking connections", {
-      ip: ipAddress,
+      ip: clientIP,
+      originalIP: ipAddress,
+      isLocalhost,
       attempts: entry.count,
-      limit: MAX_CONNECTIONS_PER_IP_PER_MINUTE,
-      blockDurationMs: entry.blockedUntil - now
+      limit: effectiveLimit,
+      baseLimit: MAX_CONNECTIONS_PER_IP_PER_MINUTE,
+      blockDurationMs: entry.blockedUntil - now,
+      proxyMode: TRUSTED_PROXY_ENABLED
     });
     
     return false;
@@ -114,20 +262,23 @@ export function recordConnectionAttempt(ipAddress: string): boolean {
 /**
  * Get current rate limit status for an IP
  */
-export function getIPRateLimitStatus(ipAddress: string): {
+export function getIPRateLimitStatus(ipAddress: string, request?: IncomingMessage): {
   limited: boolean;
   count: number;
   limit: number;
   windowStart: number;
   blockedUntil?: number;
 } {
-  const entry = ipRateLimits.get(ipAddress);
+  // Use secure IP extraction
+  const clientIP = request ? extractClientIP(request) : ipAddress;
+  const entry = ipRateLimits.get(clientIP);
+  const effectiveLimit = getEffectiveConnectionLimit(clientIP, request);
   
   if (!entry) {
     return {
       limited: false,
       count: 0,
-      limit: MAX_CONNECTIONS_PER_IP_PER_MINUTE,
+      limit: effectiveLimit,
       windowStart: Date.now()
     };
   }
@@ -135,7 +286,7 @@ export function getIPRateLimitStatus(ipAddress: string): {
   return {
     limited: !!entry.blockedUntil && Date.now() < entry.blockedUntil,
     count: entry.count,
-    limit: MAX_CONNECTIONS_PER_IP_PER_MINUTE,
+    limit: effectiveLimit,
     windowStart: entry.windowStart,
     blockedUntil: entry.blockedUntil
   };
@@ -149,6 +300,10 @@ export function getIPRateLimitStatus(ipAddress: string): {
  * Check if a session is rate limited for resume attempts
  */
 export function isSessionResumeLimited(sessionId: string): boolean {
+  if (DISABLE_FOR_TESTS) {
+    return false; // Disable rate limiting in test mode
+  }
+  
   const now = Date.now();
   const entry = sessionRateLimits.get(sessionId);
 
@@ -172,7 +327,12 @@ export function isSessionResumeLimited(sessionId: string): boolean {
  * Record a session resume attempt
  */
 export function recordSessionResumeAttempt(sessionId: string): boolean {
+  if (DISABLE_FOR_TESTS) {
+    return true; // Allow all attempts in test mode
+  }
+  
   const now = Date.now();
+  const effectiveLimit = getEffectiveResumeLimit();
   let entry = sessionRateLimits.get(sessionId);
 
   if (!entry) {
@@ -197,14 +357,15 @@ export function recordSessionResumeAttempt(sessionId: string): boolean {
   entry.resumeAttempts++;
 
   // Check if limit exceeded
-  if (entry.resumeAttempts > MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE) {
+  if (entry.resumeAttempts > effectiveLimit) {
     // Block for 5 minutes
     entry.blockedUntil = now + (5 * 60 * 1000);
     
     logSecure("Session resume rate limit exceeded - blocking", {
       sessionId: sessionId.slice(0, 8),
       attempts: entry.resumeAttempts,
-      limit: MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE,
+      limit: effectiveLimit,
+      baseLimit: MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE,
       blockDurationMs: entry.blockedUntil - now
     });
     
@@ -290,13 +451,40 @@ function cleanupExpiredEntries(): void {
  */
 export function initializeRateLimiting(): void {
   logSecure("Initializing rate limiting service", {
-    ipRateLimitingEnabled: ENABLE_CONNECTION_THROTTLING,
+    ipRateLimitingEnabled: ENABLE_CONNECTION_THROTTLING && !DISABLE_FOR_TESTS,
+    testModeDisabled: DISABLE_FOR_TESTS,
+    localhostExemptionEnabled: LOCALHOST_EXEMPTION_ENABLED,
     maxConnectionsPerIp: MAX_CONNECTIONS_PER_IP_PER_MINUTE,
+    localhostConnectionLimit: LOCALHOST_CONNECTION_LIMIT,
     windowMs: CONNECTION_THROTTLE_WINDOW_MS,
-    maxResumeAttempts: MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE
+    maxResumeAttempts: MAX_RESUME_ATTEMPTS_PER_SESSION_PER_MINUTE,
+    localhostResumeLimit: LOCALHOST_RESUME_LIMIT,
+    // Security configuration
+    trustedProxyEnabled: TRUSTED_PROXY_ENABLED,
+    trustedProxyIPs: TRUSTED_PROXY_IPS,
+    localhostExemptionsDisabled: DISABLE_LOCALHOST_EXEMPTIONS
   });
 
-  // Set up cleanup intervals
+  if (DISABLE_FOR_TESTS) {
+    logSecure("Rate limiting DISABLED for testing mode");
+  } else if (TRUSTED_PROXY_ENABLED) {
+    logSecure("Running behind trusted proxy - localhost exemptions disabled", {
+      trustedProxyIPs: TRUSTED_PROXY_IPS
+    });
+  } else if (LOCALHOST_EXEMPTION_ENABLED) {
+    logSecure("Localhost connections have elevated rate limits for development/testing");
+  }
+
+  // Security warnings
+  if (TRUSTED_PROXY_ENABLED && TRUSTED_PROXY_IPS.length === 0) {
+    logSecure("⚠️  WARNING: Trusted proxy enabled but no proxy IPs configured!");
+  }
+
+  if (!DISABLE_LOCALHOST_EXEMPTIONS && TRUSTED_PROXY_ENABLED) {
+    logSecure("⚠️  WARNING: Localhost exemptions enabled while behind proxy - this may bypass rate limiting!");
+  }
+
+  // Set up cleanup intervals (still useful even in test mode for cleanup)
   ipCleanupInterval = setInterval(cleanupExpiredEntries, 5 * 60 * 1000); // Every 5 minutes
   sessionCleanupInterval = setInterval(cleanupExpiredEntries, 5 * 60 * 1000);
 }
@@ -354,4 +542,23 @@ export function getRateLimitingStats(): {
     blockedIPs,
     blockedSessions
   };
+}
+
+// =============================================================================
+// EXPORTED UTILITY FUNCTIONS
+// =============================================================================
+
+/**
+ * Extract client IP from request (exported for use by other services)
+ * This function handles proxy detection securely
+ */
+export function getClientIPFromRequest(request: IncomingMessage): string {
+  return extractClientIP(request);
+}
+
+/**
+ * Check if an IP should get localhost exemptions (exported for debugging)
+ */
+export function checkLocalhostExemption(ipAddress: string, request?: IncomingMessage): boolean {
+  return shouldApplyLocalhostExemption(ipAddress, request);
 } 
