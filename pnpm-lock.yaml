@@ -406,7 +406,7 @@ importers:
         specifier: ^7.0.0
         version: 7.1.0
       mocha:
-        specifier: ^10.0.0
+        specifier: ^10.8.2
         version: 10.8.2
       ts-node:
         specifier: ^10.9.0
