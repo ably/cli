@@ -1,4 +1,4 @@
-import { ChatClient, RoomStatus, Subscription, MessageReactionRawEvent, MessageReactionEvents, MessageReactionSummaryEvent } from "@ably/chat";
+import { ChatClient, RoomStatus, Subscription, MessageReactionRawEvent, MessageReactionSummaryEvent } from "@ably/chat";
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
@@ -553,7 +553,7 @@ export default class MessagesReactionsSubscribe extends ChatBaseCommand {
 
   private displayReactionSummary(
     summary: Record<string, { total: number; clientIds: string[] }>,
-    flags: any
+    _flags: unknown
   ): void {
     for (const [reaction, data] of Object.entries(summary)) {
       this.log(
@@ -564,7 +564,7 @@ export default class MessagesReactionsSubscribe extends ChatBaseCommand {
 
   private displayMultipleReactionSummary(
     summary: Record<string, { total: number; clientIds: Record<string, number> }>,
-    flags: any
+    _flags: unknown
   ): void {
     for (const [reaction, data] of Object.entries(summary)) {
       this.log(
