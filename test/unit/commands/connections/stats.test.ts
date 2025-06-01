@@ -3,6 +3,9 @@ import sinon from "sinon";
 import { Config } from "@oclif/core";
 import ConnectionsStats from "../../../../src/commands/connections/stats.js";
 import * as Ably from "ably";
+import { describe, beforeEach, afterEach } from 'mocha';
+
+/* eslint-disable mocha/no-setup-in-describe */
 
 // Create a testable version of ConnectionsStats
 class TestableConnectionsStats extends ConnectionsStats {
@@ -38,7 +41,7 @@ class TestableConnectionsStats extends ConnectionsStats {
   }
 
   // Mock console.log to capture StatsDisplay output
-  public mockConsoleLog = (message?: any, ...optionalParams: any[]): void => {
+  public mockConsoleLog = (message?: any, ..._optionalParams: any[]): void => {
     if (message !== undefined) {
       this.consoleOutput.push(message.toString());
     }
@@ -281,7 +284,7 @@ describe("ConnectionsStats", function() {
     });
 
     // Create a promise that resolves quickly to simulate the live mode setup
-    let liveStatsPromise: Promise<void>;
+    let _liveStatsPromise: Promise<void>;
     
     // Mock the process.on method to prevent hanging in test
     const originalProcessOn = process.on;
@@ -289,7 +292,7 @@ describe("ConnectionsStats", function() {
     
     try {
       // Start the command but don't wait for it to complete (since live mode runs indefinitely)
-      liveStatsPromise = command.run();
+      _liveStatsPromise = command.run();
       
       // Give it a moment to set up
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -329,7 +332,7 @@ describe("ConnectionsStats", function() {
     
     try {
       // Start the command and give it a moment to set up
-      const liveStatsPromise = command.run();
+      const _liveStatsPromise = command.run();
       await new Promise(resolve => setTimeout(resolve, 50));
       
       // Verify debug mode was enabled

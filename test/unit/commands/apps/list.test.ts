@@ -1,7 +1,9 @@
 import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
-import { afterEach, beforeEach, describe } from 'mocha';
+import { describe, afterEach, beforeEach } from 'mocha';
+
+/* eslint-disable mocha/no-setup-in-describe */
 
 describe('apps:list command', () => {
   const mockAccessToken = 'fake_access_token';
