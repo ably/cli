@@ -1,8 +1,8 @@
-import { pathToFileURL } from 'node:url';
 import { log as _log, logError } from "./utils/logger.js";
 import { initializeServer } from "./services/websocket-server.js";
 import { cleanupStaleContainers, monitorContainerHealth } from "./services/session-manager.js";
-import { clearAllSessionTracking } from "./services/session-tracking-service.js";
+import { clearAllSessionTracking as _clearAllSessionTracking } from "./services/session-tracking-service.js";
+import { RESOURCE_MONITORING_INTERVAL_MS } from "./config/server-config.js";
 
 // Export test hooks for unit tests
 export {
@@ -34,58 +34,72 @@ export {
 // Container health monitoring interval
 let containerHealthInterval: NodeJS.Timeout | null = null;
 
-// Main server startup with Phase 2 and 3 enhancements
-try {
-  _log("Starting Ably CLI Terminal Server...");
-  
-  // Phase 3: Enhanced startup cleanup - Clean up any stale containers from previous instances
-  _log("Phase 3: Performing enhanced startup cleanup...");
-  await cleanupStaleContainers();
-  
-  // Clear any leftover session tracking from previous instances
-  clearAllSessionTracking();
-  
-  const server = await initializeServer();
-  _log(`Server started successfully on port ${process.env.PORT || 8080}`);
-  
-  // Phase 2: Start container health monitoring
-  containerHealthInterval = setInterval(async () => {
-    try {
-      await monitorContainerHealth();
-    } catch (error) {
-      logError(`Container health monitoring error: ${error}`);
-    }
-  }, 120 * 1000); // Every 2 minutes
-  _log("Phase 2: Container health monitoring started");
-  
-  // Enhanced graceful shutdown handling
-  const gracefulShutdown = async (signal: string) => {
-    _log(`Received ${signal}. Starting enhanced graceful shutdown...`);
-    
+// Main server startup function
+/**
+ * Start the terminal server with all phases
+ */
+async function startTerminalServer(): Promise<void> {
+  try {
+    _log("Phase 1: Cleaning up stale containers from previous server instances...");
+    await cleanupStaleContainers();
+    _log("Phase 1: Stale container cleanup completed");
+
+    // Phase 2: Start container health monitoring
+    _log("Phase 2: Starting container health monitoring...");
+    containerHealthInterval = setInterval(async () => {
+      try {
+        await monitorContainerHealth();
+      } catch (error) {
+        logError(`Container health monitoring error: ${error}`);
+      }
+    }, RESOURCE_MONITORING_INTERVAL_MS);
+    _log("Phase 2: Container health monitoring started");
+
+    // Phase 3: Initialize and start the server
+    _log("Phase 3: Initializing WebSocket server...");
     // Stop container health monitoring
     if (containerHealthInterval) {
       clearInterval(containerHealthInterval);
       _log("Container health monitoring stopped");
     }
+    await initializeServer();
+    _log("Phase 3: Terminal server started successfully");
+
+  } catch (error) {
+    logError(`Failed to start terminal server: ${error}`);
     
-    // Clear session tracking
-    clearAllSessionTracking();
+    // Cleanup on error
+    if (containerHealthInterval) {
+      clearInterval(containerHealthInterval);
+    }
     
-    server.close(() => {
-      _log("✓ Enhanced graceful shutdown completed");
-      process.exit(0);
-    });
-  };
-  
-  // Keep the process alive with enhanced shutdown
-  process.on('SIGINT', () => void gracefulShutdown('SIGINT'));
-  process.on('SIGTERM', () => void gracefulShutdown('SIGTERM'));
-  
-} catch (error: unknown) {
-  logError("Server failed unexpectedly:");
-  logError(error instanceof Error ? error.message : String(error));
-  if (error instanceof Error && error.stack) {
-    logError(error.stack);
+    process.exit(1);
   }
-  process.exit(1);
+}
+
+// More robust detection of whether this file is being run directly
+// Check multiple conditions to ensure we don't start the server during tests
+const isMainModule = () => {
+  // Don't start if we're in test environment
+  if (process.env.NODE_ENV === 'test' || process.env.npm_lifecycle_event === 'test') {
+    return false;
+  }
+  
+  // Don't start if mocha is running
+  if (process.argv.some(arg => arg.includes('mocha') || arg.includes('test'))) {
+    return false;
+  }
+  
+  // Don't start if this is being imported by another module
+  if (import.meta.url !== `file://${process.argv[1]}`) {
+    return false;
+  }
+  
+  return true;
+};
+
+// Start the server using top-level await only if running directly
+if (isMainModule()) {
+  _log("Starting terminal server...");
+  await startTerminalServer();
 }

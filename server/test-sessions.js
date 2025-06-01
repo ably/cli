@@ -16,7 +16,7 @@ async function createSession(sessionType, credentials, index) {
         result.error = 'timeout';
         resolve(result);
       }
-    }, 15000);
+    }, 15_000);
 
     ws.on('open', () => {
       console.log(`[${index}] WebSocket connected, sending auth...`);
@@ -77,10 +77,10 @@ async function testSessionLimits() {
   
   // Test creating 5 anonymous sessions
   const anonymousPromises = [];
-  for (let i = 0; i < 5; i++) {
+  for (let index = 0; index < 5; index++) {
     anonymousPromises.push(createSession('anonymous', {
       apiKey: 'dummy.anonymous:key_for_testing'
-    }, i));
+    }, index));
     
     // Small delay between session attempts
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -101,11 +101,11 @@ async function testSessionLimits() {
   
   // Test creating 5 authenticated sessions
   const authenticatedPromises = [];
-  for (let i = 0; i < 5; i++) {
+  for (let index = 0; index < 5; index++) {
     authenticatedPromises.push(createSession('authenticated', {
       apiKey: 'test.dummy:key_for_testing',
       accessToken: 'dummy_access_token_for_testing'
-    }, i));
+    }, index));
     
     // Small delay between session attempts
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -128,7 +128,9 @@ async function testSessionLimits() {
   process.exit(0);
 }
 
-testSessionLimits().catch(error => {
+try {
+  await testSessionLimits();
+} catch (error) {
   console.error('Test failed:', error);
   process.exit(1);
-}); 
+} 

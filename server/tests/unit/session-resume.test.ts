@@ -10,6 +10,9 @@ class MockWebSocket {
 }
 
 describe('terminal-server resume helpers', function () {
+  // Set timeout to prevent hanging
+  this.timeout(5000);
+  
   describe('canResumeSession', function () {
     it('returns false for null resumeId', function () {
       const result = canResumeSession(null, 'hash123');

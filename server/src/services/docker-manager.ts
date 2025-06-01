@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import * as fs from "node:fs";
 import type { DockerContainer, DockerEvent, ContainerCreateOptions, Container } from "../types/docker.types.js";
-import { DOCKER_IMAGE_NAME, CONTAINER_LIMITS, FORCE_REBUILD_SANDBOX_IMAGE, IS_CI, IS_DEVELOPMENT } from "../config/server-config.js";
+import { DOCKER_IMAGE_NAME, FORCE_REBUILD_SANDBOX_IMAGE, IS_CI, IS_DEVELOPMENT } from "../config/server-config.js";
 import { log, logError, logSecure } from "../utils/logger.js";
 
 const require = createRequire(import.meta.url);

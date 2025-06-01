@@ -4,6 +4,9 @@ import { __testHooks, __deleteSessionForTest } from '../../src/index.js';
 const { scheduleOrphanCleanup, sessions } = __testHooks;
 
 describe('terminal-server placeholder cleanup', function () {
+  // Set timeout to prevent hanging
+  this.timeout(5000);
+  
   afterEach(function () {
     // Clean up any test sessions
     const sessionIds = [...sessions.keys()];
