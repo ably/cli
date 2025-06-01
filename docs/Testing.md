@@ -35,12 +35,33 @@ Refer to [.cursor/rules/Workflow.mdc](mdc:.cursor/rules/Workflow.mdc) for the ma
 
 **Run Specific Files:**
 ```bash
-# Run a specific test file
-pnpm test test/unit/commands/apps/create.test.ts
+# CLI Tests - Run a specific test file
+pnpm test test/unit/commands/bench/bench.test.ts
 
-# Run all tests in a directory
-pnpm test test/integration/core/**/*.test.ts
+# CLI Tests - Run all tests in a directory
+pnpm test test/unit/commands/auth/**/*.test.ts
+
+# Server Tests - Run a specific server test file
+cd server && pnpm test tests/unit/placeholder-cleanup.test.ts
+
+# Server Tests - Run all server integration tests
+cd server && pnpm test:integration
 ```
+
+### 🔧 Pre-Push Validation
+
+The `scripts/pre-push-validation.sh` script runs a comprehensive test suite including fast load tests. It automatically detects free ports to avoid collisions with your local development servers:
+
+```bash
+# Run the full pre-push validation (safe to run with local servers running)
+./scripts/pre-push-validation.sh
+```
+
+The script will:
+- Find a free port for the terminal server (avoiding conflicts with your local development)
+- Run all unit, integration, and E2E tests
+- Execute fast load tests against the temporarily started server
+- Clean up automatically after completion
 
 ---
 
@@ -57,7 +78,7 @@ pnpm test test/integration/core/**/*.test.ts
 **CLI Core and Commands:**
 *   **Tools:** Mocha, `@oclif/test`, `sinon`.
 *   **Location:** Primarily within the `test/unit/` directory, mirroring the `src/` structure.
-*   **Execution:** Run all unit tests with `pnpm test:unit` or target specific files, e.g., `pnpm test test/unit/commands/apps/create.test.ts`.
+*   **Execution:** Run all unit tests with `pnpm test:unit` or target specific files, e.g., `pnpm test test/unit/commands/bench/bench.test.ts`.
 
 **Example (Mocha/Sinon):**
 ```typescript
@@ -223,6 +244,11 @@ describe('channels commands', function() {
 │   │   └── services/
 │   ├── setup.ts            # Full setup for E2E tests (runs in Mocha context)
 │   └── mini-setup.ts       # Minimal setup for Unit/Integration tests
+├── server/
+│   └── tests/              # Server-specific tests
+│       ├── unit/           # Server unit tests
+│       ├── integration/    # Server integration tests
+│       └── performance/    # Server load and performance tests
 └── ...
 ```
 
@@ -240,11 +266,13 @@ E2E tests are organized by feature/topic (e.g., `channels-e2e.test.ts`, `presenc
 2. **✅ DO** clean up all resources in tests (clients, connections, mocks)
 3. **✅ DO** use proper mocking (`sinon`, `nock`) for Unit/Integration tests
 4. **✅ DO** avoid testing implementation details when possible (test behavior)
+5. **✅ DO** use path-based test execution for faster development workflow
 
-5. **❌ DON'T** rely solely on unit tests for Ably API interactions
-6. **❌ DON'T** leave resources unclosed (memory leaks)
-7. **❌ DON'T** use brittle `setTimeout` when avoidable
-8. **❌ DON'T** hardcode credentials or API keys in tests
+6. **❌ DON'T** rely solely on unit tests for Ably API interactions
+7. **❌ DON'T** leave resources unclosed (memory leaks)
+8. **❌ DON'T** use brittle `setTimeout` when avoidable
+9. **❌ DON'T** hardcode credentials or API keys in tests
+10. **❌ DON'T** worry about port collisions when running pre-push validation
 
 ---
 

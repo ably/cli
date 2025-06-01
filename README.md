@@ -18,6 +18,7 @@
 * [MCP Server](#mcp-server)
 * [Terminal Server](#terminal-server)
 * [Contributing](#contributing)
+* [or](#or)
 <!-- tocstop -->
 
 # CLI Usage
@@ -4800,3 +4801,15 @@ This repository includes a terminal server that provides a bash environment over
 # Contributing
 
 Please see the documentation in [`.cursor/rules/Workflow.mdc`](.cursor/rules/Workflow.mdc) for details on how to contribute to this project, including our mandatory development workflow, testing requirements, and code quality standards.
+
+## Quick Development Validation
+
+Before submitting any changes, run our automated validation script to ensure your code meets all requirements:
+
+```bash
+pnpm validate
+# or
+./scripts/pre-push-validation.sh
+```
+
+This script automatically runs all mandatory steps including build, linting, and testing. See [`.cursor/rules/Workflow.mdc`](.cursor/rules/Workflow.mdc) for detailed information about each step.

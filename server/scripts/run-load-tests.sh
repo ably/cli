@@ -53,8 +53,11 @@ echo ""
 
 # Set default server URL if not provided
 if [ -z "$TERMINAL_SERVER_URL" ]; then
-    export TERMINAL_SERVER_URL="ws://localhost:8080"
-    echo -e "${YELLOW}Using default server URL: $TERMINAL_SERVER_URL${NC}"
+    # Use TERMINAL_PORT if provided, otherwise default to 8080
+    TERMINAL_PORT=${TERMINAL_PORT:-8080}
+    export TERMINAL_SERVER_URL="ws://localhost:$TERMINAL_PORT"
+    echo -e "${YELLOW}Using port from environment: $TERMINAL_PORT${NC}"
+    echo -e "${YELLOW}Using server URL: $TERMINAL_SERVER_URL${NC}"
 else
     echo -e "${GREEN}Using server URL: $TERMINAL_SERVER_URL${NC}"
 fi
@@ -66,7 +69,7 @@ if command -v nc >/dev/null 2>&1; then
     SERVER_PORT=$(echo $TERMINAL_SERVER_URL | sed 's/ws[s]*:\/\///' | cut -d':' -f2 | cut -d'/' -f1)
     
     if [ -z "$SERVER_PORT" ]; then
-        SERVER_PORT=8080
+        SERVER_PORT=${TERMINAL_PORT:-8080}
     fi
     
     if nc -z "$SERVER_HOST" "$SERVER_PORT" 2>/dev/null; then
@@ -74,7 +77,11 @@ if command -v nc >/dev/null 2>&1; then
     else
         echo -e "${YELLOW}⚠ Warning: Cannot connect to $SERVER_HOST:$SERVER_PORT${NC}"
         echo -e "${YELLOW}  Make sure the terminal server is running before starting tests${NC}"
-        echo -e "${YELLOW}  Run: cd .. && pnpm terminal-server${NC}"
+        if [ -n "$TERMINAL_PORT" ] && [ "$TERMINAL_PORT" != "8080" ]; then
+            echo -e "${YELLOW}  Run: cd .. && PORT=$TERMINAL_PORT pnpm terminal-server${NC}"
+        else
+            echo -e "${YELLOW}  Run: cd .. && pnpm terminal-server${NC}"
+        fi
     fi
 else
     echo -e "${YELLOW}⚠ Warning: 'nc' not available, skipping server connectivity check${NC}"
@@ -90,7 +97,7 @@ find_and_run_mocha() {
     # Ensure the test file is built
     if [ ! -f "$test_file" ]; then
         echo -e "${YELLOW}Building server first...${NC}"
-        if ! npm run build >/dev/null 2>&1; then
+        if ! pnpm build >/dev/null 2>&1; then
             echo -e "${RED}✗ Build failed${NC}"
             return 1
         fi
@@ -101,7 +108,7 @@ find_and_run_mocha() {
     # Method 1: Try pnpm exec (should work in pnpm workspaces)
     if command -v pnpm >/dev/null 2>&1; then
         echo -e "${BLUE}Trying pnpm exec mocha...${NC}"
-        if pnpm exec mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+        if pnpm exec mocha "$test_file" --grep "$grep_pattern"; then
             return 0
         fi
     fi
@@ -109,7 +116,7 @@ find_and_run_mocha() {
     # Method 2: Try npx (should work if mocha is in package.json)
     if command -v npx >/dev/null 2>&1; then
         echo -e "${BLUE}Trying npx mocha...${NC}"
-        if npx mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+        if npx mocha "$test_file" --grep "$grep_pattern"; then
             return 0
         fi
     fi
@@ -117,7 +124,7 @@ find_and_run_mocha() {
     # Method 3: Try global mocha
     if command -v mocha >/dev/null 2>&1; then
         echo -e "${BLUE}Trying global mocha...${NC}"
-        if mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+        if mocha "$test_file" --grep "$grep_pattern"; then
             return 0
         fi
     fi
@@ -125,7 +132,7 @@ find_and_run_mocha() {
     # Method 4: Try local mocha binary from parent workspace
     if [ -x "../node_modules/.bin/mocha" ]; then
         echo -e "${BLUE}Trying parent workspace mocha...${NC}"
-        if ../node_modules/.bin/mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+        if ../node_modules/.bin/mocha "$test_file" --grep "$grep_pattern"; then
             return 0
         fi
     fi
@@ -133,15 +140,15 @@ find_and_run_mocha() {
     # Method 5: Try direct node execution with mocha from workspace
     if [ -f "../node_modules/mocha/bin/mocha.js" ]; then
         echo -e "${BLUE}Trying direct node execution...${NC}"
-        if node ../node_modules/mocha/bin/mocha.js "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+        if node ../node_modules/mocha/bin/mocha.js "$test_file" --grep "$grep_pattern"; then
             return 0
         fi
     fi
     
     # Method 6: Try to install mocha and run
     echo -e "${YELLOW}No working mocha found, trying to install...${NC}"
-    if npm install --no-save mocha >/dev/null 2>&1; then
-        if npx mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+    if pnpm add --save-dev mocha >/dev/null 2>&1; then
+        if pnpm exec mocha "$test_file" --grep "$grep_pattern"; then
             return 0
         fi
     fi

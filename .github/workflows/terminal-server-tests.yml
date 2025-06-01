@@ -242,11 +242,120 @@ jobs:
           echo "Building Docker container..."
           pnpm build:container
 
+      - name: Start terminal server in background
+        run: |
+          cd server
+          echo "Starting server for load tests..."
+          echo "Current directory: $(pwd)"
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo "Pnpm version: $(pnpm --version)"
+          
+          # Start server with output capture for debugging
+          echo "Starting server with: node dist/src/index.js"
+          node dist/src/index.js > server.log 2>&1 &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          echo "Server started with PID: $SERVER_PID"
+          
+          # Brief initial wait for server startup
+          sleep 2
+          
+          # Check if process is still running
+          if ! kill -0 $SERVER_PID 2>/dev/null; then
+            echo "✗ Server process died immediately"
+            echo "Server logs:"
+            cat server.log || echo "No server logs found"
+            exit 1
+          fi
+          
+          echo "Waiting for server health check..."
+          for i in {1..60}; do
+            if curl -f -s http://localhost:8080/health 2>/dev/null; then
+              echo "✓ HTTP health check passed (attempt $i)"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "✗ Server health check failed after 60 attempts"
+              echo "Server logs:"
+              cat server.log || echo "No server logs found"
+              echo "Process status:"
+              ps aux | grep node || true
+              echo "Port status:"
+              netstat -tulpn | grep 8080 || true
+              exit 1
+            fi
+            echo "Waiting for server health check... (attempt $i/60)"
+            sleep 2
+          done
+          
+          echo "Testing WebSocket connectivity..."
+          # Test WebSocket connection using Node.js
+          node -e "
+          const WebSocket = require('ws');
+          const ws = new WebSocket('ws://localhost:8080');
+          const timeout = setTimeout(() => {
+            console.log('✗ WebSocket connection timeout');
+            process.exit(1);
+          }, 10000);
+          
+          ws.on('open', () => {
+            console.log('✓ WebSocket connection successful');
+            clearTimeout(timeout);
+            ws.close();
+            process.exit(0);
+          });
+          
+          ws.on('error', (error) => {
+            console.log('✗ WebSocket connection failed:', error.message);
+            clearTimeout(timeout);
+            process.exit(1);
+          });
+          " || {
+            echo "✗ WebSocket connectivity test failed"
+            echo "Server logs:"
+            cat server.log || echo "No server logs found"
+            exit 1
+          }
+          
+          echo "Waiting additional 3 seconds for full server readiness..."
+          sleep 3
+          echo "✓ Server should now be fully ready for load tests"
+
       - name: Run fast load tests
         run: |
           echo "Running fast load tests..."
           cd server
-          timeout 1200s pnpm test:load:ci || {
-            echo "Server load tests failed or timed out"
+          echo "Load test environment:"
+          echo "  TERMINAL_SERVER_URL: ${TERMINAL_SERVER_URL:-ws://localhost:8080}"
+          echo "  CI: ${CI:-false}"
+          echo "  NODE_ENV: ${NODE_ENV:-unset}"
+          
+          # Run with timeout and capture output
+          timeout 1200s pnpm test:load:ci 2>&1 | tee load-test.log || {
+            echo "✗ Server load tests failed or timed out"
+            echo "=== Load test output ==="
+            cat load-test.log || echo "No load test logs found"
+            echo "=== Server output ==="
+            cat server.log || echo "No server logs found"
             exit 1
           }
+
+      - name: Stop terminal server
+        if: always()
+        run: |
+          echo "Stopping server..."
+          if [ ! -z "$SERVER_PID" ]; then
+            echo "Killing server PID: $SERVER_PID"
+            kill $SERVER_PID || true
+            sleep 5
+            kill -9 $SERVER_PID 2>/dev/null || true
+          fi
+          # Also kill by process name as backup
+          pkill -f "node dist/src/index.js" || true
+          echo "Server stopped"
+          
+          # Show final server logs for debugging
+          echo "=== Final server logs ==="
+          cd server
+          cat server.log || echo "No server logs found"

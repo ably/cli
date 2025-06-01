@@ -1,9 +1,9 @@
 {
   "require": ["ts-node/register"],
   "extensions": ["ts"],
-  "spec": ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
+  "spec": ["tests/integration/**/*.test.ts"],
   "recursive": true,
-  "timeout": 5000,
+  "timeout": 30000,
   "loader": "ts-node/esm",
   "exit": true
 } 
