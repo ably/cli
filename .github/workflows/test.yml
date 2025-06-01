@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'server/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'tsconfig.json'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'src/**'
       - 'test/**'
+      - 'server/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'tsconfig.json'
@@ -25,6 +27,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -44,12 +47,77 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build project
+        run: pnpm build
+
       - name: Run React Web CLI Unit Tests
         run: pnpm --filter @ably/react-web-cli test
 
-      - name: Run CLI Tests
-        run: pnpm test:cli
+      - name: Run CLI Unit Tests
+        run: pnpm test:unit
         env:
           E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
           CLI_GENERAL_TESTS: true
-          SKIP_DOCKER_TESTS: true
+
+      - name: Run CLI Integration Tests
+        run: pnpm test:integration
+        env:
+          E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CLI_GENERAL_TESTS: true
+
+      - name: Setup Docker for Docker tests
+        run: |
+          # Docker should be available in GitHub Actions
+          docker --version
+          docker info
+
+      - name: Build Docker image for CLI tests
+        run: |
+          echo "Building CLI Docker image for tests..."
+          pnpm build:container
+
+      - name: Run Docker Container Security Tests
+        run: pnpm test:docker
+        env:
+          E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+          CLI_GENERAL_TESTS: true
+          RUN_DOCKER_TESTS: true
+          # Enable Docker tests in CI
+          CI: true
+
+  # Server tests as a separate job to avoid interference
+  server-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build server
+        run: |
+          echo "Building server..."
+          cd server && pnpm build
+
+      - name: Run server unit tests
+        run: |
+          echo "Running server unit tests..."
+          cd server
+          timeout 300s pnpm test:unit || {
+            echo "Server unit tests failed or timed out"
+            exit 1
+          }

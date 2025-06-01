@@ -14,11 +14,11 @@ function createSecureHash(input: string): string {
  * Note: JavaScript strings are immutable, so this is primarily about 
  * removing references and triggering garbage collection
  */
-function purgeFromMemory(obj: any, key: string): void {
+function purgeFromMemory(obj: Record<string, unknown>, key: string): void {
   if (obj && typeof obj[key] === 'string') {
     // Since strings are immutable in JavaScript, we can't actually overwrite memory
     // But we can remove the reference and encourage garbage collection
-    const originalValue = obj[key];
+    const originalValue = obj[key] as string;
     delete obj[key];
     
     // Set to undefined to help GC
@@ -95,7 +95,7 @@ export function isValidToken(token: string): boolean {
  * Returns the credential hash for session tracking
  */
 export function validateAndPurgeCredentials(
-  authPayload: { apiKey?: string; accessToken?: string; [key: string]: any }
+  authPayload: { apiKey?: string; accessToken?: string; [key: string]: unknown }
 ): { valid: boolean; credentialHash?: string } {
   try {
     const hasApiKey = typeof authPayload.apiKey === 'string' && authPayload.apiKey.trim().length > 0;

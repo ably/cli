@@ -156,10 +156,10 @@ export async function ensureDockerImage(): Promise<void> {
     // First check if the image exists (with timeout)
     const images = await Promise.race([
       docker.listImages({ filters: { reference: [DOCKER_IMAGE_NAME] } }),
-      new Promise((_, reject) => 
+      new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Docker listImages timeout')), dockerTimeout)
       )
-    ]) as any[];
+    ]);
 
     if (forceRebuild && images.length > 0) {
       logSecure(`FORCE_REBUILD_SANDBOX_IMAGE is set. Removing existing image ${DOCKER_IMAGE_NAME} to trigger rebuild.`);
@@ -168,7 +168,7 @@ export async function ensureDockerImage(): Promise<void> {
         const imageId = images[0].Id;
         await Promise.race([
           docker.getImage(imageId).remove({ force: true }),
-          new Promise((_, reject) => 
+          new Promise<never>((_, reject) => 
             setTimeout(() => reject(new Error('Docker image removal timeout')), dockerTimeout)
           )
         ]);
@@ -184,10 +184,10 @@ export async function ensureDockerImage(): Promise<void> {
     // Re-query images after potential removal (with timeout)
     const imagesPostCheck = await Promise.race([
       docker.listImages({ filters: { reference: [DOCKER_IMAGE_NAME] } }),
-      new Promise((_, reject) => 
+      new Promise<never>((_, reject) => 
         setTimeout(() => reject(new Error('Docker listImages timeout (post-check)')), dockerTimeout)
       )
-    ]) as any[];
+    ]);
 
     if (imagesPostCheck.length === 0) {
       logSecure(`Image ${DOCKER_IMAGE_NAME} not found. Will attempt to build it.`);
@@ -279,12 +279,12 @@ export async function ensureDockerImage(): Promise<void> {
           }).toString();
           logSecure(`Docker build output: ${output.slice(0, 200)}...`);
           logSecure(`Docker image ${DOCKER_IMAGE_NAME} built successfully using CLI.`);
+          return;
         }
-        return;
       } catch (error) {
         logSecure(`Failed to build using Docker CLI: ${error}. ${(IS_DEVELOPMENT || IS_CI) ? 'Development or CI mode: Skipping SDK fallback' : 'Falling back to Docker SDK.'}`);
         if (IS_DEVELOPMENT || IS_CI) {
-          throw new Error(`Development or CI environment: Docker build failed - ${error}`);
+          throw new Error(`Development or CI environment: Docker build failed - ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 
@@ -297,10 +297,10 @@ export async function ensureDockerImage(): Promise<void> {
               { context: path.resolve(__dirname, "../../../"), src: ["server/Dockerfile"] },
               { t: DOCKER_IMAGE_NAME, dockerfile: "server/Dockerfile" },
             ),
-            new Promise((_, reject) => 
+            new Promise<never>((_, reject) => 
               setTimeout(() => reject(new Error('Docker SDK buildImage timeout')), dockerTimeout)
             )
-          ]) as any;
+          ]);
 
           await new Promise((resolve, reject) => {
             const timeoutId = setTimeout(() => {
@@ -509,8 +509,9 @@ export async function removeContainer(
         log(`Stopping running container ${containerId.slice(0, 12)}`);
         await container.stop({ t: 5 }); // 5 second timeout
       }
-    } catch (error: any) {
-      if (error.statusCode !== 404) {
+    } catch (error) {
+      const err = error as { statusCode?: number };
+      if (err.statusCode !== 404) {
         logError(`Error stopping container ${containerId.slice(0, 12)}: ${error}`);
       }
     }
@@ -522,8 +523,9 @@ export async function removeContainer(
     // Verify removal
     await verifyContainerRemoval(containerId);
     
-  } catch (error: any) {
-    if (error.statusCode === 404 || error.message.includes('No such container')) {
+  } catch (error) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 404 || err.message?.includes('No such container')) {
       log(`Container ${containerId.slice(0, 12)} was already removed`);
     } else {
       logError(`Error removing container ${containerId.slice(0, 12)}: ${error}`);
@@ -541,8 +543,9 @@ async function verifyContainerRemoval(containerId: string): Promise<void> {
     await container.inspect();
     // If we get here, container still exists
     logError(`Container ${containerId.slice(0, 12)} still exists after removal attempt`);
-  } catch (error: any) {
-    if (error.statusCode === 404 || error.message.includes('No such container')) {
+  } catch (error) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 404 || err.message?.includes('No such container')) {
       log(`Container ${containerId.slice(0, 12)} removal verified`);
     } else {
       logError(`Error verifying container removal for ${containerId.slice(0, 12)}: ${error}`);
@@ -568,8 +571,9 @@ export async function getContainerStatus(containerId: string): Promise<{
       running: inspect.State.Running,
       exitCode: inspect.State.ExitCode,
     };
-  } catch (error: any) {
-    if (error.statusCode === 404 || error.message.includes('No such container')) {
+  } catch (error) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 404 || err.message?.includes('No such container')) {
       return {
         exists: false,
         running: false,
@@ -578,7 +582,7 @@ export async function getContainerStatus(containerId: string): Promise<{
       return {
         exists: true, // Assume it exists but we can't check
         running: false,
-        error: error.message,
+        error: err.message || String(error),
       };
     }
   }
