@@ -1,7 +1,9 @@
 import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
-import { afterEach, beforeEach, describe } from 'mocha';
+import { describe, afterEach, beforeEach } from 'mocha';
+
+/* eslint-disable mocha/no-setup-in-describe */
 
 describe('auth:keys:create command', () => {
   const mockAccessToken = 'fake_access_token';
@@ -107,9 +109,11 @@ describe('auth:keys:create command', () => {
       .command(['auth:keys:create', '--name', mockKeyName, '--app', mockAppId, '--json'])
       .it('should output JSON format when --json flag is used', ctx => {
         const result = JSON.parse(ctx.stdout);
-        expect(result).to.have.property('id', mockKeyId);
-        expect(result).to.have.property('name', mockKeyName);
         expect(result).to.have.property('key');
+        expect(result.key).to.have.property('id', mockKeyId);
+        expect(result.key).to.have.property('name', mockKeyName);
+        expect(result.key).to.have.property('key');
+        expect(result).to.have.property('success', true);
       });
 
     test
@@ -157,9 +161,10 @@ describe('auth:keys:create command', () => {
       .it('should require name parameter');
 
     test
+      .env({}, { clear: true }) // Clear all environment variables
       .command(['auth:keys:create', '--name', mockKeyName])
       .catch(error => {
-        expect(error.message).to.include('app');
+        expect(error.message).to.include('No app specified');
       })
       .it('should require app parameter when no current app is set');
 

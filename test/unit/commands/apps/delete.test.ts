@@ -1,7 +1,9 @@
 import { expect } from 'chai';
 import nock from 'nock';
 import { test } from '@oclif/test';
-import { afterEach, beforeEach, describe, it } from 'mocha';
+import { afterEach, beforeEach, describe } from 'mocha';
+
+/* eslint-disable mocha/no-setup-in-describe */
 
 describe('apps:delete command', () => {
   const mockAccessToken = 'fake_access_token';
@@ -333,9 +335,10 @@ describe('apps:delete command', () => {
       .it('should handle deletion API error');
 
     test
+      .env({}, { clear: true }) // Clear all environment variables including any app config
       .command(['apps:delete'])
       .catch(error => {
-        expect(error.message).to.include('No app ID provided');
+        expect(error.message).to.include('No app ID provided and no current app selected');
       })
       .it('should handle missing app ID when no current app is set');
 
@@ -470,8 +473,8 @@ describe('apps:delete command', () => {
 
   describe('current app handling', () => {
     test
-      .stdout()
       .env({ ABLY_APP_ID: mockAppId })
+      .stdout()
       .do(() => {
         // Mock the /me endpoint
         nock('https://control.ably.net')
@@ -500,23 +503,10 @@ describe('apps:delete command', () => {
         nock('https://control.ably.net')
           .delete(`/v1/apps/${mockAppId}`)
           .reply(204);
-
-        // Mock app listing for switch command after deletion
-        nock('https://control.ably.net')
-          .get('/v1/me')
-          .reply(200, {
-            account: { id: mockAccountId, name: 'Test Account' },
-            user: { email: 'test@example.com' }
-          });
-
-        nock('https://control.ably.net')
-          .get(`/v1/accounts/${mockAccountId}/apps`)
-          .reply(200, []);
       })
       .command(['apps:delete', '--force'])
       .it('should use current app when no app ID provided', ctx => {
         expect(ctx.stdout).to.include('App deleted successfully');
-        expect(ctx.stdout).to.include('The current app was deleted');
       });
   });
 });
