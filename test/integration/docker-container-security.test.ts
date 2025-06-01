@@ -11,15 +11,11 @@ const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Skip these tests if Docker is not available or we're in a general test run
+// Skip these tests if Docker is not available 
 const shouldSkipDockerTests = () => {
-  // Skip if explicitly set to skip Docker tests
-  if (process.env.SKIP_DOCKER_TESTS === 'true') {
-    return true;
-  }
-  
-  // Skip if running general CLI tests (not specifically container security tests)
-  if (process.env.CLI_GENERAL_TESTS === 'true') {
+  // If we're running general CLI tests but not specifically Docker tests, skip
+  if (process.env.CLI_GENERAL_TESTS === 'true' && !process.env.RUN_DOCKER_TESTS) {
+    console.log('Skipping Docker tests - running general CLI tests without Docker flag');
     return true;
   }
   
@@ -28,6 +24,7 @@ const shouldSkipDockerTests = () => {
     execSync('docker info', { stdio: 'ignore', timeout: 5000 });
     return false;
   } catch {
+    console.log('Docker is not available - skipping Docker container security tests');
     return true;
   }
 };

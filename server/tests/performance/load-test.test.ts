@@ -378,7 +378,6 @@ describe('Load Testing Suite', function() {
 
             ws.on('open', () => {
               ws.send(JSON.stringify({
-                type: 'auth',
                 apiKey: 'dummy.anonymous:key_for_anonymous_load_testing',
                 sessionId: `anonymous-load-test-${i}-${Date.now()}`
               }));
@@ -400,11 +399,22 @@ describe('Load Testing Suite', function() {
                       index: i
                     });
                   }, 200);
+                } else if (message.type === 'status' && (message.payload === 'connecting' || message.payload === 'connected')) {
+                  // Valid status messages, continue waiting for hello
+                } else if (message.type === 'status' && message.payload === 'error') {
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve({ success: false, reason: 'server_error', index: i });
                 }
               } catch (_error) {
-                clearTimeout(timeout);
-                ws.close();
-                resolve({ success: false, reason: 'parse_error', index: i });
+                // Not JSON - likely terminal output after session established
+                // Only treat as parse error if we haven't received hello yet
+                if (!sessionCreated) {
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve({ success: false, reason: 'parse_error', index: i });
+                }
+                // Otherwise ignore non-JSON terminal output
               }
             });
 
@@ -499,7 +509,6 @@ describe('Load Testing Suite', function() {
 
               ws.on('open', () => {
             ws.send(JSON.stringify({
-              type: 'auth',
               apiKey: 'test.dummy:key_for_authenticated_load_testing',
               accessToken: 'dummy_access_token_for_testing',
               sessionId: `auth-load-test-${i}-${Date.now()}`
@@ -522,11 +531,22 @@ describe('Load Testing Suite', function() {
                     index: i
                   });
                 }, 200);
+              } else if (message.type === 'status' && (message.payload === 'connecting' || message.payload === 'connected')) {
+                // Valid status messages, continue waiting for hello
+              } else if (message.type === 'status' && message.payload === 'error') {
+                clearTimeout(timeout);
+                ws.close();
+                resolve({ success: false, reason: 'server_error', index: i });
               }
             } catch (_error) {
-              clearTimeout(timeout);
+              // Not JSON - likely terminal output after session established
+              // Only treat as parse error if we haven't received hello yet
+              if (!sessionCreated) {
+                clearTimeout(timeout);
                 ws.close();
-              resolve({ success: false, reason: 'parse_error', index: i });
+                resolve({ success: false, reason: 'parse_error', index: i });
+              }
+              // Otherwise ignore non-JSON terminal output
             }
           });
 
@@ -610,7 +630,6 @@ describe('Load Testing Suite', function() {
 
           ws.on('open', () => {
             ws.send(JSON.stringify({
-              type: 'auth',
               apiKey: 'test.dummy:key_for_load_testing_only',
               sessionId: `load-test-session-${i}-${Date.now()}`
             }));
@@ -631,11 +650,22 @@ describe('Load Testing Suite', function() {
                     reason: 'created'
                   });
                 }, 200);
+              } else if (message.type === 'status' && (message.payload === 'connecting' || message.payload === 'connected')) {
+                // Valid status messages, continue waiting for hello
+              } else if (message.type === 'status' && message.payload === 'error') {
+                clearTimeout(timeout);
+                ws.close();
+                resolve({ success: false, reason: 'server_error' });
               }
             } catch (_error) {
-              clearTimeout(timeout);
-              ws.close();
-              resolve({ success: false, reason: 'parse_error' });
+              // Not JSON - likely terminal output after session established
+              // Only treat as parse error if we haven't received hello yet
+              if (!sessionCreated) {
+                clearTimeout(timeout);
+                ws.close();
+                resolve({ success: false, reason: 'parse_error' });
+              }
+              // Otherwise ignore non-JSON terminal output
             }
           });
 
@@ -735,7 +765,6 @@ describe('Load Testing Suite', function() {
 
             ws.on('open', () => {
               ws.send(JSON.stringify({
-                type: 'auth',
                 apiKey: 'test.dummy:key_for_session_leak_testing',
                 sessionId: `leak-test-${cycle}-${i}-${Date.now()}`
               }));
@@ -758,11 +787,22 @@ describe('Load Testing Suite', function() {
                     cycle,
                     index: i
                   });
+                } else if (message.type === 'status' && (message.payload === 'connecting' || message.payload === 'connected')) {
+                  // Valid status messages, continue waiting for hello
+                } else if (message.type === 'status' && message.payload === 'error') {
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve({ success: false, reason: 'server_error', cycle, index: i });
                 }
               } catch (_error) {
-                clearTimeout(timeout);
-                ws.close();
-                resolve({ success: false, reason: 'parse_error', cycle, index: i });
+                // Not JSON - likely terminal output after session established
+                // Only treat as parse error if we haven't received hello yet
+                if (!sessionCreated) {
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve({ success: false, reason: 'parse_error', cycle, index: i });
+                }
+                // Otherwise ignore non-JSON terminal output
               }
             });
 
@@ -821,7 +861,6 @@ describe('Load Testing Suite', function() {
 
         ws.on('open', () => {
           ws.send(JSON.stringify({
-            type: 'auth',
             apiKey: 'test.dummy:key_for_post_leak_test',
             sessionId: `post-leak-test-${Date.now()}`
           }));
@@ -835,11 +874,22 @@ describe('Load Testing Suite', function() {
               sessionCreated = true;
               ws.close();
               resolve({ success: true, sessionId: message.sessionId });
+            } else if (message.type === 'status' && (message.payload === 'connecting' || message.payload === 'connected')) {
+              // Valid status messages, continue waiting for hello
+            } else if (message.type === 'status' && message.payload === 'error') {
+              clearTimeout(timeout);
+              ws.close();
+              resolve({ success: false, reason: 'server_error' });
             }
           } catch (_error) {
-            clearTimeout(timeout);
-            ws.close();
-            resolve({ success: false, reason: 'parse_error' });
+            // Not JSON - likely terminal output after session established
+            // Only treat as parse error if we haven't received hello yet
+            if (!sessionCreated) {
+              clearTimeout(timeout);
+              ws.close();
+              resolve({ success: false, reason: 'parse_error' });
+            }
+            // Otherwise ignore non-JSON terminal output
           }
         });
 
@@ -1084,6 +1134,7 @@ describe('Load Testing Suite', function() {
         try {
           await new Promise((resolve, reject) => {
             const ws = new WebSocket(SERVER_URL);
+            let sessionCreated = false;
             const timeout = setTimeout(() => {
               ws.terminate();
               reject(new Error('Session creation timeout'));
@@ -1091,7 +1142,6 @@ describe('Load Testing Suite', function() {
 
             ws.on('open', () => {
               ws.send(JSON.stringify({
-                type: 'auth',
                 apiKey: 'test.dummy:key_for_performance_testing',
                 sessionId: `perf-test-${i}-${Date.now()}`
               }));
@@ -1102,14 +1152,27 @@ describe('Load Testing Suite', function() {
                 const message = JSON.parse(data.toString());
                 if (message.type === 'hello') {
                   clearTimeout(timeout);
+                  sessionCreated = true;
                   const end = performance.now();
                   timings.push(end - start);
                   ws.close();
                   resolve(void 0);
+                } else if (message.type === 'status' && (message.payload === 'connecting' || message.payload === 'connected')) {
+                  // Valid status messages, continue waiting for hello
+                } else if (message.type === 'status' && message.payload === 'error') {
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve({ success: false, reason: 'server_error', index: i });
                 }
-              } catch (error) {
-                clearTimeout(timeout);
-                reject(error);
+              } catch (_error) {
+                // Not JSON - likely terminal output after session established
+                // Only treat as parse error if we haven't received hello yet
+                if (!sessionCreated) {
+                  clearTimeout(timeout);
+                  ws.close();
+                  resolve({ success: false, reason: 'parse_error', index: i });
+                }
+                // Otherwise ignore non-JSON terminal output
               }
             });
 

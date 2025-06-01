@@ -27,7 +27,7 @@ interface LogContext {
   timestamp?: string;
   pid?: number;
   memory?: NodeJS.MemoryUsage;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface AuditEvent extends LogContext {
@@ -89,7 +89,7 @@ export function logError(message: string): void {
 /**
  * Enhanced secure logging function with automatic redaction and structured data
  */
-export function logSecure(message: string, context?: Record<string, any>): void {
+export function logSecure(message: string, context?: Record<string, unknown>): void {
   if (!context) {
     logWithLevel(LogLevel.INFO, message);
     return;
@@ -178,7 +178,7 @@ export function logSecurityEvent(
 /**
  * Sanitize log data by redacting sensitive information
  */
-function sanitizeLogData(data: Record<string, any>): Record<string, any> {
+function sanitizeLogData(data: Record<string, unknown>): Record<string, unknown> {
   const sanitized = { ...data };
   
   // List of sensitive field patterns (case-insensitive)
@@ -208,7 +208,7 @@ function sanitizeLogData(data: Record<string, any>): Record<string, any> {
     
     // Recursively sanitize nested objects
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      sanitized[key] = sanitizeLogData(value);
+      sanitized[key] = sanitizeLogData(value as Record<string, unknown>);
     }
     
     // Truncate very long strings to prevent log bloat
@@ -251,7 +251,7 @@ export function createSessionLogger(sessionId: string, userIp?: string, userAgen
 /**
  * Send audit events to external systems (placeholder for future implementation)
  */
-function sendToAuditSystem(auditEvent: any): void {
+function sendToAuditSystem(auditEvent: Record<string, unknown>): void {
   // This is a placeholder for sending audit events to external systems
   // Implementation would depend on the specific audit system being used
   // Examples: Elasticsearch, Splunk, AWS CloudWatch, etc.

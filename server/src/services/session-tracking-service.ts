@@ -12,7 +12,7 @@ import { logSecure } from "../utils/logger.js";
 // SESSION TRACKING DATA STRUCTURES
 // =============================================================================
 
-interface SessionMetrics {
+export interface SessionMetrics {
   anonymous: number;
   authenticated: number;
   total: number;

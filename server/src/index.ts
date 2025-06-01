@@ -1,8 +1,17 @@
-import { log as _log, logError } from "./utils/logger.js";
-import { initializeServer } from "./services/websocket-server.js";
-import { cleanupStaleContainers, monitorContainerHealth } from "./services/session-manager.js";
-import { clearAllSessionTracking as _clearAllSessionTracking } from "./services/session-tracking-service.js";
-import { RESOURCE_MONITORING_INTERVAL_MS } from "./config/server-config.js";
+import { 
+  cleanupAllSessions,
+  cleanupStaleContainers
+} from './services/session-manager.js';
+import { 
+  initializeRateLimiting,
+  shutdownRateLimiting
+} from './services/rate-limiting-service.js';
+import { 
+  clearAllSessionTracking
+} from './services/session-tracking-service.js';
+import { initializeServer } from './services/websocket-server.js';
+import { PORT } from './config/server-config.js';
+import { log as logger } from './utils/logger.js';
 
 // Export test hooks for unit tests
 export {
@@ -20,86 +29,77 @@ export {
   __deleteSessionForTest,
 } from "./services/session-manager.js";
 
-// Export logger functions for external use
-export { log, logError, logSecure } from "./utils/logger.js";
-
-// Export session utilities for external use
-export { computeCredentialHash } from "./utils/session-utils.js";
-
-// Export session manager functions for external use
-export { 
-  getSessionCount 
-} from "./services/session-manager.js";
-
-// Container health monitoring interval
-let containerHealthInterval: NodeJS.Timeout | null = null;
-
-// Main server startup function
-/**
- * Start the terminal server with all phases
- */
 async function startTerminalServer(): Promise<void> {
   try {
-    _log("Phase 1: Cleaning up stale containers from previous server instances...");
+    logger('🚀 Starting Ably CLI Terminal Server...');
+
+    // Clean up stale containers on startup
     await cleanupStaleContainers();
-    _log("Phase 1: Stale container cleanup completed");
 
-    // Phase 2: Start container health monitoring
-    _log("Phase 2: Starting container health monitoring...");
-    containerHealthInterval = setInterval(async () => {
+    // Initialize rate limiting
+    initializeRateLimiting();
+
+    // Use the existing WebSocket server initialization
+    const websocketServer = await initializeServer();
+
+    logger(`✅ Terminal Server listening on port ${PORT}`);
+    logger(`   Health check endpoint: http://localhost:${PORT}/health`);
+    logger(`   WebSocket endpoint: ws://localhost:${PORT}`);
+
+    // Handle graceful shutdown
+    const shutdown = async (signal: string) => {
+      logger(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+      
       try {
-        await monitorContainerHealth();
-      } catch (error) {
-        logError(`Container health monitoring error: ${error}`);
-      }
-    }, RESOURCE_MONITORING_INTERVAL_MS);
-    _log("Phase 2: Container health monitoring started");
+        // Close HTTP server
+        websocketServer.close(() => {
+          logger('HTTP server closed');
+        });
 
-    // Phase 3: Initialize and start the server
-    _log("Phase 3: Initializing WebSocket server...");
-    // Stop container health monitoring
-    if (containerHealthInterval) {
-      clearInterval(containerHealthInterval);
-      _log("Container health monitoring stopped");
-    }
-    await initializeServer();
-    _log("Phase 3: Terminal server started successfully");
+        // Clean up sessions
+        await cleanupAllSessions();
+        logger('Sessions cleaned up');
+
+        // Shut down rate limiting
+        shutdownRateLimiting();
+        logger('Rate limiting stopped');
+
+        // Clear session tracking
+        clearAllSessionTracking();
+        logger('Session tracking cleared');
+
+        logger('✅ Graceful shutdown completed');
+        process.exit(0);
+      } catch (error) {
+        logger(`Error during shutdown: ${error}`);
+        process.exit(1);
+      }
+    };
+
+    // Register signal handlers
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+    // Handle unhandled rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      logger(`Unhandled Promise Rejection: ${promise} reason: ${reason}`);
+    });
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      logger(`Uncaught Exception: ${error}`);
+      process.exit(1);
+    });
 
   } catch (error) {
-    logError(`Failed to start terminal server: ${error}`);
-    
-    // Cleanup on error
-    if (containerHealthInterval) {
-      clearInterval(containerHealthInterval);
-    }
-    
+    logger(`Failed to start terminal server: ${error}`);
     process.exit(1);
   }
 }
 
-// More robust detection of whether this file is being run directly
-// Check multiple conditions to ensure we don't start the server during tests
-const isMainModule = () => {
-  // Don't start if we're in test environment
-  if (process.env.NODE_ENV === 'test' || process.env.npm_lifecycle_event === 'test') {
-    return false;
-  }
-  
-  // Don't start if mocha is running
-  if (process.argv.some(arg => arg.includes('mocha') || arg.includes('test'))) {
-    return false;
-  }
-  
-  // Don't start if this is being imported by another module
-  if (import.meta.url !== `file://${process.argv[1]}`) {
-    return false;
-  }
-  
-  return true;
-};
-
-// Start the server using top-level await only if running directly
-if (isMainModule()) {
-  _log("Starting terminal server...");
+// Only start the server if this file is run directly (using top-level await as preferred)
+if (import.meta.url === `file://${process.argv[1]}`) {
   await startTerminalServer();
 }
+
+export { startTerminalServer };

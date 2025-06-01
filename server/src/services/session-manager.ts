@@ -20,6 +20,7 @@ import { unregisterSession } from "./session-tracking-service.js";
 import type { ContainerInfo } from 'dockerode';
 import Docker from 'dockerode';
 import { getSessionMetrics, validateSessionTracking, clearAllSessionTracking, registerSession } from './session-tracking-service.js';
+import type { SessionMetrics } from './session-tracking-service.js';
 
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
@@ -226,8 +227,9 @@ async function cleanupSessionContainer(session: ClientSession): Promise<void> {
       const inspect = await session.container.inspect();
       containerRunning = inspect.State.Running;
       log(`Container ${containerId.slice(0, 12)} status: running=${containerRunning}`);
-    } catch (error: any) {
-      if (error.statusCode === 404 || error.message.includes('No such container')) {
+    } catch (error) {
+      const err = error as { statusCode?: number; message?: string };
+      if (err.statusCode === 404 || err.message?.includes('No such container')) {
         containerExists = false;
         log(`Container ${containerId.slice(0, 12)} no longer exists`);
       } else {
@@ -242,9 +244,10 @@ async function cleanupSessionContainer(session: ClientSession): Promise<void> {
           log(`Stopping container ${containerId.slice(0, 12)}...`);
           await session.container.stop({ t: 5 }); // 5 second timeout
           log(`Container ${containerId.slice(0, 12)} stopped`);
-        } catch (error: any) {
+        } catch (error) {
+          const err = error as { message?: string };
           // Container might have already stopped or exited
-          if (!error.message.includes('is not running') && !error.message.includes('No such container')) {
+          if (!err.message?.includes('is not running') && !err.message?.includes('No such container')) {
             logError(`Error stopping container ${containerId.slice(0, 12)}: ${error}`);
           }
         }
@@ -255,8 +258,9 @@ async function cleanupSessionContainer(session: ClientSession): Promise<void> {
         log(`Removing container ${containerId.slice(0, 12)}...`);
         await session.container.remove({ force: true, v: true }); // force=true, remove volumes=true
         log(`Container ${containerId.slice(0, 12)} removed successfully`);
-      } catch (error: any) {
-        if (error.statusCode === 404 || error.message.includes('No such container')) {
+      } catch (error) {
+        const err = error as { statusCode?: number; message?: string };
+        if (err.statusCode === 404 || err.message?.includes('No such container')) {
           log(`Container ${containerId.slice(0, 12)} was already removed`);
         } else {
           logError(`Error removing container ${containerId.slice(0, 12)}: ${error}`);
@@ -265,7 +269,7 @@ async function cleanupSessionContainer(session: ClientSession): Promise<void> {
           try {
             await docker.getContainer(containerId).remove({ force: true, v: true });
             log(`Container ${containerId.slice(0, 12)} removed on retry`);
-          } catch (retryError: any) {
+          } catch (retryError) {
             logError(`Final cleanup attempt failed for container ${containerId.slice(0, 12)}: ${retryError}`);
           }
         }
@@ -291,8 +295,9 @@ async function verifyContainerCleanup(containerId: string): Promise<void> {
     await container.inspect();
     // If we get here, container still exists
     logError(`Container ${containerId.slice(0, 12)} still exists after cleanup attempt`);
-  } catch (error: any) {
-    if (error.statusCode === 404 || error.message.includes('No such container')) {
+  } catch (error) {
+    const err = error as { statusCode?: number; message?: string };
+    if (err.statusCode === 404 || err.message?.includes('No such container')) {
       log(`Container ${containerId.slice(0, 12)} cleanup verified - container no longer exists`);
     } else {
       logError(`Error verifying container cleanup for ${containerId.slice(0, 12)}: ${error}`);
@@ -571,7 +576,7 @@ export async function cleanupStaleContainers(): Promise<void> {
     for (let i = 0; i < allContainers.length; i += batchSize) {
       const batch = allContainers.slice(i, i + batchSize);
       
-      const batchPromises = batch.map(async (containerInfo: any) => {
+      const batchPromises = batch.map(async (containerInfo: ContainerInfo) => {
         const containerId = containerInfo.Id;
         const containerName = containerInfo.Names?.[0] || 'unnamed';
         const isRunning = containerInfo.State === 'running';
@@ -634,9 +639,11 @@ export async function cleanupStaleContainers(): Promise<void> {
               try {
                 await container.stop({ t: 5 });
                 log(`Stopped container ${containerId.slice(0, 12)}`);
-              } catch (stopError: any) {
-                if (!stopError.message.includes('is not running')) {
-                  logError(`Error stopping container ${containerId.slice(0, 12)}: ${stopError}`);
+              } catch (error) {
+                const err = error as { message?: string };
+                // Container might have already stopped or exited
+                if (!err.message?.includes('is not running') && !err.message?.includes('No such container')) {
+                  logError(`Error stopping container ${containerId.slice(0, 12)}: ${error}`);
                 }
               }
             }
@@ -646,8 +653,9 @@ export async function cleanupStaleContainers(): Promise<void> {
               await container.remove({ force: true, v: true });
               log(`Removed container ${containerId.slice(0, 12)} (${containerName})`);
               removedCount++;
-            } catch (removeError: any) {
-              if (removeError.statusCode === 404) {
+            } catch (removeError) {
+              const removeErr = removeError as { statusCode?: number };
+              if (removeErr.statusCode === 404) {
                 log(`Container ${containerId.slice(0, 12)} was already removed`);
                 removedCount++;
               } else {
@@ -733,12 +741,12 @@ async function verifyAllContainersCleanup(): Promise<void> {
     );
     
     const orphanedContainers = remainingContainers.filter(
-      (container: any) => !activeSessionContainers.has(container.Id)
+      (container: ContainerInfo) => !activeSessionContainers.has(container.Id)
     );
     
     if (orphanedContainers.length > 0) {
       logError(`Found ${orphanedContainers.length} orphaned containers after cleanup:`);
-      orphanedContainers.forEach((container: any) => {
+      orphanedContainers.forEach((container: ContainerInfo) => {
         logError(`  - ${container.Id.slice(0, 12)} (${container.Names?.[0] || 'unnamed'}) - ${container.State}`);
       });
     } else {
@@ -778,8 +786,9 @@ export async function monitorContainerHealth(): Promise<void> {
         logError(`Container ${session.container.id.slice(0, 12)} for session ${session.sessionId} exited with code ${exitCode}`);
         // Clean up the failed session
         void cleanupSession(session.sessionId);
-      } catch (error: any) {
-        if (error.statusCode === 404) {
+      } catch (error) {
+        const err = error as { statusCode?: number };
+        if (err.statusCode === 404) {
           log(`Container for session ${session.sessionId} no longer exists - cleaning up session`);
           void cleanupSession(session.sessionId);
         } else {
@@ -807,7 +816,7 @@ export async function reconcileSessionsAndContainers(options: {
   report: {
     sessionCount: number;
     containerCount: number;
-    trackingMetrics: any;
+    trackingMetrics: SessionMetrics;
     orphanedContainers: string[];
     orphanedSessions: string[];
     containersWithoutSessions: string[];
@@ -1003,7 +1012,7 @@ export async function reconcileSessionsAndContainers(options: {
       report: {
         sessionCount: 0,
         containerCount: 0,
-        trackingMetrics: {},
+        trackingMetrics: { anonymous: 0, authenticated: 0, total: 0 },
         orphanedContainers: [],
         orphanedSessions: [],
         containersWithoutSessions: [],

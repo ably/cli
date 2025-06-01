@@ -223,7 +223,12 @@ export async function attachToContainer(session: ClientSession, ws: WebSocket): 
 
             // Immediately follow with a hello that contains the sessionId for the client to log/store
             const helloMsg = { type: "hello", sessionId: session.sessionId };
+            log(`[Server] Sending 'hello' message to session ${session.sessionId}`);
             ws.send(JSON.stringify(helloMsg));
+        } else {
+            logError(`WebSocket not open when sending connected/hello to ${session.sessionId}, readyState: ${ws.readyState}`);
+            await terminateSession(session.sessionId, "WebSocket not ready for status messages", false);
+            return;
         }
     } catch (error) {
         logError(`Error sending 'connected' status to ${session.sessionId}: ${error}`);

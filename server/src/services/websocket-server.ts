@@ -8,7 +8,8 @@ import {
   SHUTDOWN_GRACE_PERIOD_MS,
   MAX_WEBSOCKET_MESSAGE_SIZE,
   validateConfiguration,
-  getConfigurationSummary
+  getConfigurationSummary,
+  DOCKER_IMAGE_NAME
 } from "../config/server-config.js";
 import { logSecure, logError } from "../utils/logger.js";
 import { validateAndPurgeCredentials } from "./auth-service.js";
@@ -265,15 +266,19 @@ export async function startServer(): Promise<http.Server> {
 
         // Immediately send a "connecting" status message
         try {
-          const connectingMsg: ServerStatusMessage = { type: "status", payload: "connecting" };
-          ws.send(JSON.stringify(connectingMsg));
-          logSecure(`Sent 'connecting' status to new session ${sessionId.slice(0, 8)}`);
+            const connectingMsg: ServerStatusMessage = { type: "status", payload: "connecting" };
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(connectingMsg));
+                logSecure(`Sent 'connecting' status to new session ${sessionId.slice(0, 8)}`);
+            } else {
+                logError(`WebSocket not open when sending 'connecting' status to ${sessionId}, readyState: ${ws.readyState}`);
+            }
         } catch (error) {
-          logError(`Error sending 'connecting' status to ${sessionId}: ${error}`);
-          // If we can't send 'connecting', close the connection
-          ws.close(1011, "Failed to send initial status");
-          // Note: No session object to cleanup here yet if this fails immediately.
-          return;
+            logError(`Error sending 'connecting' status to ${sessionId}: ${error}`);
+            // If we can't send 'connecting', close the connection
+            ws.close(1011, 'Failed to send connecting status');
+            cleanupSession(sessionId);
+            return;
         }
 
         // Create a minimal initial session state for tracking
@@ -522,7 +527,7 @@ export async function startServer(): Promise<http.Server> {
 
                    // Use enhanced container creation
                    container = await createContainer(
-                     process.env.DOCKER_IMAGE_NAME || 'ably-cli-terminal',
+                     DOCKER_IMAGE_NAME,
                      sessionId,
                      env,
                      {
