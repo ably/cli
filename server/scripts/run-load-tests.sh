@@ -21,6 +21,36 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
+# CI-friendly configuration defaults
+if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
+    echo -e "${YELLOW}CI environment detected - using reduced resource limits${NC}"
+    # Reduced limits for CI to prevent resource exhaustion
+    export ANONYMOUS_SESSION_TEST_COUNT="${ANONYMOUS_SESSION_TEST_COUNT:-3}"
+    export AUTHENTICATED_SESSION_TEST_COUNT="${AUTHENTICATED_SESSION_TEST_COUNT:-3}"
+    export CONCURRENT_CONNECTION_TEST_COUNT="${CONCURRENT_CONNECTION_TEST_COUNT:-5}"
+    export CONNECTION_DELAY_MS="${CONNECTION_DELAY_MS:-200}"
+    export SESSION_DELAY_MS="${SESSION_DELAY_MS:-100}"
+    export DISABLE_RATE_LIMITING_FOR_TESTS="true"
+    echo -e "${BLUE}CI Configuration:${NC}"
+    echo -e "  Anonymous sessions: $ANONYMOUS_SESSION_TEST_COUNT"
+    echo -e "  Authenticated sessions: $AUTHENTICATED_SESSION_TEST_COUNT"
+    echo -e "  Concurrent connections: $CONCURRENT_CONNECTION_TEST_COUNT"
+else
+    echo -e "${GREEN}Local environment detected - using default resource limits${NC}"
+    # Default values for local testing (can be overridden by env vars)
+    export ANONYMOUS_SESSION_TEST_COUNT="${ANONYMOUS_SESSION_TEST_COUNT:-10}"
+    export AUTHENTICATED_SESSION_TEST_COUNT="${AUTHENTICATED_SESSION_TEST_COUNT:-10}"
+    export CONCURRENT_CONNECTION_TEST_COUNT="${CONCURRENT_CONNECTION_TEST_COUNT:-12}"
+    export CONNECTION_DELAY_MS="${CONNECTION_DELAY_MS:-100}"
+    export SESSION_DELAY_MS="${SESSION_DELAY_MS:-50}"
+    echo -e "${BLUE}Local Configuration:${NC}"
+    echo -e "  Anonymous sessions: $ANONYMOUS_SESSION_TEST_COUNT"
+    echo -e "  Authenticated sessions: $AUTHENTICATED_SESSION_TEST_COUNT"
+    echo -e "  Concurrent connections: $CONCURRENT_CONNECTION_TEST_COUNT"
+fi
+
+echo ""
+
 # Set default server URL if not provided
 if [ -z "$TERMINAL_SERVER_URL" ]; then
     export TERMINAL_SERVER_URL="ws://localhost:8080"
@@ -44,6 +74,7 @@ if command -v nc >/dev/null 2>&1; then
     else
         echo -e "${YELLOW}⚠ Warning: Cannot connect to $SERVER_HOST:$SERVER_PORT${NC}"
         echo -e "${YELLOW}  Make sure the terminal server is running before starting tests${NC}"
+        echo -e "${YELLOW}  Run: cd .. && pnpm terminal-server${NC}"
     fi
 else
     echo -e "${YELLOW}⚠ Warning: 'nc' not available, skipping server connectivity check${NC}"
@@ -51,13 +82,87 @@ fi
 
 echo ""
 
+# Function to find and execute mocha reliably
+find_and_run_mocha() {
+    local test_file="$1"
+    local grep_pattern="$2"
+    
+    # Ensure the test file is built
+    if [ ! -f "$test_file" ]; then
+        echo -e "${YELLOW}Building server first...${NC}"
+        if ! npm run build >/dev/null 2>&1; then
+            echo -e "${RED}✗ Build failed${NC}"
+            return 1
+        fi
+    fi
+    
+    # Try different methods to run mocha, in order of preference
+    
+    # Method 1: Try pnpm exec (should work in pnpm workspaces)
+    if command -v pnpm >/dev/null 2>&1; then
+        echo -e "${BLUE}Trying pnpm exec mocha...${NC}"
+        if pnpm exec mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Method 2: Try npx (should work if mocha is in package.json)
+    if command -v npx >/dev/null 2>&1; then
+        echo -e "${BLUE}Trying npx mocha...${NC}"
+        if npx mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Method 3: Try global mocha
+    if command -v mocha >/dev/null 2>&1; then
+        echo -e "${BLUE}Trying global mocha...${NC}"
+        if mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Method 4: Try local mocha binary from parent workspace
+    if [ -x "../node_modules/.bin/mocha" ]; then
+        echo -e "${BLUE}Trying parent workspace mocha...${NC}"
+        if ../node_modules/.bin/mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Method 5: Try direct node execution with mocha from workspace
+    if [ -f "../node_modules/mocha/bin/mocha.js" ]; then
+        echo -e "${BLUE}Trying direct node execution...${NC}"
+        if node ../node_modules/mocha/bin/mocha.js "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # Method 6: Try to install mocha and run
+    echo -e "${YELLOW}No working mocha found, trying to install...${NC}"
+    if npm install --no-save mocha >/dev/null 2>&1; then
+        if npx mocha "$test_file" --grep "$grep_pattern" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    
+    # All methods failed
+    echo -e "${RED}✗ Could not execute mocha tests${NC}"
+    echo -e "${YELLOW}Troubleshooting:${NC}"
+    echo -e "  1. Try: cd .. && pnpm install"
+    echo -e "  2. Try: npm install -g mocha"
+    echo -e "  3. Or run manually: node dist/tests/performance/load-test.test.js"
+    return 1
+}
+
 # Function to run a specific test category
 run_test_category() {
     local category=$1
     local grep_pattern=$2
     
     echo -e "${BLUE}Running $category tests...${NC}"
-    if npm test -- tests/performance/load-test.test.ts --grep "$grep_pattern" 2>/dev/null; then
+    
+    if find_and_run_mocha "dist/tests/performance/load-test.test.js" "$grep_pattern"; then
         echo -e "${GREEN}✓ $category tests completed${NC}"
         return 0
     else
@@ -84,6 +189,44 @@ case "$1" in
         echo -e "${BLUE}Running Performance Benchmarks only...${NC}"
         run_test_category "Performance Benchmarks" "Performance Benchmarks"
         ;;
+    "fast"|"ci")
+        echo -e "${BLUE}Running fast CI-friendly tests...${NC}"
+        echo -e "${YELLOW}Using reduced resource limits for fast execution${NC}"
+        
+        # Override with CI-friendly values
+        export ANONYMOUS_SESSION_TEST_COUNT="3"
+        export AUTHENTICATED_SESSION_TEST_COUNT="3"
+        export CONCURRENT_CONNECTION_TEST_COUNT="5"
+        export CONNECTION_DELAY_MS="200"
+        export SESSION_DELAY_MS="100"
+        export DISABLE_RATE_LIMITING_FOR_TESTS="true"
+        
+        # Run subset of tests for CI
+        success_count=0
+        total_count=2
+        
+        if run_test_category "Connection Rate Limiting" "Connection Rate Limiting"; then
+            ((success_count++))
+        fi
+        echo ""
+        
+        if run_test_category "Session Management" "Session Management"; then
+            ((success_count++))
+        fi
+        echo ""
+        
+        # Summary
+        echo -e "${BLUE}=== Fast Load Testing Summary ===${NC}"
+        echo -e "Completed: $success_count/$total_count test categories"
+        
+        if [ $success_count -eq $total_count ]; then
+            echo -e "${GREEN}✓ Fast load tests completed successfully!${NC}"
+            exit 0
+        else
+            echo -e "${RED}✗ Some fast load tests failed${NC}"
+            exit 1
+        fi
+        ;;
     "help"|"-h"|"--help")
         echo "Usage: $0 [test-category]"
         echo ""
@@ -92,14 +235,23 @@ case "$1" in
         echo "  session       - Run session management tests" 
         echo "  container     - Run container resource limit tests"
         echo "  performance   - Run performance benchmark tests"
+        echo "  fast          - Run fast CI-friendly subset of tests"
         echo "  all (default) - Run all load tests"
         echo ""
         echo "Environment variables:"
-        echo "  TERMINAL_SERVER_URL - WebSocket URL of terminal server (default: ws://localhost:8080)"
+        echo "  TERMINAL_SERVER_URL                     - WebSocket URL (default: ws://localhost:8080)"
+        echo "  ANONYMOUS_SESSION_TEST_COUNT            - Number of anonymous sessions to test"
+        echo "  AUTHENTICATED_SESSION_TEST_COUNT        - Number of authenticated sessions to test"
+        echo "  CONCURRENT_CONNECTION_TEST_COUNT        - Number of concurrent connections to test"
+        echo "  CONNECTION_DELAY_MS                     - Delay between connections (ms)"
+        echo "  SESSION_DELAY_MS                        - Delay between session attempts (ms)"
+        echo "  DISABLE_RATE_LIMITING_FOR_TESTS         - Disable rate limiting (true/false)"
         echo ""
         echo "Examples:"
         echo "  $0                              # Run all tests"
+        echo "  $0 fast                         # Run CI-friendly tests"
         echo "  $0 connection                   # Run connection tests only"
+        echo "  CI=true $0 all                  # Run with CI resource limits"
         echo "  TERMINAL_SERVER_URL=wss://example.com $0  # Use custom server"
         exit 0
         ;;

@@ -3,16 +3,15 @@ import WebSocket from 'ws';
 console.log('Testing simple session creation...');
 
 async function testSession(sessionType, credentials) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     console.log(`\n--- Testing ${sessionType} session ---`);
     const ws = new WebSocket('ws://localhost:8080');
     let result = { type: sessionType, success: false, error: null };
     
     const timeout = setTimeout(() => {
       ws.terminate();
-      result.error = 'timeout';
-      resolve(result);
-    }, 10000);
+      reject(new Error(`Session creation timeout after 15000ms`));
+    }, 15_000);
 
     ws.on('open', () => {
       console.log(`${sessionType}: WebSocket connected`);
@@ -89,7 +88,9 @@ async function runTests() {
   process.exit(0);
 }
 
-runTests().catch(error => {
+try {
+  await runTests();
+} catch (error) {
   console.error('Test failed:', error);
   process.exit(1);
-}); 
+} 

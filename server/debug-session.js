@@ -51,4 +51,4 @@ setTimeout(() => {
   console.log('Timeout - closing connection');
   ws.close();
   process.exit(1);
-}, 10000); 
+}, 10_000); 

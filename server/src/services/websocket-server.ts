@@ -43,7 +43,9 @@ import {
   setSession,
   takeoverSession,
   attemptCrossProcessResume,
-  cleanupStaleContainers
+  cleanupStaleContainers,
+  reconcileSessionsAndContainers,
+  performPeriodicReconciliation,
 } from "./session-manager.js";
 import { attachToContainer, handleMessage } from "../utils/stream-handler.js";
 import { computeCredentialHash } from "../utils/session-utils.js";
@@ -150,26 +152,59 @@ export async function startServer(): Promise<http.Server> {
         }
     }
 
-    const server = http.createServer((_req, res) => {
-        // Simple health check endpoint
-        if (_req.url === '/health') {
-            res.writeHead(200, { 'Content-Type': 'text/plain' });
-            res.end('OK');
-        } else if (_req.url === '/stats') {
-            // Basic stats endpoint
-            const sessionStats = getSessionMetrics();
-            const rateLimitStats = getRateLimitingStats();
-            const alerts = getSessionAlerts();
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              sessions: sessionStats,
-              rateLimiting: rateLimitStats,
-              alerts: alerts.alerts
-            }));
-        } else {
-            res.writeHead(404);
-            res.end();
+    const server = http.createServer(async (_req, res) => {
+        // Route requests using switch statement
+        switch (_req.url) {
+            case '/health': {
+                // Simple health check endpoint
+                res.writeHead(200, { 'Content-Type': 'text/plain' });
+                res.end('OK');
+                break;
+            }
+            case '/stats': {
+                // Basic stats endpoint
+                const sessionStats = getSessionMetrics();
+                const rateLimitStats = getRateLimitingStats();
+                const alerts = getSessionAlerts();
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                  sessions: sessionStats,
+                  rateLimiting: rateLimitStats,
+                  alerts: alerts.alerts
+                }));
+                break;
+            }
+            default: {
+                // Handle reconcile endpoint with query parameters
+                if (_req.url?.startsWith('/reconcile')) {
+                    try {
+                        const url = new URL(_req.url, `http://${_req.headers.host}`);
+                        const dryRun = url.searchParams.get('dryRun') !== 'false';
+                        const autoFix = url.searchParams.get('autoFix') === 'true';
+                        const detailedReport = url.searchParams.get('detailed') === 'true';
+                        
+                        const result = await reconcileSessionsAndContainers({
+                            dryRun,
+                            autoFix,
+                            detailedReport
+                        });
+                        
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify(result, null, 2));
+                    } catch (error) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ 
+                            error: 'Reconciliation failed', 
+                            message: error instanceof Error ? error.message : String(error) 
+                        }));
+                    }
+                } else {
+                    res.writeHead(404);
+                    res.end();
+                }
+                break;
+            }
         }
     });
 
@@ -190,12 +225,27 @@ export async function startServer(): Promise<http.Server> {
     // Start session monitoring
     const sessionMonitoringInterval = startSessionMonitoring();
 
+    // Track last reconciliation time
+    let lastReconciliationTime = 0;
+
     // A keep-alive interval to prevent the process from exiting
-    const keepAliveInterval = setInterval(() => {
+    const keepAliveInterval = setInterval(async () => {
         // Log session alerts if any
         const alerts = getSessionAlerts();
         if (alerts.alerts.length > 0) {
           logSecure("Session capacity alerts", { alerts: alerts.alerts });
+        }
+        
+        // Perform periodic reconciliation every 5 minutes (5 intervals of 60s)
+        const currentTime = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+        if (currentTime - lastReconciliationTime > fiveMinutes) {
+            try {
+                await performPeriodicReconciliation();
+                lastReconciliationTime = currentTime;
+            } catch (error) {
+                logError(`Periodic reconciliation failed: ${error}`);
+            }
         }
     }, 60000);
 

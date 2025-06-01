@@ -1,0 +1,190 @@
+name: Terminal Server Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/terminal-server-tests.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'server/**'
+      - '.github/workflows/terminal-server-tests.yml'
+
+jobs:
+  # Security tests for container hardening and isolation
+  security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'npm'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build server
+        working-directory: ./server
+        run: pnpm build
+        
+      - name: Run security tests
+        working-directory: ./server
+        run: |
+          echo "Starting security test suite..."
+          # Get server output with timeout
+          timeout 120s pnpm build
+          timeout 300s pnpm test:security || {
+            echo "Security tests failed or timed out"
+            exit 1
+          }
+
+  # Fast load testing to validate performance in CI
+  load-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'npm'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build server
+        working-directory: ./server
+        run: pnpm build
+        
+      - name: Start terminal server in background
+        working-directory: ./server
+        run: |
+          echo "Starting terminal server for load testing..."
+          pnpm start &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          
+          # Wait for server to be ready
+          echo "Waiting for server to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/health 2>/dev/null; then
+              echo "✓ Server is ready"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "✗ Server failed to start within 30 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
+        
+      - name: Run fast load tests
+        working-directory: ./server
+        run: |
+          echo "Running CI-friendly load tests..."
+          # Use CI configuration with reduced resource limits
+          CI=true pnpm test:load:ci
+        
+      - name: Stop terminal server
+        if: always()
+        run: |
+          if [ ! -z "$SERVER_PID" ]; then
+            echo "Stopping terminal server (PID: $SERVER_PID)"
+            kill $SERVER_PID || true
+            sleep 2
+            kill -9 $SERVER_PID 2>/dev/null || true
+          fi
+
+  # Integration tests for server diagnostics and monitoring
+  diagnostics-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'npm'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build server
+        working-directory: ./server
+        run: pnpm build
+        
+      - name: Run integration tests
+        working-directory: ./server
+        run: |
+          echo "Running server diagnostics and integration tests..."
+          timeout 300s pnpm test:integration || {
+            echo "Integration tests failed or timed out"
+            exit 1
+          }
+
+  # Unit tests for core server functionality
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+          cache: 'npm'
+          
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build server
+        working-directory: ./server
+        run: pnpm build
+        
+      - name: Run unit tests
+        working-directory: ./server
+        run: |
+          echo "Running server unit tests..."
+          timeout 180s pnpm test:unit || {
+            echo "Unit tests failed or timed out"
+            exit 1
+          }

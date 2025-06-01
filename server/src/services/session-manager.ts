@@ -1,4 +1,4 @@
-import { WebSocket } from "ws";
+import { WebSocket } from 'ws';
 import * as crypto from "node:crypto";
 import { createRequire } from "node:module";
 import type { ClientSession } from "../types/session.types.js";
@@ -17,6 +17,9 @@ import {
 } from "../config/server-config.js";
 import { log, logError, logSecure } from "../utils/logger.js";
 import { unregisterSession } from "./session-tracking-service.js";
+import type { ContainerInfo } from 'dockerode';
+import Docker from 'dockerode';
+import { getSessionMetrics, validateSessionTracking, clearAllSessionTracking, registerSession } from './session-tracking-service.js';
 
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
@@ -786,6 +789,261 @@ export async function monitorContainerHealth(): Promise<void> {
     }
   } catch (error) {
     logError(`Error during container health monitoring: ${error}`);
+  }
+}
+
+/**
+ * Comprehensive session/container reconciliation for debugging and monitoring
+ * Identifies and optionally fixes inconsistencies between session tracking and actual containers
+ */
+export async function reconcileSessionsAndContainers(options: {
+  dryRun?: boolean;
+  autoFix?: boolean;
+  detailedReport?: boolean;
+} = {}): Promise<{
+  consistent: boolean;
+  issues: string[];
+  fixed: string[];
+  report: {
+    sessionCount: number;
+    containerCount: number;
+    trackingMetrics: any;
+    orphanedContainers: string[];
+    orphanedSessions: string[];
+    containersWithoutSessions: string[];
+    sessionsWithoutContainers: string[];
+  };
+}> {
+  const { dryRun = true, autoFix = false, detailedReport = false } = options;
+  const issues: string[] = [];
+  const fixed: string[] = [];
+  
+  try {
+    log("Starting session/container reconciliation...");
+    
+    // 1. Get current session state
+    const sessionMap = getSessions();
+    const sessionIds = [...sessionMap.keys()];
+    const sessionMetrics = getSessionMetrics();
+    const trackingValidation = validateSessionTracking();
+    
+    // 2. Get all containers managed by this server
+    const docker = new Docker();
+    const allContainers = await docker.listContainers({ all: true });
+    const ourContainers = allContainers.filter((container: ContainerInfo) => 
+      container.Labels && 
+      container.Labels['managed-by'] === 'ably-cli-terminal-server'
+    );
+    
+    // 3. Categorize containers
+    const runningContainers = ourContainers.filter((c: ContainerInfo) => c.State === 'running');
+    const stoppedContainers = ourContainers.filter((c: ContainerInfo) => c.State === 'exited' || c.State === 'stopped');
+    const deadContainers = ourContainers.filter((c: ContainerInfo) => c.State === 'dead');
+    
+    // 4. Find orphaned containers (containers without corresponding sessions)
+    const orphanedContainers: string[] = [];
+    const containersWithoutSessions: string[] = [];
+    
+    for (const container of runningContainers) {
+      const sessionId = container.Labels?.['session-id'];
+      if (!sessionId) {
+        orphanedContainers.push(container.Id);
+        continue;
+      }
+      
+      if (!sessionMap.has(sessionId)) {
+        containersWithoutSessions.push(container.Id);
+        issues.push(`Running container ${container.Id.slice(0, 12)} has session-id ${sessionId.slice(0, 8)} but no session exists`);
+        
+        if (autoFix && !dryRun) {
+          try {
+            const containerObj = docker.getContainer(container.Id);
+            await containerObj.stop({ t: 5 });
+            await containerObj.remove();
+            fixed.push(`Stopped and removed orphaned container ${container.Id.slice(0, 12)}`);
+          } catch (error) {
+            issues.push(`Failed to clean up orphaned container ${container.Id.slice(0, 12)}: ${error}`);
+          }
+        }
+      }
+    }
+    
+    // 5. Find orphaned sessions (sessions without corresponding containers)
+    const orphanedSessions: string[] = [];
+    const sessionsWithoutContainers: string[] = [];
+    
+    for (const [sessionId, session] of sessionMap) {
+      if (!session.container) {
+        if (session.authenticated) {
+          orphanedSessions.push(sessionId);
+          issues.push(`Authenticated session ${sessionId.slice(0, 8)} has no container`);
+        }
+        continue;
+      }
+      
+      const containerId = session.container.id;
+      const containerExists = ourContainers.some((c: ContainerInfo) => c.Id === containerId);
+      
+      if (!containerExists) {
+        sessionsWithoutContainers.push(sessionId);
+        issues.push(`Session ${sessionId.slice(0, 8)} references non-existent container ${containerId.slice(0, 12)}`);
+        
+        if (autoFix && !dryRun) {
+          try {
+            terminateSession(sessionId, 'Container no longer exists');
+            fixed.push(`Terminated session ${sessionId.slice(0, 8)} with missing container`);
+          } catch (error) {
+            issues.push(`Failed to terminate session ${sessionId.slice(0, 8)}: ${error}`);
+          }
+        }
+      }
+    }
+    
+    // 6. Check for stuck containers (stopped but session still exists)
+    for (const container of stoppedContainers) {
+      const sessionId = container.Labels?.['session-id'];
+      if (sessionId && sessionMap.has(sessionId)) {
+        issues.push(`Session ${sessionId.slice(0, 8)} exists but container ${container.Id.slice(0, 12)} is stopped`);
+        
+        if (autoFix && !dryRun) {
+          try {
+            terminateSession(sessionId, 'Container is stopped');
+            const containerObj = docker.getContainer(container.Id);
+            await containerObj.remove();
+            fixed.push(`Cleaned up stopped container ${container.Id.slice(0, 12)} and terminated session`);
+          } catch (error) {
+            issues.push(`Failed to clean up stopped container ${container.Id.slice(0, 12)}: ${error}`);
+          }
+        }
+      }
+    }
+    
+    // 7. Check session tracking consistency
+    if (!trackingValidation.valid) {
+      issues.push(...trackingValidation.issues.map((issue: string) => `Session tracking: ${issue}`));
+      
+      if (autoFix && !dryRun) {
+        // Rebuild session tracking from actual sessions
+        clearAllSessionTracking();
+        for (const [sessionId, session] of sessionMap) {
+          if (session.authenticated) {
+            // Determine if authenticated based on access token presence
+            const hasAccessToken = session.credentialHash && session.credentialHash.includes('|');
+            registerSession(sessionId, hasAccessToken ? 'dummy-token' : undefined);
+          }
+        }
+        fixed.push("Rebuilt session tracking from actual sessions");
+      }
+    }
+    
+    // 8. Clean up dead containers
+    for (const container of deadContainers) {
+      issues.push(`Dead container found: ${container.Id.slice(0, 12)}`);
+      
+      if (autoFix && !dryRun) {
+        try {
+          const containerObj = docker.getContainer(container.Id);
+          await containerObj.remove();
+          fixed.push(`Removed dead container ${container.Id.slice(0, 12)}`);
+        } catch (error) {
+          issues.push(`Failed to remove dead container ${container.Id.slice(0, 12)}: ${error}`);
+        }
+      }
+    }
+    
+    // 9. Create comprehensive report
+    const report = {
+      sessionCount: sessionIds.length,
+      containerCount: ourContainers.length,
+      trackingMetrics: sessionMetrics,
+      orphanedContainers,
+      orphanedSessions,
+      containersWithoutSessions,
+      sessionsWithoutContainers,
+      ...(detailedReport && {
+        detailed: {
+          runningContainers: runningContainers.length,
+          stoppedContainers: stoppedContainers.length,
+          deadContainers: deadContainers.length,
+          sessionTracking: trackingValidation,
+          sessions: sessionIds.map(id => ({
+            id: id.slice(0, 8),
+            authenticated: sessionMap.get(id)?.authenticated || false,
+            hasContainer: !!sessionMap.get(id)?.container,
+            creationTime: sessionMap.get(id)?.creationTime
+          })),
+          containers: ourContainers.map((c: ContainerInfo) => ({
+            id: c.Id.slice(0, 12),
+            state: c.State,
+            sessionId: c.Labels?.['session-id']?.slice(0, 8) || 'none',
+            created: c.Created
+          }))
+        }
+      })
+    };
+    
+    const consistent = issues.length === 0;
+    
+    log(`Reconciliation complete. Consistent: ${consistent}, Issues: ${issues.length}, Fixed: ${fixed.length}`);
+    
+    return {
+      consistent,
+      issues,
+      fixed,
+      report
+    };
+    
+  } catch (error) {
+    const errorMsg = `Error during reconciliation: ${error}`;
+    logError(errorMsg);
+    return {
+      consistent: false,
+      issues: [errorMsg],
+      fixed: [],
+      report: {
+        sessionCount: 0,
+        containerCount: 0,
+        trackingMetrics: {},
+        orphanedContainers: [],
+        orphanedSessions: [],
+        containersWithoutSessions: [],
+        sessionsWithoutContainers: []
+      }
+    };
+  }
+}
+
+/**
+ * Periodic reconciliation check (lighter version for regular monitoring)
+ */
+export async function performPeriodicReconciliation(): Promise<void> {
+  try {
+    const result = await reconcileSessionsAndContainers({ 
+      dryRun: true, 
+      autoFix: false, 
+      detailedReport: false 
+    });
+    
+    if (!result.consistent) {
+      logSecure("Periodic reconciliation detected issues", {
+        issueCount: result.issues.length,
+        sessionCount: result.report.sessionCount,
+        containerCount: result.report.containerCount,
+        firstFewIssues: result.issues.slice(0, 3)
+      });
+    }
+    
+    // Auto-fix critical issues (orphaned containers consuming resources)
+    if (result.report.orphanedContainers.length > 0 || result.report.containersWithoutSessions.length > 0) {
+      logSecure("Auto-fixing orphaned containers in periodic reconciliation");
+      await reconcileSessionsAndContainers({ 
+        dryRun: false, 
+        autoFix: true, 
+        detailedReport: false 
+      });
+    }
+  } catch (error) {
+    logError(`Error in periodic reconciliation: ${error}`);
   }
 }
 

@@ -176,7 +176,7 @@ describe('Docker Container Security Features', function() {
         
         // Check if Dockerfile exists first
         const dockerfilePath = path.resolve(__dirname, '../../../server/Dockerfile');
-        if (!require('fs').existsSync(dockerfilePath)) {
+        if (!await import('node:fs').then(fs => fs.existsSync(dockerfilePath))) {
           console.log(`CI mode: Dockerfile not found at ${dockerfilePath} - skipping build`);
           this.skip();
           return;

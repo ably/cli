@@ -1,18 +1,18 @@
 import { expect } from 'chai';
 import WebSocket from 'ws';
-import { performance } from 'perf_hooks';
-import { promisify } from 'util';
-import { exec } from 'child_process';
+import { performance } from 'node:perf_hooks';
+import { promisify } from 'node:util';
+import { exec } from 'node:child_process';
 
 const execAsync = promisify(exec);
 
 // Test configuration - optimized for faster execution
 const TEST_CONFIG = {
-  ANONYMOUS_SESSION_TEST_COUNT: parseInt(process.env.ANONYMOUS_SESSION_TEST_COUNT || '5', 10),
-  AUTHENTICATED_SESSION_TEST_COUNT: parseInt(process.env.AUTHENTICATED_SESSION_TEST_COUNT || '5', 10),
-  CONCURRENT_CONNECTION_TEST_COUNT: parseInt(process.env.CONCURRENT_CONNECTION_TEST_COUNT || '8', 10),
-  CONNECTION_DELAY_MS: parseInt(process.env.CONNECTION_DELAY_MS || '100', 10),
-  SESSION_DELAY_MS: parseInt(process.env.SESSION_DELAY_MS || '50', 10)
+  ANONYMOUS_SESSION_TEST_COUNT: Number.parseInt(process.env.ANONYMOUS_SESSION_TEST_COUNT || '5', 10),
+  AUTHENTICATED_SESSION_TEST_COUNT: Number.parseInt(process.env.AUTHENTICATED_SESSION_TEST_COUNT || '5', 10),
+  CONCURRENT_CONNECTION_TEST_COUNT: Number.parseInt(process.env.CONCURRENT_CONNECTION_TEST_COUNT || '8', 10),
+  CONNECTION_DELAY_MS: Number.parseInt(process.env.CONNECTION_DELAY_MS || '100', 10),
+  SESSION_DELAY_MS: Number.parseInt(process.env.SESSION_DELAY_MS || '50', 10)
 };
 
 // Server configuration
@@ -149,8 +149,8 @@ async function execWithTimeout(command: string, timeoutMs = 30000): Promise<{ st
 }
 
 describe('Load Testing Suite', function() {
-  // Extended timeout for load tests
-  this.timeout(120000); // 2 minutes for comprehensive tests
+  // Extended timeout for load tests but with upper limit to prevent hanging
+  this.timeout(120000); // 2 minutes maximum for comprehensive tests
   
   before(async function() {
     this.timeout(30000); // 30 second timeout for setup
@@ -161,9 +161,18 @@ describe('Load Testing Suite', function() {
     // No longer need to warn about rate limiting since localhost gets exemptions
     console.log('🚀 Running with localhost rate limit exemptions for local development');
     
-    // Check server connectivity
+    // Check server connectivity with timeout
     console.log('Checking server connectivity...');
-    const isAccessible = await checkServerConnectivity(SERVER_URL, 10000);
+    
+    // Use Promise.race to add a hard timeout
+    const connectivityCheck = Promise.race([
+      checkServerConnectivity(SERVER_URL, 10000),
+      new Promise<boolean>((_, reject) => 
+        setTimeout(() => reject(new Error('Server connectivity check timeout')), 15000)
+      )
+    ]);
+    
+    const isAccessible = await connectivityCheck.catch(() => false);
     
     if (!isAccessible) {
       throw new Error(`Server at ${SERVER_URL} is not accessible. Please start the terminal server before running load tests.`);
@@ -177,7 +186,12 @@ describe('Load Testing Suite', function() {
   });
 
   describe('Connection Rate Limiting Under Load', function() {
+    // Set timeout for this entire test suite
+    this.timeout(60000); // 1 minute max
+    
     it('should handle concurrent connection attempts gracefully', async function() {
+      this.timeout(30000); // 30 second timeout for this test
+      
       const concurrentConnections = TEST_CONFIG.CONCURRENT_CONNECTION_TEST_COUNT;
       const connectionPromises: Promise<any>[] = [];
       const results = {
@@ -189,40 +203,49 @@ describe('Load Testing Suite', function() {
       console.log(`Testing ${concurrentConnections} concurrent connections...`);
 
       for (let i = 0; i < concurrentConnections; i++) {
-        const connectionPromise = new Promise((resolve) => {
-          const ws = new WebSocket(SERVER_URL);
-          const timeout = setTimeout(() => {
-            ws.terminate();
-            results.errors++;
-            resolve('timeout');
-          }, 8000);
-
-          ws.on('open', () => {
-            clearTimeout(timeout);
-            results.successful++;
-            ws.close();
-            resolve('success');
-          });
-
-          ws.on('error', (error) => {
-            clearTimeout(timeout);
-            if (error.message.includes('429') || error.message.includes('rate limit')) {
-              results.rejected++;
-              resolve('rate-limited');
-            } else {
+        const connectionPromise = Promise.race([
+          new Promise((resolve) => {
+            const ws = new WebSocket(SERVER_URL);
+            const timeout = setTimeout(() => {
+              ws.terminate();
               results.errors++;
-              resolve('error');
-            }
-          });
+              resolve('timeout');
+            }, 8000);
 
-          ws.on('close', (code) => {
-            clearTimeout(timeout);
-            if (code === 1008) { // Policy violation (rate limited)
-              results.rejected++;
-              resolve('rate-limited');
-            }
-          });
-        });
+            ws.on('open', () => {
+              clearTimeout(timeout);
+              results.successful++;
+              ws.close();
+              resolve('success');
+            });
+
+            ws.on('error', (error) => {
+              clearTimeout(timeout);
+              if (error.message.includes('429') || error.message.includes('rate limit')) {
+                results.rejected++;
+                resolve('rate-limited');
+              } else {
+                results.errors++;
+                resolve('error');
+              }
+            });
+
+            ws.on('close', (code) => {
+              clearTimeout(timeout);
+              if (code === 1008) { // Policy violation (rate limited)
+                results.rejected++;
+                resolve('rate-limited');
+              }
+            });
+          }),
+          // Hard timeout to prevent hanging
+          new Promise((resolve) => 
+            setTimeout(() => {
+              results.errors++;
+              resolve('hard-timeout');
+            }, 10000)
+          )
+        ]);
 
         connectionPromises.push(connectionPromise);
         
@@ -285,7 +308,7 @@ describe('Load Testing Suite', function() {
               reject(error);
             });
           });
-        } catch (error) {
+        } catch (_error) {
           // Expected for rate limited connections
         }
         
@@ -309,8 +332,7 @@ describe('Load Testing Suite', function() {
       }
     });
 
-    it.skip('should recover from rate limiting after cooldown period (slow test - run manually)', async function() {
-      // This test is skipped by default due to the 5-minute wait time
+    it('should recover from rate limiting after cooldown period (slow test - run manually)', async function() {
       this.timeout(400000); // 6.5 minutes
       
       console.log('Testing rate limit recovery (SLOW TEST - 5+ minute wait)...');
@@ -326,87 +348,97 @@ describe('Load Testing Suite', function() {
   });
 
   describe('Session Management Under Load', function() {
+    // Set timeout for all session tests
+    this.timeout(60000); // 1 minute max for session tests
+    
     before(async function() {
       console.log('Ensuring clean state before session tests...');
       await new Promise(resolve => setTimeout(resolve, 1000));
     });
 
-    it('should enforce anonymous session limits (50 sessions)', async function() {
-      this.timeout(60000);
+    it('should handle multiple anonymous session requests', async function() {
+      this.timeout(45000); // 45 second timeout for this test
       
-      const maxAnonymousSessions = 50;
-      const testSessions = TEST_CONFIG.ANONYMOUS_SESSION_TEST_COUNT;
+      const testCount = TEST_CONFIG.ANONYMOUS_SESSION_TEST_COUNT;
       const sessionPromises: Promise<any>[] = [];
-      
-      console.log(`Testing anonymous session creation: attempting ${testSessions} sessions (server limit: ${maxAnonymousSessions})...`);
+      console.log(`Testing ${testCount} anonymous session creations...`);
 
-      for (let i = 0; i < testSessions; i++) {
-        const sessionPromise = new Promise((resolve) => {
-          const ws = new WebSocket(SERVER_URL);
-          let sessionCreated = false;
-          
-          const timeout = setTimeout(() => {
-            if (!sessionCreated) {
-              ws.terminate();
-              resolve({ success: false, reason: 'timeout', index: i });
-            }
-          }, 10000);
-
-          ws.on('open', () => {
-            ws.send(JSON.stringify({
-              type: 'auth',
-              apiKey: 'dummy.anonymous:key_for_anonymous_load_testing',
-              sessionId: `anonymous-load-test-${i}-${Date.now()}`
-            }));
-          });
-
-          ws.on('message', (data) => {
-            try {
-              const message = JSON.parse(data.toString());
-              if (message.type === 'hello') {
-                clearTimeout(timeout);
-                sessionCreated = true;
-                
-                setTimeout(() => {
-                  ws.close();
-                  resolve({ 
-                    success: true, 
-                    sessionId: message.sessionId,
-                    reason: 'created',
-                    index: i
-                  });
-                }, 200);
+      for (let i = 0; i < testCount; i++) {
+        const sessionPromise = Promise.race([
+          new Promise((resolve) => {
+            const ws = new WebSocket(SERVER_URL);
+            let sessionCreated = false;
+            
+            const timeout = setTimeout(() => {
+              if (!sessionCreated) {
+                ws.terminate();
+                resolve({ success: false, reason: 'timeout', index: i });
               }
-            } catch (error) {
+            }, 10000);
+
+            ws.on('open', () => {
+              ws.send(JSON.stringify({
+                type: 'auth',
+                apiKey: 'dummy.anonymous:key_for_anonymous_load_testing',
+                sessionId: `anonymous-load-test-${i}-${Date.now()}`
+              }));
+            });
+
+            ws.on('message', (data) => {
+              try {
+                const message = JSON.parse(data.toString());
+                if (message.type === 'hello') {
+                  clearTimeout(timeout);
+                  sessionCreated = true;
+                  
+                  setTimeout(() => {
+                    ws.close();
+                    resolve({ 
+                      success: true, 
+                      sessionId: message.sessionId,
+                      reason: 'created',
+                      index: i
+                    });
+                  }, 200);
+                }
+              } catch (_error) {
+                clearTimeout(timeout);
+                ws.close();
+                resolve({ success: false, reason: 'parse_error', index: i });
+              }
+            });
+
+            ws.on('error', (error) => {
               clearTimeout(timeout);
-              ws.close();
-              resolve({ success: false, reason: 'parse_error', index: i });
-            }
-          });
-
-          ws.on('error', (error) => {
-            clearTimeout(timeout);
-            if (error.message.includes('429') || error.message.includes('rate limit')) {
-              resolve({ success: false, reason: 'rate_limited', index: i });
-            } else {
-              resolve({ success: false, reason: `connection_error: ${error.message}`, index: i });
-            }
-          });
-
-          ws.on('close', (code) => {
-            clearTimeout(timeout);
-            if (!sessionCreated) {
-              if (code === 1006 && !sessionCreated) {
+              if (error.message.includes('429') || error.message.includes('rate limit')) {
                 resolve({ success: false, reason: 'rate_limited', index: i });
               } else {
-                resolve({ success: false, reason: `closed_${code}`, index: i });
+                resolve({ success: false, reason: `connection_error: ${error.message}`, index: i });
               }
-            }
-          });
-        });
+            });
 
+            ws.on('close', (code) => {
+              clearTimeout(timeout);
+              if (!sessionCreated) {
+                if (code === 1006 && !sessionCreated) {
+                  resolve({ success: false, reason: 'rate_limited', index: i });
+                } else {
+                  resolve({ success: false, reason: `closed_${code}`, index: i });
+                }
+              }
+            });
+          }),
+          // Hard timeout to prevent hanging
+          new Promise<any>((resolve) => 
+            setTimeout(() => {
+              resolve({ success: false, reason: 'hard-timeout', index: i });
+            }, 30000)
+          )
+        ]);
+        
         sessionPromises.push(sessionPromise);
         
+        // Small delay between session attempts
         if (i > 0) {
           await new Promise(resolve => setTimeout(resolve, TEST_CONFIG.SESSION_DELAY_MS));
         }
@@ -425,7 +457,7 @@ describe('Load Testing Suite', function() {
       const successfulSessions = results.filter(r => (r as any).reason === 'created').length;
       const rateLimitedSessions = results.filter(r => (r as any).reason === 'rate_limited').length;
       
-      console.log(`Successful anonymous sessions: ${successfulSessions}/${testSessions} (server limit: ${maxAnonymousSessions})`);
+      console.log(`Successful anonymous sessions: ${successfulSessions}/${testCount} (server limit: ${TEST_CONFIG.ANONYMOUS_SESSION_TEST_COUNT})`);
       console.log(`Rate limited sessions: ${rateLimitedSessions}`);
       
       // Adaptive expectations based on rate limiting
@@ -438,7 +470,7 @@ describe('Load Testing Suite', function() {
         expect(successfulSessions).to.be.greaterThan(0, 
           'Should be able to create at least some anonymous sessions');
         
-        if (successfulSessions >= testSessions * 0.8) {
+        if (successfulSessions >= testCount * 0.8) {
           console.log('✓ Most sessions created successfully');
         }
       }
@@ -491,7 +523,7 @@ describe('Load Testing Suite', function() {
                   });
                 }, 200);
               }
-            } catch (error) {
+            } catch (_error) {
               clearTimeout(timeout);
                 ws.close();
               resolve({ success: false, reason: 'parse_error', index: i });
@@ -727,7 +759,7 @@ describe('Load Testing Suite', function() {
                     index: i
                   });
                 }
-              } catch (error) {
+              } catch (_error) {
                 clearTimeout(timeout);
                 ws.close();
                 resolve({ success: false, reason: 'parse_error', cycle, index: i });
@@ -804,7 +836,7 @@ describe('Load Testing Suite', function() {
               ws.close();
               resolve({ success: true, sessionId: message.sessionId });
             }
-          } catch (error) {
+          } catch (_error) {
             clearTimeout(timeout);
             ws.close();
             resolve({ success: false, reason: 'parse_error' });
@@ -821,7 +853,7 @@ describe('Load Testing Suite', function() {
       console.log('✓ Server remains responsive after rapid session cycles - no session leak detected');
     });
 
-    it.skip('should enforce the full 50 anonymous session limit (slow test - run manually)', async function() {
+    it('should enforce the full 50 anonymous session limit (slow test - run manually)', async function() {
       this.timeout(300000);
       
       const maxAnonymousSessions = 50;
