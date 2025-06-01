@@ -12,6 +12,8 @@ import {
 import { initializeServer } from './services/websocket-server.js';
 import { PORT } from './config/server-config.js';
 import { log as logger } from './utils/logger.js';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 // Export test hooks for unit tests
 export {
@@ -97,9 +99,24 @@ async function startTerminalServer(): Promise<void> {
   }
 }
 
-// Only start the server if this file is run directly (using top-level await as preferred)
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Only start the server if this file is run directly
+// Use proper path comparison to handle both file URLs and paths correctly
+const currentFilePath = fileURLToPath(import.meta.url);
+const executedFilePath = process.argv[1] ? resolve(process.argv[1]) : null;
+
+// Debug logging for CI troubleshooting
+logger(`🔍 Server startup check:`);
+logger(`   Current file: ${currentFilePath}`);
+logger(`   Executed file: ${executedFilePath || 'undefined (imported)'}`);
+logger(`   Match: ${executedFilePath ? currentFilePath === executedFilePath : false}`);
+logger(`   NODE_ENV: ${process.env.NODE_ENV}`);
+logger(`   CI: ${process.env.CI}`);
+
+if (executedFilePath && currentFilePath === executedFilePath) {
+  logger(`✅ Starting server - file was executed directly`);
   await startTerminalServer();
+} else {
+  logger(`⏸️  Not starting server - file was imported/required`);
 }
 
 export { startTerminalServer };

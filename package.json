@@ -40,6 +40,7 @@
     "postinstall": "[ \"$CI\" = \"true\" ] || (test -f ./dist/scripts/postinstall-welcome.js && node ./dist/scripts/postinstall-welcome.js || echo \"Skipping welcome script (not found)\")",
     "preversion": "pnpm run prepare",
     "version": "oclif readme && git add README.md",
+    "validate": "./scripts/pre-push-validation.sh",
     "cli": "bin/run.js",
     "terminal-server": "cd server && pnpm build && node dist/src/index.js",
     "diagnostics:container": "bash server/scripts/diagnostics-container.sh",
