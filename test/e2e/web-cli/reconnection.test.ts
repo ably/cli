@@ -26,7 +26,7 @@ const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
 
 // Shared variables
-let webServerProcess: any;
+  let webServerProcess: any;
 let webServerPort: number;
 
 // Helper function to wait for server startup
@@ -132,8 +132,8 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
           activeConnections.forEach(ws => {
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
               ws.close(3000, 'Test disconnect');
-            }
-          });
+    }
+  });
         },
         count: () => activeConnections.length,
       };
@@ -146,7 +146,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
             const index = activeConnections.indexOf(this);
             if (index !== -1) activeConnections.splice(index, 1);
           });
-        }
+      }
       }
 
       window.WebSocket = InterceptedWebSocket as any;
@@ -216,9 +216,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       });
 
       // Wait for reconnection to complete - look for a fresh terminal state
-      await page.waitForFunction(() => {
-        const s = (window as any).getAblyCliTerminalReactState?.();
-        return s?.componentConnectionStatus === 'connected';
+    await page.waitForFunction(() => {
+      const s = (window as any).getAblyCliTerminalReactState?.();
+      return s?.componentConnectionStatus === 'connected';
       }, null, { timeout: connectionTimeout });
 
       // Wait for the terminal to be ready for commands (look for prompt)

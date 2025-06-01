@@ -16,6 +16,7 @@ import {
   OUTPUT_BUFFER_MAX_LINES 
 } from "../config/server-config.js";
 import { log, logError, logSecure } from "../utils/logger.js";
+import { unregisterSession } from "./session-tracking-service.js";
 
 const require = createRequire(import.meta.url);
 const Dockerode = require("dockerode");
@@ -24,6 +25,9 @@ const docker = new Dockerode();
 
 // Global sessions map
 const sessions = new Map<string, ClientSession>();
+
+// Track cleanup operations to prevent double cleanup
+const cleanupInProgress = new Set<string>();
 
 // --- Session Management Functions ---
 
@@ -40,11 +44,16 @@ export async function terminateSession(
   const session = sessions.get(sessionId);
   if (!session) {
     log(`Session ${sessionId} not found for termination.`);
+    // Still try to unregister in case it's tracked but not in sessions map
+    unregisterSession(sessionId);
     return;
   }
 
   log(`[Server] terminateSession called for sessionId=${sessionId}, reason=${reason}`);
-  clearTimeout(session.timeoutId);
+  
+  // Clear any existing timers
+  if (session.timeoutId) clearTimeout(session.timeoutId);
+  if (session.orphanTimer) clearTimeout(session.orphanTimer);
 
   // Send disconnected status message
   if (session.ws && session.ws.readyState === WebSocket.OPEN) {
@@ -73,11 +82,23 @@ export async function cleanupAllSessions(): Promise<void> {
   log(`Cleaning up ${sessions.size} sessions...`);
   const sessionIds = [...sessions.keys()];
   
-  for (const sessionId of sessionIds) {
-    try {
-      await terminateSession(sessionId, "Server shutdown", false);
-    } catch (error: unknown) {
-      logError(`Error terminating session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+  // Process cleanup in batches to prevent overwhelming the system
+  const batchSize = 5;
+  for (let i = 0; i < sessionIds.length; i += batchSize) {
+    const batch = sessionIds.slice(i, i + batchSize);
+    const cleanupPromises = batch.map(async (sessionId) => {
+      try {
+        await terminateSession(sessionId, "Server shutdown", false);
+      } catch (error: unknown) {
+        logError(`Error terminating session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    
+    await Promise.allSettled(cleanupPromises);
+    
+    // Small delay between batches to prevent system overload
+    if (i + batchSize < sessionIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
   
@@ -85,53 +106,195 @@ export async function cleanupAllSessions(): Promise<void> {
 }
 
 export async function cleanupSession(sessionId: string): Promise<void> {
-  const session = sessions.get(sessionId);
-  if (!session) {
+  // Prevent double cleanup
+  if (cleanupInProgress.has(sessionId)) {
+    log(`Cleanup already in progress for session ${sessionId}, skipping...`);
     return;
   }
-  log(`[Server] cleanupSession called for sessionId=${sessionId}`);
+  
+  cleanupInProgress.add(sessionId);
+  
+  try {
+    const session = sessions.get(sessionId);
+    if (!session) {
+      log(`Session ${sessionId} not found for cleanup`);
+      // Still unregister from tracking in case it exists there
+      unregisterSession(sessionId);
+      return;
+    }
+    
+    log(`[Server] cleanupSession called for sessionId=${sessionId}`);
 
-  // Attempt to send disconnected status if ws is open and not already handled by terminateSession
-  // This is more of a fallback. terminateSession is the primary place.
-  if (session.ws && session.ws.readyState === WebSocket.OPEN && !session.ws.CLOSING && !session.ws.CLOSED) {
-    // Check if terminateSession might have already sent it by checking if a close reason related to termination was set.
-    // This is heuristic. A more robust way would be a flag on the session object.
-    // For now, we err on sending potentially twice vs. not at all in cleanup path.
+    // Attempt to send disconnected status if ws is open and not already handled by terminateSession
+    // This is more of a fallback. terminateSession is the primary place.
+    if (session.ws && session.ws.readyState === WebSocket.OPEN && !session.ws.CLOSING && !session.ws.CLOSED) {
+      try {
+        const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason: "Session cleanup initiated" };
+        session.ws.send(JSON.stringify(statusMsg));
+        log(`Sent 'disconnected' status during cleanup for session ${sessionId} (fallback)`);
+      } catch { /* ignore */ }
+    }
+
+    // Clear all timers
+    if (session.timeoutId) clearTimeout(session.timeoutId);
+    if (session.orphanTimer) clearTimeout(session.orphanTimer);
+
+    // Clean up streams first
+    await cleanupSessionStreams(session);
+
+    // Clean up container with enhanced error handling and verification
+    await cleanupSessionContainer(session);
+
+    // Unregister from session tracking (CRITICAL - this was missing!)
+    unregisterSession(sessionId);
+
+    // Remove from sessions map
+    sessions.delete(sessionId);
+    log(`Session ${sessionId} removed. Active sessions: ${sessions.size}`);
+    
+  } catch (error) {
+    logError(`Error during session cleanup for ${sessionId}: ${error}`);
+  } finally {
+    cleanupInProgress.delete(sessionId);
+  }
+}
+
+/**
+ * Enhanced stream cleanup with proper error handling
+ */
+async function cleanupSessionStreams(session: ClientSession): Promise<void> {
+  const sessionId = session.sessionId;
+  
+  try {
+    // Clean up stdin stream
+    if (session.stdinStream) {
+      try {
+        if (!session.stdinStream.destroyed) {
+          // Remove listeners to prevent cleanup loops
+          session.stdinStream.removeAllListeners();
+          session.stdinStream.end();
+          session.stdinStream.destroy();
+        }
+        log(`stdinStream for session ${sessionId} ended and destroyed.`);
+      } catch (error) {
+        logError(`Error cleaning up stdin stream for ${sessionId}: ${error}`);
+      }
+      session.stdinStream = undefined;
+    }
+    
+    // Clean up stdout stream (if different from stdin)
+    if (session.stdoutStream && session.stdoutStream !== session.stdinStream) {
+      try {
+        if (!session.stdoutStream.destroyed) {
+          session.stdoutStream.removeAllListeners();
+          session.stdoutStream.destroy();
+        }
+        log(`stdoutStream for session ${sessionId} destroyed.`);
+      } catch (error) {
+        logError(`Error cleaning up stdout stream for ${sessionId}: ${error}`);
+      }
+      session.stdoutStream = undefined;
+    }
+  } catch (error) {
+    logError(`Error during stream cleanup for session ${sessionId}: ${error}`);
+  }
+}
+
+/**
+ * Enhanced container cleanup with verification and health monitoring
+ */
+async function cleanupSessionContainer(session: ClientSession): Promise<void> {
+  const sessionId = session.sessionId;
+  
+  if (!session.container) {
+    log(`No container to clean up for session ${sessionId}`);
+    return;
+  }
+
+  const containerId = session.container.id;
+  log(`Starting container cleanup for session ${sessionId}, container ${containerId.slice(0, 12)}`);
+  
+  try {
+    // First, try to get container status
+    let containerExists = true;
+    let containerRunning = false;
+    
     try {
-      const statusMsg: ServerStatusMessage = { type: "status", payload: "disconnected", reason: "Session cleanup initiated" };
-      session.ws.send(JSON.stringify(statusMsg));
-      log(`Sent 'disconnected' status during cleanup for session ${sessionId} (fallback)`);
-    } catch { /* ignore */ }
+      const inspect = await session.container.inspect();
+      containerRunning = inspect.State.Running;
+      log(`Container ${containerId.slice(0, 12)} status: running=${containerRunning}`);
+    } catch (error: any) {
+      if (error.statusCode === 404 || error.message.includes('No such container')) {
+        containerExists = false;
+        log(`Container ${containerId.slice(0, 12)} no longer exists`);
+      } else {
+        logError(`Error inspecting container ${containerId.slice(0, 12)}: ${error}`);
+      }
+    }
+    
+    if (containerExists) {
+      // Stop container if running
+      if (containerRunning) {
+        try {
+          log(`Stopping container ${containerId.slice(0, 12)}...`);
+          await session.container.stop({ t: 5 }); // 5 second timeout
+          log(`Container ${containerId.slice(0, 12)} stopped`);
+        } catch (error: any) {
+          // Container might have already stopped or exited
+          if (!error.message.includes('is not running') && !error.message.includes('No such container')) {
+            logError(`Error stopping container ${containerId.slice(0, 12)}: ${error}`);
+          }
+        }
+      }
+      
+      // Force remove container
+      try {
+        log(`Removing container ${containerId.slice(0, 12)}...`);
+        await session.container.remove({ force: true, v: true }); // force=true, remove volumes=true
+        log(`Container ${containerId.slice(0, 12)} removed successfully`);
+      } catch (error: any) {
+        if (error.statusCode === 404 || error.message.includes('No such container')) {
+          log(`Container ${containerId.slice(0, 12)} was already removed`);
+        } else {
+          logError(`Error removing container ${containerId.slice(0, 12)}: ${error}`);
+          
+          // Additional cleanup attempt with direct Docker API
+          try {
+            await docker.getContainer(containerId).remove({ force: true, v: true });
+            log(`Container ${containerId.slice(0, 12)} removed on retry`);
+          } catch (retryError: any) {
+            logError(`Final cleanup attempt failed for container ${containerId.slice(0, 12)}: ${retryError}`);
+          }
+        }
+      }
+    }
+    
+    // Verify container is gone
+    await verifyContainerCleanup(containerId);
+    
+  } catch (error) {
+    logError(`Error during container cleanup for session ${sessionId}: ${error}`);
+  } finally {
+    session.container = undefined;
   }
+}
 
-  clearTimeout(session.timeoutId);
-
-  if (session.stdinStream) {
-    session.stdinStream.end();
-    session.stdinStream.destroy(); // Ensure stream is fully destroyed
-    log(`stdinStream for session ${sessionId} ended and destroyed.`);
-  }
-  if (session.stdoutStream) {
-    // stdoutStream is readable, typically doesn't need end(); just destroy
-    session.stdoutStream.destroy();
-    log(`stdoutStream for session ${sessionId} destroyed.`);
-  }
-
-  // Remove container if it exists and isn't already being removed
-  if (session.container) {
-    try {
-      log(`Removing container ${session.container.id}...`);
-      await session.container.remove({ force: true }).catch((error: Error) => {
-        log(`Note: Error removing container ${session.container?.id}: ${error.message}.`);
-      });
-      log(`Container ${session.container.id} removed.`);
-    } catch (error) {
-      log(`Note: Error during container removal: ${error}.`);
+/**
+ * Verify container has been completely removed
+ */
+async function verifyContainerCleanup(containerId: string): Promise<void> {
+  try {
+    const container = docker.getContainer(containerId);
+    await container.inspect();
+    // If we get here, container still exists
+    logError(`Container ${containerId.slice(0, 12)} still exists after cleanup attempt`);
+  } catch (error: any) {
+    if (error.statusCode === 404 || error.message.includes('No such container')) {
+      log(`Container ${containerId.slice(0, 12)} cleanup verified - container no longer exists`);
+    } else {
+      logError(`Error verifying container cleanup for ${containerId.slice(0, 12)}: ${error}`);
     }
   }
-
-  sessions.delete(sessionId);
-  log(`Session ${sessionId} removed. Active sessions: ${sessions.size}`);
 }
 
 /**
@@ -359,6 +522,271 @@ export function deleteSession(sessionId: string): boolean {
 
 export function getSessionCount(): number {
   return sessions.size;
+}
+
+export function getSessionList(): { sessionId: string; authenticated: boolean; lastActivityTime: number }[] {
+  return [...sessions.values()].map(session => ({
+    sessionId: session.sessionId,
+    authenticated: session.authenticated,
+    lastActivityTime: session.lastActivityTime
+  }));
+}
+
+/**
+ * Enhanced stale container cleanup for Phase 3 - Server startup cleanup
+ * This is more aggressive than the original implementation when no other server instances are detected
+ */
+export async function cleanupStaleContainers(): Promise<void> {
+  try {
+    log("Starting enhanced stale container cleanup...");
+    
+    // Check if other server instances are running
+    const otherServersRunning = await detectOtherServerInstances();
+    const isOnlyServerInstance = !otherServersRunning;
+    
+    log(`Other server instances detected: ${otherServersRunning}, this is only instance: ${isOnlyServerInstance}`);
+    
+    // Get all containers with our label
+    const allContainers = await docker.listContainers({ 
+      all: true, // Include stopped containers
+      filters: {
+        label: ["managed-by=ably-cli-terminal-server"]
+      }
+    });
+
+    log(`Found ${allContainers.length} Ably CLI containers`);
+
+    if (allContainers.length === 0) {
+      log("No Ably CLI containers found");
+      return;
+    }
+
+    let removedCount = 0;
+    let skippedCount = 0;
+    const batchSize = 3; // Process containers in small batches
+
+    for (let i = 0; i < allContainers.length; i += batchSize) {
+      const batch = allContainers.slice(i, i + batchSize);
+      
+      const batchPromises = batch.map(async (containerInfo: any) => {
+        const containerId = containerInfo.Id;
+        const containerName = containerInfo.Names?.[0] || 'unnamed';
+        const isRunning = containerInfo.State === 'running';
+        
+        try {
+          // Check if this container belongs to any active session
+          const belongsToActiveSession = [...sessions.values()].some(
+            session => session.container?.id === containerId
+          );
+
+          if (belongsToActiveSession) {
+            log(`Skipping container ${containerId.slice(0, 12)} (${containerName}) - belongs to active session`);
+            skippedCount++;
+            return;
+          }
+
+          // Aggressive cleanup logic based on server instance detection
+          let shouldRemove = false;
+          let reason = '';
+
+          if (isOnlyServerInstance) {
+            // If we're the only server instance, remove ALL orphaned containers
+            shouldRemove = true;
+            reason = 'orphaned container (no other server instances detected)';
+          } else {
+            // If other servers might be running, be more conservative
+            // Only remove containers that are clearly stale
+            if (isRunning) {
+              // For running containers when other servers detected, check if they're old
+              const container = docker.getContainer(containerId);
+              try {
+                const inspect = await container.inspect();
+                const startTime = new Date(inspect.State.StartedAt).getTime();
+                const now = Date.now();
+                const ageHours = (now - startTime) / (1000 * 60 * 60);
+                
+                // Remove running containers older than 2 hours when other servers are detected
+                if (ageHours > 2) {
+                  shouldRemove = true;
+                  reason = `old running container (${ageHours.toFixed(1)} hours old)`;
+                }
+              } catch (inspectError) {
+                log(`Could not inspect container ${containerId.slice(0, 12)}: ${inspectError}`);
+                shouldRemove = true;
+                reason = 'uninspectable container';
+              }
+            } else {
+              shouldRemove = true;
+              reason = 'stopped container';
+            }
+          }
+
+          if (shouldRemove) {
+            log(`Removing container ${containerId.slice(0, 12)} (${containerName}): ${reason}`);
+            
+            const container = docker.getContainer(containerId);
+            
+            // Stop first if running
+            if (isRunning) {
+              try {
+                await container.stop({ t: 5 });
+                log(`Stopped container ${containerId.slice(0, 12)}`);
+              } catch (stopError: any) {
+                if (!stopError.message.includes('is not running')) {
+                  logError(`Error stopping container ${containerId.slice(0, 12)}: ${stopError}`);
+                }
+              }
+            }
+            
+            // Remove container
+            try {
+              await container.remove({ force: true, v: true });
+              log(`Removed container ${containerId.slice(0, 12)} (${containerName})`);
+              removedCount++;
+            } catch (removeError: any) {
+              if (removeError.statusCode === 404) {
+                log(`Container ${containerId.slice(0, 12)} was already removed`);
+                removedCount++;
+              } else {
+                logError(`Error removing container ${containerId.slice(0, 12)}: ${removeError}`);
+              }
+            }
+          } else {
+            log(`Keeping container ${containerId.slice(0, 12)} (${containerName}) - ${isRunning ? 'running' : 'stopped'} and within age limits`);
+            skippedCount++;
+          }
+        } catch (error) {
+          logError(`Error processing container ${containerId.slice(0, 12)}: ${error}`);
+        }
+      });
+
+      // Wait for current batch to complete
+      await Promise.allSettled(batchPromises);
+      
+      // Small delay between batches to prevent overwhelming Docker daemon
+      if (i + batchSize < allContainers.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    log(`Container cleanup completed: ${removedCount} removed, ${skippedCount} kept`);
+    
+    // Additional verification step
+    await verifyAllContainersCleanup();
+
+  } catch (error) {
+    logError(`Error during stale container cleanup: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Detect if other Ably CLI server instances are running
+ * This helps determine how aggressive to be with container cleanup
+ */
+async function detectOtherServerInstances(): Promise<boolean> {
+  try {
+    // Method 1: Check for processes listening on similar ports
+    // Note: This is a heuristic and may not be 100% accurate
+    
+    // Method 2: Check for containers running with server labels
+    const serverContainers = await docker.listContainers({
+      filters: {
+        label: ["ably-cli-server=true"]
+      }
+    });
+    
+    if (serverContainers.length > 0) {
+      log(`Found ${serverContainers.length} server containers running`);
+      return true;
+    }
+    
+    // Method 3: Check for lock files or other server indicators
+    // This could be enhanced with a more sophisticated server instance detection mechanism
+    
+    return false;
+  } catch (error) {
+    logError(`Error detecting other server instances: ${error}`);
+    // If we can't detect, assume other servers might be running (conservative approach)
+    return true;
+  }
+}
+
+/**
+ * Verify that all expected containers have been cleaned up
+ */
+async function verifyAllContainersCleanup(): Promise<void> {
+  try {
+    const remainingContainers = await docker.listContainers({
+      all: true,
+      filters: {
+        label: ["managed-by=ably-cli-terminal-server"]
+      }
+    });
+    
+    const activeSessionContainers = new Set(
+      [...sessions.values()]
+        .map(session => session.container?.id)
+        .filter(Boolean)
+    );
+    
+    const orphanedContainers = remainingContainers.filter(
+      (container: any) => !activeSessionContainers.has(container.Id)
+    );
+    
+    if (orphanedContainers.length > 0) {
+      logError(`Found ${orphanedContainers.length} orphaned containers after cleanup:`);
+      orphanedContainers.forEach((container: any) => {
+        logError(`  - ${container.Id.slice(0, 12)} (${container.Names?.[0] || 'unnamed'}) - ${container.State}`);
+      });
+    } else {
+      log("Container cleanup verification passed - no orphaned containers detected");
+    }
+  } catch (error) {
+    logError(`Error during container cleanup verification: ${error}`);
+  }
+}
+
+/**
+ * Enhanced container health monitoring for active sessions
+ */
+export async function monitorContainerHealth(): Promise<void> {
+  try {
+    const activeSessions = [...sessions.values()].filter(session => session.container);
+    
+    if (activeSessions.length === 0) {
+      return;
+    }
+    
+    log(`Monitoring health of ${activeSessions.length} active session containers`);
+    
+    for (const session of activeSessions) {
+      if (!session.container) continue;
+      
+      try {
+        const inspect = await session.container.inspect();
+        const isRunning = inspect.State.Running;
+        const exitCode = inspect.State.ExitCode;
+        
+        if (isRunning || exitCode === 0) {
+          // Container is running normally or stopped gracefully
+          continue;
+        }
+        
+        logError(`Container ${session.container.id.slice(0, 12)} for session ${session.sessionId} exited with code ${exitCode}`);
+        // Clean up the failed session
+        void cleanupSession(session.sessionId);
+      } catch (error: any) {
+        if (error.statusCode === 404) {
+          log(`Container for session ${session.sessionId} no longer exists - cleaning up session`);
+          void cleanupSession(session.sessionId);
+        } else {
+          logError(`Error monitoring container for session ${session.sessionId}: ${error}`);
+        }
+      }
+    }
+  } catch (error) {
+    logError(`Error during container health monitoring: ${error}`);
+  }
 }
 
 // Test hooks for session management

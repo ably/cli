@@ -13,7 +13,7 @@ import {
 import { logSecure, logError } from "../utils/logger.js";
 import { validateAndPurgeCredentials } from "./auth-service.js";
 import { initializeSecurity, createSecureNetwork, cleanupSecurity } from "./security-service.js";
-import { cleanupStaleContainers, ensureDockerImage, createContainer, enableAutoRemoval } from "./docker-manager.js";
+import { ensureDockerImage, createContainer, enableAutoRemoval } from "./docker-manager.js";
 import { 
   initializeRateLimiting,
   shutdownRateLimiting,
@@ -32,9 +32,9 @@ import {
   getSessionMetrics,
   getSessionAlerts
 } from "./session-tracking-service.js";
-import { 
-  generateSessionId, 
-  terminateSession, 
+import {
+  generateSessionId,
+  terminateSession,
   cleanupAllSessions,
   cleanupSession,
   scheduleOrphanCleanup,
@@ -43,7 +43,7 @@ import {
   setSession,
   takeoverSession,
   attemptCrossProcessResume,
-  canResumeSession
+  cleanupStaleContainers
 } from "./session-manager.js";
 import { attachToContainer, handleMessage } from "../utils/stream-handler.js";
 import { computeCredentialHash } from "../utils/session-utils.js";
@@ -453,8 +453,37 @@ export async function startServer(): Promise<http.Server> {
 
                 let container;
                 try {
-                   // Pass credentials to createContainer with enhanced security
-                   container = await createContainer(apiKey ?? '', accessToken ?? '', environmentVariables || {}, sessionId);
+                   // Create environment map for the container
+                   const env = {
+                     ...(apiKey ? { ABLY_API_KEY: apiKey } : {}),
+                     ...(accessToken ? { ABLY_ACCESS_TOKEN: accessToken } : {}),
+                     ...environmentVariables,
+                     // Add terminal-specific environment variables
+                     TERM: 'dumb', // Disable ANSI escape sequences
+                     COLORTERM: 'truecolor',
+                     LANG: 'en_US.UTF-8',
+                     LC_ALL: 'en_US.UTF-8',
+                     LC_CTYPE: 'en_US.UTF-8',
+                     CLICOLOR: '1',
+                     PS1: '$ ',
+                     HISTSIZE: '1000',
+                     HISTFILE: '/home/appuser/.bash_history'
+                   };
+
+                   // Use enhanced container creation
+                   container = await createContainer(
+                     process.env.DOCKER_IMAGE_NAME || 'ably-cli-terminal',
+                     sessionId,
+                     env,
+                     {
+                       name: `ably-cli-session-${sessionId}`,
+                       labels: {
+                         'managed-by': 'ably-cli-terminal-server',
+                         'session-id': sessionId,
+                         'security-level': 'enhanced'
+                       }
+                     }
+                   );
                    logSecure(`[Server] Enhanced security container created: ${container.id.slice(0, 12)}`);
 
                    // Start the container before attempting to attach
@@ -543,6 +572,8 @@ export async function startServer(): Promise<http.Server> {
         // For connections that have completed authentication we do **not** destroy
         // the session immediately – instead we schedule orphan cleanup so the
         // container can be resumed within the RESUME_GRACE_MS window.
+        // EXCEPTION: If the session was created very recently (within 10 seconds),
+        // clean it up immediately since it's likely not intended for resumption.
         const topLevelCloseHandler = (code: number, reason: Buffer) => {
             logSecure(`[Server] WebSocket closed`, {
               sessionId: sessionId.slice(0, 8),
@@ -552,8 +583,19 @@ export async function startServer(): Promise<http.Server> {
 
             const existing = getSessions().get(sessionId);
             if (existing && existing.authenticated) {
-                // Authenticated session ⇒ keep it around for possible resume
-                scheduleOrphanCleanup(existing);
+                // Check if session was created very recently (within 10 seconds)
+                const sessionAge = Date.now() - existing.creationTime;
+                const isVeryRecentSession = sessionAge < 10000; // 10 seconds
+                
+                if (isVeryRecentSession) {
+                    // Session was created and closed immediately - clean up now
+                    logSecure(`WebSocket closed for session ${sessionId.slice(0, 8)}. Code: ${code}, Reason: ${reason.toString() || 'No reason given'}. isAttaching: ${existing.isAttaching}`);
+                    unregisterSession(sessionId);
+                    cleanupSession(sessionId);
+                } else {
+                    // Authenticated session that lived longer ⇒ keep it around for possible resume
+                    scheduleOrphanCleanup(existing);
+                }
             } else {
                 // Not yet authenticated ⇒ safe to purge immediately
                 unregisterSession(sessionId);
@@ -567,7 +609,18 @@ export async function startServer(): Promise<http.Server> {
             logError(`[Server] WebSocket error: ${err.message}`);
             const existing = getSessions().get(sessionId);
             if (existing && existing.authenticated) {
-                scheduleOrphanCleanup(existing);
+                // Check if session was created very recently (within 10 seconds)
+                const sessionAge = Date.now() - existing.creationTime;
+                const isVeryRecentSession = sessionAge < 10000; // 10 seconds
+                
+                if (isVeryRecentSession) {
+                    // Session was created and errored immediately - clean up now
+                    unregisterSession(sessionId);
+                    cleanupSession(sessionId);
+                } else {
+                    // Authenticated session that lived longer ⇒ keep it around for possible resume
+                    scheduleOrphanCleanup(existing);
+                }
             } else {
                 unregisterSession(sessionId);
                 cleanupSession(sessionId);

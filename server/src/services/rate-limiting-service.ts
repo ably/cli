@@ -8,7 +8,7 @@ import {
   DISABLE_LOCALHOST_EXEMPTIONS
 } from "../config/server-config.js";
 import { logSecure } from "../utils/logger.js";
-import type { IncomingMessage } from 'http';
+import type { IncomingMessage } from 'node:http';
 
 // =============================================================================
 // RATE LIMITING CONFIGURATION
