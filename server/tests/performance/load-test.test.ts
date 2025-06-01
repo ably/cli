@@ -19,6 +19,86 @@ const TEST_CONFIG = {
 const SERVER_URL = process.env.TERMINAL_SERVER_URL || 'ws://localhost:8080';
 const isCI = process.env.CI === 'true';
 
+// Global cleanup flag to prevent multiple cleanup attempts
+let globalCleanupExecuted = false;
+
+/**
+ * Perform global cleanup - shutdown server and clean resources
+ */
+async function performGlobalCleanup(): Promise<void> {
+  if (globalCleanupExecuted) {
+    console.log('Global cleanup already executed, skipping...');
+    return;
+  }
+  
+  globalCleanupExecuted = true;
+  console.log('🧹 Performing global test cleanup...');
+  
+  try {
+    // Try to gracefully shutdown any running server processes
+    try {
+      // Send shutdown signal to server if it's running locally
+      const { stdout } = await execWithTimeout('pgrep -f "terminal-server"', 5000);
+      if (stdout.trim()) {
+        console.log('Found terminal server process, sending SIGTERM...');
+        await execWithTimeout('pkill -TERM -f "terminal-server"', 5000);
+        
+        // Wait a moment for graceful shutdown
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Force kill if still running
+        try {
+          const { stdout: stillRunning } = await execWithTimeout('pgrep -f "terminal-server"', 2000);
+          if (stillRunning.trim()) {
+            console.log('Force killing terminal server process...');
+            await execWithTimeout('pkill -KILL -f "terminal-server"', 3000);
+          }
+        } catch {
+          // Process likely already terminated
+        }
+      }
+    } catch {
+      // No server process found or kill failed - that's fine
+    }
+    
+    // Clean up any test containers that might be lingering
+    try {
+      const { stdout } = await execWithTimeout('docker ps -aq --filter "label=managed-by=ably-cli-terminal-server" --filter "name=load-test"', 10000);
+      if (stdout.trim()) {
+        console.log('Cleaning up test containers...');
+        await execWithTimeout(`docker rm -f ${stdout.trim().split('\n').join(' ')}`, 15000);
+      }
+    } catch {
+      // Container cleanup failed - not critical
+    }
+    
+    // Terminate any remaining WebSocket connections
+    try {
+      // Force close any lingering network connections
+      await execWithTimeout('ss -K dport = 8080 || true', 3000);
+    } catch {
+      // Connection cleanup failed - not critical
+    }
+    
+    console.log('✓ Global cleanup completed');
+  } catch (error) {
+    console.log('⚠️  Some cleanup operations failed:', error);
+  }
+}
+
+// Install signal handlers for clean shutdown
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Received SIGINT, performing cleanup...');
+  await performGlobalCleanup();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 Received SIGTERM, performing cleanup...');
+  await performGlobalCleanup();
+  process.exit(0);
+});
+
 /**
  * Check if the terminal server is accessible
  */
@@ -43,7 +123,7 @@ async function checkServerConnectivity(url: string, timeoutMs = 5000): Promise<b
         console.log('Server is rate limiting (429) - considering this as server accessible');
         resolve(true);
       } else {
-        resolve(false);
+      resolve(false);
       }
     });
   });
@@ -165,7 +245,7 @@ describe('Load Testing Suite', function() {
         // If mostly rate limited, that's actually testing the rate limiting works
         expect(results.rejected + results.successful).to.be.greaterThan(0, 'Should have some connection attempts');
       } else {
-        expect(results.successful).to.be.greaterThan(0, 'At least some connections should succeed');
+      expect(results.successful).to.be.greaterThan(0, 'At least some connections should succeed');
       }
     });
 
@@ -375,17 +455,17 @@ describe('Load Testing Suite', function() {
 
       for (let i = 0; i < testSessions; i++) {
         const sessionPromise = new Promise((resolve) => {
-          const ws = new WebSocket(SERVER_URL);
+            const ws = new WebSocket(SERVER_URL);
           let sessionCreated = false;
           
-          const timeout = setTimeout(() => {
+              const timeout = setTimeout(() => {
             if (!sessionCreated) {
-              ws.terminate();
+                ws.terminate();
               resolve({ success: false, reason: 'timeout', index: i });
             }
           }, 10000);
 
-          ws.on('open', () => {
+              ws.on('open', () => {
             ws.send(JSON.stringify({
               type: 'auth',
               apiKey: 'test.dummy:key_for_authenticated_load_testing',
@@ -413,7 +493,7 @@ describe('Load Testing Suite', function() {
               }
             } catch (error) {
               clearTimeout(timeout);
-              ws.close();
+                ws.close();
               resolve({ success: false, reason: 'parse_error', index: i });
             }
           });
@@ -532,7 +612,7 @@ describe('Load Testing Suite', function() {
             if (error.message.includes('429') || error.message.includes('rate limit')) {
               resolve({ success: false, reason: 'rate_limited' });
             } else {
-              resolve({ success: false, reason: `connection_error: ${error.message}` });
+            resolve({ success: false, reason: `connection_error: ${error.message}` });
             }
           });
 
@@ -542,7 +622,7 @@ describe('Load Testing Suite', function() {
               if (code === 1006) {
                 resolve({ success: false, reason: 'rate_limited' });
               } else {
-                resolve({ success: false, reason: `closed_${code}` });
+              resolve({ success: false, reason: `closed_${code}` });
               }
             }
           });
@@ -1049,4 +1129,15 @@ describe('Load Testing Suite', function() {
       console.log('Performance benchmark tests completed');
     });
   });
-}); 
+
+  // Top-level cleanup to ensure proper test suite shutdown
+  after(async function() {
+    this.timeout(30000); // Give cleanup time to complete
+    console.log('🏁 Load test suite completed - performing final cleanup...');
+    await performGlobalCleanup();
+    
+    // Give extra time for any final cleanup to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('✅ Load test suite cleanup completed');
+  });
+});

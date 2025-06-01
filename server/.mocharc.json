@@ -4,5 +4,6 @@
   "spec": ["tests/**/*.test.ts"],
   "recursive": true,
   "timeout": 5000,
-  "loader": "ts-node/esm"
+  "loader": "ts-node/esm",
+  "exit": true
 } 
