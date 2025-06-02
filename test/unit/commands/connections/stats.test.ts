@@ -5,7 +5,7 @@ import ConnectionsStats from "../../../../src/commands/connections/stats.js";
 import * as Ably from "ably";
 import { describe, beforeEach, afterEach } from 'mocha';
 
-/* eslint-disable mocha/no-setup-in-describe */
+ 
 
 // Create a testable version of ConnectionsStats
 class TestableConnectionsStats extends ConnectionsStats {

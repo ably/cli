@@ -365,11 +365,11 @@ describe("Connections E2E Tests", function() {
         },
       });
       
-      let outputReceived = false;
+      let _outputReceived = false;
       connectionsMonitor.stdout?.on("data", (data) => {
         const output = data.toString();
         if (output.includes("connectionId") || output.includes("transport")) {
-          outputReceived = true;
+          _outputReceived = true;
         }
       });
       
