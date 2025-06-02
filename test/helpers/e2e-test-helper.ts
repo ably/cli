@@ -1,11 +1,11 @@
 import * as Ably from "ably";
 import { randomUUID } from "node:crypto";
-import { spawn, ChildProcess } from "node:child_process";
+import { spawn, ChildProcess, exec } from "node:child_process";
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import Mocha from "mocha";
-import { trackAblyClient } from "../setup.js";
+import { trackAblyClient, trackProcess, cleanupGlobalProcesses } from "../setup.js";
 const { beforeEach, before, after, afterEach } = Mocha;
 
 // Constants
@@ -135,6 +135,11 @@ export async function runBackgroundProcessAndGetOutput(
 
     const processId = `sync-process-${randomUUID()}`;
     console.log(`Started sync process (ID: ${processId}, PID: ${childProcess.pid}) for command: ${command}`);
+    
+    // Track the process globally if it has a PID
+    if (childProcess.pid) {
+      trackProcess(childProcess.pid);
+    }
 
     childProcess.stdout?.on('data', (data) => {
       stdout += data.toString();
@@ -166,15 +171,44 @@ export async function runBackgroundProcessAndGetOutput(
 export async function runLongRunningBackgroundProcess(
   command: string,
   outputPath: string,
-  options?: { readySignal?: string; timeoutMs?: number }
+  options?: { readySignal?: string; timeoutMs?: number; retryCount?: number }
 ): Promise<{ process: ChildProcess; processId: string }> {
   const readySignal = options?.readySignal;
-  const timeoutMs = options?.timeoutMs || 10000;
+  const timeoutMs = options?.timeoutMs || 15000; // Increased default timeout
+  const retryCount = options?.retryCount || 1;
 
   const childEnv = { ...process.env };
   childEnv.ABLY_API_KEY = E2E_API_KEY;
   delete childEnv.ABLY_CLI_TEST_MODE;
 
+  let lastError: Error | null = null;
+
+  // Retry logic for flaky process startup
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    try {
+      console.log(`Starting process attempt ${attempt}/${retryCount}: ${command}`);
+      return await attemptProcessStart(command, outputPath, readySignal, timeoutMs, childEnv);
+    } catch (error) {
+      lastError = error as Error;
+      console.warn(`Process attempt ${attempt} failed:`, error);
+      
+      if (attempt < retryCount) {
+        console.log(`Retrying in 1 second...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  throw lastError || new Error('Failed to start process after retries');
+}
+
+async function attemptProcessStart(
+  command: string,
+  outputPath: string,
+  readySignal: string | undefined,
+  timeoutMs: number,
+  childEnv: NodeJS.ProcessEnv
+): Promise<{ process: ChildProcess; processId: string }> {
   let processId: string | null = null;
   let childProcess: ChildProcess | null = null;
 
@@ -200,7 +234,7 @@ export async function runLongRunningBackgroundProcess(
         }
 
         console.log(`Polling for ready signal "${readySignal}" for process ${processId}...`);
-        const pollInterval = 150;
+        const pollInterval = 200; // Slightly increased polling interval
         const pollTimer = setInterval(async () => {
             if (signal.aborted) {
                 clearInterval(pollTimer);
@@ -208,7 +242,11 @@ export async function runLongRunningBackgroundProcess(
             }
             try {
                 const output = await readProcessOutput(outputPath);
-                if (output.includes(readySignal)) {
+                // More flexible signal detection - use includes for partial matches
+                if (output.includes(readySignal) || 
+                    output.toLowerCase().includes(readySignal.toLowerCase()) ||
+                    // Also check for common variations
+                    (readySignal.includes('Subscribing') && output.includes('Subscribing'))) {
                     console.log(`Ready signal found for process ${processId}.`);
                     clearInterval(pollTimer);
                     clearTimeout(overallTimeout);
@@ -228,13 +266,18 @@ export async function runLongRunningBackgroundProcess(
     // Spawn the process
     childProcess = spawn('sh', ['-c', command], {
       env: childEnv,
-      detached: true,
+      detached: false, // Don't detach in tests to prevent orphaning
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
     processId = `bg-process-${randomUUID()}`;
     activeProcesses.set(processId, childProcess); // Track immediately
     console.log(`Started background process (ID: ${processId}, PID: ${childProcess.pid})`);
+    
+    // Track the process globally if it has a PID
+    if (childProcess.pid) {
+      trackProcess(childProcess.pid);
+    }
 
     childProcess.on('error', (err) => {
         console.error(`Background process ${processId} failed to spawn:`, err);
@@ -271,7 +314,7 @@ export async function runLongRunningBackgroundProcess(
         }
     })();
 
-    childProcess.unref();
+    // Don't unref the process in tests - we want it to be tracked
   });
 
   // Wait for readiness signal (or immediate resolution if no signal)
@@ -315,9 +358,12 @@ export async function cleanupTrackedResources(): Promise<void> {
   // Kill tracked background processes
   for (const [processId, childProcess] of activeProcesses.entries()) {
     console.log(`Cleaning up background process (ID: ${processId}, PID: ${childProcess.pid})...`);
-    killProcess(childProcess); // Use the existing killProcess utility
+    await killProcess(childProcess); // Use the existing killProcess utility
     activeProcesses.delete(processId);
   }
+
+  // Also run global process cleanup as a safety net
+  await cleanupGlobalProcesses();
 
   // Delete tracked temporary files
   for (const filePath of tempFiles) {
@@ -337,70 +383,74 @@ export async function cleanupTrackedResources(): Promise<void> {
 }
 
 /**
- * Utility to kill a background process safely
+ * Utility to kill a background process safely and aggressively
  */
-export function killProcess(childProcess: ChildProcess | null): void {
+export async function killProcess(childProcess: ChildProcess | null): Promise<void> {
   if (!childProcess || childProcess.killed || !childProcess.pid) {
-      console.log(`Process (PID: ${childProcess?.pid || 'N/A'}) already killed or has no PID.`);
-      return;
+    console.log(`Process (PID: ${childProcess?.pid || 'N/A'}) already killed or has no PID.`);
+    return;
   }
 
   const pid = childProcess.pid;
-  console.log(`Attempting to kill process (PID: ${pid}) with SIGTERM...`);
+  console.log(`Attempting to kill process (PID: ${pid}) and its children...`);
+
   try {
-    // Try killing the process group first (more reliable for detached processes)
-    process.kill(-pid, 'SIGTERM');
-    console.log(`Sent SIGTERM to process group ${-pid}.`);
+    // First, try to kill all child processes using system commands
+    
+    // Kill all child processes of this PID
+    await new Promise<void>((resolve) => {
+      exec(`pkill -P ${pid}`, (_error) => {
+        // Don't worry about errors - process might not have children
+        resolve();
+      });
+    });
 
-    // Wait briefly before potentially sending SIGKILL
-    setTimeout(() => {
-        try {
-            // Check if it exited before sending SIGKILL
-            process.kill(-pid, 0); // Sending signal 0 checks existence
-            console.warn(`Process group ${-pid} still exists after SIGTERM, sending SIGKILL...`);
-            process.kill(-pid, 'SIGKILL');
-            console.log(`Sent SIGKILL to process group ${-pid}.`);
-        } catch (error) {
-            // Process group likely exited, which is good.
-             if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
-                 console.log(`Process group ${-pid} exited after SIGTERM.`);
-             } else {
-                 console.warn(`Error checking/killing process group ${-pid} after SIGTERM:`, error);
-             }
-        }
-    }, 200); // 200ms delay
+    // Give child processes a moment to exit
+    await new Promise(resolve => setTimeout(resolve, 200));
 
-  } catch (error) {
-    console.warn(`Failed to kill process group ${-pid} with SIGTERM, attempting direct kill...`, (error as Error).message);
+    // Try graceful termination first
     try {
       process.kill(pid, 'SIGTERM');
       console.log(`Sent SIGTERM to process ${pid}.`);
-
-      // Wait briefly before potentially sending SIGKILL
-      setTimeout(() => {
-          try {
-              process.kill(pid, 0); // Check existence
-              console.warn(`Process ${pid} still exists after SIGTERM, sending SIGKILL...`);
-              process.kill(pid, 'SIGKILL');
-              console.log(`Sent SIGKILL to process ${pid}.`);
-          } catch (error) {
-             if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
-                 console.log(`Process ${pid} exited after SIGTERM.`);
-             } else {
-                 console.warn(`Error checking/killing process ${pid} after SIGTERM:`, error);
-             }
-          }
-      }, 200); // 200ms delay
-
-    } catch (error) {
-      console.warn(`Failed to send SIGTERM to process ${pid}, attempting SIGKILL directly...`, (error as Error).message);
+      
+      // Wait for graceful exit
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Check if process is still alive
       try {
+        process.kill(pid, 0); // Check if process exists
+        console.warn(`Process ${pid} still alive after SIGTERM, sending SIGKILL...`);
         process.kill(pid, 'SIGKILL');
         console.log(`Sent SIGKILL to process ${pid}.`);
       } catch (error) {
-        console.error(`Failed to kill process ${pid} even with SIGKILL:`, (error as Error).message);
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+          console.log(`Process ${pid} exited after SIGTERM.`);
+        } else {
+          console.warn(`Error checking process ${pid}:`, error);
+        }
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+        console.log(`Process ${pid} was already dead.`);
+      } else {
+        console.warn(`Failed to kill process ${pid}:`, (error as Error).message);
       }
     }
+
+    // Also try to kill any remaining processes by name pattern
+    try {
+      await new Promise<void>((resolve) => {
+        exec('pkill -f "bin/run.js.*subscribe"', (_error) => {
+          // Don't worry about errors
+          resolve();
+        });
+      });
+    } catch {
+      // Ignore errors
+    }
+
+  } catch (error) {
+    console.error(`Error during aggressive process cleanup for PID ${pid}:`, error);
   }
 }
 

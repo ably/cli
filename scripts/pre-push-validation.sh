@@ -3,6 +3,26 @@ set -e
 
 echo "🚀 Running Pre-Push Validation..."
 
+# Global cleanup function
+cleanup() {
+  if [ -n "$SERVER_PID" ] && ps -p $SERVER_PID > /dev/null 2>&1; then
+    echo "   Cleaning up: stopping terminal server (PID: $SERVER_PID)..."
+    kill -TERM $SERVER_PID 2>/dev/null || true
+    sleep 2
+    # Force kill if still running
+    if ps -p $SERVER_PID > /dev/null 2>&1; then
+      kill -KILL $SERVER_PID 2>/dev/null || true
+    fi
+  fi
+  
+  # Also kill any orphaned processes
+  pkill -f "bin/run.js.*subscribe" 2>/dev/null || true
+  pkill -f "terminal-server" 2>/dev/null || true
+}
+
+# Set trap to ensure cleanup runs on any exit
+trap cleanup EXIT INT TERM
+
 # Helper function to find a free port
 find_free_port() {
   # Use Node.js to find a free port starting from a base port
@@ -74,6 +94,7 @@ cd server && pnpm build
 echo "   Starting terminal server on port $TERMINAL_PORT..."
 PORT=$TERMINAL_PORT pnpm start &
 SERVER_PID=$!
+echo "   Terminal server started with PID: $SERVER_PID"
 
 # Wait for server to be ready (max 30 seconds)
 echo "   Waiting for terminal server to start..."
@@ -84,8 +105,6 @@ for i in {1..30}; do
   fi
   if [ $i -eq 30 ]; then
     echo "   ❌ Terminal server failed to start within 30 seconds"
-    kill $SERVER_PID 2>/dev/null || true
-    cd ..
     exit 1
   fi
   sleep 1
@@ -96,15 +115,10 @@ echo "   Running fast load tests..."
 TERMINAL_PORT=$TERMINAL_PORT DIAGNOSTICS_PORT=$DIAGNOSTICS_PORT pnpm test:load:ci --reporter min
 LOAD_TEST_EXIT_CODE=$?
 
-# Clean up: stop the terminal server
-echo "   Stopping terminal server..."
-kill $SERVER_PID 2>/dev/null || true
-wait $SERVER_PID 2>/dev/null || true
-
 # Return to root directory
 cd ..
 
-# Check if load tests passed
+# Check if load tests passed (cleanup will be handled by trap)
 if [ $LOAD_TEST_EXIT_CODE -ne 0 ]; then
     echo "❌ Fast load tests failed"
     exit 1
