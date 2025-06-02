@@ -1,7 +1,16 @@
-// Import with type assertion to handle the nested default export
-import Spaces from "@ably/spaces";
 import * as Ably from "ably";
 import { type Space } from "@ably/spaces";
+
+// Dynamic import to handle module structure issues
+let SpacesConstructor: any = null;
+
+async function getSpacesConstructor() {
+  if (!SpacesConstructor) {
+    const spacesModule: any = await import("@ably/spaces");
+    SpacesConstructor = spacesModule.default?.default || spacesModule.default || spacesModule;
+  }
+  return SpacesConstructor;
+}
 
 import { AblyBaseCommand } from "./base-command.js";
 import { BaseFlags } from "./types/cli.js";
@@ -13,7 +22,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     spaceName: string,
   ): Promise<{
     realtimeClient: Ably.Realtime;
-    spacesClient: Spaces;
+    spacesClient: any;
     space: Space;
   }> {
     // First create an Ably client
@@ -23,6 +32,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     }
 
     // Create a Spaces client using the Ably client
+    const Spaces = await getSpacesConstructor();
     const spacesClient = new Spaces(realtimeClient);
 
     // Get a space instance with the provided name
@@ -35,7 +45,8 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     };
   }
 
-  protected createSpacesClient(realtimeClient: Ably.Realtime): Spaces {
+  protected async createSpacesClient(realtimeClient: Ably.Realtime): Promise<any> {
+    const Spaces = await getSpacesConstructor();
     return new Spaces(realtimeClient);
   }
 }

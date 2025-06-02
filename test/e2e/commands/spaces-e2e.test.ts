@@ -70,7 +70,7 @@ if (!SHOULD_SKIP_E2E) {
             const client2SpaceInfo = await runLongRunningBackgroundProcess(
               `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Test User 2","role":"collaborator","department":"E2E Testing"}' --client-id ${client2Id}`,
               client2OutputPath,
-              { readySignal: "Successfully entered space", timeoutMs: 15000, retryCount: 1 }
+              { readySignal: "Successfully entered space:", timeoutMs: 15000, retryCount: 1 }
             );
             const client2Process = client2SpaceInfo.process;
 
@@ -122,14 +122,14 @@ if (!SHOULD_SKIP_E2E) {
             const client1SpaceInfo = await runLongRunningBackgroundProcess(
               `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id}`,
               client1OutputPath,
-              { readySignal: "Successfully entered space", timeoutMs: 15000, retryCount: 1 }
+              { readySignal: "Successfully entered space:", timeoutMs: 15000, retryCount: 1 }
             );
             client1SpaceProcess = client1SpaceInfo.process;
             
             const client2SpaceInfo = await runLongRunningBackgroundProcess(
               `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id}`,
               client2OutputPath,
-              { readySignal: "Successfully entered space", timeoutMs: 15000, retryCount: 1 }
+              { readySignal: "Successfully entered space:", timeoutMs: 15000, retryCount: 1 }
             );
             client2SpaceProcess = client2SpaceInfo.process;
 

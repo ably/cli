@@ -55,7 +55,7 @@ if (!SHOULD_SKIP_E2E) {
           const presenceInfo = await runLongRunningBackgroundProcess(
             `bin/run.js rooms presence enter ${testRoomId} --profile-data '{"name":"Test User 1"}' --client-id ${client1Id}`,
             outputPath,
-            { readySignal: "Entered room", timeoutMs: 15000, retryCount: 1 }
+            { readySignal: "✓ Entered room", timeoutMs: 15000, retryCount: 1 }
           );
           presenceProcess = presenceInfo.process;
 
@@ -110,7 +110,7 @@ if (!SHOULD_SKIP_E2E) {
             const client2PresenceInfo = await runLongRunningBackgroundProcess(
               `bin/run.js rooms presence enter ${testRoomId} --profile-data '{"name":"Test User 2","status":"active"}' --client-id ${client2Id}`,
               client2OutputPath,
-              { readySignal: "Entered room", timeoutMs: 15000, retryCount: 1 }
+              { readySignal: "✓ Entered room", timeoutMs: 15000, retryCount: 1 }
             );
             const client2Process = client2PresenceInfo.process;
 

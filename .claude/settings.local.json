@@ -11,7 +11,11 @@
       "Bash(git checkout:*)",
       "Bash(source .env)",
       "Bash(bin/run.js *)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(echo:*)",
+      "Bash(pnpm build:*)",
+      "Bash(node:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
