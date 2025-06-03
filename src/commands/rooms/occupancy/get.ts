@@ -1,5 +1,6 @@
 import { Args } from "@oclif/core";
 import * as Ably from "ably";
+import { ChatClient } from "@ably/chat";
 import { ChatBaseCommand } from "../../../chat-base-command.js";
 
 export default class RoomsOccupancyGet extends ChatBaseCommand {
@@ -23,18 +24,44 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
   };
 
-  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+  private ablyClient: Ably.Realtime | null = null;
+  private chatClient: ChatClient | null = null;
+
+  private async properlyCloseAblyClient(): Promise<void> {
+    if (!this.ablyClient || this.ablyClient.connection.state === 'closed') {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('Ably client cleanup timed out after 3 seconds');
+        resolve();
+      }, 3000);
+
+      const onClosed = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      // Listen for both closed and failed states
+      this.ablyClient!.connection.once('closed', onClosed);
+      this.ablyClient!.connection.once('failed', onClosed);
+      
+      // Close the client
+      this.ablyClient!.close();
+    });
+  }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsOccupancyGet);
 
     try {
       // Create Chat client
-      const chatClient = await this.createChatClient(flags);
+      this.chatClient = await this.createChatClient(flags);
       // Also get the underlying Ably client for cleanup
       this.ablyClient = await this.createAblyClient(flags);
 
-      if (!chatClient) {
+      if (!this.chatClient) {
         this.error("Failed to create Chat client");
         return;
       }
@@ -42,7 +69,7 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
       const { roomId } = args;
 
       // Get the room with occupancy enabled
-      const room = await chatClient.rooms.get(roomId, {});
+      const room = await this.chatClient.rooms.get(roomId, {});
 
       // Attach to the room to access occupancy
       await room.attach();
@@ -70,9 +97,10 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
           this.log(`Presence Members: ${occupancyMetrics.presenceMembers}`);
         }
       }
+      
+      // Release the room BEFORE closing the client
+      await this.chatClient.rooms.release(roomId);
 
-      // Release the room
-      await chatClient.rooms.release(roomId);
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(
@@ -91,9 +119,18 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
         );
       }
     } finally {
-      if (this.ablyClient && this.ablyClient.connection.state !== "closed") {
-        this.ablyClient.close();
+      // Proper cleanup sequence
+      try {
+        // Release room if we haven't already
+        if (this.chatClient && args?.roomId) {
+          await this.chatClient.rooms.release(args.roomId);
+        }
+      } catch {
+        // Ignore release errors in cleanup
       }
+
+      // Close Ably client properly
+      await this.properlyCloseAblyClient();
     }
   }
 }

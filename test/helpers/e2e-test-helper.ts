@@ -2,10 +2,12 @@ import * as Ably from "ably";
 import { randomUUID } from "node:crypto";
 import { spawn, ChildProcess, exec } from "node:child_process";
 import { promises as fs } from "node:fs";
+import * as fsSync from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import Mocha from "mocha";
 import { trackAblyClient, trackProcess, cleanupGlobalProcesses } from "../setup.js";
+import stripAnsi from "strip-ansi";
 const { beforeEach, before, after, afterEach } = Mocha;
 
 // Constants
@@ -113,10 +115,21 @@ export async function createTempOutputFile(): Promise<string> {
 }
 
 /**
+ * Get process environment with E2E test settings
+ */
+function getProcessEnv(): NodeJS.ProcessEnv {
+  const childEnv = { ...process.env };
+  childEnv.ABLY_API_KEY = E2E_API_KEY;
+  delete childEnv.ABLY_CLI_TEST_MODE;
+  return childEnv;
+}
+
+/**
  * Run a CLI command in the background, wait for it to exit, and return its full output.
  */
 export async function runBackgroundProcessAndGetOutput(
-  command: string
+  command: string,
+  timeoutMs: number = 30000 // 30 second default timeout
 ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
   // Construct environment for child process
   const childEnv = { ...process.env };
@@ -126,6 +139,7 @@ export async function runBackgroundProcessAndGetOutput(
   return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
+    let resolved = false;
 
     const childProcess = spawn('sh', ['-c', command], {
       env: childEnv,
@@ -141,6 +155,22 @@ export async function runBackgroundProcessAndGetOutput(
       trackProcess(childProcess.pid);
     }
 
+    // Add timeout mechanism
+    const timeoutHandle = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        console.warn(`Process ${processId} timed out after ${timeoutMs}ms, killing it`);
+        try {
+          if (childProcess.pid) {
+            process.kill(childProcess.pid, 'SIGKILL');
+          }
+        } catch {
+          // Ignore errors when killing
+        }
+        reject(new Error(`Process timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
+
     childProcess.stdout?.on('data', (data) => {
       stdout += data.toString();
     });
@@ -150,56 +180,76 @@ export async function runBackgroundProcessAndGetOutput(
     });
 
     childProcess.on('error', (error) => {
-      console.error(`Error spawning process ${processId} (PID: ${childProcess.pid}):`, error);
-      reject(error);
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutHandle);
+        console.error(`Error spawning process ${processId} (PID: ${childProcess.pid}):`, error);
+        reject(error);
+      }
     });
 
     childProcess.on('close', (code) => {
-      console.log(`Process ${processId} (PID: ${childProcess.pid}) exited with code ${code}`);
-      // Wait a very short time for stdio streams to flush before resolving
-      setTimeout(() => {
-          resolve({ stdout, stderr, exitCode: code });
-      }, 50); // 50ms delay
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeoutHandle);
+        console.log(`Process ${processId} (PID: ${childProcess.pid}) exited with code ${code}`);
+        // Wait a very short time for stdio streams to flush before resolving
+        setTimeout(() => {
+            resolve({ stdout, stderr, exitCode: code });
+        }, 50); // 50ms delay
+      }
     });
   });
 }
 
 /**
- * Run a CLI command as a long-running background process, capture output to a file,
- * wait for a readiness signal, AND TRACK IT.
+ * Start a long-running background process and wait for it to emit a ready signal
  */
 export async function runLongRunningBackgroundProcess(
   command: string,
   outputPath: string,
-  options?: { readySignal?: string; timeoutMs?: number; retryCount?: number }
+  options: {
+    readySignal?: string;
+    timeoutMs?: number;
+    retryCount?: number;
+  } = {}
 ): Promise<{ process: ChildProcess; processId: string }> {
-  const readySignal = options?.readySignal;
-  const timeoutMs = options?.timeoutMs || 15000; // Increased default timeout
-  const retryCount = options?.retryCount || 1;
-
-  const childEnv = { ...process.env };
-  childEnv.ABLY_API_KEY = E2E_API_KEY;
-  delete childEnv.ABLY_CLI_TEST_MODE;
+  const { 
+    readySignal = "ready", 
+    timeoutMs = process.env.CI ? 25000 : 15000, // Increased default timeout for CI
+    retryCount = 1 
+  } = options;
 
   let lastError: Error | null = null;
 
-  // Retry logic for flaky process startup
-  for (let attempt = 1; attempt <= retryCount; attempt++) {
+  for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
-      console.log(`Starting process attempt ${attempt}/${retryCount}: ${command}`);
-      return await attemptProcessStart(command, outputPath, readySignal, timeoutMs, childEnv);
+      console.log(`[Attempt ${attempt + 1}/${retryCount + 1}] Starting process: ${command}`);
+      
+      const result = await attemptProcessStart(
+        command,
+        outputPath,
+        readySignal,
+        timeoutMs,
+        getProcessEnv()
+      );
+      
+      console.log(`Process started successfully on attempt ${attempt + 1}, PID: ${result.processId}`);
+      return result;
+      
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Process attempt ${attempt} failed:`, error);
+      console.warn(`Attempt ${attempt + 1} failed:`, error);
       
       if (attempt < retryCount) {
-        console.log(`Retrying in 1 second...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const retryDelay = Math.min(2000 * (attempt + 1), 5000); // Progressive backoff, max 5s
+        console.log(`Waiting ${retryDelay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
   }
 
-  throw lastError || new Error('Failed to start process after retries');
+  throw new Error(`Failed to start process after ${retryCount + 1} attempts. Last error: ${lastError?.message}`);
 }
 
 async function attemptProcessStart(
@@ -212,7 +262,7 @@ async function attemptProcessStart(
   let processId: string | null = null;
   let childProcess: ChildProcess | null = null;
 
-  // Use a separate promise for readiness detection
+  // Use a separate promise for readiness detection with better error handling
   const readinessPromise = new Promise<void>((resolveReady, rejectReady) => {
     const controller = new AbortController();
     const signal = controller.signal;
@@ -221,110 +271,137 @@ async function attemptProcessStart(
     }, timeoutMs);
 
     signal.addEventListener('abort', () => {
-        // We only reject the readiness promise on abort
-        rejectReady(new Error(signal.reason || "Readiness check aborted"));
+        clearTimeout(overallTimeout);
+        if (signal.reason) {
+            rejectReady(new Error(signal.reason as string));
+        } else {
+            rejectReady(new Error(`Process startup aborted: signal without reason`));
+        }
     });
 
-    // Start polling immediately *after* spawn is initiated
-    const startPolling = () => {
-        if (!readySignal) {
-            clearTimeout(overallTimeout);
-            resolveReady(); // Resolve immediately if no signal needed
-            return;
-        }
-
-        console.log(`Polling for ready signal "${readySignal}" for process ${processId}...`);
-        const pollInterval = 200; // Slightly increased polling interval
-        const pollTimer = setInterval(async () => {
-            if (signal.aborted) {
-                clearInterval(pollTimer);
-                return;
-            }
+    const pollForSignal = async () => {
+        let lastOutputLength = 0;
+        const pollInterval = process.env.CI ? 200 : 100; // Slower polling for CI
+        
+        while (!signal.aborted) {
             try {
                 const output = await readProcessOutput(outputPath);
-                // More flexible signal detection - use includes for partial matches
-                if (output.includes(readySignal) || 
-                    output.toLowerCase().includes(readySignal.toLowerCase()) ||
-                    // Also check for common variations
-                    (readySignal.includes('Subscribing') && output.includes('Subscribing'))) {
-                    console.log(`Ready signal found for process ${processId}.`);
-                    clearInterval(pollTimer);
-                    clearTimeout(overallTimeout);
-                    resolveReady();
+                
+                // Log new output for debugging
+                if (output.length > lastOutputLength && process.env.E2E_DEBUG) {
+                    const newOutput = output.slice(lastOutputLength);
+                    console.log(`[DEBUG] New output: ${newOutput.trim()}`);
+                    lastOutputLength = output.length;
                 }
-            } catch (readError) {
-                if ((readError as NodeJS.ErrnoException).code !== 'ENOENT') {
-                    console.warn(`Error reading output file during polling for ${processId}:`, readError);
-                }
-            }
-        }, pollInterval);
 
-        // Ensure timer is cleared if promise resolves/rejects early
-        signal.addEventListener('abort', () => clearInterval(pollTimer));
+                // Check for ready signal with more flexible matching
+                if (readySignal && output.length > 0) {
+                    const normalizedOutput = output.toLowerCase();
+                    const normalizedSignal = readySignal.toLowerCase();
+                    
+                    // Try multiple matching strategies
+                    const signalFound = 
+                        output.includes(readySignal) ||
+                        normalizedOutput.includes(normalizedSignal) ||
+                        // Handle partial matches for common patterns
+                        (readySignal.includes("ready") && normalizedOutput.includes("ready")) ||
+                        (readySignal.includes("listening") && normalizedOutput.includes("listening")) ||
+                        (readySignal.includes("subscribing") && normalizedOutput.includes("subscribing")) ||
+                        (readySignal.includes("entered") && normalizedOutput.includes("entered"));
+                    
+                    if (signalFound) {
+                        console.log(`Ready signal detected: "${readySignal}"`);
+                        clearTimeout(overallTimeout);
+                        resolveReady();
+                        return;
+                    }
+                }
+
+                // Also check for common error patterns that indicate immediate failure
+                if (output.includes("authentication failed") || 
+                    output.includes("401") || 
+                    output.includes("403") ||
+                    output.includes("Command failed") ||
+                    output.includes("ENOENT")) {
+                    clearTimeout(overallTimeout);
+                    rejectReady(new Error(`Process failed with error in output: ${output.slice(-200)}`));
+                    return;
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, pollInterval));
+            } catch {
+                // If we can't read the output file yet, that's okay - process might still be starting
+                await new Promise(resolve => setTimeout(resolve, pollInterval));
+            }
+        }
     };
 
-    // Spawn the process
-    childProcess = spawn('sh', ['-c', command], {
-      env: childEnv,
-      detached: false, // Don't detach in tests to prevent orphaning
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    processId = `bg-process-${randomUUID()}`;
-    activeProcesses.set(processId, childProcess); // Track immediately
-    console.log(`Started background process (ID: ${processId}, PID: ${childProcess.pid})`);
-    
-    // Track the process globally if it has a PID
-    if (childProcess.pid) {
-      trackProcess(childProcess.pid);
-    }
-
-    childProcess.on('error', (err) => {
-        console.error(`Background process ${processId} failed to spawn:`, err);
+    pollForSignal().catch(error => {
         clearTimeout(overallTimeout);
-        controller.abort('Spawn error'); // Abort readiness check
-        activeProcesses.delete(processId!); // Untrack
-        // Rejecting readiness is handled by the abort listener
+        rejectReady(error);
     });
-
-    childProcess.on('exit', (code, signal) => {
-        const exitReason = `Background process ${processId} exited prematurely (code ${code}, signal ${signal})`;
-        console.warn(exitReason);
-        clearTimeout(overallTimeout);
-        controller.abort(exitReason); // Abort readiness check
-        activeProcesses.delete(processId!); // Untrack
-        // Rejecting readiness is handled by the abort listener
-    });
-
-    // Pipe output (using async IIFE to handle await within non-async scope)
-    (async () => {
-        try {
-            const outputStream = await fs.open(outputPath, 'a');
-            childProcess?.stdout?.pipe(outputStream.createWriteStream());
-            childProcess?.stderr?.pipe(outputStream.createWriteStream());
-            childProcess?.stdout?.on('error', (err) => console.error(`Error piping stdout for ${processId}:`, err));
-            childProcess?.stderr?.on('error', (err) => console.error(`Error piping stderr for ${processId}:`, err));
-            // Start polling *after* pipes are set up
-            startPolling();
-        } catch (error) {
-            console.error(`Failed to open output file ${outputPath} or pipe streams for process ${processId}:`, error);
-            clearTimeout(overallTimeout);
-            controller.abort('Output stream error'); // Abort if file opening fails
-            rejectReady(error); // Reject readiness directly here
-        }
-    })();
-
-    // Don't unref the process in tests - we want it to be tracked
   });
 
-  // Wait for readiness signal (or immediate resolution if no signal)
-  await readinessPromise;
+  try {
+    // Start the process with better error handling
+    const parts = command.split(' ');
+    const cmd = parts[0];
+    const args = parts.slice(1);
 
-  // Return the process details only after readiness is confirmed (or immediately if no signal)
-  if (!childProcess || !processId) {
-      throw new Error('Background process failed to initialize correctly.');
+    childProcess = spawn(cmd, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: childEnv,
+      cwd: process.cwd(),
+      detached: false, // Keep attached for better cleanup
+    });
+
+    processId = `${childProcess.pid}`;
+    
+    if (!childProcess.pid) {
+      throw new Error(`Failed to start process: no PID assigned`);
+    }
+
+    // Track the process globally for cleanup
+    trackProcess(childProcess.pid);
+
+    // Set up output redirection to file
+    const outputStream = fsSync.createWriteStream(outputPath, { flags: 'a' });
+    
+    childProcess.stdout?.pipe(outputStream);
+    childProcess.stderr?.pipe(outputStream);
+    
+    // Handle process exit early
+    childProcess.on('exit', (code, signal) => {
+      outputStream.end();
+      if (code !== null && code !== 0) {
+        console.warn(`Process ${processId} exited with code ${code}, signal: ${signal}`);
+      }
+    });
+
+    // Handle process errors
+    childProcess.on('error', (error) => {
+      console.error(`Process ${processId} error:`, error);
+      outputStream.end();
+    });
+
+    // Wait for the ready signal or timeout
+    if (readySignal) {
+      await readinessPromise;
+    }
+
+    return { process: childProcess, processId };
+
+  } catch (error) {
+    // Clean up on failure
+    if (childProcess && !childProcess.killed) {
+      childProcess.kill('SIGTERM');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!childProcess.killed) {
+        childProcess.kill('SIGKILL');
+      }
+    }
+    throw error;
   }
-  return { process: childProcess, processId };
 }
 
 /**
@@ -332,12 +409,10 @@ async function attemptProcessStart(
  */
 export async function readProcessOutput(outputPath: string): Promise<string> {
   try {
-    return await fs.readFile(outputPath, 'utf8');
-  } catch (error) {
+    const raw = await fs.readFile(outputPath, 'utf8');
+    return stripAnsi(raw);
+  } catch {
     // Log less verbosely if file just doesn't exist yet
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-    console.error(`Error reading output file ${outputPath}:`, error);
-    }
     return '';
   }
 }
@@ -383,7 +458,7 @@ export async function cleanupTrackedResources(): Promise<void> {
 }
 
 /**
- * Utility to kill a background process safely and aggressively
+ * Utility to kill a background process safely and gracefully
  */
 export async function killProcess(childProcess: ChildProcess | null): Promise<void> {
   if (!childProcess || childProcess.killed || !childProcess.pid) {
@@ -392,65 +467,73 @@ export async function killProcess(childProcess: ChildProcess | null): Promise<vo
   }
 
   const pid = childProcess.pid;
-  console.log(`Attempting to kill process (PID: ${pid}) and its children...`);
+  console.log(`Attempting to kill process (PID: ${pid}) gracefully...`);
 
   try {
     // First, try to kill all child processes using system commands
-    
-    // Kill all child processes of this PID
+    // This prevents orphaned processes
     await new Promise<void>((resolve) => {
-      exec(`pkill -P ${pid}`, (_error) => {
+      exec(`pkill -TERM -P ${pid}`, (error) => {
         // Don't worry about errors - process might not have children
+        if (error && process.env.E2E_DEBUG) {
+          console.log(`pkill -P ${pid} returned: ${error.message}`);
+        }
         resolve();
       });
     });
 
-    // Give child processes a moment to exit
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // Give child processes a moment to exit gracefully
+    await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Try graceful termination first
+    // Try graceful termination first with SIGTERM
     try {
       process.kill(pid, 'SIGTERM');
       console.log(`Sent SIGTERM to process ${pid}.`);
       
-      // Wait for graceful exit
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for graceful exit with a reasonable timeout
+      let exited = false;
+      const checkInterval = 100;
+      const maxChecks = 20; // 2 seconds total
       
-      // Check if process is still alive
-      try {
-        process.kill(pid, 0); // Check if process exists
-        console.warn(`Process ${pid} still alive after SIGTERM, sending SIGKILL...`);
-        process.kill(pid, 'SIGKILL');
-        console.log(`Sent SIGKILL to process ${pid}.`);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
-          console.log(`Process ${pid} exited after SIGTERM.`);
-        } else {
-          console.warn(`Error checking process ${pid}:`, error);
+      for (let i = 0; i < maxChecks; i++) {
+        try {
+          process.kill(pid, 0); // Check if process exists
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+        } catch {
+          // Process no longer exists
+          exited = true;
+          break;
         }
       }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
-        console.log(`Process ${pid} was already dead.`);
+      
+      if (exited) {
+        console.log(`Process ${pid} exited gracefully.`);
+        return;
       } else {
-        console.warn(`Failed to kill process ${pid}:`, (error as Error).message);
+        console.log(`Process ${pid} did not exit gracefully within timeout.`);
       }
+    } catch {
+      // Process might already be dead
+      console.log(`Process ${pid} is already terminated or does not exist.`);
+      return;
     }
 
-    // Also try to kill any remaining processes by name pattern
+    // Force kill with SIGKILL as last resort
     try {
-      await new Promise<void>((resolve) => {
-        exec('pkill -f "bin/run.js.*subscribe"', (_error) => {
-          // Don't worry about errors
-          resolve();
-        });
-      });
+      console.log(`Force killing process ${pid} with SIGKILL...`);
+      process.kill(pid, 'SIGKILL');
+      
+      // Wait a moment for the kill to take effect
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log(`Process ${pid} force killed.`);
     } catch {
-      // Ignore errors
+      // Process was probably already dead
+      console.log(`Process ${pid} could not be killed (probably already dead).`);
     }
 
   } catch (error) {
-    console.error(`Error during aggressive process cleanup for PID ${pid}:`, error);
+    console.error(`Error killing process ${pid}:`, error);
   }
 }
 

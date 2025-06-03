@@ -2,12 +2,14 @@ import * as Ably from "ably";
 import { type Space } from "@ably/spaces";
 
 // Dynamic import to handle module structure issues
-let SpacesConstructor: any = null;
+let SpacesConstructor: (new (client: Ably.Realtime) => unknown) | null = null;
 
-async function getSpacesConstructor() {
+async function getSpacesConstructor(): Promise<new (client: Ably.Realtime) => unknown> {
   if (!SpacesConstructor) {
-    const spacesModule: any = await import("@ably/spaces");
-    SpacesConstructor = spacesModule.default?.default || spacesModule.default || spacesModule;
+    const spacesModule = await import("@ably/spaces") as unknown;
+    const moduleAsRecord = spacesModule as Record<string, unknown>;
+    const defaultProperty = moduleAsRecord.default as Record<string, unknown> | undefined;
+    SpacesConstructor = (defaultProperty?.default || moduleAsRecord.default || moduleAsRecord) as new (client: Ably.Realtime) => unknown;
   }
   return SpacesConstructor;
 }
@@ -22,7 +24,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     spaceName: string,
   ): Promise<{
     realtimeClient: Ably.Realtime;
-    spacesClient: any;
+    spacesClient: unknown;
     space: Space;
   }> {
     // First create an Ably client
@@ -36,7 +38,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     const spacesClient = new Spaces(realtimeClient);
 
     // Get a space instance with the provided name
-    const space = await spacesClient.get(spaceName);
+    const space = await (spacesClient as { get: (name: string) => Promise<Space> }).get(spaceName);
 
     return {
       realtimeClient,
@@ -45,7 +47,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     };
   }
 
-  protected async createSpacesClient(realtimeClient: Ably.Realtime): Promise<any> {
+  protected async createSpacesClient(realtimeClient: Ably.Realtime): Promise<unknown> {
     const Spaces = await getSpacesConstructor();
     return new Spaces(realtimeClient);
   }

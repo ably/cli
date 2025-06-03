@@ -37,7 +37,7 @@ export default class SpacesLocationsSet extends SpacesBaseCommand {
 
   private cleanupInProgress = false;
   private realtimeClient: Ably.Realtime | null = null;
-  private spacesClient: Spaces | null = null;
+  private spacesClient: unknown | null = null;
   private space: Space | null = null;
   private subscription: LocationSubscription | null = null;
   private locationHandler:

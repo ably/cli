@@ -1,4 +1,4 @@
-import { OccupancyEvent, RoomStatus, Subscription } from "@ably/chat";
+import { OccupancyEvent, RoomStatus, Subscription, RoomStatusChange, ChatClient } from "@ably/chat";
 import { Args } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
@@ -34,9 +34,36 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
   private ablyClient: Ably.Realtime | null = null;
   private unsubscribeOccupancyFn: Subscription | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
+  private chatClient: ChatClient | null = null;
+  private roomId: string | null = null;
+
+  private async properlyCloseAblyClient(): Promise<void> {
+    if (!this.ablyClient || this.ablyClient.connection.state === 'closed') {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('Ably client cleanup timed out after 3 seconds');
+        resolve();
+      }, 3000);
+
+      const onClosed = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      // Listen for both closed and failed states
+      this.ablyClient!.connection.once('closed', onClosed);
+      this.ablyClient!.connection.once('failed', onClosed);
+      
+      this.ablyClient!.close();
+    });
+  }
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
+    // Unsubscribe logic first
     if (this.unsubscribeOccupancyFn) {
       try {
         this.unsubscribeOccupancyFn.unsubscribe();
@@ -51,20 +78,25 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         /* ignore */
       }
     }
-    if (
-      this.ablyClient &&
-      this.ablyClient.connection.state !== "closed" &&
-      this.ablyClient.connection.state !== "failed"
-    ) {
-      this.ablyClient.close();
+
+    // Then, attempt to release the room
+    try {
+      if (this.chatClient && typeof this.roomId === 'string') {
+        await this.chatClient!.rooms.release(this.roomId!);
+      }
+    } catch {
+        // Ignore release errors specifically
     }
+    
+    // Finally, close the Ably client
+    await this.properlyCloseAblyClient();
 
     return super.finally(err);
   }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsOccupancySubscribe);
-    const { roomId } = args;
+    this.roomId = args.roomId; // Store for cleanup
 
     try {
       this.logCliEvent(
@@ -78,11 +110,11 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
       }
 
       // Create Chat client
-      const chatClient = await this.createChatClient(flags);
+      this.chatClient = await this.createChatClient(flags);
       // Also get the underlying Ably client for cleanup and state listeners
       this.ablyClient = await this.createAblyClient(flags);
 
-      if (!chatClient) {
+      if (!this.chatClient) {
         this.error("Failed to create Chat client");
         return;
       }
@@ -109,16 +141,16 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         flags,
         "room",
         "gettingRoom",
-        `Getting room handle for ${roomId}`,
+        `Getting room handle for ${this.roomId}`,
       );
-      const room = await chatClient.rooms.get(roomId, {
+      const room = await this.chatClient.rooms.get(this.roomId, {
         occupancy: { enableEvents: true },
       });
       this.logCliEvent(
         flags,
         "room",
         "gotRoom",
-        `Got room handle for ${roomId}`,
+        `Got room handle for ${this.roomId}`,
       );
 
       // Subscribe to room status changes
@@ -128,7 +160,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         "subscribingToStatus",
         "Subscribing to room status changes",
       );
-      const { off: unsubscribeStatus } = room.onStatusChange((statusChange) => {
+      const { off: unsubscribeStatus } = room.onStatusChange((statusChange: RoomStatusChange) => {
         let reason: Error | null | string | undefined;
         if (statusChange.current === RoomStatus.Failed) {
           reason = room.error; // Get reason from room.error on failure
@@ -148,7 +180,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
             if (!this.shouldOutputJson(flags)) {
               this.log("Successfully connected to Ably");
               this.log(
-                `Subscribing to occupancy events for room '${roomId}'...`,
+                `Subscribing to occupancy events for room '${this.roomId}'...`,
               );
             }
 
@@ -186,7 +218,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         flags,
         "room",
         "attaching",
-        `Attaching to room ${roomId}`,
+        `Attaching to room ${this.roomId}`,
       );
       await room.attach();
       // Successful attach logged by onStatusChange handler
@@ -217,7 +249,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
           "Initial occupancy metrics fetched",
           { metrics: initialOccupancy },
         );
-        this.displayOccupancyMetrics(initialOccupancy, roomId, flags, true);
+        this.displayOccupancyMetrics(initialOccupancy, this.roomId, flags, true);
       } catch (error) {
         const errorMsg = `Failed to fetch initial occupancy: ${error instanceof Error ? error.message : String(error)}`;
         this.logCliEvent(flags, "occupancy", "getInitialError", errorMsg, {
@@ -244,7 +276,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
             "Occupancy update received",
             { metrics: occupancyMetrics },
           );
-          this.displayOccupancyMetrics(occupancyMetrics, roomId, flags);
+          this.displayOccupancyMetrics(occupancyMetrics, this.roomId, flags);
         },
       );
       this.logCliEvent(
@@ -270,22 +302,6 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
           if (!this.shouldOutputJson(flags)) {
             this.log("\nUnsubscribing and closing connection...");
           }
-
-          // Set a force exit timeout
-          const forceExitTimeout = setTimeout(() => {
-            const errorMsg = "Force exiting after timeout during cleanup";
-            this.logCliEvent(flags, "occupancy", "forceExit", errorMsg, {
-              roomId,
-            });
-            if (!this.shouldOutputJson(flags)) {
-              this.log(chalk.red("Force exiting after timeout..."));
-            }
-
-            // SIGINT/SIGTERM received, or fatal error
-            this.log(chalk.yellow("Closing connection..."));
-            this.ablyClient?.close();
-            process.exit(1);
-          }, 5000);
 
           // Unsubscribe from occupancy events
           if (this.unsubscribeOccupancyFn) {
@@ -351,14 +367,14 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
                 flags,
                 "room",
                 "releasing",
-                `Releasing room ${roomId}`,
+                `Releasing room ${this.roomId}`,
               );
-              await chatClient.rooms.release(roomId);
+              await this.chatClient!.rooms.release(this.roomId!);
               this.logCliEvent(
                 flags,
                 "room",
                 "released",
-                `Room ${roomId} released`,
+                `Room ${this.roomId} released`,
               );
             } catch (error) {
               const errorMsg = `Error releasing room: ${error instanceof Error ? error.message : String(error)}`;
@@ -368,7 +384,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
               if (this.shouldOutputJson(flags)) {
                 this.log(
                   this.formatJsonOutput(
-                    { error: errorMsg, roomId, success: false },
+                    { error: errorMsg, roomId: this.roomId, success: false },
                     flags,
                   ),
                 );
@@ -396,7 +412,6 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
               );
             }
 
-            clearTimeout(forceExitTimeout);
             this.logCliEvent(
               flags,
               "occupancy",
@@ -407,7 +422,6 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
               this.log(chalk.green("\nSuccessfully disconnected."));
             }
             resolve();
-            process.exit(0);
           };
 
           void releaseAndClose();
@@ -420,12 +434,12 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
       const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
       this.logCliEvent(flags, "occupancy", "fatalError", errorMsg, {
         error: errorMsg,
-        roomId,
+        roomId: this.roomId,
       });
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
-            { error: errorMsg, roomId, success: false },
+            { error: errorMsg, roomId: this.roomId, success: false },
             flags,
           ),
         );
@@ -449,10 +463,12 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
 
   private displayOccupancyMetrics(
     occupancyMetrics: OccupancyMetrics,
-    roomId: string,
+    roomId: string | null,
     flags: Record<string, unknown>,
     isInitial = false,
   ): void {
+    if (!roomId) return; // Guard against null roomId
+    
     const timestamp = new Date().toISOString();
     const logData = {
       metrics: occupancyMetrics,

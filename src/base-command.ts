@@ -245,7 +245,18 @@ export abstract class AblyBaseCommand extends Command {
 
       // Wait for the connection to be established or fail
       return await new Promise((resolve, reject) => {
+        // Add timeout for connection attempt (especially important for E2E tests with fake credentials)
+        const connectionTimeout = setTimeout(() => {
+          client.connection.off(); // Remove event listeners
+          const timeoutError = new Error("Connection timeout after 3 seconds");
+          if (isJsonMode) {
+            this.outputJsonError("Connection timeout", { code: 80003 }); // Custom timeout error code
+          }
+          reject(timeoutError);
+        }, 3000); // 3 second timeout
+
         client.connection.once("connected", () => {
+          clearTimeout(connectionTimeout);
           // Use logCliEvent for connection success if verbose
           this.logCliEvent(
             flags,
@@ -257,6 +268,7 @@ export abstract class AblyBaseCommand extends Command {
         });
 
         client.connection.once("failed", (stateChange) => {
+          clearTimeout(connectionTimeout);
           // Handle authentication errors specifically
           if (stateChange.reason && stateChange.reason.code === 40_100) {
             // Unauthorized

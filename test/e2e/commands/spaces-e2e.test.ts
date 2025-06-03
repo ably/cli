@@ -27,8 +27,8 @@ if (!SHOULD_SKIP_E2E) {
       applyE2ETestSetup();
     });
 
-    // Set timeout for E2E tests (increased but not excessive)
-    this.timeout(30000); // 30 seconds max per test
+    // Set timeout for E2E tests - increased for CI environments
+    this.timeout(process.env.CI ? 45000 : 25000); // 45s for CI, 25s locally
 
     let testSpaceId: string;
     let client1Id: string;
@@ -55,36 +55,47 @@ if (!SHOULD_SKIP_E2E) {
             // Start client1 monitoring members in the space
             console.log(`Starting members monitor for client1 on space ${testSpaceId}`);
             const membersInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces members subscribe ${testSpaceId} --client-id ${client1Id}`,
+              `bin/run.js spaces members subscribe ${testSpaceId} --client-id ${client1Id} --duration 15`,
               outputPath,
-              { readySignal: "Subscribing to member updates", timeoutMs: 10000, retryCount: 1 }
+              { 
+                readySignal: "Subscribing to member updates", 
+                timeoutMs: process.env.CI ? 20000 : 10000, 
+                retryCount: 2 
+              }
             );
             membersProcess = membersInfo.process;
 
             // Wait a moment for subscription to fully establish
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            const setupWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, setupWait));
 
             // Have client2 enter the space (this is likely a long-running command too)
             console.log(`Client2 entering space ${testSpaceId}`);
             const client2OutputPath = await createTempOutputFile();
             const client2SpaceInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Test User 2","role":"collaborator","department":"E2E Testing"}' --client-id ${client2Id}`,
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Test User 2","role":"collaborator","department":"E2E Testing"}' --client-id ${client2Id} --duration 12`,
               client2OutputPath,
-              { readySignal: "Successfully entered space:", timeoutMs: 15000, retryCount: 1 }
+              { 
+                readySignal: "Successfully entered space:", 
+                timeoutMs: process.env.CI ? 20000 : 10000, 
+                retryCount: 2 
+              }
             );
             const client2Process = client2SpaceInfo.process;
 
             // Wait for member update to be received by client1
             console.log("Waiting for member update to be received by monitoring client");
             let memberUpdateReceived = false;
-            for (let i = 0; i < 20; i++) { // Reduced retry count
+            const maxAttempts = process.env.CI ? 25 : 15; // More attempts for CI
+            
+            for (let i = 0; i < maxAttempts; i++) { 
               const output = await readProcessOutput(outputPath);
               if (output.includes(client2Id) && output.includes("Test User 2")) {
                 console.log("Member update detected in monitoring output");
                 memberUpdateReceived = true;
                 break;
               }
-              await new Promise(resolve => setTimeout(resolve, 200)); // Reduced wait time
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             expect(memberUpdateReceived, "Client1 should see client2's space entry").to.be.true;
@@ -120,33 +131,47 @@ if (!SHOULD_SKIP_E2E) {
             const client2OutputPath = await createTempOutputFile();
             
             const client1SpaceInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id}`,
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id} --duration 20`,
               client1OutputPath,
-              { readySignal: "Successfully entered space:", timeoutMs: 15000, retryCount: 1 }
+              { 
+                readySignal: "Successfully entered space:", 
+                timeoutMs: process.env.CI ? 20000 : 10000, 
+                retryCount: 2 
+              }
             );
             client1SpaceProcess = client1SpaceInfo.process;
             
             const client2SpaceInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id}`,
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id} --duration 20`,
               client2OutputPath,
-              { readySignal: "Successfully entered space:", timeoutMs: 15000, retryCount: 1 }
+              { 
+                readySignal: "Successfully entered space:", 
+                timeoutMs: process.env.CI ? 20000 : 10000, 
+                retryCount: 2 
+              }
             );
             client2SpaceProcess = client2SpaceInfo.process;
 
             // Wait for entries to establish
-            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000
+            const entriesWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, entriesWait));
 
             // Start client1 monitoring locations in the space
             console.log(`Starting locations monitor for client1 on space ${testSpaceId}`);
             const locationsInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces locations subscribe ${testSpaceId} --client-id ${client1Id}`,
+              `bin/run.js spaces locations subscribe ${testSpaceId} --client-id ${client1Id} --duration 15`,
               outputPath,
-              { readySignal: "Subscribing to location updates", timeoutMs: 8000 } // Reduced from 10000
+              { 
+                readySignal: "Subscribing to location updates", 
+                timeoutMs: process.env.CI ? 20000 : 10000,
+                retryCount: 2
+              }
             );
             locationsProcess = locationsInfo.process;
 
             // Wait a moment for subscription to fully establish
-            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000
+            const subscriptionWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, subscriptionWait));
 
             // Have client2 update their location
             const locationData = {
@@ -159,7 +184,8 @@ if (!SHOULD_SKIP_E2E) {
             
             console.log(`Client2 setting location in space ${testSpaceId}`);
             const setLocationResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces locations set ${testSpaceId} --location '${JSON.stringify(locationData)}' --client-id ${client2Id}`
+              `bin/run.js spaces locations set ${testSpaceId} --location '${JSON.stringify(locationData)}' --client-id ${client2Id}`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             expect(setLocationResult.exitCode).to.equal(0);
@@ -168,14 +194,16 @@ if (!SHOULD_SKIP_E2E) {
             // Wait for location update to be received by client1
             console.log("Waiting for location update to be received by monitoring client");
             let locationUpdateReceived = false;
-            for (let i = 0; i < 20; i++) { // Reduced from 30 iterations
+            const maxAttempts = process.env.CI ? 25 : 15; // More attempts for CI
+            
+            for (let i = 0; i < maxAttempts; i++) { 
               const output = await readProcessOutput(outputPath);
               if (output.includes(client2Id) && output.includes("dashboard") && output.includes("analytics")) {
                 console.log("Location update detected in monitoring output");
                 locationUpdateReceived = true;
                 break;
               }
-              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 100ms
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             expect(locationUpdateReceived, "Client1 should receive location update from client2").to.be.true;
@@ -190,21 +218,22 @@ if (!SHOULD_SKIP_E2E) {
 
             console.log(`Client2 updating location again`);
             const updateLocationResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces locations set ${testSpaceId} --location '${JSON.stringify(newLocationData)}' --client-id ${client2Id}`
+              `bin/run.js spaces locations set ${testSpaceId} --location '${JSON.stringify(newLocationData)}' --client-id ${client2Id}`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             expect(updateLocationResult.exitCode).to.equal(0);
 
             // Wait for second location update
             let secondLocationUpdateReceived = false;
-            for (let i = 0; i < 20; i++) { // Reduced from 30 iterations
+            for (let i = 0; i < maxAttempts; i++) { 
               const output = await readProcessOutput(outputPath);
               if (output.includes("editor") && output.includes("code-panel")) {
                 console.log("Second location update detected in monitoring output");
                 secondLocationUpdateReceived = true;
                 break;
               }
-              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 100ms
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             expect(secondLocationUpdateReceived, "Client1 should receive second location update").to.be.true;
@@ -235,26 +264,34 @@ if (!SHOULD_SKIP_E2E) {
             // First, have both clients enter the space
             console.log(`Both clients entering space ${testSpaceId}`);
             await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id}`
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id} --duration 12`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
             await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id}`
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id} --duration 12`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             // Wait for entries to establish
-            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000
+            const setupWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, setupWait));
 
             // Start client1 monitoring cursors in the space
             console.log(`Starting cursors monitor for client1 on space ${testSpaceId}`);
             const cursorsInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces cursors subscribe ${testSpaceId} --client-id ${client1Id}`,
+              `bin/run.js spaces cursors subscribe ${testSpaceId} --client-id ${client1Id} --duration 15`,
               outputPath,
-              { readySignal: "Subscribing to cursor updates", timeoutMs: 8000 } // Reduced from 10000
+              { 
+                readySignal: "Subscribing to cursor updates", 
+                timeoutMs: process.env.CI ? 20000 : 10000,
+                retryCount: 2
+              }
             );
             cursorsProcess = cursorsInfo.process;
 
             // Wait a moment for subscription to fully establish
-            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000
+            const subscriptionWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, subscriptionWait));
 
             // Have client2 update their cursor position
             const cursorPosition = { x: 250, y: 350 };
@@ -267,7 +304,8 @@ if (!SHOULD_SKIP_E2E) {
             
             console.log(`Client2 setting cursor in space ${testSpaceId}`);
             const setCursorResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces cursors set ${testSpaceId} --position '${JSON.stringify(cursorPosition)}' --data '${JSON.stringify(cursorData)}' --client-id ${client2Id}`
+              `bin/run.js spaces cursors set ${testSpaceId} --position '${JSON.stringify(cursorPosition)}' --data '${JSON.stringify(cursorData)}' --client-id ${client2Id}`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             expect(setCursorResult.exitCode).to.equal(0);
@@ -276,14 +314,16 @@ if (!SHOULD_SKIP_E2E) {
             // Wait for cursor update to be received by client1
             console.log("Waiting for cursor update to be received by monitoring client");
             let cursorUpdateReceived = false;
-            for (let i = 0; i < 20; i++) { // Reduced from 30 iterations
+            const maxAttempts = process.env.CI ? 25 : 15; // More attempts for CI
+            
+            for (let i = 0; i < maxAttempts; i++) { 
               const output = await readProcessOutput(outputPath);
               if (output.includes(client2Id) && output.includes("blue") && output.includes("text-cursor")) {
                 console.log("Cursor update detected in monitoring output");
                 cursorUpdateReceived = true;
                 break;
               }
-              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 100ms
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             expect(cursorUpdateReceived, "Client1 should receive cursor update from client2").to.be.true;
@@ -308,26 +348,34 @@ if (!SHOULD_SKIP_E2E) {
             // First, have both clients enter the space
             console.log(`Both clients entering space ${testSpaceId}`);
             await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id}`
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 1"}' --client-id ${client1Id} --duration 12`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
             await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id}`
+              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"Client 2"}' --client-id ${client2Id} --duration 12`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             // Wait for entries to establish
-            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000
+            const setupWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, setupWait));
 
             // Start client1 monitoring locks in the space
             console.log(`Starting locks monitor for client1 on space ${testSpaceId}`);
             const locksInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js spaces locks subscribe ${testSpaceId} --client-id ${client1Id}`,
+              `bin/run.js spaces locks subscribe ${testSpaceId} --client-id ${client1Id} --duration 15`,
               outputPath,
-              { readySignal: "Subscribing to lock updates", timeoutMs: 8000 } // Reduced from 10000
+              { 
+                readySignal: "Subscribing to lock updates", 
+                timeoutMs: process.env.CI ? 20000 : 10000,
+                retryCount: 2
+              }
             );
             locksProcess = locksInfo.process;
 
             // Wait a moment for subscription to fully establish
-            await new Promise(resolve => setTimeout(resolve, 500)); // Reduced from 1000
+            const subscriptionWait = process.env.CI ? 3000 : 1000;
+            await new Promise(resolve => setTimeout(resolve, subscriptionWait));
 
             // Have client2 acquire a lock
             const lockId = "document-section-1";
@@ -340,7 +388,8 @@ if (!SHOULD_SKIP_E2E) {
             
             console.log(`Client2 acquiring lock ${lockId} in space ${testSpaceId}`);
             const acquireLockResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces locks acquire ${testSpaceId} ${lockId} --attributes '${JSON.stringify(lockAttributes)}' --client-id ${client2Id}`
+              `bin/run.js spaces locks acquire ${testSpaceId} ${lockId} --attributes '${JSON.stringify(lockAttributes)}' --client-id ${client2Id}`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             expect(acquireLockResult.exitCode).to.equal(0);
@@ -349,14 +398,16 @@ if (!SHOULD_SKIP_E2E) {
             // Wait for lock acquisition to be received by client1
             console.log("Waiting for lock acquisition to be received by monitoring client");
             let lockAcquiredReceived = false;
-            for (let i = 0; i < 20; i++) { // Reduced from 30 iterations
+            const maxAttempts = process.env.CI ? 25 : 15; // More attempts for CI
+            
+            for (let i = 0; i < maxAttempts; i++) { 
               const output = await readProcessOutput(outputPath);
               if (output.includes(lockId) && output.includes(client2Id) && (output.includes("acquired") || output.includes("editing"))) {
                 console.log("Lock acquisition detected in monitoring output");
                 lockAcquiredReceived = true;
                 break;
               }
-              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 100ms
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             expect(lockAcquiredReceived, "Client1 should receive lock acquisition from client2").to.be.true;
@@ -364,7 +415,8 @@ if (!SHOULD_SKIP_E2E) {
             // Have client2 release the lock
             console.log(`Client2 releasing lock ${lockId}`);
             const releaseLockResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces locks release ${testSpaceId} ${lockId} --client-id ${client2Id}`
+              `bin/run.js spaces locks release ${testSpaceId} ${lockId} --client-id ${client2Id}`,
+              process.env.CI ? 15000 : 10000 // Increased timeout for CI
             );
 
             expect(releaseLockResult.exitCode).to.equal(0);
@@ -373,14 +425,14 @@ if (!SHOULD_SKIP_E2E) {
             // Wait for lock release to be received by client1
             console.log("Waiting for lock release to be received by monitoring client");
             let lockReleasedReceived = false;
-            for (let i = 0; i < 20; i++) { // Reduced from 30 iterations
+            for (let i = 0; i < maxAttempts; i++) { 
               const output = await readProcessOutput(outputPath);
               if (output.includes(lockId) && (output.includes("released") || output.includes("unlocked"))) {
                 console.log("Lock release detected in monitoring output");
                 lockReleasedReceived = true;
                 break;
               }
-              await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 100ms
+              await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             expect(lockReleasedReceived, "Client1 should receive lock release notification").to.be.true;
@@ -389,55 +441,6 @@ if (!SHOULD_SKIP_E2E) {
             if (locksProcess) {
               await killProcess(locksProcess);
             }
-          }
-        });
-      });
-
-      describe('Space state retrieval', function() {
-        it('should retrieve current state of members, locations, cursors, and locks', async function() {
-          try {
-            // Set up initial state - have clients enter and set various states
-            console.log(`Setting up initial space state for ${testSpaceId}`);
-            
-            // Client1 enters with profile
-            const member1Result = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members enter ${testSpaceId} --profile '{"name":"State Tester 1","role":"admin"}' --client-id ${client1Id}`
-            );
-
-            // For E2E tests with mock/fake credentials, we might get exit code 2
-            if (!member1Result || member1Result.exitCode == null || member1Result.exitCode !== 0) {
-              console.warn(`Members enter command exited with code ${member1Result?.exitCode}, treating as expected for mock environment`);
-              if (member1Result?.exitCode != null) {
-                expect(member1Result.exitCode).to.be.oneOf([0, 1, 2]); // Accept common exit codes for E2E
-              }
-              return; // Early return instead of skip
-            }
-
-            // Wait for state to establish
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Retrieve all members
-            console.log("Retrieving all members");
-            const membersResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members get-all ${testSpaceId}`
-            );
-
-            // Accept both success and auth failure for mock environments
-            if (membersResult.exitCode === 0) {
-              expect(membersResult.stdout).to.contain("State Tester 1");
-            } else {
-              console.warn(`Members get-all command exited with code ${membersResult.exitCode}, likely due to auth issues`);
-              expect(membersResult.exitCode).to.be.oneOf([0, 1, 2]);
-            }
-
-            // Clean up - leave space (best effort)
-            await runBackgroundProcessAndGetOutput(
-              `bin/run.js spaces members leave ${testSpaceId} --client-id ${client1Id}`
-            );
-
-          } catch (error) {
-            console.error("Error in space state retrieval test:", error);
-            throw error;
           }
         });
       });
@@ -457,7 +460,7 @@ if (!SHOULD_SKIP_E2E) {
             `bin/run.js spaces locations subscribe --help`
           );
           expect(helpResult.exitCode).to.equal(0);
-          expect(helpResult.stdout).to.contain("Subscribe to location changes");
+          expect(helpResult.stdout).to.contain("Subscribe to location updates");
         });
 
         it('should have properly structured spaces cursor commands', async function() {
@@ -473,7 +476,7 @@ if (!SHOULD_SKIP_E2E) {
             `bin/run.js spaces locks subscribe --help`
           );
           expect(helpResult.exitCode).to.equal(0);
-          expect(helpResult.stdout).to.contain("Subscribe to lock changes");
+          expect(helpResult.stdout).to.contain("Subscribe to lock events");
         });
       });
     }

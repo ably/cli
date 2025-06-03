@@ -224,7 +224,7 @@ async function globalCleanup() {
 
 try {
   // Force exit after 90 seconds maximum to prevent hanging
-  const MAX_TEST_RUNTIME = 90 * 1000; // 90 seconds - shorter timeout
+  const MAX_TEST_RUNTIME = 240 * 1000; // 240 seconds - increased for E2E tests
   const exitTimer = setTimeout(() => {
     console.error('Tests exceeded maximum runtime. Force exiting.');
     process.exit(1);

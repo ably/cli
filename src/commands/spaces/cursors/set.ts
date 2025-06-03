@@ -50,7 +50,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
 
   private cleanupInProgress = false;
   private realtimeClient: Ably.Realtime | null = null;
-  private spacesClient: Spaces | null = null;
+  private spacesClient: unknown | null = null;
   private space: Space | null = null;
   private simulationIntervalId: NodeJS.Timeout | null = null;
   private cursorData: Record<string, unknown> | null = null;

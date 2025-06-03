@@ -510,8 +510,6 @@ export default class MessagesReactionsSubscribe extends ChatBaseCommand {
 
           clearTimeout(forceExitTimeout);
           resolve();
-
-          process.exit(0);
         };
 
         process.on("SIGINT", () => void cleanup());
