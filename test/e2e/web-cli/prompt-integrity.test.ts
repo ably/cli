@@ -106,9 +106,16 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     await page.keyboard.press('Enter');
     await expect(terminal).toContainText('browser-based CLI', { timeout: 30000 });
 
+    // Wait for session ID to be available before capturing it
+    await page.waitForFunction(() => {
+      const sessionId = (window as any)._sessionId;
+      return sessionId && typeof sessionId === 'string' && sessionId.length > 0;
+    }, null, { timeout: 30_000 });
+
     // Capture session ID before reload
     const originalSessionId = await page.evaluate(() => (window as any)._sessionId);
     expect(originalSessionId).toBeTruthy();
+    console.log(`Original session ID: ${originalSessionId}`);
 
     // Reload page
     await page.reload({ waitUntil: 'networkidle' });
@@ -118,8 +125,31 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
       return s?.componentConnectionStatus === 'connected';
     }, null, { timeout: 60_000 });
 
+    // Wait for session ID to be restored after reload
+    await page.waitForFunction(() => {
+      const sessionId = (window as any)._sessionId;
+      return sessionId && typeof sessionId === 'string' && sessionId.length > 0;
+    }, null, { timeout: 30_000 });
+
     // Verify session was preserved
     const newSessionId = await page.evaluate(() => (window as any)._sessionId);
+    console.log(`New session ID after reload: ${newSessionId}`);
+    
+    if (!newSessionId) {
+      // Enhanced debugging for CI
+      const debugInfo = await page.evaluate(() => {
+        const w = window as any;
+        return {
+          _sessionId: w._sessionId,
+          sessionStorage: Object.keys(sessionStorage).map(key => ({ key, value: sessionStorage.getItem(key) })),
+          localStorage: Object.keys(localStorage).map(key => ({ key, value: localStorage.getItem(key) })),
+          reactState: w.getAblyCliTerminalReactState?.() || 'not available'
+        };
+      });
+      console.error('Debug info when session ID is undefined:', JSON.stringify(debugInfo, null, 2));
+    }
+    
+    expect(newSessionId).toBeTruthy();
     expect(newSessionId).toBe(originalSessionId);
 
     // Verify terminal still works after reload

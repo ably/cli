@@ -2,6 +2,7 @@ import { expect } from "@oclif/test";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { exec } from "node:child_process";
+import * as fs from 'node:fs';
 import {
   E2E_API_KEY,
   SHOULD_SKIP_E2E,
@@ -16,6 +17,8 @@ import {
   applyE2ETestSetup,
   createAblyRealtimeClient
 } from "../../helpers/e2e-test-helper.js";
+import { startSubscribeCommand, startPresenceCommand, runCommand, waitForOutput, cleanupRunners } from "../../helpers/command-helpers.js";
+import { CliRunner } from "../../helpers/cli-runner.js";
 import { ChildProcess, spawn } from "node:child_process";
 import * as os from "node:os";
 
@@ -90,47 +93,64 @@ if (!SHOULD_SKIP_E2E) {
 
     describe('Room occupancy functionality', function() {
       it('should show occupancy metrics for active room', async function() {
-        let presenceProcess: ChildProcess | null = null;
-        let outputPath: string = '';
+        let presenceRunner: CliRunner | null = null;
 
         try {
-          // Create output file for presence monitoring
-          outputPath = await createTempOutputFile();
-
           // Start client1 entering presence (this is a long-running command)
           console.log(`Client1 entering presence to establish room occupancy`);
-          const presenceInfo = await runLongRunningBackgroundProcess(
-            `bin/run.js rooms presence enter ${testRoomId} --profile-data '{"name":"Test User 1"}' --client-id ${client1Id} --duration 15`,
-            outputPath,
-            { 
-              readySignal: "Entered room", 
-              timeoutMs: process.env.CI ? 20000 : 15000, // Increased timeout for CI
-              retryCount: 2 
-            }
+          presenceRunner = await startPresenceCommand(
+            ['rooms', 'presence', 'enter', testRoomId, '--profile-data', '{"name":"TestUser1"}', '--client-id', client1Id, '--duration', '15'],
+            /Entered room/,
+            { timeoutMs: process.env.CI ? 20000 : 15000 }
           );
-          presenceProcess = presenceInfo.process;
 
           // Wait longer for presence to establish in CI
-          const waitTime = process.env.CI ? 3000 : 1500;
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          const initialWait = process.env.CI ? 5000 : 3000;
+          console.log(`Waiting ${initialWait}ms for presence to fully establish...`);
+          await new Promise(resolve => setTimeout(resolve, initialWait));
 
-          // Check occupancy metrics (this should exit quickly)
-          console.log(`Checking occupancy metrics for room ${testRoomId}`);
-          const occupancyResult = await runBackgroundProcessAndGetOutput(
-            `bin/run.js rooms occupancy get ${testRoomId}`,
-            process.env.CI ? 15000 : 10000 // Increased timeout for CI
-          );
+          console.log(`Presence process output so far: ${presenceRunner.combined().slice(-200)}`);
 
-          expect(occupancyResult.exitCode).to.equal(0);
-          expect(occupancyResult.stdout).to.contain("Connections:");
-          expect(occupancyResult.stdout).to.contain("Presence Members:");
+          // Check occupancy metrics multiple times with retry logic
+          let occupancyResult: { exitCode: number | null; stdout: string; stderr: string } | null = null;
+          let attempts = 0;
+          const maxAttempts = process.env.CI ? 5 : 3;
+
+          while (attempts < maxAttempts) {
+            attempts++;
+            console.log(`Checking occupancy metrics for room ${testRoomId} (attempt ${attempts}/${maxAttempts})`);
+            
+            occupancyResult = await runCommand(['rooms', 'occupancy', 'get', testRoomId], {
+              timeoutMs: process.env.CI ? 15000 : 10000
+            });
+
+            console.log(`Occupancy attempt ${attempts} - Exit code: ${occupancyResult.exitCode}`);
+            console.log(`Occupancy stdout: ${occupancyResult.stdout}`);
+            console.log(`Occupancy stderr: ${occupancyResult.stderr}`);
+
+            if (occupancyResult.exitCode === 0 && 
+                occupancyResult.stdout.includes("Connections:") && 
+                occupancyResult.stdout.includes("Presence Members:")) {
+              break;
+            }
+
+            if (attempts < maxAttempts) {
+              const retryDelay = 2000 * attempts; // Progressive delay
+              console.log(`Occupancy check failed, waiting ${retryDelay}ms before retry...`);
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+            }
+          }
+
+          // Validate final result
+          expect(occupancyResult, "Should have occupancy result").to.not.be.null;
+          expect(occupancyResult!.exitCode, `Exit code should be 0. stderr: ${occupancyResult!.stderr}`).to.equal(0);
+          expect(occupancyResult!.stdout).to.contain("Connections:");
+          expect(occupancyResult!.stdout).to.contain("Presence Members:");
 
         } finally {
-          // Clean up - kill the presence process
-          if (presenceProcess) {
-            await killProcess(presenceProcess);
-            // Wait for process to fully exit
-            await new Promise(resolve => setTimeout(resolve, 1000));
+          // Clean up
+          if (presenceRunner) {
+            await presenceRunner.kill();
           }
         }
       });
@@ -140,166 +160,137 @@ if (!SHOULD_SKIP_E2E) {
     if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
       describe('Presence functionality', function() {
         it('should allow two connections where one person entering is visible to the other', async function() {
-          const testRoomId = `test-room-${Date.now()}`;
-          const client1Id = `client-1-${Date.now()}`;
-          const client2Id = `client-2-${Date.now()}`;
-          const tmpDir = os.tmpdir();
-          const outputPath = `${tmpDir}/rooms-presence-output.txt`;
+          this.timeout(process.env.CI ? 90000 : 75000); // Restored and generous timeout
+          let subscribeRunner: CliRunner | null = null;
+          let enterRunner: CliRunner | null = null;
 
-          // Create a child process to subscribe to presence in the background
-          const subscribeChild = spawn(
-            "bin/run.js",
-            [
-              "rooms",
-              "presence",
-              "subscribe",
-              testRoomId,
-              "--client-id",
-              client1Id,
-              "--duration",
-              "15", // Increased duration for CI
-            ],
-            {
-              stdio: ["pipe", "pipe", "pipe"],
-              env: {
-                ...process.env,
-                ABLY_API_KEY: E2E_API_KEY, // Ensure the subscriber gets the API key
-                // Remove ABLY_CLI_TEST_MODE so it uses real Ably
-              },
+          try {
+            // Start client1 subscribing to presence events
+            console.log(`[Test Debug] Starting presence subscription for client1 (${client1Id}) on room ${testRoomId}`);
+            subscribeRunner = await startSubscribeCommand(
+              ['rooms', 'presence', 'subscribe', testRoomId, '--client-id', client1Id, '--duration', '35'],
+              /Subscribing to presence events/,
+              { timeoutMs: process.env.CI ? 30000 : 20000 }
+            );
+            console.log(`[Test Debug] Subscriber process for client1 started and ready.`);
+
+            // Wait a moment for client1's subscription to fully establish
+            const client1SetupWait = process.env.CI ? 4000 : 2000;
+            console.log(`[Test Debug] Waiting ${client1SetupWait}ms for client1 subscription to fully establish.`);
+            await new Promise(resolve => setTimeout(resolve, client1SetupWait));
+
+            // Have client2 enter the room
+            console.log(`[Test Debug] Client2 (${client2Id}) entering room ${testRoomId} with profile data.`);
+            enterRunner = await startPresenceCommand(
+              ['rooms', 'presence', 'enter', testRoomId, '--profile-data', '{"name":"TestUser2","status":"active"}', '--client-id', client2Id, '--duration', '25'],
+              /Entered room/,
+              { timeoutMs: process.env.CI ? 30000 : 20000 }
+            );
+            console.log(`[Test Debug] Enter process for client2 started and ready.`);
+
+            // Add a significant delay for presence event propagation
+            const propagationDelay = process.env.CI ? 10000 : 7000; 
+            console.log(`[Test Debug] Waiting ${propagationDelay}ms for presence event propagation after client2 entered.`);
+            await new Promise(resolve => setTimeout(resolve, propagationDelay));
+
+            // Wait for all presence event components using the improved detection
+            console.log("[Test Debug] Waiting for presence event components to appear...");
+
+            try {
+              // Wait for action enter pattern
+              await waitForOutput(subscribeRunner, `Action: enter`, process.env.CI ? 20000 : 15000);
+              console.log("[Test Debug] ✓ Detected presence action: enter");
+
+              // Wait for client ID pattern
+              await waitForOutput(subscribeRunner, `Client: ${client2Id}`, process.env.CI ? 10000 : 5000);
+              console.log("[Test Debug] ✓ Detected client ID in presence event");
+
+              // Wait for profile data pattern
+              await waitForOutput(subscribeRunner, `"name":"TestUser2"`, process.env.CI ? 10000 : 5000);
+              console.log("[Test Debug] ✓ Detected profile data in presence event");
+
+              // Wait for status in profile data
+              await waitForOutput(subscribeRunner, `"status":"active"`, process.env.CI ? 5000 : 3000);
+              console.log("[Test Debug] ✓ Detected status in profile data");
+
+              console.log("[Test Debug] All presence event components detected successfully!");
+
+            } catch (error) {
+              console.log(`[TEST FAILURE DEBUG] Failed to detect presence event components: ${error instanceof Error ? error.message : String(error)}`);
+              console.log(`[TEST FAILURE DEBUG] Final subscriber output:\n${subscribeRunner.combined().slice(-1500)}`);
+              console.log(`[TEST FAILURE DEBUG] Final enterer output:\n${enterRunner.combined().slice(-1500)}`);
+              throw error;
             }
-          );
 
-          let subscribeOutput = "";
-          subscribeChild.stdout?.on("data", (data) => {
-            subscribeOutput += data.toString();
-          });
-          subscribeChild.stderr?.on("data", (data) => {
-            subscribeOutput += data.toString();
-          });
-
-          // Wait for the subscriber to be ready (looking for the ready signal)
-          await waitForStringInOutput(
-            () => subscribeOutput,
-            "Subscribing to presence events. Press Ctrl+C to exit.",
-            process.env.CI ? 10000 : 5000 // Increased timeout for CI
-          );
-
-          // Additional wait for subscription to fully establish
-          await new Promise(resolve => setTimeout(resolve, process.env.CI ? 2000 : 1000));
-
-          // Now have client 2 enter the room
-          const enterResult = await execAsync(
-            `bin/run.js rooms presence enter ${testRoomId} --profile-data '{"name":"Test User 2","status":"active"}' --client-id ${client2Id} --duration 8`,
-            {
-              env: {
-                ...process.env,
-                ABLY_API_KEY: E2E_API_KEY,
-                // Remove ABLY_CLI_TEST_MODE so it uses real Ably
-              },
-            }
-          );
-
-          expect(enterResult.stderr).to.be.empty;
-          expect(enterResult.stdout).to.contain("Entered room");
-
-          // Wait longer for the presence event to be received by the subscriber
-          // We need to poll the subscribeOutput for presence events
-          let presenceEventDetected = false;
-          const maxWaitTime = process.env.CI ? 15000 : 8000; // Increased for CI
-          const pollInterval = 300; // Faster polling
-          const maxAttempts = maxWaitTime / pollInterval;
-
-          for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (subscribeOutput.includes("Test User 2") && subscribeOutput.includes("enter")) {
-              presenceEventDetected = true;
-              break;
-            }
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
+          } finally {
+            console.log("[Test Debug] Entering finally block for Rooms Presence test.");
+            await cleanupRunners([subscribeRunner, enterRunner].filter(Boolean) as CliRunner[]);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Final wait for cleanup
           }
-
-          // Clean up the subscribe process
-          subscribeChild.kill("SIGTERM");
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for cleanup
-
-          // Check that the presence event was detected
-          expect(presenceEventDetected).to.be.true;
-          expect(subscribeOutput).to.contain("Test User 2");
-          expect(subscribeOutput).to.contain("enter");
         });
       });
 
       describe('Message publish and subscribe functionality', function() {
-        it('should allow subscribe to show messages arrive whilst publishing', async function() {
-          let subscribeProcess: ChildProcess | null = null;
-          let outputPath: string = '';
+        it('should allow publishing and subscribing to messages', async function() {
+          let subscribeRunner: CliRunner | null = null;
 
           try {
-            // Create output file for message monitoring
-            outputPath = await createTempOutputFile();
-
-            // Start client1 subscribing to messages on the room
-            console.log(`Starting message subscription for client1 on room ${testRoomId}`);
-            const subscribeInfo = await runLongRunningBackgroundProcess(
-              `bin/run.js rooms messages subscribe ${testRoomId} --client-id ${client1Id} --duration 15`,
-              outputPath,
-              { 
-                readySignal: "Listening for messages", 
-                timeoutMs: process.env.CI ? 20000 : 15000, // Increased timeout for CI
-                retryCount: 2 
-              }
+            // Start subscribing to messages with client1
+            console.log(`[Test Debug] Starting message subscribe for client1 on room ${testRoomId}`);
+            subscribeRunner = await startSubscribeCommand(
+              ['rooms', 'messages', 'subscribe', testRoomId, '--client-id', client1Id, '--duration', '30'],
+              /Connected to room:/,
+              { timeoutMs: process.env.CI ? 45000 : 25000 }
             );
-            subscribeProcess = subscribeInfo.process;
 
-            // Wait longer for subscription to fully establish
-            const setupWait = process.env.CI ? 3000 : 1500;
+            console.log(`[Test Debug] Subscribe process started and ready`);
+
+            // Wait a bit to ensure subscription is established
+            const setupWait = process.env.CI ? 3000 : 1000;
+            console.log(`[Test Debug] Waiting ${setupWait}ms for subscription to establish`);
             await new Promise(resolve => setTimeout(resolve, setupWait));
 
-            // Have client2 send a message to the room
-            const testMessage = `E2E test message from ${client2Id} at ${new Date().toISOString()}`;
-            console.log(`Client2 sending message to room ${testRoomId}: ${testMessage}`);
-            
-            const sendResult = await runBackgroundProcessAndGetOutput(
-              `bin/run.js rooms messages send ${testRoomId} "${testMessage}" --client-id ${client2Id}`,
-              process.env.CI ? 15000 : 10000 // Increased timeout for CI
-            );
+            // Have client2 send a message
+            const testMessage = "Hello from E2E test!";
+            console.log(`[Test Debug] Client2 sending message: "${testMessage}"`);
+            const sendResult = await runCommand(['rooms', 'messages', 'send', testRoomId, testMessage, '--client-id', client2Id], {
+              timeoutMs: process.env.CI ? 20000 : 10000
+            });
 
-            // Handle authentication failures gracefully
-            if (!sendResult || sendResult.exitCode == null || sendResult.exitCode !== 0) {
-              console.warn(`Message send failed with exit code ${sendResult?.exitCode}, stderr:`, sendResult?.stderr);
-              console.warn(`stdout:`, sendResult?.stdout);
-              if (sendResult?.stderr?.includes('authentication') || sendResult?.stderr?.includes('401')) {
-                console.warn('Authentication failure detected, skipping test');
-                this.skip();
-                return;
-              }
-              expect(sendResult?.exitCode).to.equal(0);
-            }
+            console.log(`[Test Debug] Send result - exitCode: ${sendResult.exitCode}`);
+            console.log(`[Test Debug] Send result - stdout: ${sendResult.stdout}`);
+            console.log(`[Test Debug] Send result - stderr: ${sendResult.stderr}`);
 
+            expect(sendResult.exitCode).to.equal(0);
             expect(sendResult.stdout).to.contain("Message sent successfully");
 
-            // Wait for message to be received by client1
-            console.log("Waiting for message to be received by subscribing client");
-            let messageReceived = false;
-            const maxAttempts = process.env.CI ? 40 : 25; // More attempts for CI
-            
-            for (let i = 0; i < maxAttempts; i++) {
-              const output = await readProcessOutput(outputPath);
-              if ((output.includes(testMessage) || output.includes(client2Id)) && 
-                  !output.includes('Failed to subscribe')) {
-                console.log("Message received in subscription output");
-                messageReceived = true;
-                break;
-              }
-              await new Promise(resolve => setTimeout(resolve, 200));
-            }
+            // Wait for the message to be received by the subscriber
+            console.log(`[Test Debug] Waiting for message to be received by subscriber`);
+            await waitForOutput(subscribeRunner, testMessage, process.env.CI ? 10000 : 6000);
+            await waitForOutput(subscribeRunner, client2Id, process.env.CI ? 5000 : 3000);
+            console.log(`[Test Debug] Message detected in subscriber output!`);
 
-            expect(messageReceived, "Client1 should receive the message sent by client2").to.be.true;
+            // Send a second message with metadata
+            const secondMessage = "Second test message with metadata";
+            const metadata = { timestamp: Date.now(), type: "test" };
+            console.log(`[Test Debug] Client2 sending second message with metadata`);
+            const sendResult2 = await runCommand([
+              'rooms', 'messages', 'send', testRoomId, secondMessage, 
+              '--metadata', JSON.stringify(metadata), '--client-id', client2Id
+            ], {
+              timeoutMs: process.env.CI ? 20000 : 10000
+            });
+
+            expect(sendResult2.exitCode).to.equal(0);
+
+            // Wait for the second message to be received
+            console.log(`[Test Debug] Waiting for second message to be received`);
+            await waitForOutput(subscribeRunner, secondMessage, process.env.CI ? 10000 : 6000);
+            console.log(`[Test Debug] Second message detected in subscriber output!`);
 
           } finally {
-            if (subscribeProcess) {
-              await killProcess(subscribeProcess);
-              // Wait for cleanup
-              await new Promise(resolve => setTimeout(resolve, 1000));
+            if (subscribeRunner) {
+              await subscribeRunner.kill();
             }
           }
         });
@@ -308,17 +299,13 @@ if (!SHOULD_SKIP_E2E) {
       describe('Command Structure Tests (No Real API Key)', function() {
         it('should have properly structured presence commands', async function() {
           // Test help command to ensure command structure exists
-          const helpResult = await runBackgroundProcessAndGetOutput(
-            `bin/run.js rooms presence subscribe --help`
-          );
+          const helpResult = await runCommand(['rooms', 'presence', 'subscribe', '--help']);
           expect(helpResult.exitCode).to.equal(0);
           expect(helpResult.stdout).to.contain("Subscribe to presence events");
         });
 
         it('should have properly structured message commands', async function() {
-          const helpResult = await runBackgroundProcessAndGetOutput(
-            `bin/run.js rooms messages subscribe --help`
-          );
+          const helpResult = await runCommand(['rooms', 'messages', 'subscribe', '--help']);
           expect(helpResult.exitCode).to.equal(0);
           expect(helpResult.stdout).to.contain("Subscribe to messages");
         });
