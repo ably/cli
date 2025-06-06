@@ -284,7 +284,6 @@ describe("Connections E2E Tests", function() {
                     connectionId: connectionId
                   });
                   
-                  console.log(`Detected connection event for ${testClientId}: ${logEvent.eventType || 'connection'} (${connectionId})`);
                 }
               }
             } catch {
@@ -298,7 +297,6 @@ describe("Connections E2E Tests", function() {
       await new Promise(resolve => setTimeout(resolve, 5000));
       
       // Step 2: Start a channel subscriber with specific client ID (this will create a new connection)
-      console.log(`Starting channel subscriber with clientId: ${testClientId}...`);
       const channelSubscriber = execa("node", [cliPath, "channels", "subscribe", testChannelName, "--client-id", testClientId], {
         env: {
           ...process.env,
@@ -311,7 +309,6 @@ describe("Connections E2E Tests", function() {
       await new Promise(resolve => setTimeout(resolve, 15000));
       
       // Step 3: Close the channel subscriber
-      console.log("Closing channel subscriber...");
       channelSubscriber.kill("SIGTERM");
       
       // Wait for the subscriber to fully disconnect
@@ -322,7 +319,6 @@ describe("Connections E2E Tests", function() {
       }
       
       // Step 4: Wait up to 15 seconds for the disconnection event to appear
-      console.log("Waiting for disconnection event to appear in monitoring...");
       await new Promise(resolve => setTimeout(resolve, 15000));
       
       // Stop the connections monitor
@@ -339,10 +335,6 @@ describe("Connections E2E Tests", function() {
       expect(connectionEvents.length).to.be.greaterThan(0, `Should have seen connection events for clientId: ${testClientId}`);
       
       // Log captured events for debugging
-      console.log(`Captured ${connectionEvents.length} connection events for ${testClientId}:`);
-      connectionEvents.forEach(event => {
-        console.log(`  - ${event.eventType} at ${new Date(event.timestamp).toISOString()} (${event.connectionId})`);
-      });
       
       // Verify we got valid JSON output throughout
       expect(monitorOutput).to.include("connectionId", "Should have received connection log events");

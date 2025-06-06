@@ -86,7 +86,6 @@ describe("E2E: ably bench publisher and subscriber", function () {
           const errorChunk = data.toString();
           if (DEBUG_OUTPUT) {
             process.stderr.write(`[DEBUG_SUB_ERR] ${errorChunk}`); // Pipe to main stderr
-            console.error(`SUBSCRIBER STDERR: ${errorChunk.trim()}`);
           }
         });
 
@@ -158,7 +157,6 @@ describe("E2E: ably bench publisher and subscriber", function () {
           const errorChunk = data.toString();
           if (DEBUG_OUTPUT) {
             process.stderr.write(`[DEBUG_PUB_ERR] ${errorChunk}`); // Pipe to main stderr
-            console.error(`PUBLISHER STDERR: ${errorChunk.trim()}`);
           }
         });
         publisherProcess.on("error", (err) => {

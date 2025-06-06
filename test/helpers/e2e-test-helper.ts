@@ -68,7 +68,6 @@ export function createAblyClient(): Ably.Rest {
   const clientId = getUniqueClientId();
   const keyPrefix = E2E_API_KEY.split(':')[0]?.split('.')[0] || 'unknown-app';
   const keyId = E2E_API_KEY.split(':')[0]?.split('.')[1]?.slice(0, 4) || 'unknown-key';
-  console.log(`[Client Lifecycle] Creating Ably REST client (App: ${keyPrefix}, Key Prefix: ${keyId}, ClientID: ${clientId}) at ${new Date().toISOString()}`);
 
   const client = new Ably.Rest({
     key: E2E_API_KEY,
@@ -98,7 +97,6 @@ export function createAblyRealtimeClient(): Ably.Realtime {
   const clientId = getUniqueClientId();
   const keyPrefix = E2E_API_KEY.split(':')[0]?.split('.')[0] || 'unknown-app';
   const keyId = E2E_API_KEY.split(':')[0]?.split('.')[1]?.slice(0, 4) || 'unknown-key';
-  console.log(`[Client Lifecycle] Creating Ably Realtime client (App: ${keyPrefix}, Key Prefix: ${keyId}, ClientID: ${clientId}) at ${new Date().toISOString()}`);
 
   const client = new Ably.Realtime({
     key: E2E_API_KEY,
@@ -167,7 +165,6 @@ export async function runBackgroundProcessAndGetOutput(
     });
 
     const processId = `sync-process-${randomUUID()}`;
-    console.log(`Started sync process (ID: ${processId}, PID: ${childProcess.pid}) for command: ${obfuscatedCommand}`);
     
     // Track the process globally if it has a PID
     if (childProcess.pid) {
@@ -178,7 +175,6 @@ export async function runBackgroundProcessAndGetOutput(
     const timeoutHandle = setTimeout(() => {
       if (!resolved) {
         resolved = true;
-        console.warn(`Process ${processId} timed out after ${timeoutMs}ms, killing it`);
         try {
           if (childProcess.pid) {
             process.kill(childProcess.pid, 'SIGKILL');
@@ -202,7 +198,6 @@ export async function runBackgroundProcessAndGetOutput(
       if (!resolved) {
         resolved = true;
         clearTimeout(timeoutHandle);
-        console.error(`Error spawning process ${processId} (PID: ${childProcess.pid}) for command ${obfuscatedCommand}:`, error);
         reject(error);
       }
     });
@@ -211,7 +206,6 @@ export async function runBackgroundProcessAndGetOutput(
       if (!resolved) {
         resolved = true;
         clearTimeout(timeoutHandle);
-        console.log(`Process ${processId} (PID: ${childProcess.pid}) for command ${obfuscatedCommand} exited with code ${code}`);
         // Wait a very short time for stdio streams to flush before resolving
         setTimeout(() => {
             if (code === 0) {
@@ -248,7 +242,6 @@ export async function runLongRunningBackgroundProcess(
 
   for (let attempt = 0; attempt <= retryCount; attempt++) {
     try {
-      console.log(`[Attempt ${attempt + 1}/${retryCount + 1}] Starting process: ${command}`);
       
       const result = await attemptProcessStart(
         command,
@@ -258,16 +251,13 @@ export async function runLongRunningBackgroundProcess(
         getProcessEnv()
       );
       
-      console.log(`Process started successfully on attempt ${attempt + 1}, PID: ${result.processId}`);
       return result;
       
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Attempt ${attempt + 1} failed:`, error);
       
       if (attempt < retryCount) {
         const retryDelay = Math.min(2000 * (attempt + 1), 5000); // Progressive backoff, max 5s
-        console.log(`Waiting ${retryDelay}ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
@@ -290,11 +280,6 @@ async function attemptProcessStart(
   const signal = controller.signal;
 
   // Debug logging for command analysis
-  console.log(`[E2E Debug] Full command: ${obfuscatedCommand}`);
-  console.log(`[E2E Debug] Ready signal: ${readySignal}`);
-  console.log(`[E2E Debug] Output path: ${outputPath}`);
-  console.log(`[E2E Debug] Timeout: ${timeoutMs}ms`);
-  console.log(`[E2E Debug] Environment: CI=${process.env.CI ? 'true' : 'false'}`);
 
   // Use a separate promise for readiness detection with better error handling
   const readinessPromise = new Promise<void>((resolveReady, rejectReady) => {
@@ -302,7 +287,6 @@ async function attemptProcessStart(
         // Ensure controller.abort is called only once
         if (!signal.aborted) {
             const finalOutput = await readProcessOutput(outputPath);
-            console.error(`[E2E TIMEOUT DEBUG] Final output for ${obfuscatedCommand} before timeout:\n${finalOutput}`);
             controller.abort(`Timeout for ${obfuscatedCommand}: Process did not emit ready signal "${readySignal}" within ${timeoutMs}ms. Output was: ${finalOutput.slice(-1000)}`);
         }
     }, timeoutMs);
@@ -331,26 +315,22 @@ async function attemptProcessStart(
                 // Check if the child process has exited prematurely
                 if (childProcess && childProcess.exitCode !== null && !signal.aborted) {
                     const prematureExitOutput = await readProcessOutput(outputPath);
-                    console.error(`[E2E Debug] Process ${processId} for command ${obfuscatedCommand} exited prematurely with code ${childProcess.exitCode} while waiting for signal "${readySignal}". Output: ${prematureExitOutput.slice(-1000)}`);
                     controller.abort(`Process ${obfuscatedCommand} exited prematurely (code ${childProcess.exitCode}) before emitting ready signal "${readySignal}". Full Output:\n${prematureExitOutput}`);
                     return; // Exit poll loop
                 }
                 
                 // Log first few polls and every 10th poll
                 if (pollCount <= 5 || pollCount % 10 === 0) {
-                    console.log(`[E2E Debug] Poll ${pollCount}: Output length=${output.length}, looking for="${readySignal}"`);
                 }
                 
                 // Check if output has changed
                 if (output.length === lastOutputLength) {
                     consecutiveNoChangeCount++;
                     if (consecutiveNoChangeCount >= maxConsecutiveNoChange && output.length === 0) {
-                        console.log(`[E2E Debug] No output after ${consecutiveNoChangeCount} polls for command ${obfuscatedCommand}, process may have issues or outputPath ${outputPath} is incorrect/empty.`);
                     }
                 } else {
                     consecutiveNoChangeCount = 0;
                     const newOutput = output.slice(lastOutputLength);
-                    console.log(`[E2E Debug] New output (${newOutput.length} chars): ${newOutput.trim().slice(0, 200)}`);
                     lastOutputLength = output.length;
                 }
 
@@ -361,7 +341,6 @@ async function attemptProcessStart(
                     
                     // Debug what we're comparing (less verbose)
                     if (pollCount === 1 || (pollCount === 5)) {
-                        console.log(`[E2E Debug] Looking for normalized signal: "${normalizedSignal}"`);
                     }
                     
                     // Try multiple matching strategies
@@ -378,7 +357,6 @@ async function attemptProcessStart(
                         (readySignal.toLowerCase().includes("presence") && normalizedOutput.includes("presence"));
                     
                     if (signalFound) {
-                        console.log(`[E2E Debug] Ready signal detected: "${readySignal}"`);
                         clearTimeout(overallTimeout);
                         resolveReady();
                         return;
@@ -395,7 +373,6 @@ async function attemptProcessStart(
                     output.includes("error:") ||
                     output.includes("Cannot find module") ||
                     output.includes("SyntaxError")) {
-                    console.log(`[E2E Debug] Error pattern detected in output for ${obfuscatedCommand}`);
                     clearTimeout(overallTimeout);
                     const errorOutput = await readProcessOutput(outputPath);
                     rejectReady(new Error(`Process ${obfuscatedCommand} failed with error pattern in output. Full Output:\n${errorOutput}`));
@@ -406,7 +383,6 @@ async function attemptProcessStart(
             } catch (readError) {
                 // If we can't read the output file yet, that's okay - process might still be starting
                 if (pollCount > 20) { // Give it some time before logging
-                    console.log(`[E2E Debug] Poll ${pollCount}: Cannot read output file yet (${readError})`);
                 }
                 await new Promise(resolve => setTimeout(resolve, pollInterval));
             }
@@ -421,7 +397,6 @@ async function attemptProcessStart(
 
   try {
     // Use a shell invocation so that complex arguments with spaces or quotes are preserved
-    console.log(`[E2E Debug] Spawning shell with command: sh -c '${command}' for outputPath: ${outputPath} (Obfuscated: ${obfuscatedCommand})`);
     childProcess = spawn('sh', ['-c', command], {
       stdio: ['pipe', 'pipe', 'pipe'], // Changed from 'inherit' to ensure we capture all output
       env: childEnv,
@@ -431,9 +406,7 @@ async function attemptProcessStart(
 
     processId = `${childProcess.pid}`;
     
-    console.log(`[E2E Debug] Process spawned with PID: ${processId} for command: ${obfuscatedCommand}`);
     if (!childProcess.pid) {
-      console.error(`[E2E Debug] Failed to start process (no PID): ${obfuscatedCommand}`);
       throw new Error(`Failed to start process: no PID assigned`);
     }
 
@@ -441,43 +414,34 @@ async function attemptProcessStart(
     trackProcess(childProcess.pid);
 
     // Set up output redirection to file with immediate flushing
-    console.log(`[E2E Debug] Attempting to create/append to output file: ${outputPath}`);
     let outputStream: fsSync.WriteStream;
     try {
       // Ensure directory exists (though os.tmpdir() should exist)
       const outputDir = path.dirname(outputPath);
       if (!fsSync.existsSync(outputDir)) {
         fsSync.mkdirSync(outputDir, { recursive: true });
-        console.log(`[E2E Debug] Created directory for output: ${outputDir}`);
       }
       outputStream = fsSync.createWriteStream(outputPath, { flags: 'a' });
-      console.log(`[E2E Debug] Output stream CREATED for ${outputPath}`);
       outputStream.on('error', (err) => {
-        console.error(`[E2E Debug] Error with outputStream for ${outputPath}:`, err);
         // If stream errors, it might be a reason for ENOENT later if file not properly handled
         if (!controller.signal.aborted) {
             controller.abort(`OutputStream error for ${outputPath}: ${err.message}`);
         }
       });
       outputStream.on('open', (fd) => {
-        console.log(`[E2E Debug] Output stream OPENED for ${outputPath} with fd: ${fd}`);
       });
       outputStream.on('finish', () => {
-        console.log(`[E2E Debug] Output stream FINISHED for ${outputPath}`);
       });
       outputStream.on('close', () => {
-        console.log(`[E2E Debug] Output stream CLOSED for ${outputPath}`);
       });
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[E2E Debug] CRITICAL ERROR creating WriteStream for ${outputPath}:`, errorMessage);
         // If we can't create the stream, the process output won't be captured.
         // This will likely lead to readiness timeout or ENOENT later.
         throw new Error(`Failed to create output stream for ${outputPath}: ${errorMessage}`);
     }
     
     const flushOutput = (data: Buffer) => {
-      console.log(`[E2E Debug] Received output for ${processId} (${obfuscatedCommand.slice(0,30)}...): ${data.toString().slice(0, 50).replaceAll('\n', "\\n")}...`);
       outputStream.write(data);
       if (process.env.CI) {
         outputStream.write(''); // Trigger flush
@@ -489,16 +453,12 @@ async function attemptProcessStart(
     
     // Handle process exit early
     childProcess.on('exit', (code, signal) => {
-      console.log(`[E2E Debug] Process ${processId} exited with code=${code}, signal=${signal}`);
       if (outputStream && !outputStream.destroyed) {
         outputStream.end(() => {
-            console.log(`[E2E Debug] outputStream explicitly ended and flushed for ${outputPath} on process exit.`);
         });
       } else {
-        console.log(`[E2E Debug] outputStream for ${outputPath} was already destroyed or null on process exit.`);
       }
       if (code !== null && code !== 0 && code !== 130) { // 130 is SIGINT
-        console.warn(`Process ${processId} exited with non-zero code ${code}, signal: ${signal}`);
       }
     });
 
@@ -508,18 +468,15 @@ async function attemptProcessStart(
       const errorText = data.toString();
       stderrBuffer += errorText;
       if (stderrBuffer.length < 1000) { // Only log first 1KB of stderr
-        console.log(`[E2E Debug] Process ${processId} stderr: ${errorText.slice(0, 200)}`);
       }
     });
     
     // Log if process fails to start
     childProcess.on('spawn', () => {
-      console.log(`[E2E Debug] Process ${processId} (command: ${obfuscatedCommand.slice(0,30)}...) spawn event fired`);
     });
 
     // Handle process errors more explicitly
     childProcess.on('error', (error) => {
-      console.error(`[E2E Debug] Process ${processId} (command: ${obfuscatedCommand.slice(0,30)}...) emitted error event:`, error);
       if (outputStream && !outputStream.destroyed) {
         outputStream.end();
       }
@@ -540,10 +497,8 @@ async function attemptProcessStart(
     return { process: childProcess, processId };
 
   } catch (error) {
-    console.error(`[E2E Debug] Error in attemptProcessStart for command ${obfuscatedCommand}:`, error);
     // Clean up on failure
     if (childProcess && !childProcess.killed) {
-      console.log(`[E2E Debug] Cleaning up failed process ${processId}`);
       childProcess.kill('SIGTERM');
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (!childProcess.killed) {
@@ -563,7 +518,6 @@ export async function readProcessOutput(outputPath: string): Promise<string> {
     return stripAnsi(raw);
   } catch (error) {
     // Log when file read fails, this is important for debugging
-    console.error(`[E2E Test Helper DEBUG] Failed to read process output file ${outputPath}:`, error);
     return '';
   }
 }
@@ -572,7 +526,6 @@ export async function readProcessOutput(outputPath: string): Promise<string> {
  * Force exit function to prevent tests from hanging
  */
 export function forceExit(): void {
-  console.warn("Force exiting test process...");
   process.exit(1); // Exit with non-zero code
 }
 
@@ -583,7 +536,6 @@ export function forceExit(): void {
 export async function cleanupTrackedResources(): Promise<void> {
   // Kill tracked background processes
   for (const [processId, childProcess] of activeProcesses.entries()) {
-    console.log(`Cleaning up background process (ID: ${processId}, PID: ${childProcess.pid})...`);
     await killProcess(childProcess); // Use the existing killProcess utility
     activeProcesses.delete(processId);
   }
@@ -594,13 +546,11 @@ export async function cleanupTrackedResources(): Promise<void> {
   // Delete tracked temporary files
   for (const filePath of tempFiles) {
     try {
-      console.log(`Deleting temporary file: ${filePath}`);
       await fs.unlink(filePath);
       tempFiles.delete(filePath);
   } catch (error) {
        // Log minor error if file already gone
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-         console.warn(`Warning: Error deleting temp file ${filePath}:`, error);
       }
       // Still remove from set even if deletion failed
       tempFiles.delete(filePath);
@@ -613,12 +563,10 @@ export async function cleanupTrackedResources(): Promise<void> {
  */
 export async function killProcess(childProcess: ChildProcess | null): Promise<void> {
   if (!childProcess || childProcess.killed || !childProcess.pid) {
-    console.log(`Process (PID: ${childProcess?.pid || 'N/A'}) already killed or has no PID.`);
     return;
   }
 
   const pid = childProcess.pid;
-  console.log(`Attempting to kill process (PID: ${pid}) gracefully...`);
 
   try {
     // First, try to kill all child processes using system commands
@@ -627,7 +575,6 @@ export async function killProcess(childProcess: ChildProcess | null): Promise<vo
       exec(`pkill -TERM -P ${pid}`, (error) => {
         // Don't worry about errors - process might not have children
         if (error && process.env.E2E_DEBUG) {
-          console.log(`pkill -P ${pid} returned: ${error.message}`);
         }
         resolve();
       });
@@ -639,7 +586,6 @@ export async function killProcess(childProcess: ChildProcess | null): Promise<vo
     // Try graceful termination first with SIGTERM
     try {
       process.kill(pid, 'SIGTERM');
-      console.log(`Sent SIGTERM to process ${pid}.`);
       
       // Wait for graceful exit with a reasonable timeout
       let exited = false;
@@ -658,33 +604,26 @@ export async function killProcess(childProcess: ChildProcess | null): Promise<vo
       }
       
       if (exited) {
-        console.log(`Process ${pid} exited gracefully.`);
         return;
       } else {
-        console.log(`Process ${pid} did not exit gracefully within timeout.`);
       }
     } catch {
       // Process might already be dead
-      console.log(`Process ${pid} is already terminated or does not exist.`);
       return;
     }
 
     // Force kill with SIGKILL as last resort
     try {
-      console.log(`Force killing process ${pid} with SIGKILL...`);
       process.kill(pid, 'SIGKILL');
       
       // Wait a moment for the kill to take effect
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log(`Process ${pid} force killed.`);
     } catch {
       // Process was probably already dead
-      console.log(`Process ${pid} could not be killed (probably already dead).`);
     }
 
   } catch (error) {
-    console.error(`Error killing process ${pid}:`, error);
   }
 }
 
