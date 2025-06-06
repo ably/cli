@@ -46,6 +46,32 @@ export default class TypingKeystroke extends ChatBaseCommand {
   private ablyClient: Ably.Realtime | null = null;
   private typingIntervalId: NodeJS.Timeout | null = null;
   private unsubscribeStatusFn: (() => void) | null = null;
+  private roomId: string | null = null;
+
+  private async properlyCloseAblyClient(): Promise<void> {
+    if (!this.ablyClient || this.ablyClient.connection.state === 'closed') {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('Ably client cleanup timed out after 3 seconds');
+        resolve();
+      }, 3000);
+
+      const onClosed = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      // Listen for both closed and failed states
+      this.ablyClient!.connection.once('closed', onClosed);
+      this.ablyClient!.connection.once('failed', onClosed);
+      
+      // Close the client
+      this.ablyClient!.close();
+    });
+  }
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
@@ -61,13 +87,19 @@ export default class TypingKeystroke extends ChatBaseCommand {
         /* ignore */
       }
     }
-    if (
-      this.ablyClient &&
-      this.ablyClient.connection.state !== "closed" &&
-      this.ablyClient.connection.state !== "failed"
-    ) {
-      this.ablyClient.close();
+
+    // Proper cleanup sequence
+    try {
+      // Release room if we have one
+      if (this.chatClient && this.roomId) {
+        await this.chatClient.rooms.release(this.roomId);
+      }
+    } catch {
+      // Ignore release errors in cleanup
     }
+
+    // Close Ably client properly
+    await this.properlyCloseAblyClient();
 
     return super.finally(err);
   }
@@ -85,6 +117,7 @@ export default class TypingKeystroke extends ChatBaseCommand {
       }
 
       const { roomId } = args;
+      this.roomId = roomId;
 
       // Add listeners for connection state changes
       this.ablyClient.connection.on(
@@ -367,7 +400,6 @@ export default class TypingKeystroke extends ChatBaseCommand {
           }
 
           resolve();
-          process.exit(0); // Explicitly exit to ensure process terminates
         });
       });
     } catch (error) {

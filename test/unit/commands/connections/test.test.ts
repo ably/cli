@@ -29,7 +29,7 @@ class TestableConnectionsTest extends ConnectionsTest {
     return this.mockClient as unknown as Ably.Realtime;
   }
 
-  // Mock console.log to capture output
+  // Mock console.log to capture any direct console output
   public mockConsoleLog = (message?: any, ..._optionalParams: any[]): void => {
     if (message !== undefined) {
       this.consoleOutput.push(message.toString());

@@ -49,3 +49,6 @@ tsconfig.tsbuildinfo
 
 # SpecStory plugin to save chats
 .specstory/
+
+# Claude local settings
+.claude/*.local.json

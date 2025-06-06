@@ -335,7 +335,7 @@ describe('apps:delete command', () => {
       .it('should handle deletion API error');
 
     test
-      .env({}, { clear: true }) // Clear all environment variables including any app config
+      .env({ ABLY_ACCESS_TOKEN: mockAccessToken, ABLY_CLI_CONFIG_DIR: '/tmp/empty-config-dir-that-does-not-exist' }, { clear: true })
       .command(['apps:delete'])
       .catch(error => {
         expect(error.message).to.include('No app ID provided and no current app selected');

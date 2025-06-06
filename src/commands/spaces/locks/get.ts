@@ -37,7 +37,7 @@ export default class SpacesLocksGet extends SpacesBaseCommand {
 
   // Declare class properties
   private realtimeClient: Ably.Realtime | null = null;
-  private spacesClient: Spaces | null = null;
+  private spacesClient: unknown | null = null;
   private space: Space | null = null;
 
   async run(): Promise<void> {

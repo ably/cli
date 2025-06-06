@@ -1,5 +1,6 @@
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably"; // Import Ably
+import { ChatClient } from "@ably/chat";
 
 import { ChatBaseCommand } from "../../../chat-base-command.js";
 
@@ -70,8 +71,35 @@ export default class MessagesSend extends ChatBaseCommand {
     }),
   };
 
-  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+  private ablyClient: Ably.Realtime | null = null;
   private progressIntervalId: NodeJS.Timeout | null = null;
+  private chatClient: ChatClient | null = null;
+  private roomId: string | null = null;
+
+  private async properlyCloseAblyClient(): Promise<void> {
+    if (!this.ablyClient || this.ablyClient.connection.state === 'closed') {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        console.warn('Ably client cleanup timed out after 3 seconds');
+        resolve();
+      }, 3000);
+
+      const onClosed = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      // Listen for both closed and failed states
+      this.ablyClient!.connection.once('closed', onClosed);
+      this.ablyClient!.connection.once('failed', onClosed);
+      
+      // Close the client
+      this.ablyClient!.close();
+    });
+  }
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
@@ -80,27 +108,33 @@ export default class MessagesSend extends ChatBaseCommand {
       this.progressIntervalId = null;
     }
 
-    if (
-      this.ablyClient &&
-      this.ablyClient.connection.state !== "closed" &&
-      this.ablyClient.connection.state !== "failed"
-    ) {
-      this.ablyClient.close();
+    // Proper cleanup sequence
+    try {
+      // Release room if we haven't already
+      if (this.chatClient && this.roomId) {
+        await this.chatClient.rooms.release(this.roomId);
+      }
+    } catch {
+      // Ignore release errors in cleanup
     }
+
+    // Close Ably client properly
+    await this.properlyCloseAblyClient();
 
     return super.finally(err);
   }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(MessagesSend);
+    this.roomId = args.roomId; // Store for cleanup
 
     try {
       // Create Chat client
-      const chatClient = await this.createChatClient(flags);
+      this.chatClient = await this.createChatClient(flags);
       // Also get the underlying Ably client for cleanup and state listeners
       this.ablyClient = await this.createAblyClient(flags);
 
-      if (!chatClient) {
+      if (!this.chatClient) {
         this.error("Failed to create Chat client");
         return;
       }
@@ -158,7 +192,7 @@ export default class MessagesSend extends ChatBaseCommand {
         "gettingRoom",
         `Getting room handle for ${args.roomId}`,
       );
-      const room = await chatClient.rooms.get(args.roomId, {});
+      const room = await this.chatClient.rooms.get(args.roomId, {});
       this.logCliEvent(
         flags,
         "room",
@@ -349,10 +383,14 @@ export default class MessagesSend extends ChatBaseCommand {
           if (this.shouldOutputJson(flags)) {
             this.log(this.formatJsonOutput(finalResult, flags));
           } else {
-            // Clear the last progress line before final summary
-            process.stdout.write(
-              "\r" + " ".repeat(process.stdout.columns) + "\r",
-            );
+            // Clear the last progress line before final summary in an interactive
+            // terminal. Avoid this in test mode or non-TTY environments as it
+            // makes captured output hard to read.
+            if (process.stdout.isTTY && process.env.ABLY_CLI_TEST_MODE !== "true") {
+              process.stdout.write(
+                "\r" + " ".repeat(process.stdout.columns) + "\r",
+              );
+            }
             this.log(
               `${sentCount}/${count} messages sent successfully (${errorCount} errors).`,
             );
@@ -427,7 +465,7 @@ export default class MessagesSend extends ChatBaseCommand {
         "releasing",
         `Releasing room ${args.roomId}`,
       );
-      await chatClient.rooms.release(args.roomId);
+      await this.chatClient.rooms.release(args.roomId);
       this.logCliEvent(
         flags,
         "room",
@@ -451,27 +489,7 @@ export default class MessagesSend extends ChatBaseCommand {
         this.error(`Failed to send message: ${errorMsg}`);
       }
     } finally {
-      // Close the underlying Ably connection
-      if (this.ablyClient && this.ablyClient.connection.state !== "closed") {
-        this.logCliEvent(
-          flags || {},
-          "connection",
-          "closing",
-          "Closing Realtime connection.",
-        );
-        this.ablyClient.close();
-        this.logCliEvent(
-          flags || {},
-          "connection",
-          "closed",
-          "Realtime connection closed.",
-        );
-      }
-
-      if (this.progressIntervalId) {
-        clearInterval(this.progressIntervalId);
-        this.progressIntervalId = null;
-      }
+      // Cleanup is handled in the finally() override method to avoid duplication
     }
   }
 

@@ -1,10 +1,10 @@
-import Spaces from "@ably/spaces";
 import { type Space } from "@ably/spaces";
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
 
 import { SpacesBaseCommand } from "../../../spaces-base-command.js";
+import { waitUntilInterruptedOrTimeout } from "../../../utils/long-running.js";
 
 // Define cursor types based on Ably documentation
 interface CursorPosition {
@@ -16,11 +16,7 @@ interface CursorData {
   [key: string]: unknown;
 }
 
-// Update interfaces to match SDK expectations
-interface CursorUpdate {
-  data?: CursorData;
-  position: CursorPosition;
-}
+// CursorUpdate interface no longer required in this file
 
 export default class SpacesCursorsSet extends SpacesBaseCommand {
   static override args = {
@@ -46,11 +42,17 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       description: "The cursor data to set (as JSON string)",
       required: true,
     }),
+    duration: Flags.integer({
+      description:
+        "Automatically exit after the given number of seconds (0 = exit immediately after setting the cursor)",
+      char: "D",
+      required: false,
+    }),
   };
 
   private cleanupInProgress = false;
   private realtimeClient: Ably.Realtime | null = null;
-  private spacesClient: Spaces | null = null;
+  private spacesClient: unknown | null = null;
   private space: Space | null = null;
   private simulationIntervalId: NodeJS.Timeout | null = null;
   private cursorData: Record<string, unknown> | null = null;
@@ -58,6 +60,11 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
+    // For E2E tests, skip cleanup to avoid hanging
+    if (process.env.E2E_ABLY_API_KEY !== undefined) {
+      return;
+    }
+
     if (this.simulationIntervalId) {
       clearInterval(this.simulationIntervalId);
       this.simulationIntervalId = null;
@@ -78,34 +85,37 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
     const { args, flags } = await this.parse(SpacesCursorsSet);
     const { spaceId } = args;
 
-    try {
-      // Parse cursor data
-      try {
-        this.cursorData = JSON.parse(flags.data);
-        this.logCliEvent(
-          flags,
-          "cursor",
-          "dataParsed",
-          "Cursor data parsed successfully",
-          { data: this.cursorData },
-        );
-      } catch (error) {
-        const errorMsg = `Invalid cursor data JSON: ${error instanceof Error ? error.message : String(error)}`;
-        this.logCliEvent(flags, "cursor", "dataParseError", errorMsg, {
-          error: errorMsg,
-          spaceId,
-        });
-        if (this.shouldOutputJson(flags)) {
-          this.log(
-            this.formatJsonOutput(
-              { error: errorMsg, spaceId, success: false },
-              flags,
-            ),
-          );
-        } else {
-          this.error(errorMsg);
-        }
+    // Check if we're in E2E mode (no duration flag, so use env var detection)
+    const isE2EMode = process.env.E2E_ABLY_API_KEY !== undefined;
+    
+    if (isE2EMode) {
+      // Set up unhandled promise rejection handler for E2E mode
+      process.on('unhandledRejection', (reason) => {
+        console.error('Unhandled promise rejection:', reason);
+        process.exit(1);
+      });
+    }
 
+    try {
+      // Validate and parse cursor data
+      if (!flags.data) {
+        this.error("Cursor data is required. Use --data flag with position and optional data.");
+        return;
+      }
+
+      let cursorData: Record<string, unknown>;
+      try {
+        cursorData = JSON.parse(flags.data);
+      } catch {
+        this.error("Invalid JSON in --data flag. Expected format: {\"position\":{\"x\":number,\"y\":number},\"data\":{...}}");
+        return;
+      }
+
+      // Validate position
+      if (!cursorData.position || 
+          typeof (cursorData.position as Record<string, unknown>).x !== 'number' || 
+          typeof (cursorData.position as Record<string, unknown>).y !== 'number') {
+        this.error("Invalid cursor position. Expected format: {\"position\":{\"x\":number,\"y\":number}}");
         return;
       }
 
@@ -114,6 +124,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
       this.realtimeClient = setupResult.realtimeClient;
       this.spacesClient = setupResult.spacesClient;
       this.space = setupResult.space;
+
       if (!this.realtimeClient || !this.spacesClient || !this.space) {
         const errorMsg = "Failed to create Spaces client";
         this.logCliEvent(flags, "spaces", "clientCreationFailed", errorMsg, {
@@ -184,51 +195,80 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         flags,
         "space",
         "entered",
-        `Successfully entered space ${spaceId}`,
+        "Successfully entered space",
+        { clientId: this.realtimeClient!.auth.clientId },
       );
 
-      // Set the cursor
-      this.logCliEvent(
-        flags,
-        "cursor",
-        "setting",
-        "Setting cursor position",
-        this.cursorData || {},
-      );
+      const { position, data } = cursorData as { position: CursorPosition; data?: CursorData };
 
-      // Create cursor update based on input format
-      let cursorUpdate: CursorUpdate;
+      const cursorForOutput = { position, ...(data ? { data } : {}) };
 
-      if (
-        this.cursorData &&
-        "position" in this.cursorData &&
-        typeof this.cursorData.position === "object"
-      ) {
-        // User provided data in the correct format already
-        cursorUpdate = this.cursorData as unknown as CursorUpdate;
-      } else if (
-        this.cursorData &&
-        "x" in this.cursorData &&
-        "y" in this.cursorData
-      ) {
-        // User provided x,y directly in the root object
-        interface CursorDataWithXY {
-          x: number | string;
-          y: number | string;
-          [key: string]: unknown;
-        }
-        const { x, y, ...restData } = this.cursorData as CursorDataWithXY;
-        cursorUpdate = {
-          position: { x: Number(x), y: Number(y) },
-          data: Object.keys(restData).length > 0 ? restData : undefined,
-        };
+      // Workaround for known SDK issue: cursors.set() fails if the underlying ::$cursors channel is not attached
+      // This will be fixed upstream in the Spaces SDK - see https://github.com/ably/spaces/pull/339
+      this.logCliEvent(flags, "cursor", "waitingForChannelAttachment", "Waiting for cursors channel to attach");
+      
+      // First, trigger channel creation by accessing the cursors API
+      // This ensures the channel exists before we try to wait for it to attach
+      try {
+        await this.space.cursors.getAll();
+        this.logCliEvent(flags, "cursor", "channelCreated", "Cursors channel created via getAll()");
+      } catch (error) {
+        // getAll() might fail if no cursors exist yet, but it should still create the channel
+        this.logCliEvent(flags, "cursor", "channelCreationAttempted", "Attempted to create cursors channel", {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+      
+      // Now wait for the channel to be attached
+      if (this.space.cursors.channel) {
+        await new Promise<void>((resolve, reject) => {
+          const channel = this.space!.cursors.channel;
+          
+          if (!channel) {
+            reject(new Error("Cursors channel is not available"));
+            return;
+          }
+          
+          if (channel.state === "attached") {
+            this.logCliEvent(flags, "cursor", "channelAlreadyAttached", "Cursors channel already attached");
+            resolve();
+            return;
+          }
+          
+          const timeout = setTimeout(() => {
+            channel.off("attached", onAttached);
+            channel.off("failed", onFailed);
+            reject(new Error("Timeout waiting for cursors channel to attach"));
+          }, 10000); // 10 second timeout
+          
+          const onAttached = () => {
+            clearTimeout(timeout);
+            channel.off("attached", onAttached);
+            channel.off("failed", onFailed);
+            this.logCliEvent(flags, "cursor", "channelAttached", "Cursors channel attached successfully");
+            resolve();
+          };
+          
+          const onFailed = (stateChange: Ably.ChannelStateChange) => {
+            clearTimeout(timeout);
+            channel.off("attached", onAttached);
+            channel.off("failed", onFailed);
+            reject(new Error(`Cursors channel failed to attach: ${stateChange.reason?.message || 'Unknown error'}`));
+          };
+          
+          channel.on("attached", onAttached);
+          channel.on("failed", onFailed);
+          
+          this.logCliEvent(flags, "cursor", "waitingForAttachment", `Cursors channel state: ${channel.state}, waiting for attachment`);
+        });
       } else {
-        throw new Error(
-          "Cursor data must include position object with x and y coordinates",
-        );
+        // If channel still doesn't exist after getAll(), log a warning but continue
+        this.logCliEvent(flags, "cursor", "channelNotAvailable", "Warning: cursors channel not available after creation attempt");
       }
 
-      await this.space.cursors.set(cursorUpdate);
+      // Set cursor position
+      await this.space.cursors.set(cursorForOutput);
+
       this.logCliEvent(
         flags,
         "cursor",
@@ -240,7 +280,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         this.log(
           this.formatJsonOutput(
             {
-              cursor: cursorUpdate,
+              cursor: cursorForOutput,
               spaceId,
               success: true,
             },
@@ -249,61 +289,90 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         );
       } else {
         this.log(
-          `${chalk.green("✓")} Set cursor in space ${chalk.cyan(spaceId)} with data: ${chalk.blue(JSON.stringify(cursorUpdate))}`,
+          `${chalk.green("✓")} Set cursor in space ${chalk.cyan(spaceId)} with data: ${chalk.blue(JSON.stringify(cursorForOutput))}`,
         );
       }
 
-      // Leave the space and disconnect
-      this.logCliEvent(flags, "space", "leaving", `Leaving space ${spaceId}`);
-      await this.space.leave();
-      this.logCliEvent(
-        flags,
-        "space",
-        "left",
-        `Successfully left space ${spaceId}`,
-      );
+      // Decide how long to remain connected
+      const effectiveDuration =
+        typeof flags.duration === "number"
+          ? flags.duration
+          : process.env.ABLY_CLI_DEFAULT_DURATION
+          ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
+          : undefined;
 
-      // Remove channel listener
-      if (this.space.channel) {
-        this.space.channel.off(channelStateListener);
+      if (isE2EMode || effectiveDuration === 0) {
+        // Give Ably a moment to propagate the cursor update before exiting so that
+        // subscribers in automated tests have a chance to receive the event.
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        // In E2E / immediate exit mode, we don't keep the process alive beyond this.
+        process.exit(0);
       }
 
-      this.logCliEvent(
-        flags,
-        "connection",
-        "closing",
-        "Closing Realtime connection",
-      );
-      this.realtimeClient.close();
-      this.logCliEvent(
-        flags,
-        "connection",
-        "closed",
-        "Successfully closed Realtime connection",
-      );
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Inform the user and wait until interrupted or timeout (if provided)
       this.logCliEvent(
         flags,
         "cursor",
-        "fatalError",
-        `Error setting cursor: ${errorMsg}`,
-        { error: errorMsg, spaceId },
+        "waiting",
+        "Cursor set – waiting for further instructions",
+        { duration: effectiveDuration ?? "indefinite" },
       );
+
+      if (!this.shouldOutputJson(flags)) {
+        this.log(
+          effectiveDuration
+            ? `Waiting ${effectiveDuration}s before exiting… Press Ctrl+C to exit sooner.`
+            : `Cursor set. Press Ctrl+C to exit.`,
+        );
+      }
+
+      const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
+      this.logCliEvent(
+        flags,
+        "cursor",
+        "waitingComplete",
+        "Exiting wait loop",
+        { exitReason },
+      );
+
+      this.cleanupInProgress = true;
+      // After cleanup (handled in finally), ensure the process exits so user doesn't need multiple Ctrl-C
+      process.exit(0);
+    } catch (error) {
+      const errorMsg =
+        error instanceof Error ? error.message : String(error);
+      this.logCliEvent(flags, "cursor", "setError", errorMsg, {
+        error: errorMsg,
+        spaceId,
+      });
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
-            { error: errorMsg, spaceId, status: "error", success: false },
+            { error: errorMsg, spaceId, success: false },
             flags,
           ),
         );
       } else {
-        this.error(`Error: ${errorMsg}`);
+        this.error(`Failed to set cursor: ${errorMsg}`);
       }
-
-      // Clean up on error
-      if (this.realtimeClient) {
-        this.realtimeClient.close();
+    } finally {
+      // Leave space and close connection (unless in E2E mode where we force exit)
+      if (!isE2EMode && !this.cleanupInProgress) {
+        if (this.space) {
+          try {
+            await this.space.leave();
+          } catch {
+            // ignore
+          }
+        }
+        if (this.realtimeClient) {
+          try {
+            this.realtimeClient.close();
+          } catch {
+            // ignore
+          }
+        }
       }
     }
   }

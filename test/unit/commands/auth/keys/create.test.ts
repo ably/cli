@@ -161,7 +161,7 @@ describe('auth:keys:create command', () => {
       .it('should require name parameter');
 
     test
-      .env({}, { clear: true }) // Clear all environment variables
+      .env({ ABLY_ACCESS_TOKEN: mockAccessToken, ABLY_CLI_CONFIG_DIR: '/tmp/empty-config-dir-that-does-not-exist' }, { clear: true })
       .command(['auth:keys:create', '--name', mockKeyName])
       .catch(error => {
         expect(error.message).to.include('No app specified');

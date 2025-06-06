@@ -33,6 +33,10 @@
 - [x] [feat/terminal-server-improvements] The Web CLI React component persists and re-uses `sessionId`. It exposes the value via `onSessionId`, automatically includes it in reconnects, and—when `resumeOnReload` is enabled—stores it in `sessionStorage` so a full page reload resumes the session.
 - [x] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, connection status indicators per-pane, and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the server
+- [x] For commands that run indefinitely like subscribe, or enter, should we add an optional command line argument that allows them to timeout after X seconds. Then in CI, we can ensure that the default settings (with an ENV var) is say 20 seconds, so that at least we can ensure these commands can never mistakenly wait. Check where `timeout` has been uused in test suites and replace with the appropriate timeout argument (name still to be determined). Whilst CI will have a default timeout for all commands, the tests that rely on this should explicitly set a timeout. In addition, we should update the docs for agents to tell them that commands that run indefinitely like subscribe, enter, have these arguments, and they should be used when running tests, and when running commands locally, prefixing them with `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
+- [ ] Support new endpoint client optiosn when public -> https://github.com/ably/ably-js/pull/1973
+- [ ] For all commands that are long running, where we connect over a realtime client, the CLI should output connection failure events, like disconnected, suspended, failed and then from those states, if they reconnedt, we should output that. 
+- [ ] E2E tests that fail should output the cmd output from the CLI commands run so that it's easier to debug these failures.
 
 ## Server Migration
 
@@ -171,6 +175,22 @@
 - [ ] The text inside the web terminal is now not wrapping, but instead it's scrolling off to the left showing a "<" char to the left of teh line. THis is not what is expected and should wrap to the next line. Need to tweak the bash settings.
 - [ ] One of the Playwright tests is flakey -> https://github.com/mattheworiordan/ably-cli/actions/runs/15327667612/job/43126212502
       `test/e2e/web-cli/prompt-integrity.test.ts:94:3 › Prompt integrity & exit behaviour › Typing `exit` ends session and page refresh starts a NEW session automatically`
+- [ ] Sometimes running commands, especially from tests, I see the Using command shown twice:
+```
+ABLY_API_KEY=$E2E_ABLY_API_KEY bin/run.js rooms presence enter myroom123 --profile-data '{"name":"Test User 2","status":"active"}' --client-id sub2-client
+
+Using: App=Unknown App (xVLyHw) • Key=All access (xVLyHw.-pwh7w)
+
+Using: App=Unknown App (xVLyHw) • Key=All access (xVLyHw.-pwh7w)
+
+Successfully connected to room: myroom123
+✓ Entered room myroom123 as sub2-client
+
+No other users are present in this room
+
+Listening for presence events until terminated. Press Ctrl+C to exit.
+```
+
 
 ## Test coverage
 
