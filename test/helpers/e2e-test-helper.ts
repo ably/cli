@@ -5,10 +5,8 @@ import { promises as fs } from "node:fs";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import Mocha from "mocha";
 import { trackAblyClient, trackProcess, cleanupGlobalProcesses } from "../setup.js";
 import stripAnsi from "strip-ansi";
-const { beforeEach, before, after, afterEach } = Mocha;
 
 // Constants
 export const E2E_API_KEY = process.env.E2E_ABLY_API_KEY;
@@ -238,6 +236,9 @@ export async function runLongRunningBackgroundProcess(
     timeoutMs = process.env.CI ? 25000 : 15000, // Increased default timeout for CI
     retryCount = 1 
   } = options;
+
+  // Track this command execution
+  trackTestCommand(command, outputPath);
 
   let lastError: Error | null = null;
 
@@ -657,6 +658,14 @@ export function skipTestsIfNeeded(suiteDescription: string): void {
 // Global tracking for test output files to display on failure
 const testOutputFiles = new Set<string>();
 
+// Global tracking for commands executed during tests
+const testCommands: Array<{
+  command: string;
+  outputPath?: string;
+  timestamp: string;
+  result?: any;
+}> = [];
+
 /**
  * Register an output file to be displayed if the current test fails
  */
@@ -665,15 +674,28 @@ export function trackTestOutputFile(outputPath: string): void {
 }
 
 /**
+ * Register a command that was executed during the test
+ */
+export function trackTestCommand(command: string, outputPath?: string, result?: any): void {
+  testCommands.push({
+    command: command.replace(/--api-key=[^\s]+/g, '--api-key=***'), // Obfuscate API keys
+    outputPath,
+    timestamp: new Date().toISOString(),
+    result
+  });
+}
+
+/**
  * Apply standard E2E test setup
  * This method should be called inside the describe block
  */
 export function applyE2ETestSetup(): void {
-  // Set test timeout
+  // Set test timeout - increased for complex E2E tests
   beforeEach(function() {
-    this.timeout(30000);
-    // Clear tracked output files for this test
+    this.timeout(120000); // 2 minutes per individual test
+    // Clear tracked output files and commands for this test
     testOutputFiles.clear();
+    testCommands.length = 0;
   });
 
   // Setup signal handler
@@ -721,31 +743,76 @@ export function applyE2ETestSetup(): void {
       // the full stdout/stderr from background commands when a test fails.
       await Promise.all([...testOutputFiles].map(p => waitForFileStability(p)));
 
-      if (testOutputFiles.size === 0) {
-      } else {
+      try {
+        console.error(`\n=== TEST FAILURE DEBUG OUTPUT FOR: ${this.currentTest.title} ===`);
+        console.error(`Commands tracked: ${testCommands.length}, Output files tracked: ${testOutputFiles.size}`);
         
-        for (const filePath of testOutputFiles) {
-          try {
-            // Check if file exists and get stats
-            const fileExists = fsSync.existsSync(filePath);
-            
-            if (!fileExists) {
-              continue;
+        // Display commands that were executed
+        if (testCommands.length > 0) {
+          console.error(`\n--- COMMANDS EXECUTED (${testCommands.length}) ---`);
+          testCommands.forEach((cmd, index) => {
+            console.error(`[${index + 1}] ${cmd.timestamp}: ${cmd.command}`);
+            if (cmd.outputPath) {
+              console.error(`    Output file: ${cmd.outputPath}`);
             }
-            
-            const stats = fsSync.statSync(filePath);
-            
-            if (stats.size === 0) {
-              continue;
+            if (cmd.result) {
+              console.error(`    Exit code: ${cmd.result.exitCode}`);
+              if (cmd.result.stdout) console.error(`    Stdout: ${cmd.result.stdout.slice(0, 200)}${cmd.result.stdout.length > 200 ? '...' : ''}`);
+              if (cmd.result.stderr) console.error(`    Stderr: ${cmd.result.stderr.slice(0, 200)}${cmd.result.stderr.length > 200 ? '...' : ''}`);
             }
-            
-            const content = await readProcessOutput(filePath);
-            if (content.trim()) {
-            } else {
-            }
-          } catch (error) {
-          }
+          });
+        } else {
+          console.error('\n--- NO COMMANDS TRACKED ---');
         }
+
+        if (testOutputFiles.size === 0) {
+          console.error('\n--- NO OUTPUT FILES TRACKED ---');
+        } else {
+          console.error(`\n--- OUTPUT FILES (${testOutputFiles.size}) ---`);
+          
+          for (const filePath of testOutputFiles) {
+            try {
+              // Check if file exists and get stats
+              const fileExists = fsSync.existsSync(filePath);
+              
+              if (!fileExists) {
+                console.error(`\n--- ${filePath} ---`);
+                console.error('FILE DOES NOT EXIST');
+                continue;
+              }
+              
+              const stats = fsSync.statSync(filePath);
+              console.error(`\n--- ${filePath} ---`);
+              console.error(`File size: ${stats.size} bytes`);
+              console.error(`Modified: ${stats.mtime.toISOString()}`);
+              console.error(`Created: ${stats.birthtime.toISOString()}`);
+              
+              if (stats.size === 0) {
+                console.error('FILE IS EMPTY');
+                continue;
+              }
+              
+              const content = await readProcessOutput(filePath);
+              if (content.trim()) {
+                console.error('File contents:');
+                console.error(content);
+              } else {
+                console.error('FILE CONTENT IS EMPTY (after processing)');
+              }
+            } catch (error) {
+              console.error(`\n--- ${filePath} (error reading) ---`);
+              console.error(`Error: ${error}`);
+            }
+          }
+          
+          console.error(`=== END TEST FAILURE DEBUG OUTPUT ===`);
+        }
+      } catch (debugError) {
+        console.error(`\n=== DEBUG OUTPUT ERROR ===`);
+        console.error(`Error in debug output: ${debugError}`);
+        console.error(`testCommands.length: ${testCommands.length}`);
+        console.error(`testOutputFiles.size: ${testOutputFiles.size}`);
+        console.error(`=== END DEBUG OUTPUT ERROR ===`);
       }
       
     }

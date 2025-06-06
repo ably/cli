@@ -2,8 +2,11 @@ import { expect } from "chai";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { applyE2ETestSetup } from "../../helpers/e2e-test-helper.js";
 
 describe("Authentication E2E", function() {
+  // Apply E2E test setup for debug output on failures
+  applyE2ETestSetup();
   let tempConfigDir: string;
   let originalEnv: NodeJS.ProcessEnv;
 

@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import stripAnsi from "strip-ansi";
 import { runCommand } from "../../helpers/command-helpers.js";
+import { applyE2ETestSetup } from "../../helpers/e2e-test-helper.js";
 
 // Helper function to extract JSON from potentially noisy stdout
 // Looks for the last occurrence of { or [ to handle potential prefixes
@@ -47,6 +48,9 @@ if (SHOULD_SKIP_TESTS) {
 } else {
   // These tests check the basic CLI functionality in a real environment
   describe("Basic CLI E2E", function() {
+    // Apply E2E test setup for debug output on failures
+    applyE2ETestSetup();
+    
     // Set a longer timeout for command execution tests
     this.timeout(20000);
 

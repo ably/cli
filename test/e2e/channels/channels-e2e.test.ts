@@ -1,4 +1,4 @@
-import { expect, test } from "@oclif/test";
+import { expect } from "chai";
 import * as Ably from "ably";
 import {
   E2E_API_KEY,
@@ -6,9 +6,10 @@ import {
   getUniqueChannelName,
   createAblyClient,
   publishTestMessage,
-  forceExit,
-  skipTestsIfNeeded
+  skipTestsIfNeeded,
+  applyE2ETestSetup
 } from "../../helpers/e2e-test-helper.js";
+import { runCommand } from "../../helpers/command-helpers.js";
 
 // Helper to fetch channel history
 async function getChannelHistory(channelName: string): Promise<Ably.Message[]> {
@@ -58,15 +59,15 @@ skipTestsIfNeeded('Channel E2E Tests');
 if (!SHOULD_SKIP_E2E) {
   // Regular tests when API key is available
   describe('Channel E2E Tests', function() {
+    // Apply E2E test setup for debug output on failures
+    applyE2ETestSetup();
+    
     // Set up vars for test data
     let historyChannel: string;
     let jsonHistoryChannel: string;
     let listChannel: string;
 
     before(async function() {
-      // Add handler for interrupt signal
-      process.on('SIGINT', forceExit);
-
       try {
         // Set up unique channel names for the tests
         historyChannel = getUniqueChannelName("history");
@@ -83,23 +84,16 @@ if (!SHOULD_SKIP_E2E) {
       }
     });
 
-    after(function() {
-      // Remove interrupt handler
-      process.removeListener('SIGINT', forceExit);
-    });
-
     // Test channels list command with verification
     it('should list channels and verify test channel is included', async function() {
-      // First run the CLI command
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "list"])
-        .it('lists channels with test channel', async (ctx) => {
-          // Verify CLI output
-          expect(ctx.stdout).to.include("Found");
-        });
+      // Run the CLI command
+      const listResult = await runCommand(["channels", "list"], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(listResult.exitCode).to.equal(0);
+      expect(listResult.stdout).to.include("Found");
 
       // Now verify with SDK in a separate step
       const allChannels = await retryUntilSuccess(
@@ -115,18 +109,16 @@ if (!SHOULD_SKIP_E2E) {
     // Test channels list with JSON output and verification
     it('should list channels in JSON format and verify test channel is included', async function() {
       // First run the CLI command
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "list", "--json"])
-        .it('lists channels in JSON format with test channel', async (ctx) => {
-          // Verify CLI output
-          const result = JSON.parse(ctx.stdout);
-          expect(result).to.have.property("success", true);
-          expect(result).to.have.property("channels").that.is.an("array");
-          expect(result).to.have.property("timestamp").that.is.a("string");
-        });
+      const listResult = await runCommand(["channels", "list", "--json"], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(listResult.exitCode).to.equal(0);
+      const result = JSON.parse(listResult.stdout);
+      expect(result).to.have.property("success", true);
+      expect(result).to.have.property("channels").that.is.an("array");
+      expect(result).to.have.property("timestamp").that.is.a("string");
 
       // Now verify with SDK in a separate step
       const allChannels = await retryUntilSuccess(
@@ -144,45 +136,39 @@ if (!SHOULD_SKIP_E2E) {
       const messageData = { data: "E2E Test Message" };
       const uniqueChannel = getUniqueChannelName("cli");
 
-      // First publish the message using the test framework
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "publish", uniqueChannel, JSON.stringify(messageData)])
-        .it('publishes a message to channel', async (ctx) => {
-          // Verify CLI output
-          expect(ctx.stdout).to.contain(`Message published successfully to channel "${uniqueChannel}"`);
-        });
+      // First publish the message
+      const publishResult = await runCommand(["channels", "publish", uniqueChannel, JSON.stringify(messageData)], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(publishResult.exitCode).to.equal(0);
+      expect(publishResult.stdout).to.contain(`Message published successfully to channel "${uniqueChannel}"`);
 
       // Add a delay to ensure message is stored and available in history
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Then check history with the test framework
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "history", uniqueChannel])
-        .it('retrieves published message from history', async (ctx) => {
-          // Verify output contains our message
-          expect(ctx.stdout).to.contain("E2E Test Message");
-        });
+      // Then check history
+      const historyResult = await runCommand(["channels", "history", uniqueChannel], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(historyResult.exitCode).to.equal(0);
+      expect(historyResult.stdout).to.contain("E2E Test Message");
     });
 
     // Test history with verification
     it('should retrieve message history and verify contents', async function() {
       // First run the CLI command
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "history", historyChannel])
-        .it('retrieves history with expected content', async (ctx) => {
-          // Verify CLI output
-          expect(ctx.stdout).to.contain("Found");
-          expect(ctx.stdout).to.contain("E2E History Test");
-        });
+      const historyResult = await runCommand(["channels", "history", historyChannel], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(historyResult.exitCode).to.equal(0);
+      expect(historyResult.stdout).to.contain("Found");
+      expect(historyResult.stdout).to.contain("E2E History Test");
 
       // Now verify with SDK in a separate step outside of Oclif's callback
       const history = await getChannelHistory(historyChannel);
@@ -197,22 +183,20 @@ if (!SHOULD_SKIP_E2E) {
     // Test JSON history with verification
     it('should retrieve message history in JSON format and verify contents', async function() {
       // First run the CLI command
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "history", jsonHistoryChannel, "--json"])
-        .it('retrieves JSON history with expected content', async (ctx) => {
-          // Verify CLI output
-          const result = JSON.parse(ctx.stdout);
-          expect(result).to.have.property("messages").that.is.an("array");
-          expect(result.messages.length).to.be.at.least(1);
+      const historyResult = await runCommand(["channels", "history", jsonHistoryChannel, "--json"], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(historyResult.exitCode).to.equal(0);
+      const result = JSON.parse(historyResult.stdout);
+      expect(result).to.have.property("messages").that.is.an("array");
+      expect(result.messages.length).to.be.at.least(1);
 
-          const testMsg = result.messages.find((msg: any) =>
-            msg.data && typeof msg.data === 'object' && msg.data.text === "JSON History Test"
-          );
-          expect(testMsg).to.exist;
-        });
+      const testMsg = result.messages.find((msg: any) =>
+        msg.data && typeof msg.data === 'object' && msg.data.text === "JSON History Test"
+      );
+      expect(testMsg).to.exist;
 
       // Now verify with SDK in a separate step
       const history = await getChannelHistory(jsonHistoryChannel);
@@ -229,30 +213,26 @@ if (!SHOULD_SKIP_E2E) {
       const messageData = { data: "Batch Message 1" };
       const batchChannel = getUniqueChannelName("batch");
 
-      // First batch publish the message using the test framework
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "batch-publish", "--channels", batchChannel, JSON.stringify(messageData)])
-        .it('batch publishes a message to channel', async (ctx) => {
-          // Verify CLI output
-          expect(ctx.stdout).to.contain("Batch publish successful");
-        });
+      // First batch publish the message
+      const batchPublishResult = await runCommand(["channels", "batch-publish", "--channels", batchChannel, JSON.stringify(messageData)], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(batchPublishResult.exitCode).to.equal(0);
+      expect(batchPublishResult.stdout).to.contain("Batch publish successful");
 
       // Add a delay to ensure message is stored and available in history
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Then check history with the test framework
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "history", batchChannel])
-        .it('retrieves batch published message from history', async (ctx) => {
-          // Verify output contains our message
-          expect(ctx.stdout).to.contain("Batch Message 1");
-        });
+      // Then check history
+      const batchHistoryResult = await runCommand(["channels", "history", batchChannel], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(batchHistoryResult.exitCode).to.equal(0);
+      expect(batchHistoryResult.stdout).to.contain("Batch Message 1");
     });
 
     // Test publishing multiple messages with count and verification
@@ -260,35 +240,31 @@ if (!SHOULD_SKIP_E2E) {
       const expectedMessages = ["Message number 1", "Message number 2", "Message number 3"];
       const countChannel = getUniqueChannelName("count");
 
-      // First publish multiple messages using the test framework
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "publish", countChannel, "Message number {{.Count}}", "--count", "3"])
-        .it('publishes multiple messages to channel', async (ctx) => {
-          // Verify CLI output
-          expect(ctx.stdout).to.contain("Message 1 published successfully");
-          expect(ctx.stdout).to.contain("Message 2 published successfully");
-          expect(ctx.stdout).to.contain("Message 3 published successfully");
-          expect(ctx.stdout).to.contain("3/3 messages published successfully");
-        });
+      // First publish multiple messages
+      const countPublishResult = await runCommand(["channels", "publish", countChannel, "Message number {{.Count}}", "--count", "3"], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(countPublishResult.exitCode).to.equal(0);
+      expect(countPublishResult.stdout).to.contain("Message 1 published successfully");
+      expect(countPublishResult.stdout).to.contain("Message 2 published successfully");
+      expect(countPublishResult.stdout).to.contain("Message 3 published successfully");
+      expect(countPublishResult.stdout).to.contain("3/3 messages published successfully");
 
       // Add a delay to ensure messages are stored and available in history
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Then check history with the test framework
-      await test
-        .timeout(30000)
-        .env({ ABLY_API_KEY: E2E_API_KEY || "" })
-        .stdout()
-        .command(["channels", "history", countChannel])
-        .it('retrieves multiple published messages from history', async (ctx) => {
-          // Verify output contains our messages
-          for (const expectedMsg of expectedMessages) {
-            expect(ctx.stdout).to.contain(expectedMsg);
-          }
-        });
+      // Then check history
+      const countHistoryResult = await runCommand(["channels", "history", countChannel], {
+        env: { ABLY_API_KEY: E2E_API_KEY || "" },
+        timeoutMs: 30000
+      });
+      
+      expect(countHistoryResult.exitCode).to.equal(0);
+      for (const expectedMsg of expectedMessages) {
+        expect(countHistoryResult.stdout).to.contain(expectedMsg);
+      }
     });
   });
 }

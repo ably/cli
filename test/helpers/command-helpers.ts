@@ -1,4 +1,5 @@
 import { CliRunner, startCli, runCliOnce, RunnerOpts } from './cli-runner.js';
+import { trackTestCommand } from './e2e-test-helper.js';
 import * as path from 'node:path';
 
 // Type for current test context
@@ -28,6 +29,10 @@ export async function startSubscribeCommand(
   opts: Partial<RunnerOpts> = {}
 ): Promise<CliRunner> {
   const outfile = getOutputFile('-subscribe');
+  const command = `bin/run.js ${argv.join(' ')}`;
+  
+  // Track this command execution
+  trackTestCommand(command, outfile);
   
   return startCli(argv, outfile, {
     timeoutMs: 30000,
@@ -44,6 +49,10 @@ export async function startPresenceCommand(
   opts: Partial<RunnerOpts> = {}
 ): Promise<CliRunner> {
   const outfile = getOutputFile('-presence');
+  const command = `bin/run.js ${argv.join(' ')}`;
+  
+  // Track this command execution
+  trackTestCommand(command, outfile);
   
   return startCli(argv, outfile, {
     timeoutMs: 30000,
@@ -58,11 +67,17 @@ export async function runCommand(
   argv: string[],
   opts: Partial<RunnerOpts> = {}
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+  const command = `bin/run.js ${argv.join(' ')}`;
+  
   const result = await runCliOnce(argv, {
     timeoutMs: 15000,
     logLabel: 'COMMAND',
     ...opts
   });
+  
+  // Track this command execution with result
+  trackTestCommand(command, undefined, result);
+  
   return result;
 }
 

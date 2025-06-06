@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import { applyE2ETestSetup } from "../../helpers/e2e-test-helper.js";
 import { resolve } from "node:path";
-// import { AblyTestEnvironment } from "test/helpers/ably-test-environment.js"; // Removed as not strictly needed and causing import error
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 
 // Path to the compiled CLI entry point
 const cliPath = resolve(process.cwd(), "bin/run.js");
@@ -13,6 +13,9 @@ const DEBUG_OUTPUT = Boolean(process.env.ABLY_CLI_TEST_SHOW_OUTPUT);
 const DEFAULT_TIMEOUT = 30_000; // 30 seconds
 
 describe("E2E: ably bench publisher and subscriber", function () {
+  // Apply E2E test setup for debug output on failures
+  applyE2ETestSetup();
+  
   this.timeout(DEFAULT_TIMEOUT * 4); // Allow more time for the whole suite (was * 2, then *3, now *4 = 120s)
 
   let testChannel: string;
