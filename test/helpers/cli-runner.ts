@@ -163,6 +163,13 @@ export class CliRunner extends EventTarget {
   private async spawnProcess(): Promise<void> {
     const env = { ...process.env, ...this.opts.env };
     
+    // For E2E tests, ensure proper environment setup
+    if (process.env.E2E_ABLY_API_KEY) {
+      // Running in E2E mode - use real Ably connections
+      delete env.ABLY_CLI_TEST_MODE;
+      env.ABLY_API_KEY = process.env.E2E_ABLY_API_KEY;
+    }
+    
     // Determine if this is a CLI command or shell command
     const isCli = this.cmd.startsWith('ably ') || this.cmd.startsWith('bin/run.js');
     
@@ -170,8 +177,8 @@ export class CliRunner extends EventTarget {
     let spawnArgs: string[];
     
     if (isCli) {
-      // Parse CLI command
-      const parts = this.cmd.split(' ');
+      // Parse CLI command with proper handling of quoted arguments
+      const parts = this.parseCommand(this.cmd);
       if (parts[0] === 'ably') {
         spawnCmd = 'node';
         spawnArgs = ['bin/run.js', ...parts.slice(1)];
@@ -186,7 +193,6 @@ export class CliRunner extends EventTarget {
       spawnArgs = ['-c', this.cmd];
     }
 
-    console.log(`[${this.opts.logLabel}] Starting process: ${spawnCmd} ${spawnArgs.join(' ')}`);
 
     this.process = spawn(spawnCmd, spawnArgs, {
       stdio: 'pipe',
@@ -208,14 +214,12 @@ export class CliRunner extends EventTarget {
     // Set up timeout
     if (this.opts.timeoutMs && this.opts.timeoutMs > 0) {
       this.timeoutHandle = setTimeout(() => {
-        console.warn(`[${this.opts.logLabel}] Process timed out after ${this.opts.timeoutMs}ms, killing`);
         this.kill('SIGKILL');
       }, this.opts.timeoutMs);
     }
 
     // Handle process exit
     this.process.on('exit', (code, signal) => {
-      console.log(`[${this.opts.logLabel}] Process exited with code=${code}, signal=${signal}`);
       this.processExitCode = code;
       
       if (this.timeoutHandle) {
@@ -229,7 +233,6 @@ export class CliRunner extends EventTarget {
     });
 
     this.process.on('error', (error) => {
-      console.error(`[${this.opts.logLabel}] Process error:`, error);
       this.emitEvent('error');
     });
   }
@@ -337,7 +340,6 @@ export class CliRunner extends EventTarget {
         }
 
         if (signalFound) {
-          console.log(`[${this.opts.logLabel}] Ready signal detected: "${matcher}"`);
           resolve();
         } else {
           setTimeout(checkReady, 100);
@@ -363,6 +365,43 @@ export class CliRunner extends EventTarget {
     
     return current;
   }
+
+  private parseCommand(cmd: string): string[] {
+    const parts: string[] = [];
+    let currentArg = '';
+    let inQuotes = false;
+    let quoteChar = '';
+
+    for (let i = 0; i < cmd.length; i++) {
+      const char = cmd[i];
+      
+      if ((char === '"' || char === "'") && !inQuotes) {
+        // Start of quoted string
+        inQuotes = true;
+        quoteChar = char;
+      } else if (char === quoteChar && inQuotes) {
+        // End of quoted string
+        inQuotes = false;
+        quoteChar = '';
+      } else if (char === ' ' && !inQuotes) {
+        // Space outside quotes - end current argument
+        if (currentArg.length > 0) {
+          parts.push(currentArg);
+          currentArg = '';
+        }
+      } else {
+        // Regular character or space inside quotes
+        currentArg += char;
+      }
+    }
+
+    // Add final argument if any
+    if (currentArg.length > 0) {
+      parts.push(currentArg);
+    }
+
+    return parts;
+  }
 }
 
 // Utility functions for common patterns
@@ -371,7 +410,15 @@ export async function startCli(
   outfile: string, 
   opts: RunnerOpts = {}
 ): Promise<CliRunner> {
-  const cmd = `ably ${argv.join(' ')}`;
+  // Properly quote arguments that contain spaces or special characters
+  const quotedArgs = argv.map(arg => {
+    if (arg.includes(' ') || arg.includes('"') || arg.includes("'") || arg.includes('&') || arg.includes('|')) {
+      // Use single quotes to avoid escaping JSON quotes
+      return `'${arg.replaceAll("'", "\\'")}'`;
+    }
+    return arg;
+  });
+  const cmd = `ably ${quotedArgs.join(' ')}`;
   const runner = new CliRunner(cmd, outfile, opts);
   await runner.start();
   
@@ -387,31 +434,38 @@ export async function runCliOnce(
   opts: RunnerOpts = {}
 ): Promise<ProcessResult> {
   const tempFile = `/tmp/cli-runner-${Date.now()}-${Math.random().toString(36).slice(2)}.log`;
-  const runner = new CliRunner(`ably ${argv.join(' ')}`, tempFile, opts);
   
-  try {
-    await runner.start();
-    
-    // Wait for process to complete
-    return new Promise<ProcessResult>((resolve, reject) => {
-      runner.addEventListener('exit', () => {
-        resolve({
-          exitCode: runner.exitCode(),
-          stdout: runner.stdout(),
-          stderr: runner.stderr()
-        });
-      });
-      
-      runner.addEventListener('error', () => {
-        reject(new Error('Process failed'));
-      });
-    });
-  } finally {
-    // Cleanup temp file
-    try {
-      fs.unlinkSync(tempFile);
-    } catch {
-      // Ignore cleanup errors
+  // Import trackTestOutputFile to register the file for potential debugging
+  const { trackTestOutputFile } = await import('../helpers/e2e-test-helper.js');
+  trackTestOutputFile(tempFile);
+  
+  // Properly quote arguments that contain spaces or special characters
+  const quotedArgs = argv.map(arg => {
+    if (arg.includes(' ') || arg.includes('"') || arg.includes("'") || arg.includes('&') || arg.includes('|')) {
+      // Use single quotes to avoid escaping JSON quotes
+      return `'${arg.replaceAll("'", "\\'")}'`;
     }
-  }
+    return arg;
+  });
+  const runner = new CliRunner(`ably ${quotedArgs.join(' ')}`, tempFile, opts);
+  
+  await runner.start();
+  
+  // Wait for process to complete
+  return new Promise<ProcessResult>((resolve, reject) => {
+    runner.addEventListener('exit', () => {
+      const result = {
+        exitCode: runner.exitCode(),
+        stdout: runner.stdout(),
+        stderr: runner.stderr()
+      };
+      resolve(result);
+    });
+    
+    runner.addEventListener('error', () => {
+      reject(new Error('Process failed'));
+    });
+  });
+  // Note: We no longer delete the temp file here - it will be cleaned up by the test framework's afterEach hook
+  // This allows failed tests to access the output files for debugging
 } 

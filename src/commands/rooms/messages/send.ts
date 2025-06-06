@@ -489,23 +489,7 @@ export default class MessagesSend extends ChatBaseCommand {
         this.error(`Failed to send message: ${errorMsg}`);
       }
     } finally {
-      // Proper cleanup sequence
-      try {
-        // Release room if we haven't already
-        if (this.chatClient && this.roomId) {
-          await this.chatClient.rooms.release(this.roomId);
-        }
-      } catch {
-        // Ignore release errors in cleanup
-      }
-
-      // Clear any remaining intervals
-      if (this.progressIntervalId) {
-        clearInterval(this.progressIntervalId);
-        this.progressIntervalId = null;
-      }
-      
-      // Close Ably client properly - this is now handled in finally() override
+      // Cleanup is handled in the finally() override method to avoid duplication
     }
   }
 

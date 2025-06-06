@@ -84,9 +84,13 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
       let profileData: any = undefined;
       if (flags["profile-data"]) {
         try {
-          profileData = JSON.parse(flags["profile-data"]);
+          let trimmed = (flags["profile-data"] as string).trim();
+          if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+            trimmed = trimmed.slice(1, -1);
+          }
+          profileData = JSON.parse(trimmed);
         } catch (error) {
-          const errorMsg = `Invalid JSON in profile-data: ${error instanceof Error ? error.message : String(error)}`;
+          const errorMsg = `Invalid profile-data or data JSON: ${error instanceof Error ? error.message : String(error)}`;
           this.logCliEvent(
             flags,
             "presence",

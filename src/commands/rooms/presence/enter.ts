@@ -83,13 +83,18 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
     this.commandFlags = flags;
     this.roomId = args.roomId;
 
-    const profileDataString = flags["profile-data"] || flags.data;
-    if (profileDataString && profileDataString !== "{}") {
+    const rawProfileData = flags["profile-data"] || flags.data;
+    if (rawProfileData && rawProfileData !== "{}") {
       try {
-        this.profileData = JSON.parse(profileDataString);
+        let trimmed = rawProfileData.trim();
+        // If the string is wrapped in single or double quotes (common when passed through a shell), remove them first.
+        if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+          trimmed = trimmed.slice(1, -1);
+        }
+        this.profileData = JSON.parse(trimmed);
       } catch (error) {
         this.error(`Invalid profile-data or data JSON: ${error instanceof Error ? error.message : String(error)}`);
-        return; 
+        return; // Exit early if JSON is invalid
       }
     }
 

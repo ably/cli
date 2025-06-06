@@ -140,28 +140,40 @@ export default class MessagesSubscribe extends ChatBaseCommand {
     // Close Ably client properly with timeout
     await this.properlyCloseAblyClient();
 
-    return super.finally(err);
+    // Ensure the process does not linger due to any stray async handles
+    await super.finally(err);
+
+    // Force a graceful exit shortly after cleanup to avoid hanging (skip in tests)
+    if (process.env.NODE_ENV !== 'test') {
+      setTimeout(() => {
+        process.exit(0);
+      }, 100);
+    }
   }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(MessagesSubscribe);
     this.roomId = args.roomId; // Store for cleanup
+    this.logCliEvent(flags, "subscribe.run", "start", `Starting rooms messages subscribe for room: ${this.roomId}`);
 
     try {
       // Always show the readiness signal first, before attempting auth
       if (!this.shouldOutputJson(flags)) {
         this.log(`${chalk.dim("Listening for messages. Press Ctrl+C to exit.")}`);
       }
+      this.logCliEvent(flags, "subscribe.run", "initialSignalLogged", "Initial readiness signal logged.");
 
       // Try to create clients, but don't fail if auth fails
       try {
+        this.logCliEvent(flags, "subscribe.auth", "attemptingClientCreation", "Attempting to create Chat and Ably clients.");
         // Create Chat client
         this.chatClient = await this.createChatClient(flags) as ChatClientType;
         // Also get the underlying Ably client for cleanup and state listeners
         this.ablyClient = await this.createAblyClient(flags);
+        this.logCliEvent(flags, "subscribe.auth", "clientCreationSuccess", "Chat and Ably clients created.");
       } catch (authError) {
-        // Auth failed, but we still want to show the signal and wait
-        this.logCliEvent(flags, "initialization", "authFailed", `Authentication failed: ${authError instanceof Error ? authError.message : String(authError)}`);
+        const errorMsg = authError instanceof Error ? authError.message : String(authError);
+        this.logCliEvent(flags, "initialization", "authFailed", `Authentication failed: ${errorMsg}`, { error: errorMsg });
         if (!this.shouldOutputJson(flags)) {
           this.log(`Connected to room: ${this.roomId || args.roomId} (mock)`);
           this.log("Listening for messages");
@@ -242,19 +254,9 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       );
 
       // Get the room
-      this.logCliEvent(
-        flags,
-        "room",
-        "gettingRoom",
-        `Getting room handle for ${this.roomId}`,
-      );
+      this.logCliEvent(flags, "room", "gettingRoom", `Getting room handle for ${this.roomId}`);
       const room = await this.chatClient.rooms.get(this.roomId, {});
-      this.logCliEvent(
-        flags,
-        "room",
-        "gotRoom",
-        `Got room handle for ${this.roomId}`,
-      );
+      this.logCliEvent(flags, "room", "gotRoom", `Got room handle for ${this.roomId}`);
 
       // Setup message handler
       this.logCliEvent(
@@ -317,24 +319,13 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       );
 
       // Subscribe to room status changes
-      this.logCliEvent(
-        flags,
-        "room",
-        "subscribingToStatus",
-        `Subscribing to status changes for room ${this.roomId}`,
-      );
+      this.logCliEvent(flags, "room", "subscribingToStatus", `Subscribing to status changes for room ${this.roomId}`);
       this.unsubscribeStatusFn = room.onStatusChange(
         (statusChange: unknown) => {
-          // Type assertion after we receive it
           const change = statusChange as StatusChange;
-          this.logCliEvent(
-            flags,
-            "room",
-            `status-${change.current}`,
-            `Room status changed to ${change.current}`,
-            { reason: change.reason, roomId: this.roomId },
-          );
+          this.logCliEvent(flags, "room", `status-${change.current}`, `Room status changed to ${change.current}`, { reason: change.reason, roomId: this.roomId });
           if (change.current === "attached") {
+            this.logCliEvent(flags, "room", "statusAttached", "Room status is ATTACHED.");
             if (!this.shouldSuppressOutput(flags)) {
               if (this.shouldOutputJson(flags)) {
                 // Already logged via logCliEvent
@@ -344,6 +335,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
                 );
                 // Output the exact signal that E2E tests expect (without ANSI codes)
                 this.log("Listening for messages");
+                this.logCliEvent(flags, "room", "readySignalLogged", "Final readiness signal 'Listening for messages' logged.");
                 this.log(
                   `${chalk.dim("Press Ctrl+C to exit.")}`,
                 );
@@ -368,13 +360,9 @@ export default class MessagesSubscribe extends ChatBaseCommand {
       );
 
       // Attach to the room
-      this.logCliEvent(
-        flags,
-        "room",
-        "attaching",
-        `Attaching to room ${this.roomId}`,
-      );
+      this.logCliEvent(flags, "room", "attaching", `Attaching to room ${this.roomId}`);
       await room.attach();
+      this.logCliEvent(flags, "room", "attachCallComplete", `room.attach() call complete for ${this.roomId}. Waiting for status change to 'attached'.`);
       // Note: successful attach logged by onStatusChange handler
 
       this.logCliEvent(

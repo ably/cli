@@ -4262,12 +4262,14 @@ Set a cursor with position data in a space
 ```
 USAGE
   $ ably spaces cursors set SPACEID --data <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
-    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  The space ID to set cursor in
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = exit immediately after setting
+                              the cursor)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4450,12 +4452,14 @@ Set your location in a space
 ```
 USAGE
   $ ably spaces locations set SPACEID --location <value> [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to set location in
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = exit immediately after setting
+                              location)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs

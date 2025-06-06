@@ -58,11 +58,12 @@ export async function runCommand(
   argv: string[],
   opts: Partial<RunnerOpts> = {}
 ): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
-  return runCliOnce(argv, {
+  const result = await runCliOnce(argv, {
     timeoutMs: 15000,
     logLabel: 'COMMAND',
     ...opts
   });
+  return result;
 }
 
 // Wait for a specific output pattern in a running command

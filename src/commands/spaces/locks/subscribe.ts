@@ -83,22 +83,27 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesLocksSubscribe);
     const { spaceId } = args;
+    this.logCliEvent(flags, "subscribe.run", "start", `Starting spaces locks subscribe for space: ${spaceId}`);
 
     try {
       // Always show the readiness signal first, before attempting auth
       if (!this.shouldOutputJson(flags)) {
         this.log("Subscribing to lock events");
       }
+      this.logCliEvent(flags, "subscribe.run", "initialSignalLogged", "Initial readiness signal logged.");
 
       // Create Spaces client using setupSpacesClient
+      this.logCliEvent(flags, "subscribe.clientSetup", "attemptingClientCreation", "Attempting to create Spaces and Ably clients.");
       const setupResult = await this.setupSpacesClient(flags, spaceId);
       this.realtimeClient = setupResult.realtimeClient;
       this.spacesClient = setupResult.spacesClient;
       this.space = setupResult.space;
       if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.logCliEvent(flags, "subscribe.clientSetup", "clientCreationFailed", "Client or space setup failed.");
         this.error("Failed to initialize clients or space");
         return;
       }
+      this.logCliEvent(flags, "subscribe.clientSetup", "clientCreationSuccess", "Spaces and Ably clients created.");
 
       // Add listeners for connection state changes
       this.realtimeClient.connection.on(
@@ -252,6 +257,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
           `\n${chalk.dim("Subscribing to lock events. Press Ctrl+C to exit.")}\n`,
         );
       }
+      this.logCliEvent(flags, "lock.subscribe", "readySignalLogged", "Final readiness signal 'Subscribing to lock events' logged.");
 
       // Define the listener function
       this.listener = (lock: Lock) => {
@@ -330,9 +336,7 @@ export default class SpacesLocksSubscribe extends SpacesBaseCommand {
 
     } catch (error) {
       const errorMsg = `Error during execution: ${error instanceof Error ? error.message : String(error)}`;
-      this.logCliEvent(flags, "lock", "executionError", errorMsg, {
-        error: errorMsg,
-      });
+      this.logCliEvent(flags, "lock", "executionError", errorMsg, { error: errorMsg });
       if (!this.shouldOutputJson(flags)) {
         this.log(chalk.red(errorMsg));
       }

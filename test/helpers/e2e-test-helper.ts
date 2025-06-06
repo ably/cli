@@ -211,8 +211,9 @@ export async function runBackgroundProcessAndGetOutput(
             if (code === 0) {
                 resolve({ stdout, stderr, exitCode: code });
             } else {
-                // For non-zero exit codes, reject with more info
-                reject(new Error(`Command failed: ${obfuscatedCommand}\nExit Code: ${code}\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}`));
+                // For non-zero exit codes, provide comprehensive error information
+                const errorMessage = `Command failed: ${obfuscatedCommand}\nExit Code: ${code}\nSTDOUT (${stdout.length} chars):\n${stdout}\nSTDERR (${stderr.length} chars):\n${stderr}`;
+                reject(new Error(errorMessage));
             }
         }, 50); // 50ms delay
       }
@@ -266,6 +267,10 @@ export async function runLongRunningBackgroundProcess(
   throw new Error(`Failed to start process after ${retryCount + 1} attempts. Last error: ${lastError?.message}`);
 }
 
+// Ensure every background process output file is automatically tracked so that, even if
+// an individual test forgets to call `trackTestOutputFile()`, we will still have access
+// to its stdout/stderr when a failure occurs.
+
 async function attemptProcessStart(
   command: string,
   outputPath: string,
@@ -273,11 +278,16 @@ async function attemptProcessStart(
   timeoutMs: number,
   childEnv: NodeJS.ProcessEnv
 ): Promise<{ process: ChildProcess; processId: string }> {
-  const obfuscatedCommand = obfuscateSensitiveData(command);
+  // Automatically register the output file for failure-time diagnostics.  This is idempotent
+  // and adds negligible overhead because the underlying `Set` will ignore duplicates.
+  trackTestOutputFile(outputPath);
+
   let processId: string | null = null;
   let childProcess: ChildProcess | null = null;
   const controller = new AbortController();
   const signal = controller.signal;
+
+  const obfuscatedCommand = obfuscateSensitiveData(command);
 
   // Debug logging for command analysis
 
@@ -287,7 +297,7 @@ async function attemptProcessStart(
         // Ensure controller.abort is called only once
         if (!signal.aborted) {
             const finalOutput = await readProcessOutput(outputPath);
-            controller.abort(`Timeout for ${obfuscatedCommand}: Process did not emit ready signal "${readySignal}" within ${timeoutMs}ms. Output was: ${finalOutput.slice(-1000)}`);
+            controller.abort(`Timeout for ${command}: Process did not emit ready signal "${readySignal}" within ${timeoutMs}ms. Output was: ${finalOutput.slice(-1000)}`);
         }
     }, timeoutMs);
 
@@ -315,7 +325,7 @@ async function attemptProcessStart(
                 // Check if the child process has exited prematurely
                 if (childProcess && childProcess.exitCode !== null && !signal.aborted) {
                     const prematureExitOutput = await readProcessOutput(outputPath);
-                    controller.abort(`Process ${obfuscatedCommand} exited prematurely (code ${childProcess.exitCode}) before emitting ready signal "${readySignal}". Full Output:\n${prematureExitOutput}`);
+                    controller.abort(`Process ${command} exited prematurely (code ${childProcess.exitCode}) before emitting ready signal "${readySignal}". Full Output:\n${prematureExitOutput}`);
                     return; // Exit poll loop
                 }
                 
@@ -375,7 +385,7 @@ async function attemptProcessStart(
                     output.includes("SyntaxError")) {
                     clearTimeout(overallTimeout);
                     const errorOutput = await readProcessOutput(outputPath);
-                    rejectReady(new Error(`Process ${obfuscatedCommand} failed with error pattern in output. Full Output:\n${errorOutput}`));
+                    rejectReady(new Error(`Process ${command} failed with error pattern in output. Full Output:\n${errorOutput}`));
                     return;
                 }
                 
@@ -482,7 +492,7 @@ async function attemptProcessStart(
       }
       // Explicitly reject readinessPromise if process errors out
       if (!signal.aborted) {
-        controller.abort(`Process error for ${obfuscatedCommand}: ${error.message}`);
+        controller.abort(`Process error for ${command}: ${error.message}`);
       }
     });
 
@@ -517,7 +527,9 @@ export async function readProcessOutput(outputPath: string): Promise<string> {
     const raw = await fs.readFile(outputPath, 'utf8');
     return stripAnsi(raw);
   } catch (error) {
-    // Log when file read fails, this is important for debugging
+    // Only log unexpected errors, not ENOENT (file not found) which is expected during polling
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+    }
     return '';
   }
 }
@@ -642,6 +654,16 @@ export function skipTestsIfNeeded(suiteDescription: string): void {
   }
 }
 
+// Global tracking for test output files to display on failure
+const testOutputFiles = new Set<string>();
+
+/**
+ * Register an output file to be displayed if the current test fails
+ */
+export function trackTestOutputFile(outputPath: string): void {
+  testOutputFiles.add(outputPath);
+}
+
 /**
  * Apply standard E2E test setup
  * This method should be called inside the describe block
@@ -650,6 +672,8 @@ export function applyE2ETestSetup(): void {
   // Set test timeout
   beforeEach(function() {
     this.timeout(30000);
+    // Clear tracked output files for this test
+    testOutputFiles.clear();
   });
 
   // Setup signal handler
@@ -664,6 +688,86 @@ export function applyE2ETestSetup(): void {
 
   // Clean up TRACKED resources after each test
   afterEach(async function() {
+    if (this.currentTest?.state === 'failed') {
+      
+      // Ensure any background processes are fully terminated so that their stdio
+      // streams are flushed to disk before we read the corresponding files.
+      await killActiveProcessesForDebug();
+
+      // Ensure that any buffered writes from background processes have been flushed to the
+      // tracked output files before we read them.  We poll each file until the size is
+      // stable (or until a short timeout is reached) so that late writes that occur right
+      // after a child-process exit are not missed in the diagnostic output.
+      const waitForFileStability = async (filePath: string, timeoutMs = 750): Promise<void> => {
+        const start = Date.now();
+        let previousSize = -1;
+        for (;;) {
+          try {
+            const { size } = fsSync.statSync(filePath);
+            if (size === previousSize) {
+              return; // size is stable – we assume all data has been flushed
+            }
+            previousSize = size;
+          } catch {
+            // ignore – file may not exist yet
+          }
+          if (Date.now() - start > timeoutMs) return; // give up after timeout
+          await new Promise(r => setTimeout(r, 50));
+        }
+      };
+
+      // Wait for stability on all files in parallel – this only adds a very small
+      // delay (sub-second) but dramatically increases the chance that we capture
+      // the full stdout/stderr from background commands when a test fails.
+      await Promise.all([...testOutputFiles].map(p => waitForFileStability(p)));
+
+      if (testOutputFiles.size === 0) {
+      } else {
+        
+        for (const filePath of testOutputFiles) {
+          try {
+            // Check if file exists and get stats
+            const fileExists = fsSync.existsSync(filePath);
+            
+            if (!fileExists) {
+              continue;
+            }
+            
+            const stats = fsSync.statSync(filePath);
+            
+            if (stats.size === 0) {
+              continue;
+            }
+            
+            const content = await readProcessOutput(filePath);
+            if (content.trim()) {
+            } else {
+            }
+          } catch (error) {
+          }
+        }
+      }
+      
+    }
+    
+    // Clear tracked files for next test
+    testOutputFiles.clear();
+    
+    // Perform normal cleanup
     await cleanupTrackedResources();
   });
+}
+
+// Kill all tracked child-processes *without* touching temporary output files.  This is
+// useful in the failure-diagnostics path because we must ensure every stdout/stderr
+// writer has exited (and flushed) before we attempt to read the captured files.
+async function killActiveProcessesForDebug(): Promise<void> {
+  for (const [processId, childProcess] of activeProcesses.entries()) {
+    try {
+      await killProcess(childProcess);
+    } catch {
+      /* ignore – best-effort */
+    }
+    activeProcesses.delete(processId);
+  }
 }

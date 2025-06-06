@@ -124,22 +124,27 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(SpacesLocationsSubscribe);
     const { spaceId } = args;
+    this.logCliEvent(flags, "subscribe.run", "start", `Starting spaces locations subscribe for space: ${spaceId}`);
 
     try {
       // Always show the readiness signal first, before attempting auth
       if (!this.shouldOutputJson(flags)) {
         this.log("Subscribing to location updates");
       }
+      this.logCliEvent(flags, "subscribe.run", "initialSignalLogged", "Initial readiness signal logged.");
 
       // Create Spaces client using setupSpacesClient
+      this.logCliEvent(flags, "subscribe.clientSetup", "attemptingClientCreation", "Attempting to create Spaces and Ably clients.");
       const setupResult = await this.setupSpacesClient(flags, spaceId);
       this.realtimeClient = setupResult.realtimeClient;
       this.spacesClient = setupResult.spacesClient;
       this.space = setupResult.space;
       if (!this.realtimeClient || !this.spacesClient || !this.space) {
+        this.logCliEvent(flags, "subscribe.clientSetup", "clientCreationFailed", "Client or space setup failed.");
         this.error("Failed to initialize clients or space");
         return;
       }
+      this.logCliEvent(flags, "subscribe.clientSetup", "clientCreationSuccess", "Spaces and Ably clients created.");
 
       // Add listeners for connection state changes
       this.realtimeClient.connection.on(
@@ -340,6 +345,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
           `\n${chalk.dim("Subscribing to location updates. Press Ctrl+C to exit.")}\n`,
         );
       }
+      this.logCliEvent(flags, "location.subscribe", "readySignalLogged", "Final readiness signal 'Subscribing to location updates' logged.");
 
       try {
         // Define the location update handler
@@ -467,13 +473,7 @@ export default class SpacesLocationsSubscribe extends SpacesBaseCommand {
 
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      this.logCliEvent(
-        flags,
-        "location",
-        "fatalError",
-        `Failed to subscribe to location updates: ${errorMsg}`,
-        { error: errorMsg, spaceId },
-      );
+      this.logCliEvent(flags, "location", "fatalError", `Failed to subscribe to location updates: ${errorMsg}`, { error: errorMsg, spaceId });
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
