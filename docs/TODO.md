@@ -42,6 +42,7 @@
   - Support for `ABLY_CLI_DEFAULT_DURATION` environment variable
   - All unit tests pass for the timeout and cleanup functionality
 - [ ] Support new endpoint client optiosn when public -> https://github.com/ably/ably-js/pull/1973
+- [ ] For all commands that are long running, where we connect over a realtime client, the CLI should output connection failure events, like disconnected, suspended, failed and then from those states, if they reconnedt, we should output that. 
 - [ ] E2E tests that fail should output the cmd output from the CLI commands run so that it's easier to debug these failures.
 
 ## Server Migration
