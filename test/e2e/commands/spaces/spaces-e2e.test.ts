@@ -311,7 +311,7 @@ describe('Spaces E2E Tests', function() {
             `bin/run.js spaces cursors subscribe ${testSpaceId} --client-id ${client1Id} --duration 20`,
             outputPath,
             { 
-              readySignal: "Entered space:", 
+              readySignal: "Subscribing to cursor movements", 
               timeoutMs: 60000, // Increased timeout significantly
               retryCount: 3 
             }
