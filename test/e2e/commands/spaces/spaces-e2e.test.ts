@@ -1,6 +1,5 @@
 import { expect } from "@oclif/test";
 import {
-  E2E_API_KEY,
   SHOULD_SKIP_E2E,
   getUniqueChannelName,
   getUniqueClientId,
@@ -54,14 +53,7 @@ describe('Spaces E2E Tests', function() {
     await cleanupTrackedResources();
   });
 
-  // Only run interactive tests if we have a working API key
   describe('Members presence functionality', function() {
-    before(function() {
-      if (!E2E_API_KEY || E2E_API_KEY.includes('fake')) {
-        this.skip();
-      }
-    });
-
     it('should allow two connections where one person entering is visible to the other', async function() {
         let membersProcess: ChildProcess | null = null;
         let outputPath: string = '';
@@ -528,13 +520,7 @@ describe('Spaces E2E Tests', function() {
       });
     });
     
-    describe('Command Structure Tests (No Real API Key)', function() {
-      before(function() {
-        if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
-          this.skip();
-        }
-      });
-
+    describe('Command Structure Tests', function() {
       it('should have properly structured spaces member commands', async function() {
         // Test help command to ensure command structure exists
         const helpResult = await runBackgroundProcessAndGetOutput(
