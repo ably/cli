@@ -17,7 +17,7 @@ import {
   testOutputFiles,
   testCommands,
   displayTestFailureDebugOutput
-} from "../../helpers/e2e-test-helper.js";
+} from "../../../helpers/e2e-test-helper.js";
 import { ChildProcess } from "node:child_process";
 
 
@@ -362,6 +362,16 @@ describe('Spaces E2E Tests', function() {
           }
 
           expect(cursorUpdateReceived, "Client1 should receive cursor update from client2").to.be.true;
+
+          // Test getAll functionality 
+          const getAllResult = await runBackgroundProcessAndGetOutput(
+            `bin/run.js spaces cursors get-all ${testSpaceId} --client-id ${client1Id}`,
+            15000
+          );
+
+          expect(getAllResult.exitCode, `getAll should succeed. Exit code: ${getAllResult.exitCode}, stdout: ${getAllResult.stdout}, stderr: ${getAllResult.stderr}`).to.equal(0);
+          expect(getAllResult.stdout).to.contain(client2Id);
+          expect(getAllResult.stdout).to.contain("TestUser2");
 
         } catch (error) {
           throw error;
