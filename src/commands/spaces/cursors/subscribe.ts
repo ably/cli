@@ -141,10 +141,6 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
         "gettingSpace",
         `Getting space: ${spaceId}...`,
       );
-      if (!this.shouldOutputJson(flags)) {
-        const tmpClientId = this.realtimeClient!.auth.clientId ?? "unknown-client";
-        this.log(`Connecting to space: ${chalk.cyan(spaceId)} with clientId: ${chalk.blue(tmpClientId)}...`);
-      }
 
       this.logCliEvent(
         flags,
@@ -163,9 +159,6 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
         "entered",
         `Entered space ${spaceId} with clientId ${clientId}`,
       );
-      if (!this.shouldOutputJson(flags)) {
-        this.log(`${chalk.green("Entered space:")} ${chalk.cyan(spaceId)} with clientId: ${chalk.blue(clientId)}`);
-      }
 
       // Subscribe to cursor updates
       this.logCliEvent(
