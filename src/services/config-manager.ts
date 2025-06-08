@@ -78,12 +78,19 @@ export class ConfigManager {
   // Get API key for current app or specific app ID
   public getApiKey(appId?: string): string | undefined {
     const currentAccount = this.getCurrentAccount();
-    if (!currentAccount || !currentAccount.apps) return undefined;
+    if (!currentAccount || !currentAccount.apps) {
+      // Fallback to environment variable if no config available
+      return process.env.ABLY_API_KEY;
+    }
 
     const targetAppId = appId || this.getCurrentAppId();
-    if (!targetAppId) return undefined;
+    if (!targetAppId) {
+      // Fallback to environment variable if no current app
+      return process.env.ABLY_API_KEY;
+    }
 
-    return currentAccount.apps[targetAppId]?.apiKey;
+    // Return configured API key or fallback to environment variable
+    return currentAccount.apps[targetAppId]?.apiKey || process.env.ABLY_API_KEY;
   }
 
   // Get app name for specific app ID

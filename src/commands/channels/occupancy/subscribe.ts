@@ -1,71 +1,82 @@
-import { Args } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
 
 import { AblyBaseCommand } from "../../../base-command.js";
+import { BaseFlags } from "../../../types/cli.js";
+import { waitUntilInterruptedOrTimeout } from "../../../utils/long-running.js";
 
 export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
-  static args = {
+  static override args = {
     channel: Args.string({
-      description: "Channel name to subscribe to occupancy for",
+      description: "Channel name to subscribe to occupancy events",
       required: true,
     }),
   };
 
-  static description = "Subscribe to real-time occupancy metrics for a channel";
+  static override description =
+    "Subscribe to occupancy events on a channel";
 
-  static examples = [
+  static override examples = [
     "$ ably channels occupancy subscribe my-channel",
+    '$ ably channels occupancy subscribe my-channel --api-key "YOUR_API_KEY"',
+    '$ ably channels occupancy subscribe my-channel --token "YOUR_ABLY_TOKEN"',
     "$ ably channels occupancy subscribe my-channel --json",
-    "$ ably channels occupancy subscribe --pretty-json my-channel",
+    "$ ably channels occupancy subscribe my-channel --pretty-json",
+    "$ ably channels occupancy subscribe my-channel --duration 30",
   ];
 
-  static flags = {
+  static override flags = {
     ...AblyBaseCommand.globalFlags,
+    duration: Flags.integer({
+      description: "Automatically exit after the given number of seconds (0 = run indefinitely)",
+      char: "D",
+      required: false,
+    }),
   };
 
+  private cleanupInProgress = false;
   private client: Ably.Realtime | null = null;
+
+  private async properlyCloseAblyClient(): Promise<void> {
+    if (!this.client || this.client.connection.state === 'closed' || this.client.connection.state === 'failed') {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve();
+      }, 2000);
+
+      const onClosedOrFailed = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      this.client!.connection.once('closed', onClosedOrFailed);
+      this.client!.connection.once('failed', onClosedOrFailed);
+      this.client!.close();
+    });
+  }
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
-    if (
-      this.client &&
-      this.client.connection.state !== "closed" && // Check state before closing to avoid errors if already closed
-      this.client.connection.state !== "failed"
-    ) {
-      this.client.close();
-    }
-
+    await this.properlyCloseAblyClient();
     return super.finally(err);
   }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsOccupancySubscribe);
-
-    const channelName = args.channel;
+    let channel: Ably.RealtimeChannel | null = null;
 
     try {
-      this.logCliEvent(
-        flags,
-        "subscribe",
-        "connecting",
-        "Connecting to Ably...",
-      );
-
-      // Create the Ably client
       this.client = await this.createAblyClient(flags);
       if (!this.client) return;
 
-      const { client } = this; // local const
+      const client = this.client;
+      const channelName = args.channel;
 
-      // Get the channel with occupancy option enabled
-      const channelOptions = {
-        params: {
-          occupancy: "metrics", // Enable occupancy events
-        },
-      };
-
-      const channel = client.channels.get(channelName, channelOptions);
+      channel = client.channels.get(channelName);
 
       // Setup connection state change handler
       client.connection.on((stateChange: Ably.ConnectionStateChange) => {
@@ -80,39 +91,30 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
           switch (stateChange.current) {
             case "connected": {
               this.log("Successfully connected to Ably");
-              this.log(
-                `Subscribing to occupancy events for channel '${channelName}'...`,
-              );
-
               break;
             }
-
             case "disconnected": {
               this.log("Disconnected from Ably");
-
               break;
             }
-
             case "failed": {
               this.error(
                 `Connection failed: ${stateChange.reason?.message || "Unknown error"}`,
               );
-
               break;
             }
-            // No default
           }
         }
       });
 
-      // Listen to channel state changes
+      // Setup channel state change handler
       channel.on((stateChange: Ably.ChannelStateChange) => {
         this.logCliEvent(
           flags,
           "channel",
           stateChange.current,
           `Channel '${channelName}' state changed to ${stateChange.current}`,
-          { channel: channelName, reason: stateChange.reason },
+          { reason: stateChange.reason },
         );
         if (!this.shouldOutputJson(flags)) {
           switch (stateChange.current) {
@@ -120,217 +122,108 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
               this.log(
                 `${chalk.green("✓")} Successfully attached to channel: ${chalk.cyan(channelName)}`,
               );
-
               break;
             }
-
             case "failed": {
               this.log(
                 `${chalk.red("✗")} Failed to attach to channel ${chalk.cyan(channelName)}: ${stateChange.reason?.message || "Unknown error"}`,
               );
-
               break;
             }
-
             case "detached": {
               this.log(
-                `${chalk.yellow("!")} Detached from channel: ${chalk.cyan(channelName)} ${stateChange.reason ? `(Reason: ${stateChange.reason.message})` : ""}`,
+                `${chalk.yellow("!")} Detached from channel: ${chalk.cyan(channelName)}`,
               );
-
               break;
             }
-            // No default
           }
         }
       });
 
+      // Subscribe to occupancy events using internal occupancy events
+      const occupancyEventName = "[meta]occupancy";
       this.logCliEvent(
         flags,
-        "subscribe",
-        "listening",
-        "Listening for occupancy updates. Press Ctrl+C to exit.",
+        "occupancy",
+        "subscribing",
+        `Subscribing to occupancy events on channel: ${channelName}`,
+        { channel: channelName },
       );
+
       if (!this.shouldOutputJson(flags)) {
-        this.log("Listening for occupancy updates. Press Ctrl+C to exit.");
+        this.log(
+          `${chalk.green("Subscribing to occupancy events on channel:")} ${chalk.cyan(channelName)}`,
+        );
       }
 
-      // Subscribe to occupancy events
-      channel.subscribe("[meta]occupancy", (message: Ably.Message) => {
+      channel.subscribe(occupancyEventName, (message: Ably.Message) => {
         const timestamp = message.timestamp
           ? new Date(message.timestamp).toISOString()
           : new Date().toISOString();
-
-        // Extract occupancy metrics from the message
-        const occupancyMetrics = message.data?.metrics;
-
-        if (!occupancyMetrics) {
-          const errorMsg = "Received occupancy update but no metrics available";
-          this.logCliEvent(flags, "subscribe", "metricsUnavailable", errorMsg, {
-            channel: channelName,
-            timestamp,
-          });
-          if (this.shouldOutputJson(flags)) {
-            this.log(
-              this.formatJsonOutput(
-                {
-                  channel: channelName,
-                  error: errorMsg,
-                  success: false,
-                  timestamp,
-                },
-                flags,
-              ),
-            );
-          } else {
-            this.log(`[${timestamp}] ${errorMsg}`);
-          }
-
-          return;
-        }
-
-        const occupancyEvent = {
+        const event = {
           channel: channelName,
-          metrics: occupancyMetrics,
+          event: occupancyEventName,
+          data: message.data,
           timestamp,
         };
         this.logCliEvent(
           flags,
-          "subscribe",
+          "occupancy",
           "occupancyUpdate",
-          "Received occupancy update",
-          occupancyEvent,
+          `Occupancy update received for channel ${channelName}`,
+          event,
         );
 
-        // Output the occupancy metrics based on format
         if (this.shouldOutputJson(flags)) {
-          this.log(
-            this.formatJsonOutput({ success: true, ...occupancyEvent }, flags),
-          );
+          this.log(this.formatJsonOutput(event, flags));
         } else {
           this.log(
-            `[${timestamp}] Occupancy update for channel '${channelName}'`,
+            `${chalk.gray(`[${timestamp}]`)} ${chalk.cyan(`Channel: ${channelName}`)} | ${chalk.yellow("Occupancy Update")}`,
           );
-          this.log(`  Connections: ${occupancyMetrics.connections ?? 0}`);
-          this.log(`  Publishers: ${occupancyMetrics.publishers ?? 0}`);
-          this.log(`  Subscribers: ${occupancyMetrics.subscribers ?? 0}`);
 
-          if (occupancyMetrics.presenceConnections !== undefined) {
-            this.log(
-              `  Presence Connections: ${occupancyMetrics.presenceConnections}`,
-            );
-          }
-
-          if (occupancyMetrics.presenceMembers !== undefined) {
-            this.log(`  Presence Members: ${occupancyMetrics.presenceMembers}`);
-          }
-
-          if (occupancyMetrics.presenceSubscribers !== undefined) {
-            this.log(
-              `  Presence Subscribers: ${occupancyMetrics.presenceSubscribers}`,
-            );
+          if (message.data !== null && message.data !== undefined) {
+            this.log(`${chalk.green("Occupancy Data:")} ${JSON.stringify(message.data, null, 2)}`);
           }
 
           this.log(""); // Empty line for better readability
         }
       });
+
       this.logCliEvent(
         flags,
-        "subscribe",
-        "subscribedToOccupancy",
-        `Subscribed to [meta]occupancy on channel ${channelName}`,
-        { channel: channelName },
+        "occupancy",
+        "listening",
+        "Listening for occupancy events. Press Ctrl+C to exit.",
       );
+      if (!this.shouldOutputJson(flags)) {
+        this.log("Listening for occupancy events. Press Ctrl+C to exit.");
+      }
 
-      // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
-        const cleanup = () => {
-          this.logCliEvent(
-            flags,
-            "subscribe",
-            "cleanupInitiated",
-            "Cleanup initiated (Ctrl+C pressed)",
-          );
-          if (!this.shouldOutputJson(flags)) {
-            this.log("\nUnsubscribing and closing connection...");
-          }
+      // Wait until the user interrupts or the optional duration elapses
+      const effectiveDuration =
+        typeof flags.duration === "number" && flags.duration > 0
+          ? flags.duration
+          : process.env.ABLY_CLI_DEFAULT_DURATION
+          ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
+          : undefined;
 
-          this.logCliEvent(
-            flags,
-            "subscribe",
-            "unsubscribingOccupancy",
-            `Unsubscribing from [meta]occupancy on ${channelName}`,
-            { channel: channelName },
-          );
-          try {
-            channel.unsubscribe(); // Unsubscribe from all listeners on the channel
-            this.logCliEvent(
-              flags,
-              "subscribe",
-              "unsubscribedOccupancy",
-              `Unsubscribed from [meta]occupancy on ${channelName}`,
-              { channel: channelName },
-            );
-          } catch (error) {
-            this.logCliEvent(
-              flags,
-              "subscribe",
-              "unsubscribeError",
-              `Error unsubscribing from ${channelName}: ${error instanceof Error ? error.message : String(error)}`,
-              {
-                channel: channelName,
-                error: error instanceof Error ? error.message : String(error),
-              },
-            );
-          }
+      const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
+      this.logCliEvent(flags, "occupancy", "runComplete", "Exiting wait loop", { exitReason });
+      this.cleanupInProgress = exitReason === "signal";
 
-          if (client) {
-            client.connection.once("closed", () => {
-              this.logCliEvent(
-                flags,
-                "connection",
-                "closed",
-                "Connection closed gracefully.",
-              );
-              if (!this.shouldOutputJson(flags)) {
-                this.log("Connection closed");
-              }
-
-              resolve();
-            });
-            this.logCliEvent(
-              flags,
-              "connection",
-              "closing",
-              "Closing Ably connection.",
-            );
-            client.close();
-          } else {
-            this.logCliEvent(
-              flags,
-              "subscribe",
-              "noClientToClose",
-              "No active client connection to close.",
-            );
-            resolve();
-          }
-        };
-
-        process.on("SIGINT", cleanup);
-        process.on("SIGTERM", cleanup);
-      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logCliEvent(
         flags,
-        "subscribe",
+        "occupancy",
         "fatalError",
         `Error during occupancy subscription: ${errorMsg}`,
-        { channel: channelName, error: errorMsg },
+        { channel: args.channel, error: errorMsg },
       );
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
-            { channel: channelName, error: errorMsg, success: false },
+            { channel: args.channel, error: errorMsg, success: false },
             flags,
           ),
         );
@@ -338,16 +231,44 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
         this.error(`Error: ${errorMsg}`);
       }
     } finally {
-      // Ensure client is closed even if cleanup promise didn't resolve
-      if (this.client && this.client.connection.state !== "closed") {
-        this.logCliEvent(
-          flags || {},
-          "connection",
-          "finalCloseAttempt",
-          "Ensuring connection is closed in finally block.",
-        );
-        this.client.close();
+      // Wrap all cleanup in a timeout to prevent hanging
+      await Promise.race([
+        this.performCleanup(flags || {}, channel),
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            this.logCliEvent(flags || {}, "occupancy", "cleanupTimeout", "Cleanup timed out after 5s, forcing completion");
+            resolve();
+          }, 5000);
+        })
+      ]);
+
+      if (!this.shouldOutputJson(flags || {})) {
+        if (this.cleanupInProgress) {
+          this.log(chalk.green("Graceful shutdown complete (user interrupt)."));
+        } else {
+          this.log(chalk.green("Duration elapsed – command finished cleanly."));
+        }
       }
     }
+  }
+
+  private async performCleanup(flags: BaseFlags, channel: Ably.RealtimeChannel | null): Promise<void> {
+    // Unsubscribe from occupancy events with timeout
+    if (channel) {
+      try {
+        await Promise.race([
+          Promise.resolve(channel.unsubscribe("[meta]occupancy")),
+          new Promise<void>((resolve) => setTimeout(resolve, 1000))
+        ]);
+        this.logCliEvent(flags, "occupancy", "unsubscribedOccupancy", "Unsubscribed from occupancy events");
+      } catch (error) {
+        this.logCliEvent(flags, "occupancy", "unsubscribeError", `Error unsubscribing from occupancy: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Close Ably client (already has internal timeout)
+    this.logCliEvent(flags, "connection", "closingClientFinally", "Closing Ably client.");
+    await this.properlyCloseAblyClient();
+    this.logCliEvent(flags, "connection", "clientClosedFinally", "Ably client close attempt finished.");
   }
 }

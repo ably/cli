@@ -107,7 +107,7 @@ See [MCP Server section](#mcp-server) for more details on how to use the MCP Ser
 * [`ably channels occupancy get CHANNEL`](#ably-channels-occupancy-get-channel)
 * [`ably channels occupancy subscribe CHANNEL`](#ably-channels-occupancy-subscribe-channel)
 * [`ably channels presence`](#ably-channels-presence)
-* [`ably channels presence enter CHANNEL`](#ably-channels-presence-enter-channel)
+* [`ably channels presence enter CHANNELNAME`](#ably-channels-presence-enter-channelname)
 * [`ably channels presence subscribe CHANNEL`](#ably-channels-presence-subscribe-channel)
 * [`ably channels publish CHANNEL MESSAGE`](#ably-channels-publish-channel-message)
 * [`ably channels subscribe CHANNELS`](#ably-channels-subscribe-channels)
@@ -757,7 +757,7 @@ Delete an app
 ```
 USAGE
   $ ably apps delete [ID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f] [--app <value>]
 
 ARGUMENTS
   ID  App ID to delete (uses current app if not specified)
@@ -767,6 +767,7 @@ FLAGS
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
+      --app=<value>           App ID to delete (overrides argument and current app)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --env=<value>           Override the environment for all product API calls
@@ -782,6 +783,8 @@ EXAMPLES
   $ ably apps delete
 
   $ ably apps delete app-id
+
+  $ ably apps delete --app app-id
 
   $ ably apps delete app-id --access-token "YOUR_ACCESS_TOKEN"
 
@@ -1944,17 +1947,18 @@ _See code: [src/commands/channels/occupancy/get.ts](https://github.com/ably/cli/
 
 ## `ably channels occupancy subscribe CHANNEL`
 
-Subscribe to real-time occupancy metrics for a channel
+Subscribe to occupancy events on a channel
 
 ```
 USAGE
   $ ably channels occupancy subscribe CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
-  CHANNEL  Channel name to subscribe to occupancy for
+  CHANNEL  Channel name to subscribe to occupancy events
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -1967,14 +1971,20 @@ FLAGS
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Subscribe to real-time occupancy metrics for a channel
+  Subscribe to occupancy events on a channel
 
 EXAMPLES
   $ ably channels occupancy subscribe my-channel
 
+  $ ably channels occupancy subscribe my-channel --api-key "YOUR_API_KEY"
+
+  $ ably channels occupancy subscribe my-channel --token "YOUR_ABLY_TOKEN"
+
   $ ably channels occupancy subscribe my-channel --json
 
-  $ ably channels occupancy subscribe --pretty-json my-channel
+  $ ably channels occupancy subscribe my-channel --pretty-json
+
+  $ ably channels occupancy subscribe my-channel --duration 30
 ```
 
 _See code: [src/commands/channels/occupancy/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/channels/occupancy/subscribe.ts)_
@@ -1998,41 +2008,49 @@ EXAMPLES
 
 _See code: [src/commands/channels/presence.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/channels/presence.ts)_
 
-## `ably channels presence enter CHANNEL`
+## `ably channels presence enter CHANNELNAME`
 
-Enter presence on a channel and remain present until terminated
+Enter presence on a channel and listen for presence events
 
 ```
 USAGE
-  $ ably channels presence enter CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>] [--show-others]
+  $ ably channels presence enter CHANNELNAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
+    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--profile-data <value>]
 
 ARGUMENTS
-  CHANNEL  Channel name to enter presence on
+  CHANNELNAME  Channel name to enter presence on
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
-      --data=<value>          [default: {}] Presence data to publish (JSON string)
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
-      --show-others           Show other presence events while present
+      --profile-data=<value>  Optional JSON data to associate with the presence
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Enter presence on a channel and remain present until terminated
+  Enter presence on a channel and listen for presence events
 
 EXAMPLES
-  $ ably channels presence enter my-channel
+  $ ably channels presence enter my-channel --client-id "client123"
 
-  $ ably channels presence enter my-channel --data '{"status":"online"}'
+  $ ably channels presence enter my-channel --client-id "client123" --profile-data '{"name":"John","status":"online"}'
 
-  $ ably channels presence enter my-channel --client-id "user123"
+  $ ably channels presence enter my-channel --api-key "YOUR_API_KEY"
+
+  $ ably channels presence enter my-channel --token "YOUR_ABLY_TOKEN"
+
+  $ ably channels presence enter my-channel --json
+
+  $ ably channels presence enter my-channel --pretty-json
+
+  $ ably channels presence enter my-channel --duration 30
 ```
 
 _See code: [src/commands/channels/presence/enter.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/channels/presence/enter.ts)_
@@ -2044,12 +2062,13 @@ Subscribe to presence events on a channel
 ```
 USAGE
   $ ably channels presence subscribe CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
-  CHANNEL  Channel name to subscribe to presence on
+  CHANNEL  Channel name to subscribe to presence events
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -2067,9 +2086,17 @@ DESCRIPTION
 EXAMPLES
   $ ably channels presence subscribe my-channel
 
+  $ ably channels presence subscribe my-channel --client-id "filter123"
+
+  $ ably channels presence subscribe my-channel --api-key "YOUR_API_KEY"
+
+  $ ably channels presence subscribe my-channel --token "YOUR_ABLY_TOKEN"
+
   $ ably channels presence subscribe my-channel --json
 
   $ ably channels presence subscribe my-channel --pretty-json
+
+  $ ably channels presence subscribe my-channel --duration 30
 ```
 
 _See code: [src/commands/channels/presence/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/channels/presence/subscribe.ts)_
@@ -2143,12 +2170,13 @@ Subscribe to messages published on one or more Ably channels
 USAGE
   $ ably channels subscribe CHANNELS... [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
     <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--cipher-algorithm <value>] [--cipher-key
-    <value>] [--cipher-key-length <value>] [--cipher-mode <value>] [--delta] [--rewind <value>]
+    <value>] [--cipher-key-length <value>] [--cipher-mode <value>] [--delta] [-D <value>] [--rewind <value>]
 
 ARGUMENTS
   CHANNELS...  Channel name(s) to subscribe to
 
 FLAGS
+  -D, --duration=<value>           Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose                    Output verbose logs
       --access-token=<value>       Overrides any configured access token used for the Control API
       --api-key=<value>            Overrides any configured API key used for the product APIs
@@ -2187,6 +2215,8 @@ EXAMPLES
   $ ably channels subscribe my-channel --json
 
   $ ably channels subscribe my-channel --pretty-json
+
+  $ ably channels subscribe my-channel --duration 30
 ```
 
 _See code: [src/commands/channels/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/channels/subscribe.ts)_
@@ -2849,14 +2879,16 @@ _See code: [src/commands/logs/app/history.ts](https://github.com/ably/cli/blob/v
 
 ## `ably logs app subscribe`
 
-Stream logs from the app-wide meta channel [meta]log
+Subscribe to live app logs
 
 ```
 USAGE
   $ ably logs app subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--rewind <value>]
+    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--type
+    channel.lifecycle|channel.occupancy|channel.presence|connection.lifecycle|push.publish]
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -2866,20 +2898,24 @@ FLAGS
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
-      --rewind=<value>        Number of messages to rewind when subscribing
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+      --type=<option>         Filter by log type
+                              <options:
+                              channel.lifecycle|channel.occupancy|channel.presence|connection.lifecycle|push.publish>
 
 DESCRIPTION
-  Stream logs from the app-wide meta channel [meta]log
+  Subscribe to live app logs
 
 EXAMPLES
   $ ably logs app subscribe
 
-  $ ably logs app subscribe --rewind 10
+  $ ably logs app subscribe --type channel.lifecycle
 
   $ ably logs app subscribe --json
 
   $ ably logs app subscribe --pretty-json
+
+  $ ably logs app subscribe --duration 30
 ```
 
 _See code: [src/commands/logs/app/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/logs/app/subscribe.ts)_
@@ -3012,14 +3048,15 @@ _See code: [src/commands/logs/connection-lifecycle/history.ts](https://github.co
 
 ## `ably logs connection-lifecycle subscribe`
 
-Stream logs from [meta]connection.lifecycle meta channel
+Subscribe to live connection lifecycle logs
 
 ```
 USAGE
   $ ably logs connection-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--rewind <value>]
+    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -3029,34 +3066,34 @@ FLAGS
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
-      --rewind=<value>        Number of messages to rewind when subscribing
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Stream logs from [meta]connection.lifecycle meta channel
+  Subscribe to live connection lifecycle logs
 
 EXAMPLES
   $ ably logs connection-lifecycle subscribe
 
-  $ ably logs connection-lifecycle subscribe --rewind 10
-
   $ ably logs connection-lifecycle subscribe --json
 
   $ ably logs connection-lifecycle subscribe --pretty-json
+
+  $ ably logs connection-lifecycle subscribe --duration 30
 ```
 
 _See code: [src/commands/logs/connection-lifecycle/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/logs/connection-lifecycle/subscribe.ts)_
 
 ## `ably logs connection subscribe`
 
-Stream logs from [meta]connection meta channel
+Subscribe to live connection logs
 
 ```
 USAGE
   $ ably logs connection subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--rewind <value>]
+    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -3066,20 +3103,19 @@ FLAGS
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
-      --rewind=<value>        Number of messages to rewind when subscribing
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Stream logs from [meta]connection meta channel
+  Subscribe to live connection logs
 
 EXAMPLES
   $ ably logs connection subscribe
 
-  $ ably logs connection subscribe --rewind 10
-
   $ ably logs connection subscribe --json
 
   $ ably logs connection subscribe --pretty-json
+
+  $ ably logs connection subscribe --duration 30
 ```
 
 _See code: [src/commands/logs/connection/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/logs/connection/subscribe.ts)_
@@ -3692,12 +3728,13 @@ Subscribe to messages in an Ably Chat room
 ```
 USAGE
   $ ably rooms messages subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--show-metadata]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--show-metadata] [-D <value>]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to messages from
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -3719,6 +3756,8 @@ EXAMPLES
   $ ably rooms messages subscribe --api-key "YOUR_API_KEY" my-room
 
   $ ably rooms messages subscribe --show-metadata my-room
+
+  $ ably rooms messages subscribe my-room --duration 30
 
   $ ably rooms messages subscribe my-room --json
 
@@ -3848,24 +3887,24 @@ Enter presence in a chat room and remain present until terminated
 ```
 USAGE
   $ ably rooms presence enter ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>] [--show-others] [--profile-data
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile-data <value>] [--show-others] [-D
     <value>]
 
 ARGUMENTS
   ROOMID  Room ID to enter presence on
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
-      --data=<value>          [default: {}] Presence data to publish (JSON string)
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
-      --profile-data=<value>  Profile data to publish (JSON string)
+      --profile-data=<value>  Profile data to include with the member (JSON format)
       --show-others           Show other presence events while present
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
@@ -3875,13 +3914,9 @@ DESCRIPTION
 EXAMPLES
   $ ably rooms presence enter my-room
 
-  $ ably rooms presence enter my-room --data '{"status":"online","username":"john"}'
+  $ ably rooms presence enter my-room --profile-data '{"name":"User","status":"active"}'
 
-  $ ably rooms presence enter my-room --client-id "user123"
-
-  $ ably rooms presence enter my-room --json
-
-  $ ably rooms presence enter my-room --pretty-json
+  $ ably rooms presence enter my-room --duration 30
 ```
 
 _See code: [src/commands/rooms/presence/enter.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/rooms/presence/enter.ts)_
@@ -3893,12 +3928,13 @@ Subscribe to presence events in a chat room
 ```
 USAGE
   $ ably rooms presence subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to presence for
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4229,12 +4265,14 @@ Set a cursor with position data in a space
 ```
 USAGE
   $ ably spaces cursors set SPACEID --data <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
-    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  The space ID to set cursor in
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = exit immediately after setting
+                              the cursor)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4271,12 +4309,13 @@ Subscribe to cursor movements in a space
 ```
 USAGE
   $ ably spaces cursors subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to cursors for
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4297,6 +4336,8 @@ EXAMPLES
   $ ably spaces cursors subscribe my-space --json
 
   $ ably spaces cursors subscribe my-space --pretty-json
+
+  $ ably spaces cursors subscribe my-space --duration 30
 ```
 
 _See code: [src/commands/spaces/cursors/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/spaces/cursors/subscribe.ts)_
@@ -4414,12 +4455,14 @@ Set your location in a space
 ```
 USAGE
   $ ably spaces locations set SPACEID --location <value> [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to set location in
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = exit immediately after setting
+                              location)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4445,17 +4488,18 @@ _See code: [src/commands/spaces/locations/set.ts](https://github.com/ably/cli/bl
 
 ## `ably spaces locations subscribe SPACEID`
 
-Subscribe to location changes in a space
+Subscribe to location updates for members in a space
 
 ```
 USAGE
   $ ably spaces locations subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to locations for
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4468,7 +4512,7 @@ FLAGS
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Subscribe to location changes in a space
+  Subscribe to location updates for members in a space
 
 EXAMPLES
   $ ably spaces locations subscribe my-space
@@ -4476,6 +4520,8 @@ EXAMPLES
   $ ably spaces locations subscribe my-space --json
 
   $ ably spaces locations subscribe my-space --pretty-json
+
+  $ ably spaces locations subscribe my-space --duration 30
 ```
 
 _See code: [src/commands/spaces/locations/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/spaces/locations/subscribe.ts)_
@@ -4617,17 +4663,18 @@ _See code: [src/commands/spaces/locks/get-all.ts](https://github.com/ably/cli/bl
 
 ## `ably spaces locks subscribe SPACEID`
 
-Subscribe to lock changes in a space
+Subscribe to lock events in a space
 
 ```
 USAGE
   $ ably spaces locks subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
-  SPACEID  Space ID to subscribe for locks from
+  SPACEID  Space ID to subscribe to locks for
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4640,7 +4687,7 @@ FLAGS
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
-  Subscribe to lock changes in a space
+  Subscribe to lock events in a space
 
 EXAMPLES
   $ ably spaces locks subscribe my-space
@@ -4648,6 +4695,8 @@ EXAMPLES
   $ ably spaces locks subscribe my-space --json
 
   $ ably spaces locks subscribe my-space --pretty-json
+
+  $ ably spaces locks subscribe my-space --duration 30
 ```
 
 _See code: [src/commands/spaces/locks/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/spaces/locks/subscribe.ts)_
@@ -4678,12 +4727,13 @@ Enter a space and remain present until terminated
 ```
 USAGE
   $ ably spaces members enter SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile <value>]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile <value>] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to enter
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4703,6 +4753,8 @@ EXAMPLES
   $ ably spaces members enter my-space
 
   $ ably spaces members enter my-space --profile '{"name":"User","status":"active"}'
+
+  $ ably spaces members enter my-space --duration 30
 ```
 
 _See code: [src/commands/spaces/members/enter.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/spaces/members/enter.ts)_
@@ -4714,12 +4766,13 @@ Subscribe to member presence events in a space
 ```
 USAGE
   $ ably spaces members subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to members for
 
 FLAGS
+  -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
   -v, --verbose               Output verbose logs
       --access-token=<value>  Overrides any configured access token used for the Control API
       --api-key=<value>       Overrides any configured API key used for the product APIs
@@ -4740,6 +4793,8 @@ EXAMPLES
   $ ably spaces members subscribe my-space --json
 
   $ ably spaces members subscribe my-space --pretty-json
+
+  $ ably spaces members subscribe my-space --duration 30
 ```
 
 _See code: [src/commands/spaces/members/subscribe.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/spaces/members/subscribe.ts)_

@@ -2,7 +2,24 @@
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { exec } from 'node:child_process';
 import * as Ably from 'ably';
+
+// Global type declarations for test mocks
+declare global {
+  var __TEST_MOCKS__: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ablyRestMock: any; // Keep simple 'any' type to match base-command.ts expectations
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ablyChatMock?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ablySpacesMock?: any; 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ablyRealtimeMock?: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  } | undefined;
+}
 
 // Ensure we're in test mode for all tests
 process.env.ABLY_CLI_TEST_MODE = 'true';
@@ -10,6 +27,65 @@ process.env.ABLY_CLI_TEST_MODE = 'true';
 // Track active resources for cleanup
 const activeClients: (Ably.Rest | Ably.Realtime)[] = [];
 const activeTimers: NodeJS.Timeout[] = [];
+const globalProcessRegistry = new Set<number>();
+
+// Global process tracking function
+export function trackProcess(pid: number): void {
+  globalProcessRegistry.add(pid);
+  console.log(`Tracking process PID: ${pid}`);
+}
+
+// Global process cleanup function
+export async function cleanupGlobalProcesses(): Promise<void> {
+  if (globalProcessRegistry.size > 0) {
+    console.log(`Cleaning up ${globalProcessRegistry.size} tracked processes...`);
+    
+    for (const pid of globalProcessRegistry) {
+      try {
+        // Check if process exists before trying to kill
+        process.kill(pid, 0);
+        console.log(`Killing tracked process PID: ${pid}`);
+        
+        // Try graceful kill first
+        process.kill(pid, 'SIGTERM');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Check if still alive and force kill
+        try {
+          process.kill(pid, 0);
+          process.kill(pid, 'SIGKILL');
+          console.log(`Force killed PID: ${pid}`);
+        } catch {
+          // Ignore errors
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+          // Process already dead
+        } else {
+          console.warn(`Error killing process ${pid}:`, error);
+        }
+      }
+    }
+    
+    globalProcessRegistry.clear();
+  }
+
+  // Also kill any processes matching our patterns
+  try {
+    await new Promise<void>((resolve) => {
+      exec('pkill -f "bin/run.js.*subscribe"', () => {
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve) => {
+      exec('pkill -f "ably.*subscribe"', () => {
+        resolve();
+      });
+    });
+  } catch {
+    // Ignore errors
+  }
+}
 
 // Set Ably log level to only show errors
 if (process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
@@ -84,6 +160,9 @@ async function globalCleanup() {
     console.log(`Cleaning up ${clientCount} active Ably clients...`);
   }
 
+  // Clean up processes first
+  await cleanupGlobalProcesses();
+
   // Close all clients with timeout
   const cleanup = activeClients.map(async (client) => {
     return new Promise<void>((resolve) => {
@@ -145,7 +224,7 @@ async function globalCleanup() {
 
 try {
   // Force exit after 90 seconds maximum to prevent hanging
-  const MAX_TEST_RUNTIME = 90 * 1000; // 90 seconds - shorter timeout
+  const MAX_TEST_RUNTIME = 240 * 1000; // 240 seconds - increased for E2E tests
   const exitTimer = setTimeout(() => {
     console.error('Tests exceeded maximum runtime. Force exiting.');
     process.exit(1);
@@ -165,6 +244,39 @@ try {
         process.exit(0);
       });
     });
+  });
+
+  // Handle uncaught exceptions to ensure cleanup
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+    globalCleanup().finally(() => {
+      process.exit(1);
+    });
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled promise rejection at:', promise, 'reason:', reason);
+    globalCleanup().finally(() => {
+      process.exit(1);
+    });
+  });
+
+  // Add cleanup on process exit
+  process.on('exit', () => {
+    // Note: Can't use async here, so do synchronous cleanup
+    console.log('Process exiting, attempting final cleanup...');
+    try {
+      for (const pid of globalProcessRegistry) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          // Ignore errors
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
   });
 
   // Register a global cleanup function that can be used in tests

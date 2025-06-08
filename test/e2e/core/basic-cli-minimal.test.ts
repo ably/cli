@@ -1,53 +1,66 @@
 import { expect } from "chai";
-import { execa } from "execa";
+import { runCommand } from "../../helpers/command-helpers.js";
+import { forceExit, cleanupTrackedResources, testOutputFiles, testCommands, displayTestFailureDebugOutput } from "../../helpers/e2e-test-helper.js";
 
-// Options for execa to prevent Node debugger attachment/output
-const execaOptions = {
+// Options for runCommand to prevent Node debugger attachment/output
+const commandOptions = {
   env: { NODE_OPTIONS: "--no-inspect" }, // Clear NODE_OPTIONS to prevent debugger attachment
-  reject: false, // Don't reject promise on non-zero exit code
-  timeout: 5000 // 5 second timeout for commands
+  timeoutMs: 5000 // 5 second timeout for commands
 };
 
 // Skip tests if we're in CI without API keys
 const SHOULD_SKIP_TESTS = process.env.SKIP_E2E_TESTS === 'true';
 
-if (SHOULD_SKIP_TESTS) {
-  // If tests should be skipped, create a simple describe with a skip
-  describe("Minimal CLI E2E Tests (skipped)", function() {
-    it("tests skipped due to missing API key", function() {
-      this.skip();
-    });
-  });
-} else {
 // Very simple tests to see if the CLI works at all
 describe("Minimal CLI E2E Tests", function() {
-  // Set a short timeout
-  this.timeout(15000);
+  before(function() {
+    if (SHOULD_SKIP_TESTS) {
+      this.skip();
+    }
+    process.on('SIGINT', forceExit);
+  });
+
+  after(function() {
+    process.removeListener('SIGINT', forceExit);
+  });
+
+  beforeEach(function() {
+    this.timeout(120000); // 2 minutes per individual test
+    // Clear tracked output files and commands for this test
+    testOutputFiles.clear();
+    testCommands.length = 0;
+  });
+
+  afterEach(async function() {
+    if (this.currentTest?.state === 'failed') {
+      await displayTestFailureDebugOutput(this.currentTest?.title);
+    }
+    await cleanupTrackedResources();
+  });
 
   it("should output the version", async function() {
-    const result = await execa("node", ["bin/run.js", "--version"], execaOptions);
+    const result = await runCommand(["--version"], commandOptions);
 
     // Basic check for successful command
-    expect(result.failed).to.be.false;
+    expect(result.exitCode).to.equal(0);
     expect(result.stdout).to.match(/^@ably\/cli\/[0-9]+\.[0-9]+\.[0-9]+/);
   });
 
   it("should output JSON version info", async function() {
-    const result = await execa("node", ["bin/run.js", "--version", "--json"], execaOptions);
+    const result = await runCommand(["--version", "--json"], commandOptions);
 
     // Basic JSON check
-    expect(result.failed).to.be.false;
+    expect(result.exitCode).to.equal(0);
     const parsed = JSON.parse(result.stdout);
     expect(parsed).to.have.property("version");
   });
 
   it("should show help text", async function() {
-    const result = await execa("node", ["bin/run.js", "help"], execaOptions);
+    const result = await runCommand(["help"], commandOptions);
 
     // Basic help check
-    expect(result.failed).to.be.false;
+    expect(result.exitCode).to.equal(0);
     expect(result.stdout).to.include("Ably help commands");
     expect(result.stdout).to.include("ably help");
   });
 });
-}

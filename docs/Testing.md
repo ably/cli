@@ -6,7 +6,7 @@
 
 > **💡 QUICK START:** Run `pnpm test` for all tests or `pnpm test:unit` for faster unit tests.
 > **📋 MANDATORY:** All code changes require related tests. See [Workflow.mdc](mdc:.cursor/rules/Workflow.mdc).
-> **🐛 DEBUGGING:** See [Debugging Guide](mdc:docs/Debugging.md) for troubleshooting tips.
+> **🐛 DEBUGGING:** See [Debugging Guide](mdc:docs/Debugging.md) for troubleshooting tips and the [Debug Test Execution](#-debug-test-execution) section below.
 > **🔍 TROUBLESHOOTING:** See [Troubleshooting Guide](mdc:docs/Troubleshooting.md) for common errors.
 
 ---
@@ -47,6 +47,82 @@ cd server && pnpm test tests/unit/placeholder-cleanup.test.ts
 # Server Tests - Run all server integration tests
 cd server && pnpm test:integration
 ```
+
+---
+
+## 🐛 Debug Test Execution
+
+The test runner includes built-in debugging support to help diagnose test failures, especially for E2E tests that interact with real services.
+
+### Debugging Flags
+
+| Flag | Description |
+|------|-------------|
+| `--debug` | Enable detailed test debugging output |
+| `--show-output` | Show CLI command output during tests |
+| `--verbose` | Enable both debug and show-output (full verbosity) |
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `E2E_DEBUG=true` | Enable detailed test debugging output |
+| `ABLY_CLI_TEST_SHOW_OUTPUT=true` | Show detailed CLI output during tests |
+| `TEST_DEBUG=true` | Alias for E2E_DEBUG |
+
+### Examples
+
+```bash
+# Debug E2E tests with verbose output
+pnpm test:e2e --debug
+
+# Debug specific failing tests with full verbosity
+pnpm test:e2e test/e2e/commands/rooms* --verbose
+
+# Debug using environment variables
+E2E_DEBUG=true pnpm test:e2e
+
+# Debug specific test file with output capture
+pnpm test:e2e test/e2e/commands/spaces-e2e.test.ts --show-output
+
+# Debug all E2E command tests with full verbosity
+pnpm test:e2e:commands --verbose
+```
+
+### Debug Output Features
+
+When debugging is enabled, you'll see:
+- ✅ **Detailed timing information** for test execution phases
+- ✅ **Environment variable status** (API keys, debug flags)
+- ✅ **Command execution details** (patterns, arguments, runner type)
+- ✅ **Process cleanup information** (hanging processes detection)
+- ✅ **Enhanced error reporting** with exit codes and timing
+- ✅ **Pre/post test cleanup** to avoid process conflicts
+
+**Example debug output:**
+```bash
+=== TEST DEBUG MODE ENABLED ===
+Starting debug run at Wed Dec 18 10:30:45 PST 2024
+Environment variables:
+  E2E_DEBUG=true
+  TEST_DEBUG=true
+  NODE_OPTIONS=--trace-warnings --trace-deprecation
+  ABLY_CLI_TEST_SHOW_OUTPUT=true
+  E2E_ABLY_API_KEY is configured
+=================================
+
+=== Test Execution Details ===
+Test pattern: test/e2e/commands/rooms*
+Additional args: --timeout 30000
+Using Playwright: false
+Starting test execution at: Wed Dec 18 10:30:46 PST 2024
+==============================
+
+=== Running Mocha Tests ===
+Executing command: CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS="..." node --import '...' ./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught --exit --reporter spec 'test/e2e/commands/rooms*' --timeout 30000 --exclude 'test/e2e/web-cli/**/*.test.ts'
+```
+
+---
 
 ### 🔧 Pre-Push Validation
 

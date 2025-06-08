@@ -169,7 +169,18 @@ export class ControlApi {
   constructor(options: ControlApiOptions) {
     this.accessToken = options.accessToken;
     this.controlHost = options.controlHost || "control.ably.net";
-    this.logErrors = options.logErrors !== false;
+    // Respect SUPPRESS_CONTROL_API_ERRORS env var for default behavior
+    // Explicit options.logErrors will override the env var.
+    // eslint-disable-next-line unicorn/no-negated-condition
+    if (options.logErrors !== undefined) {
+      this.logErrors = options.logErrors;
+    } else {
+      // Determine logErrors based on environment variables
+      const suppressErrors = process.env.SUPPRESS_CONTROL_API_ERRORS === 'true' ||
+                            process.env.CI === 'true' ||
+                            process.env.ABLY_CLI_TEST_MODE === 'true';
+      this.logErrors = !suppressErrors;
+    }
   }
 
   // Ask a question to the Ably AI agent
