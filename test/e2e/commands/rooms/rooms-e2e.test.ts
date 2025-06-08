@@ -1,34 +1,24 @@
 import { expect } from "@oclif/test";
-import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { exec } from "node:child_process";
-import * as fs from 'node:fs';
 import {
   E2E_API_KEY,
   SHOULD_SKIP_E2E,
   getUniqueChannelName,
   getUniqueClientId,
-  createTempOutputFile,
-  runLongRunningBackgroundProcess,
-  readProcessOutput,
-  runBackgroundProcessAndGetOutput,
-  killProcess,
   forceExit,
   cleanupTrackedResources,
-  createAblyRealtimeClient,
   testOutputFiles,
   testCommands,
   displayTestFailureDebugOutput
 } from "../../../helpers/e2e-test-helper.js";
 import { startSubscribeCommand, startPresenceCommand, runCommand, waitForOutput, cleanupRunners } from "../../../helpers/command-helpers.js";
 import { CliRunner } from "../../../helpers/cli-runner.js";
-import { ChildProcess, spawn } from "node:child_process";
-import * as os from "node:os";
 
-const execAsync = promisify(exec);
+const _execAsync = promisify(exec);
 
 // Helper function to wait for a string to appear in output
-async function waitForStringInOutput(
+async function _waitForStringInOutput(
   outputFn: () => string,
   targetString: string,
   timeoutMs: number = 20000 // Increased default timeout for CI
@@ -61,8 +51,8 @@ async function waitForStringInOutput(
 
 // Helper function to strip ANSI codes
 function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, '');
+  // eslint-disable-next-line no-control-regex, unicorn/escape-case, unicorn/no-hex-escape
+  return str.replaceAll(/\x1b\[[0-9;]*m/g, '');
 }
 
 describe('Rooms E2E Tests', function() {
@@ -158,9 +148,14 @@ describe('Rooms E2E Tests', function() {
     });
     
     // Only run interactive tests if we have a working API key
-    if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
-      describe('Presence functionality', function() {
-        it('should allow two connections where one person entering is visible to the other', async function() {
+    describe('Presence functionality', function() {
+      before(function() {
+        if (!E2E_API_KEY || E2E_API_KEY.includes('fake')) {
+          this.skip();
+        }
+      });
+
+      it('should allow two connections where one person entering is visible to the other', async function() {
           this.timeout(process.env.CI ? 90000 : 75000); // Restored and generous timeout
           let subscribeRunner: CliRunner | null = null;
           let enterRunner: CliRunner | null = null;
@@ -202,7 +197,8 @@ describe('Rooms E2E Tests', function() {
 
 
             } catch (error) {
-              throw error;
+              // Re-throw with additional context
+              throw new Error(`Test failed: ${error instanceof Error ? error.message : String(error)}`);
             }
 
           } finally {
@@ -274,7 +270,8 @@ describe('Rooms E2E Tests', function() {
             }
 
           } catch (error) {
-            throw error;
+            // Re-throw with additional context  
+            throw new Error(`Test failed: ${error instanceof Error ? error.message : String(error)}`);
           } finally {
             if (subscribeRunner) {
               await subscribeRunner.kill();
@@ -282,9 +279,15 @@ describe('Rooms E2E Tests', function() {
           }
         });
       });
-    } else {
-      describe('Command Structure Tests (No Real API Key)', function() {
-        it('should have properly structured presence commands', async function() {
+    
+    describe('Command Structure Tests (No Real API Key)', function() {
+      before(function() {
+        if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
+          this.skip();
+        }
+      });
+
+      it('should have properly structured presence commands', async function() {
           // Test help command to ensure command structure exists
           const helpResult = await runCommand(['rooms', 'presence', 'subscribe', '--help']);
           expect(helpResult.exitCode).to.equal(0);
@@ -297,5 +300,4 @@ describe('Rooms E2E Tests', function() {
           expect(helpResult.stdout).to.contain("Subscribe to messages");
         });
       });
-    }
 });

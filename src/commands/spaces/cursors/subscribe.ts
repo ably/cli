@@ -84,18 +84,10 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
         return;
       }
 
-      // Add listeners for connection state changes
-      this.realtimeClient.connection.on(
-        (stateChange: Ably.ConnectionStateChange) => {
-          this.logCliEvent(
-            flags,
-            "connection",
-            stateChange.current,
-            `Connection state changed to ${stateChange.current}`,
-            { reason: stateChange.reason },
-          );
-        },
-      );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.realtimeClient, flags, {
+        includeUserFriendlyMessages: true
+      });
 
       // Make sure we have a connection before proceeding
       this.logCliEvent(

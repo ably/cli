@@ -136,14 +136,9 @@ export default class BenchPublisher extends AblyBaseCommand {
 
     const client = this.realtime;
 
-    client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-      this.logCliEvent(
-        flags,
-        "connection",
-        stateChange.current,
-        `Connection state changed to ${stateChange.current}`,
-        { reason: stateChange.reason },
-      );
+    // Set up connection state logging
+    this.setupConnectionStateLogging(client, flags, {
+      includeUserFriendlyMessages: true
     });
 
     let channel: Ably.RealtimeChannel | null = null;
@@ -164,14 +159,9 @@ export default class BenchPublisher extends AblyBaseCommand {
     try {
       channel = client.channels.get(args.channel, { params: { rewind: "1" } });
 
-      channel.on((stateChange: Ably.ChannelStateChange) => {
-        this.logCliEvent(
-          flags,
-          "channel",
-          stateChange.current,
-          `Channel '${args.channel}' state changed to ${stateChange.current}`,
-          { reason: stateChange.reason },
-        );
+      // Set up channel state logging
+      this.setupChannelStateLogging(channel, flags, {
+        includeUserFriendlyMessages: true
       });
 
       await this.subscribeToEcho(

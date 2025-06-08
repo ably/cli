@@ -240,18 +240,10 @@ export default class MessagesSubscribe extends ChatBaseCommand {
         return;
       }
 
-      // Add listeners for connection state changes
-      this.ablyClient.connection.on(
-        (stateChange: Ably.ConnectionStateChange) => {
-          this.logCliEvent(
-            flags,
-            "connection",
-            stateChange.current,
-            `Realtime connection state changed to ${stateChange.current}`,
-            { reason: stateChange.reason },
-          );
-        },
-      );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.ablyClient, flags, {
+        includeUserFriendlyMessages: true
+      });
 
       // Get the room
       this.logCliEvent(flags, "room", "gettingRoom", `Getting room handle for ${this.roomId}`);

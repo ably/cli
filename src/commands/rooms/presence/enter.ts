@@ -183,6 +183,11 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
         return;
       }
       
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.ablyClient, flags, {
+        includeUserFriendlyMessages: true
+      });
+      
       this.room = await this.chatClient.rooms.get(this.roomId); 
       const currentRoom = this.room!; 
 
