@@ -78,66 +78,14 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
 
       channel = client.channels.get(channelName);
 
-      // Setup connection state change handler
-      client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-        this.logCliEvent(
-          flags,
-          "connection",
-          stateChange.current,
-          `Connection state changed to ${stateChange.current}`,
-          { reason: stateChange.reason },
-        );
-        if (!this.shouldOutputJson(flags)) {
-          switch (stateChange.current) {
-            case "connected": {
-              this.log("Successfully connected to Ably");
-              break;
-            }
-            case "disconnected": {
-              this.log("Disconnected from Ably");
-              break;
-            }
-            case "failed": {
-              this.error(
-                `Connection failed: ${stateChange.reason?.message || "Unknown error"}`,
-              );
-              break;
-            }
-          }
-        }
+      // Set up connection state logging
+      this.setupConnectionStateLogging(client, flags, {
+        includeUserFriendlyMessages: true
       });
 
-      // Setup channel state change handler
-      channel.on((stateChange: Ably.ChannelStateChange) => {
-        this.logCliEvent(
-          flags,
-          "channel",
-          stateChange.current,
-          `Channel '${channelName}' state changed to ${stateChange.current}`,
-          { reason: stateChange.reason },
-        );
-        if (!this.shouldOutputJson(flags)) {
-          switch (stateChange.current) {
-            case "attached": {
-              this.log(
-                `${chalk.green("✓")} Successfully attached to channel: ${chalk.cyan(channelName)}`,
-              );
-              break;
-            }
-            case "failed": {
-              this.log(
-                `${chalk.red("✗")} Failed to attach to channel ${chalk.cyan(channelName)}: ${stateChange.reason?.message || "Unknown error"}`,
-              );
-              break;
-            }
-            case "detached": {
-              this.log(
-                `${chalk.yellow("!")} Detached from channel: ${chalk.cyan(channelName)}`,
-              );
-              break;
-            }
-          }
-        }
+      // Set up channel state logging
+      this.setupChannelStateLogging(channel, flags, {
+        includeUserFriendlyMessages: true
       });
 
       // Subscribe to occupancy events using internal occupancy events

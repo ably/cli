@@ -75,19 +75,10 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       // const { chatClient, realtimeClient } = this.clients // Remove deconstruction
       const { roomId } = args;
 
-      // Add listeners for connection state changes
-      // realtimeClient.connection.on((stateChange: any) => { // Use ablyClient
-      this.ablyClient.connection.on(
-        (stateChange: Ably.ConnectionStateChange) => {
-          this.logCliEvent(
-            flags,
-            "connection",
-            stateChange.current,
-            `Realtime connection state changed to ${stateChange.current}`,
-            { reason: stateChange.reason },
-          );
-        },
-      );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.ablyClient, flags, {
+        includeUserFriendlyMessages: true
+      });
 
       this.logCliEvent(
         flags,

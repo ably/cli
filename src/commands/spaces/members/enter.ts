@@ -113,18 +113,10 @@ export default class SpacesMembersEnter extends SpacesBaseCommand {
         return;
       }
 
-      // Add listeners for connection state changes
-      this.realtimeClient.connection.on(
-        (stateChange: Ably.ConnectionStateChange) => {
-          this.logCliEvent(
-            flags,
-            "connection",
-            stateChange.current,
-            `Connection state changed to ${stateChange.current}`,
-            { reason: stateChange.reason },
-          );
-        },
-      );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.realtimeClient, flags, {
+        includeUserFriendlyMessages: true
+      });
 
       // Parse profile data if provided
       let profileData: ProfileData | undefined;

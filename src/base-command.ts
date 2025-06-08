@@ -1070,5 +1070,104 @@ export abstract class AblyBaseCommand extends Command {
       Boolean(process.env.ABLY_ACCESS_TOKEN)
     );
   }
+
+  /**
+   * Set up connection state logging for a Realtime client
+   * This should be called after creating a Realtime client for long-running commands
+   */
+  protected setupConnectionStateLogging(
+    client: Ably.Realtime,
+    flags: BaseFlags,
+    options?: {
+      component?: string;
+      includeUserFriendlyMessages?: boolean;
+    }
+  ): void {
+    const component = options?.component || "connection";
+    const showUserMessages = options?.includeUserFriendlyMessages || false;
+
+    client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+      this.logCliEvent(
+        flags,
+        component,
+        stateChange.current,
+        `Connection state changed to ${stateChange.current}`,
+        { reason: stateChange.reason },
+      );
+
+      // Optional user-friendly messages for non-JSON output
+      if (showUserMessages && !this.shouldOutputJson(flags)) {
+        switch (stateChange.current) {
+          case "connected": {
+            this.log(chalk.green("✓ Connected to Ably"));
+            break;
+          }
+          case "disconnected": {
+            this.log(chalk.yellow("! Disconnected from Ably"));
+            break;
+          }
+          case "failed": {
+            this.log(chalk.red(`✗ Connection failed: ${stateChange.reason?.message || "Unknown error"}`));
+            break;
+          }
+          case "suspended": {
+            this.log(chalk.yellow("! Connection suspended"));
+            break;
+          }
+          case "connecting": {
+            this.log(chalk.blue("Connecting to Ably..."));
+            break;
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Set up channel state logging for a channel
+   * This should be called after creating/getting a channel for long-running commands
+   */
+  protected setupChannelStateLogging(
+    channel: Ably.RealtimeChannel,
+    flags: BaseFlags,
+    options?: {
+      component?: string;
+      includeUserFriendlyMessages?: boolean;
+    }
+  ): void {
+    const component = options?.component || "channel";
+    const showUserMessages = options?.includeUserFriendlyMessages || false;
+
+    channel.on((stateChange: Ably.ChannelStateChange) => {
+      this.logCliEvent(
+        flags,
+        component,
+        stateChange.current,
+        `Channel '${channel.name}' state changed to ${stateChange.current}`,
+        { channel: channel.name, reason: stateChange.reason },
+      );
+
+      if (showUserMessages && !this.shouldOutputJson(flags)) {
+        switch (stateChange.current) {
+          case "attached": {
+            this.log(chalk.green(`✓ Successfully attached to channel: ${chalk.cyan(channel.name)}`));
+            break;
+          }
+          case "failed": {
+            this.log(chalk.red(`✗ Failed to attach to channel ${chalk.cyan(channel.name)}: ${stateChange.reason?.message || "Unknown error"}`));
+            break;
+          }
+          case "detached": {
+            this.log(chalk.yellow(`! Detached from channel: ${chalk.cyan(channel.name)} ${stateChange.reason ? `(Reason: ${stateChange.reason.message})` : ""}`));
+            break;
+          }
+          case "attaching": {
+            this.log(chalk.blue(`Attaching to channel: ${chalk.cyan(channel.name)}...`));
+            break;
+          }
+        }
+      }
+    });
+  }
 }
 export { BaseFlags } from "./types/cli.js";

@@ -112,18 +112,10 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
         return;
       }
 
-      // Add listeners for connection state changes
-      this.realtimeClient.connection.on(
-        (stateChange: Ably.ConnectionStateChange) => {
-          this.logCliEvent(
-            flags,
-            "connection",
-            stateChange.current,
-            `Connection state changed to ${stateChange.current}`,
-            { reason: stateChange.reason },
-          );
-        },
-      );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.realtimeClient, flags, {
+        includeUserFriendlyMessages: true
+      });
 
       // Parse lock data if provided
       let lockData: unknown;

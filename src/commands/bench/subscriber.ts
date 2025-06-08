@@ -501,14 +501,9 @@ export default class BenchSubscriber extends AblyBaseCommand {
       return null;
     }
 
-    realtime.connection.on((stateChange: Ably.ConnectionStateChange) => {
-      this.logCliEvent(
-        flags,
-        "connection",
-        stateChange.current,
-        `Connection state changed to ${stateChange.current}`,
-        { reason: stateChange.reason },
-      );
+    // Set up connection state logging
+    this.setupConnectionStateLogging(realtime, flags, {
+      includeUserFriendlyMessages: true
     });
     return realtime;
   }
