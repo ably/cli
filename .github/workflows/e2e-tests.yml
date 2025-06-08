@@ -93,6 +93,22 @@ jobs:
             exit 1
           }
 
+      - name: Run E2E Spaces Tests
+        run: |
+          echo "Running E2E Spaces Tests..."
+          timeout 900s pnpm test:e2e:spaces || {
+            echo "E2E Spaces tests failed or timed out"
+            exit 1
+          }
+
+      - name: Run E2E Rooms Tests  
+        run: |
+          echo "Running E2E Rooms Tests..."
+          timeout 900s pnpm test:e2e:rooms || {
+            echo "E2E Rooms tests failed or timed out"
+            exit 1
+          }
+
       - name: Run E2E Control API Tests
         run: |
           echo "Running E2E Control API Tests..."

@@ -19,9 +19,9 @@ import {
   testOutputFiles,
   testCommands,
   displayTestFailureDebugOutput
-} from "../../helpers/e2e-test-helper.js";
-import { startSubscribeCommand, startPresenceCommand, runCommand, waitForOutput, cleanupRunners } from "../../helpers/command-helpers.js";
-import { CliRunner } from "../../helpers/cli-runner.js";
+} from "../../../helpers/e2e-test-helper.js";
+import { startSubscribeCommand, startPresenceCommand, runCommand, waitForOutput, cleanupRunners } from "../../../helpers/command-helpers.js";
+import { CliRunner } from "../../../helpers/cli-runner.js";
 import { ChildProcess, spawn } from "node:child_process";
 import * as os from "node:os";
 
