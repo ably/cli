@@ -58,7 +58,7 @@ describe('Channel Subscribe E2E Tests', function() {
 
     // Test subscribe functionality - subscribe in one process, publish in another
     it('should subscribe to a channel and receive messages', async function() {
-      const readySignal = "Subscribing to channel"; // Define the signal to wait for
+      const readySignal = "Successfully attached to channel"; // Wait for channel to be fully attached
 
       // Start the subscribe process, waiting for the ready signal
       subscribeProcessInfo = await runLongRunningBackgroundProcess(
