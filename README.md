@@ -4264,8 +4264,9 @@ Set a cursor with position data in a space
 
 ```
 USAGE
-  $ ably spaces cursors set SPACEID --data <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
-    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+  $ ably spaces cursors set SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>] [--x <value>] [--y <value>]
+    [--simulate] [-D <value>]
 
 ARGUMENTS
   SPACEID  The space ID to set cursor in
@@ -4278,26 +4279,35 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
-      --data=<value>          (required) The cursor data to set (as JSON string)
+      --data=<value>          The cursor data to set (as JSON string)
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
+      --simulate              Simulate cursor movement every 250ms with random positions
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
+      --x=<value>             The x coordinate for cursor position
+      --y=<value>             The y coordinate for cursor position
 
 DESCRIPTION
   Set a cursor with position data in a space
 
 EXAMPLES
+  $ ably spaces cursors set my-space --x 100 --y 200
+
+  $ ably spaces cursors set my-space --x 100 --y 200 --data '{"name": "John", "color": "#ff0000"}'
+
+  $ ably spaces cursors set my-space --x 100 --y 200 --simulate
+
   $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}'
 
   $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}, "data": {"name": "John", "color": "#ff0000"}}'
 
-  $ ably spaces cursors set --api-key "YOUR_API_KEY" my-space --data '{"position": {"x": 100, "y": 200}}'
+  $ ably spaces cursors set --api-key "YOUR_API_KEY" my-space --x 100 --y 200
 
-  $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}' --json
+  $ ably spaces cursors set my-space --x 100 --y 200 --json
 
-  $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}' --pretty-json
+  $ ably spaces cursors set my-space --x 100 --y 200 --pretty-json
 ```
 
 _See code: [src/commands/spaces/cursors/set.ts](https://github.com/ably/cli/blob/v0.5.1/src/commands/spaces/cursors/set.ts)_
