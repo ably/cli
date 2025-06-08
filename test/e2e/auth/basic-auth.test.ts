@@ -2,12 +2,23 @@ import { expect } from "chai";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { forceExit, cleanupTrackedResources } from "../../helpers/e2e-test-helper.js";
 
 describe("Authentication E2E", function() {
   let tempConfigDir: string;
   let originalEnv: NodeJS.ProcessEnv;
 
+  // Apply E2E test setup for debug output on failures
+  before(async function() {
+    process.on('SIGINT', forceExit);
+  });
+
+  after(function() {
+    process.removeListener('SIGINT', forceExit);
+  });
+
   beforeEach(function() {
+    this.timeout(120000); // 2 minutes per individual test
     originalEnv = { ...process.env };
     
     // Create temporary config directory
@@ -18,7 +29,7 @@ describe("Authentication E2E", function() {
     process.env.ABLY_CLI_TEST_MODE = 'true';
   });
 
-  afterEach(function() {
+  afterEach(async function() {
     // Restore environment
     process.env = originalEnv;
     
@@ -26,6 +37,9 @@ describe("Authentication E2E", function() {
     if (tempConfigDir && fs.existsSync(tempConfigDir)) {
       fs.rmSync(tempConfigDir, { recursive: true, force: true });
     }
+    
+    // Perform E2E cleanup
+    await cleanupTrackedResources();
   });
 
   describe("config persistence", function() {

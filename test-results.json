@@ -1,0 +1,379 @@
+npm warn invalid config access="public ignore-build-scripts=false" set in /workspace/.npmrc
+npm warn invalid config Must be one of: null, restricted, public
+
+> @ably/cli@0.5.1 pretest
+> pnpm build && chmod +x bin/run.js
+
+
+> @ably/cli@0.5.1 build /workspace
+> shx rm -rf dist && tsc -b
+
+
+> @ably/cli@0.5.1 test
+> ./scripts/run-tests.sh "test/**/*.test.ts" --timeout 30000 --reporter json
+
+Using Mocha test runner for specific test pattern: test/**/*.test.ts
+Executing command: CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=" --no-inspect --unhandled-rejections=strict" node --import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("ts-node/esm", pathToFileURL("./"), { project: "./tsconfig.test.json" });' ./node_modules/mocha/bin/mocha --require ./test/setup.ts --forbid-only --allow-uncaught --exit 'test/**/*.test.ts' --timeout 30000 --reporter json --exclude 'test/e2e/web-cli/**/*.test.ts'
+Test process running with PID 24856
+(node:24858) [DEP0180] DeprecationWarning: fs.Stats constructor is deprecated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:24870) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("ts-node/esm", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:24870) [DEP0180] DeprecationWarning: fs.Stats constructor is deprecated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 401: Unauthorized',
+  response: { error: 'Unauthorized' },
+  statusCode: 401
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 403: Forbidden',
+  response: { error: 'Forbidden' },
+  statusCode: 403
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 404: Not Found',
+  response: { error: 'Not Found' },
+  statusCode: 404
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 500: Internal Server Error',
+  response: { error: 'Internal Server Error' },
+  statusCode: 500
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 400: Bad Request',
+  response: { error: 'Validation failed', details: 'App name already exists' },
+  statusCode: 400
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 401: Unauthorized',
+  response: { error: 'Unauthorized' },
+  statusCode: 401
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 500: Internal Server Error',
+  response: { error: 'Internal Server Error' },
+  statusCode: 500
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 500: Internal Server Error',
+  response: { error: 'Internal Server Error' },
+  statusCode: 500
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 403: Forbidden',
+  response: { error: 'Forbidden' },
+  statusCode: 403
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 409: Conflict',
+  response: {
+    error: 'Conflict',
+    details: 'App has active resources that must be deleted first'
+  },
+  statusCode: 409
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 401: Unauthorized',
+  response: { error: 'Unauthorized' },
+  statusCode: 401
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 403: Forbidden',
+  response: { error: 'Forbidden' },
+  statusCode: 403
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 500: Internal Server Error',
+  response: { error: 'Internal Server Error' },
+  statusCode: 500
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 429: Too Many Requests',
+  response: { error: 'Rate limit exceeded' },
+  statusCode: 429
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 401: Unauthorized',
+  response: { error: 'Unauthorized' },
+  statusCode: 401
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 403: Forbidden',
+  response: { error: 'Forbidden' },
+  statusCode: 403
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 404: Not Found',
+  response: { error: 'App not found' },
+  statusCode: 404
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 500: Internal Server Error',
+  response: { error: 'Internal Server Error' },
+  statusCode: 500
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 400: Bad Request',
+  response: { error: 'Validation failed', details: 'Key name already exists' },
+  statusCode: 400
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+Control API Request Error: {
+  message: 'API request failed with status 429: Too Many Requests',
+  response: { error: 'Rate limit exceeded' },
+  statusCode: 429
+}
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+(node:24870) Error Plugin: @ably/cli: could not find package.json with { name: './dist', type: 'core', root: '/workspace' }
+module: @oclif/core@2.16.0
+plugin: @ably/cli
+root: /workspace
+See more details with DEBUG=*
+[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0f[2J[0fTests exited with code 0
+Adding 1s delay before final exit...

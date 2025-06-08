@@ -7,39 +7,53 @@ import {
   readProcessOutput,
   publishTestMessage,
   killProcess,
-  skipTestsIfNeeded,
-  applyE2ETestSetup
+  forceExit,
+  cleanupTrackedResources,
+  testOutputFiles,
+  testCommands,
+  displayTestFailureDebugOutput
 } from "../../helpers/e2e-test-helper.js";
 import { ChildProcess } from "node:child_process";
 
-// Skip tests if API key not available
-skipTestsIfNeeded('Channel Subscribe E2E Tests');
+describe('Channel Subscribe E2E Tests', function() {
+  // Skip all tests if API key not available
+  before(async function() {
+    if (SHOULD_SKIP_E2E) {
+      this.skip();
+    }
+    process.on('SIGINT', forceExit);
+  });
 
-// Only run the test suite if we should not skip E2E tests
-if (!SHOULD_SKIP_E2E) {
-  describe('Channel Subscribe E2E Tests', function() {
-    // Apply standard E2E setup
-    before(function() {
-      applyE2ETestSetup();
-    });
+  after(function() {
+    process.removeListener('SIGINT', forceExit);
+  });
 
-    let subscribeChannel: string;
-    let outputPath: string;
-    let subscribeProcess: ChildProcess | null = null;
-    let subscribeProcessInfo: any;
+  let subscribeChannel: string;
+  let outputPath: string;
+  let subscribeProcess: ChildProcess | null = null;
+  let subscribeProcessInfo: any;
 
-    beforeEach(async function(){
-      subscribeChannel = getUniqueChannelName("subscribe");
-      outputPath = await createTempOutputFile();
-    });
+  beforeEach(async function() {
+    this.timeout(120000); // 2 minutes per individual test
+    // Clear tracked commands and output files before each test
+    testOutputFiles.clear();
+    testCommands.length = 0;
+    subscribeChannel = getUniqueChannelName("subscribe");
+    outputPath = await createTempOutputFile();
+  });
 
     afterEach(async function() {
-       // Cleanup is handled by applyE2ETestSetup's afterEach hook
+       // Display debug output if test failed
+       if (this.currentTest?.state === 'failed') {
+         await displayTestFailureDebugOutput(this.currentTest?.title);
+       }
        // Kill specific process if necessary
         if (subscribeProcess) {
-            killProcess(subscribeProcess);
+            await killProcess(subscribeProcess);
             subscribeProcess = null;
         }
+        // Perform E2E cleanup
+        await cleanupTrackedResources();
     });
 
     // Test subscribe functionality - subscribe in one process, publish in another
@@ -87,5 +101,4 @@ if (!SHOULD_SKIP_E2E) {
         console.log(`[Test Subscribe] Test finished, cleanup will handle process ${subscribeProcessInfo?.processId}`);
       }
     });
-  });
-}
+});

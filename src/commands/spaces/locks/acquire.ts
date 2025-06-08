@@ -1,4 +1,4 @@
-import Spaces, { type Space, type LockOptions } from "@ably/spaces";
+import { type Space, type LockOptions } from "@ably/spaces";
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
@@ -34,7 +34,7 @@ export default class SpacesLocksAcquire extends SpacesBaseCommand {
 
   private cleanupInProgress = false;
   private realtimeClient: Ably.Realtime | null = null;
-  private spacesClient: Spaces | null = null;
+  private spacesClient: unknown | null = null;
   private lockId: null | string = null;
   private space: Space | null = null;
 

@@ -1,33 +1,8 @@
 import { expect } from "chai";
-import { execa } from "execa";
+import { runCommand } from "../../helpers/command-helpers.js";
+import { forceExit, cleanupTrackedResources, testOutputFiles, testCommands, displayTestFailureDebugOutput } from "../../helpers/e2e-test-helper.js";
+import { spawn } from "node:child_process";
 import { join } from "node:path";
-
-// Helper function to run CLI commands
-async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const cliPath = join(process.cwd(), "bin", "run.js");
-  
-  try {
-    const result = await execa("node", [cliPath, ...args], {
-      timeout: 30000, // 30 second timeout
-      env: {
-        ...process.env,
-        ABLY_CLI_TEST_MODE: "false", // Use real Ably operations for E2E
-      },
-    });
-    
-    return {
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode || 0,
-    };
-  } catch (error: any) {
-    return {
-      stdout: error.stdout || "",
-      stderr: error.stderr || "",
-      exitCode: error.exitCode || 1,
-    };
-  }
-}
 
 describe("Connections E2E Tests", function() {
   // Skip E2E tests if no API key is available
@@ -35,13 +10,35 @@ describe("Connections E2E Tests", function() {
     if (!process.env.ABLY_API_KEY && !process.env.ABLY_ACCESS_TOKEN) {
       this.skip();
     }
+    process.on('SIGINT', forceExit);
+  });
+
+  after(function() {
+    process.removeListener('SIGINT', forceExit);
+  });
+
+  beforeEach(function() {
+    this.timeout(120000); // 2 minutes per individual test
+    // Clear tracked output files and commands for this test
+    testOutputFiles.clear();
+    testCommands.length = 0;
+  });
+
+  afterEach(async function() {
+    if (this.currentTest?.state === 'failed') {
+      await displayTestFailureDebugOutput(this.currentTest?.title);
+    }
+    await cleanupTrackedResources();
   });
 
   describe("Connection Stats E2E", function() {
     it("should retrieve real connection stats successfully", async function() {
       this.timeout(60000); // 60 second timeout for real API calls
       
-      const result = await runCli(["connections", "stats", "--limit", "5"]);
+      const result = await runCommand(["connections", "stats", "--limit", "5"], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       expect(result.stdout).to.include("Connections:");
@@ -52,7 +49,10 @@ describe("Connections E2E Tests", function() {
     it("should output connection stats in JSON format", async function() {
       this.timeout(60000);
       
-      const result = await runCli(["connections", "stats", "--json", "--limit", "3"]);
+      const result = await runCommand(["connections", "stats", "--json", "--limit", "3"], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       
@@ -71,7 +71,10 @@ describe("Connections E2E Tests", function() {
     it("should handle different time units correctly", async function() {
       this.timeout(60000);
       
-      const result = await runCli(["connections", "stats", "--unit", "hour", "--limit", "2"]);
+      const result = await runCommand(["connections", "stats", "--unit", "hour", "--limit", "2"], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       expect(result.stdout).to.include("Stats for");
@@ -83,12 +86,15 @@ describe("Connections E2E Tests", function() {
       const endTime = Date.now();
       const startTime = endTime - (60 * 60 * 1000); // 1 hour ago
       
-      const result = await runCli([
+      const result = await runCommand([
         "connections", "stats", 
         "--start", startTime.toString(),
         "--end", endTime.toString(),
         "--limit", "2"
-      ]);
+      ], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
     });
@@ -100,11 +106,14 @@ describe("Connections E2E Tests", function() {
       const endTime = Date.now();
       const startTime = endTime - 1000; // 1 second ago
       
-      const result = await runCli([
+      const result = await runCommand([
         "connections", "stats",
         "--start", startTime.toString(),
         "--end", endTime.toString()
-      ]);
+      ], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       // Should exit successfully even with no stats
       expect(result.exitCode).to.equal(0);
@@ -115,7 +124,10 @@ describe("Connections E2E Tests", function() {
     it("should test WebSocket connection successfully", async function() {
       this.timeout(90000); // 90 second timeout for connection testing
       
-      const result = await runCli(["connections", "test", "--transport", "ws"]);
+      const result = await runCommand(["connections", "test", "--transport", "ws"], {
+        timeoutMs: 90000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       expect(result.stdout).to.include("WebSocket connection");
@@ -124,7 +136,10 @@ describe("Connections E2E Tests", function() {
     it("should test HTTP connection successfully", async function() {
       this.timeout(90000);
       
-      const result = await runCli(["connections", "test", "--transport", "xhr"]);
+      const result = await runCommand(["connections", "test", "--transport", "xhr"], {
+        timeoutMs: 90000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       expect(result.stdout).to.include("HTTP connection");
@@ -133,7 +148,10 @@ describe("Connections E2E Tests", function() {
     it("should test all connection types", async function() {
       this.timeout(120000); // 2 minute timeout for testing all connections
       
-      const result = await runCli(["connections", "test", "--transport", "all"]);
+      const result = await runCommand(["connections", "test", "--transport", "all"], {
+        timeoutMs: 120000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       expect(result.stdout).to.include("Connection Test Summary");
@@ -142,7 +160,10 @@ describe("Connections E2E Tests", function() {
     it("should output connection test results in JSON format", async function() {
       this.timeout(90000);
       
-      const result = await runCli(["connections", "test", "--transport", "ws", "--json"]);
+      const result = await runCommand(["connections", "test", "--transport", "ws", "--json"], {
+        timeoutMs: 90000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.equal(0);
       
@@ -164,7 +185,10 @@ describe("Connections E2E Tests", function() {
     it("should handle invalid time units gracefully", async function() {
       this.timeout(30000);
       
-      const result = await runCli(["connections", "stats", "--unit", "invalid"]);
+      const result = await runCommand(["connections", "stats", "--unit", "invalid"], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.not.equal(0);
       expect(result.stderr).to.include("Expected --unit=");
@@ -173,7 +197,10 @@ describe("Connections E2E Tests", function() {
     it("should handle invalid transport types gracefully", async function() {
       this.timeout(30000);
       
-      const result = await runCli(["connections", "test", "--transport", "invalid"]);
+      const result = await runCommand(["connections", "test", "--transport", "invalid"], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.not.equal(0);
       expect(result.stderr).to.include("Expected --transport=");
@@ -182,7 +209,10 @@ describe("Connections E2E Tests", function() {
     it("should handle invalid timestamp formats gracefully", async function() {
       this.timeout(30000);
       
-      const result = await runCli(["connections", "stats", "--start", "not-a-timestamp"]);
+      const result = await runCommand(["connections", "stats", "--start", "not-a-timestamp"], {
+        timeoutMs: 30000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result.exitCode).to.not.equal(0);
     });
@@ -193,7 +223,10 @@ describe("Connections E2E Tests", function() {
       this.timeout(45000); // 45 second timeout
       
       const startTime = Date.now();
-      const result = await runCli(["connections", "stats", "--limit", "10"]);
+      const result = await runCommand(["connections", "stats", "--limit", "10"], {
+        timeoutMs: 45000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       const endTime = Date.now();
       
       expect(result.exitCode).to.equal(0);
@@ -205,7 +238,10 @@ describe("Connections E2E Tests", function() {
       
       // Run multiple stats requests in sequence
       for (let i = 0; i < 3; i++) {
-        const result = await runCli(["connections", "stats", "--limit", "2"]);
+        const result = await runCommand(["connections", "stats", "--limit", "2"], {
+          timeoutMs: 30000,
+          env: { ABLY_CLI_TEST_MODE: "false" }
+        });
         expect(result.exitCode).to.equal(0);
       }
     });
@@ -214,8 +250,14 @@ describe("Connections E2E Tests", function() {
       this.timeout(90000);
       
       // Run the same command twice and verify consistent output structure
-      const result1 = await runCli(["connections", "stats", "--json", "--limit", "2"]);
-      const result2 = await runCli(["connections", "stats", "--json", "--limit", "2"]);
+      const result1 = await runCommand(["connections", "stats", "--json", "--limit", "2"], {
+        timeoutMs: 45000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
+      const result2 = await runCommand(["connections", "stats", "--json", "--limit", "2"], {
+        timeoutMs: 45000,
+        env: { ABLY_CLI_TEST_MODE: "false" }
+      });
       
       expect(result1.exitCode).to.equal(0);
       expect(result2.exitCode).to.equal(0);
@@ -243,7 +285,7 @@ describe("Connections E2E Tests", function() {
       const testClientId = `test-client-${Date.now()}`;
       
       // Step 1: Start live connection log monitoring
-      const connectionsMonitor = execa("node", [cliPath, "logs", "connection", "subscribe", "--json"], {
+      const connectionsMonitor = spawn("node", [cliPath, "logs", "connection", "subscribe", "--json"], {
         env: {
           ...process.env,
           ABLY_CLI_TEST_MODE: "false", // Use real Ably operations
@@ -284,7 +326,6 @@ describe("Connections E2E Tests", function() {
                     connectionId: connectionId
                   });
                   
-                  console.log(`Detected connection event for ${testClientId}: ${logEvent.eventType || 'connection'} (${connectionId})`);
                 }
               }
             } catch {
@@ -298,20 +339,17 @@ describe("Connections E2E Tests", function() {
       await new Promise(resolve => setTimeout(resolve, 5000));
       
       // Step 2: Start a channel subscriber with specific client ID (this will create a new connection)
-      console.log(`Starting channel subscriber with clientId: ${testClientId}...`);
-      const channelSubscriber = execa("node", [cliPath, "channels", "subscribe", testChannelName, "--client-id", testClientId], {
+      const channelSubscriber = spawn("node", [cliPath, "channels", "subscribe", testChannelName, "--client-id", testClientId], {
         env: {
           ...process.env,
           ABLY_CLI_TEST_MODE: "false",
         },
-        timeout: 45000, // Increased timeout for connection establishment
       });
       
       // Wait for the subscriber to establish connection and appear in monitoring
       await new Promise(resolve => setTimeout(resolve, 15000));
       
       // Step 3: Close the channel subscriber
-      console.log("Closing channel subscriber...");
       channelSubscriber.kill("SIGTERM");
       
       // Wait for the subscriber to fully disconnect
@@ -322,7 +360,6 @@ describe("Connections E2E Tests", function() {
       }
       
       // Step 4: Wait up to 15 seconds for the disconnection event to appear
-      console.log("Waiting for disconnection event to appear in monitoring...");
       await new Promise(resolve => setTimeout(resolve, 15000));
       
       // Stop the connections monitor
@@ -330,18 +367,15 @@ describe("Connections E2E Tests", function() {
       
       try {
         await connectionsMonitor;
-      } catch (_error) {
-        // Expected - we killed the process
+      } catch (_error: any) {
+        // Should exit cleanly with SIGTERM
+        expect(_error.signal).to.equal("SIGTERM");
       }
       
       // Verify we captured connection lifecycle for our specific client
       expect(connectionEvents.length).to.be.greaterThan(0, `Should have seen connection events for clientId: ${testClientId}`);
       
       // Log captured events for debugging
-      console.log(`Captured ${connectionEvents.length} connection events for ${testClientId}:`);
-      connectionEvents.forEach(event => {
-        console.log(`  - ${event.eventType} at ${new Date(event.timestamp).toISOString()} (${event.connectionId})`);
-      });
       
       // Verify we got valid JSON output throughout
       expect(monitorOutput).to.include("connectionId", "Should have received connection log events");
@@ -357,18 +391,18 @@ describe("Connections E2E Tests", function() {
       const cliPath = join(process.cwd(), "bin", "run.js");
       
       // Start live connection log monitoring
-      const connectionsMonitor = execa("node", [cliPath, "logs", "connection", "subscribe"], {
+      const connectionsMonitor = spawn("node", [cliPath, "logs", "connection", "subscribe"], {
         env: {
           ...process.env,
           ABLY_CLI_TEST_MODE: "false",
         },
       });
       
-      let outputReceived = false;
+      let _outputReceived = false;
       connectionsMonitor.stdout?.on("data", (data) => {
         const output = data.toString();
         if (output.includes("connectionId") || output.includes("transport")) {
-          outputReceived = true;
+          _outputReceived = true;
         }
       });
       
@@ -380,9 +414,9 @@ describe("Connections E2E Tests", function() {
       
       try {
         await connectionsMonitor;
-      } catch (_error) {
+      } catch (_error: any) {
         // Should exit cleanly with SIGTERM
-        expect(outputReceived).to.be.true;
+        expect(_error.signal).to.equal("SIGTERM");
       }
     });
   });

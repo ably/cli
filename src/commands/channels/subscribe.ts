@@ -3,7 +3,9 @@ import * as Ably from "ably";
 import chalk from "chalk";
 
 import { AblyBaseCommand } from "../../base-command.js";
+import { BaseFlags } from "../../types/cli.js";
 import { formatJson, isJsonData } from "../../utils/json-formatter.js";
+import { waitUntilInterruptedOrTimeout } from "../../utils/long-running.js";
 
 export default class ChannelsSubscribe extends AblyBaseCommand {
   static override args = {
@@ -27,6 +29,7 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
     "$ ably channels subscribe --cipher-key YOUR_CIPHER_KEY my-channel",
     "$ ably channels subscribe my-channel --json",
     "$ ably channels subscribe my-channel --pretty-json",
+    "$ ably channels subscribe my-channel --duration 30",
   ];
 
   static override flags = {
@@ -50,6 +53,11 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
       default: false,
       description: "Enable delta compression for messages",
     }),
+    duration: Flags.integer({
+      description: "Automatically exit after the given number of seconds (0 = run indefinitely)",
+      char: "D",
+      required: false,
+    }),
     rewind: Flags.integer({
       default: 0,
       description: "Number of messages to rewind when subscribing",
@@ -58,18 +66,33 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
 
   static override strict = false;
 
+  private cleanupInProgress = false;
   private client: Ably.Realtime | null = null;
+
+  private async properlyCloseAblyClient(): Promise<void> {
+    if (!this.client || this.client.connection.state === 'closed' || this.client.connection.state === 'failed') {
+      return;
+    }
+
+    return new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve();
+      }, 2000);
+
+      const onClosedOrFailed = () => {
+        clearTimeout(timeout);
+        resolve();
+      };
+
+      this.client!.connection.once('closed', onClosedOrFailed);
+      this.client!.connection.once('failed', onClosedOrFailed);
+      this.client!.close();
+    });
+  }
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
-    if (
-      this.client &&
-      this.client.connection.state !== "closed" && // Check state before closing to avoid errors if already closed
-      this.client.connection.state !== "failed"
-    ) {
-      this.client.close();
-    }
-
+    await this.properlyCloseAblyClient();
     return super.finally(err);
   }
 
@@ -79,13 +102,14 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
 
     // Get all channel names from argv
     const channelNames = _args.argv as string[];
+    let channels: Ably.RealtimeChannel[] = [];
 
     try {
       // Create the Ably client
       this.client = await this.createAblyClient(flags);
       if (!this.client) return;
 
-      const { client } = this; // Local const
+      const client = this.client;
 
       if (channelNames.length === 0) {
         const errorMsg = "At least one channel name is required";
@@ -104,7 +128,7 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
       }
 
       // Setup channels with appropriate options
-      const channels = channelNames.map((channelName: string) => {
+      channels = channelNames.map((channelName: string) => {
         const channelOptions: Ably.ChannelOptions = {};
 
         // Configure encryption if cipher key is provided
@@ -301,85 +325,18 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         this.log("Listening for messages. Press Ctrl+C to exit.");
       }
 
-      // Keep the process running until interrupted
-      await new Promise<void>((resolve) => {
-        const cleanup = () => {
-          this.logCliEvent(
-            flags,
-            "subscribe",
-            "cleanupInitiated",
-            "Cleanup initiated (Ctrl+C pressed)",
-          );
-          if (!this.shouldOutputJson(flags)) {
-            this.log("\nUnsubscribing and closing connection...");
-          }
+      // Wait until the user interrupts or the optional duration elapses
+      const effectiveDuration =
+        typeof flags.duration === "number" && flags.duration > 0
+          ? flags.duration
+          : process.env.ABLY_CLI_DEFAULT_DURATION
+          ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
+          : undefined;
 
-          for (const channel of channels) {
-            this.logCliEvent(
-              flags,
-              "subscribe",
-              "unsubscribing",
-              `Unsubscribing from channel ${channel.name}`,
-              { channel: channel.name },
-            );
-            try {
-              channel.unsubscribe();
-              this.logCliEvent(
-                flags,
-                "subscribe",
-                "unsubscribed",
-                `Unsubscribed from channel ${channel.name}`,
-                { channel: channel.name },
-              );
-            } catch (error) {
-              this.logCliEvent(
-                flags,
-                "subscribe",
-                "unsubscribeError",
-                `Error unsubscribing from ${channel.name}: ${error instanceof Error ? error.message : String(error)}`,
-                {
-                  channel: channel.name,
-                  error: error instanceof Error ? error.message : String(error),
-                },
-              );
-            }
-          }
+      const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
+      this.logCliEvent(flags, "subscribe", "runComplete", "Exiting wait loop", { exitReason });
+      this.cleanupInProgress = exitReason === "signal";
 
-          if (client) {
-            client.connection.once("closed", () => {
-              this.logCliEvent(
-                flags,
-                "connection",
-                "closed",
-                "Connection closed gracefully.",
-              );
-              if (!this.shouldOutputJson(flags)) {
-                this.log("Connection closed");
-              }
-
-              resolve();
-            });
-            this.logCliEvent(
-              flags,
-              "connection",
-              "closing",
-              "Closing Ably connection.",
-            );
-            client.close();
-          } else {
-            this.logCliEvent(
-              flags,
-              "subscribe",
-              "noClientToClose",
-              "No active client connection to close.",
-            );
-            resolve();
-          }
-        };
-
-        process.on("SIGINT", cleanup);
-        process.on("SIGTERM", cleanup);
-      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       this.logCliEvent(
@@ -400,16 +357,44 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         this.error(`Error: ${errorMsg}`);
       }
     } finally {
-      // Ensure client is closed even if cleanup promise didn't resolve
-      if (this.client && this.client.connection.state !== "closed") {
-        this.logCliEvent(
-          flags || {},
-          "connection",
-          "finalCloseAttempt",
-          "Ensuring connection is closed in finally block.",
-        );
-        this.client.close();
+      // Wrap all cleanup in a timeout to prevent hanging
+      await Promise.race([
+        this.performCleanup(flags || {}, channels),
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            this.logCliEvent(flags || {}, "subscribe", "cleanupTimeout", "Cleanup timed out after 5s, forcing completion");
+            resolve();
+          }, 5000);
+        })
+      ]);
+
+      if (!this.shouldOutputJson(flags || {})) {
+        if (this.cleanupInProgress) {
+          this.log(chalk.green("Graceful shutdown complete (user interrupt)."));
+        } else {
+          this.log(chalk.green("Duration elapsed – command finished cleanly."));
+        }
       }
     }
+  }
+
+  private async performCleanup(flags: BaseFlags, channels: Ably.RealtimeChannel[]): Promise<void> {
+    // Unsubscribe from all channels with timeout
+    for (const channel of channels) {
+      try {
+        await Promise.race([
+          Promise.resolve(channel.unsubscribe()),
+          new Promise<void>((resolve) => setTimeout(resolve, 1000))
+        ]);
+        this.logCliEvent(flags, "subscribe", "unsubscribedChannel", `Unsubscribed from ${channel.name}`);
+      } catch (error) {
+        this.logCliEvent(flags, "subscribe", "unsubscribeError", `Error unsubscribing from ${channel.name}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // Close Ably client (already has internal timeout)
+    this.logCliEvent(flags, "connection", "closingClientFinally", "Closing Ably client.");
+    await this.properlyCloseAblyClient();
+    this.logCliEvent(flags, "connection", "clientClosedFinally", "Ably client close attempt finished.");
   }
 }

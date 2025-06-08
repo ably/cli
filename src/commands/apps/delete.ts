@@ -17,6 +17,7 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
   static examples = [
     "$ ably apps delete",
     "$ ably apps delete app-id",
+    "$ ably apps delete --app app-id",
     '$ ably apps delete app-id --access-token "YOUR_ACCESS_TOKEN"',
     "$ ably apps delete app-id --force",
     "$ ably apps delete app-id --json",
@@ -30,6 +31,10 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
       default: false,
       description: "Skip confirmation prompt",
     }),
+    app: Flags.string({
+      description: "App ID to delete (overrides argument and current app)",
+      env: "ABLY_APP_ID",
+    }),
   };
 
   async run(): Promise<void> {
@@ -37,8 +42,8 @@ export default class AppsDeleteCommand extends ControlBaseCommand {
 
     const controlApi = this.createControlApi(flags);
 
-    // Use current app ID if none is provided
-    let appIdToDelete = args.id;
+    // Use app ID from flag, argument, or current app (in that order)
+    let appIdToDelete = flags.app || args.id;
     if (!appIdToDelete) {
       appIdToDelete = this.configManager.getCurrentAppId();
       if (!appIdToDelete) {

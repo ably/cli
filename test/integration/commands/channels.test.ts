@@ -1,20 +1,6 @@
 import { expect } from "chai";
 import { test } from "@oclif/test";
 
-// Add type declaration for global mocks
-declare global {
-  var __TEST_MOCKS__: {
-    ablyRestMock: {
-      request: () => any;
-      channels: { get: () => any };
-      close: () => void;
-      connection?: { once: (event: string, cb: () => void) => void };
-      [key: string]: any;
-    };
-    [key: string]: any;
-  } | undefined;
-}
-
 // Create a more comprehensive mock for Ably client
 const mockPresenceMembers = [
   { clientId: "user1", data: { name: "User 1" } },

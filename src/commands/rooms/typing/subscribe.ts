@@ -185,12 +185,28 @@ export default class TypingSubscribe extends ChatBaseCommand {
               this.formatJsonOutput({ success: true, ...eventData }, flags),
             );
           } else {
-            // Clear the line and show who's typing
-            process.stdout.write("\r\u001B[K"); // Clear line, move cursor to beginning
+            // Clear-line updates are helpful in an interactive TTY but they make
+            // the mocha output hard to read when the CLI is invoked from unit
+            // tests (ABLY_CLI_TEST_MODE=true) or when stdout is not a TTY (CI).
+            const shouldInlineUpdate =
+              process.stdout.isTTY && process.env.ABLY_CLI_TEST_MODE !== "true";
+
+            if (shouldInlineUpdate) {
+              // Clear the current line and rewrite it in-place.
+              process.stdout.write("\r\u001B[K");
 
             if (currentlyTyping.length > 0) {
               const memberNames = currentlyTyping.join(", ");
               process.stdout.write(
+                  chalk.yellow(
+                    `${memberNames} ${currentlyTyping.length === 1 ? "is" : "are"} typing...`,
+                  ),
+                );
+              }
+            } else if (currentlyTyping.length > 0) {
+              // Fallback: just log a new line so that test output remains intact.
+              const memberNames = currentlyTyping.join(", ");
+              this.log(
                 chalk.yellow(
                   `${memberNames} ${currentlyTyping.length === 1 ? "is" : "are"} typing...`,
                 ),
@@ -340,7 +356,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
             this.log(`${chalk.green("Successfully disconnected.")}`);
           }
 
-          process.exit(0); // Reinstated: Explicit exit
+          // Graceful exit without forcing process termination.
         });
       });
     } catch (error) {

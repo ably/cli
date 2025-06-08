@@ -1,4 +1,3 @@
-import Spaces from "@ably/spaces";
 import { type Space } from "@ably/spaces";
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
@@ -64,7 +63,7 @@ export default class SpacesLocationsGetAll extends SpacesBaseCommand {
   };
 
   private realtimeClient: Ably.Realtime | null = null;
-  private spacesClient: Spaces | null = null;
+  private spacesClient: unknown | null = null;
   private space: Space | null = null;
 
   async run(): Promise<void> {
