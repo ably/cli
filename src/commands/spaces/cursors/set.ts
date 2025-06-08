@@ -29,18 +29,33 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
   static override description = "Set a cursor with position data in a space";
 
   static override examples = [
+    '$ ably spaces cursors set my-space --x 100 --y 200',
+    '$ ably spaces cursors set my-space --x 100 --y 200 --data \'{"name": "John", "color": "#ff0000"}\'',
+    '$ ably spaces cursors set my-space --x 100 --y 200 --simulate',
     '$ ably spaces cursors set my-space --data \'{"position": {"x": 100, "y": 200}}\'',
     '$ ably spaces cursors set my-space --data \'{"position": {"x": 100, "y": 200}, "data": {"name": "John", "color": "#ff0000"}}\'',
-    '$ ably spaces cursors set --api-key "YOUR_API_KEY" my-space --data \'{"position": {"x": 100, "y": 200}}\'',
-    '$ ably spaces cursors set my-space --data \'{"position": {"x": 100, "y": 200}}\' --json',
-    '$ ably spaces cursors set my-space --data \'{"position": {"x": 100, "y": 200}}\' --pretty-json',
+    '$ ably spaces cursors set --api-key "YOUR_API_KEY" my-space --x 100 --y 200',
+    '$ ably spaces cursors set my-space --x 100 --y 200 --json',
+    '$ ably spaces cursors set my-space --x 100 --y 200 --pretty-json',
   ];
 
   static override flags = {
     ...SpacesBaseCommand.globalFlags,
     data: Flags.string({
       description: "The cursor data to set (as JSON string)",
-      required: true,
+      required: false,
+    }),
+    x: Flags.integer({
+      description: "The x coordinate for cursor position",
+      required: false,
+    }),
+    y: Flags.integer({
+      description: "The y coordinate for cursor position", 
+      required: false,
+    }),
+    simulate: Flags.boolean({
+      description: "Simulate cursor movement every 250ms with random positions",
+      required: false,
     }),
     duration: Flags.integer({
       description:
@@ -97,25 +112,43 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
     }
 
     try {
-      // Validate and parse cursor data
-      if (!flags.data) {
-        this.error("Cursor data is required. Use --data flag with position and optional data.");
-        return;
-      }
-
+      // Validate and parse cursor data - either x/y flags or --data JSON
       let cursorData: Record<string, unknown>;
-      try {
-        cursorData = JSON.parse(flags.data);
-      } catch {
-        this.error("Invalid JSON in --data flag. Expected format: {\"position\":{\"x\":number,\"y\":number},\"data\":{...}}");
-        return;
-      }
 
-      // Validate position
-      if (!cursorData.position || 
-          typeof (cursorData.position as Record<string, unknown>).x !== 'number' || 
-          typeof (cursorData.position as Record<string, unknown>).y !== 'number') {
-        this.error("Invalid cursor position. Expected format: {\"position\":{\"x\":number,\"y\":number}}");
+      if (flags.x !== undefined && flags.y !== undefined) {
+        // Use x & y flags
+        cursorData = {
+          position: { x: flags.x, y: flags.y }
+        };
+        
+        // If --data is also provided with x/y flags, treat it as additional cursor data
+        if (flags.data) {
+          try {
+            const additionalData = JSON.parse(flags.data);
+            cursorData.data = additionalData;
+          } catch {
+            this.error("Invalid JSON in --data flag when used with --x and --y. Expected format: {\"name\":\"value\",...}");
+            return;
+          }
+        }
+      } else if (flags.data) {
+        // Use --data JSON format
+        try {
+          cursorData = JSON.parse(flags.data);
+        } catch {
+          this.error("Invalid JSON in --data flag. Expected format: {\"position\":{\"x\":number,\"y\":number},\"data\":{...}}");
+          return;
+        }
+
+        // Validate position when using --data
+        if (!cursorData.position || 
+            typeof (cursorData.position as Record<string, unknown>).x !== 'number' || 
+            typeof (cursorData.position as Record<string, unknown>).y !== 'number') {
+          this.error("Invalid cursor position in --data. Expected format: {\"position\":{\"x\":number,\"y\":number}}");
+          return;
+        }
+      } else {
+        this.error("Cursor position is required. Use either --x and --y flags, or --data flag with position and optional data.");
         return;
       }
 
@@ -179,7 +212,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
           !this.shouldOutputJson(flags)
         ) {
           this.log(
-            `${chalk.green("Connected to space:")} ${chalk.cyan(spaceId)}`,
+            `${chalk.green("Entered space:")} ${chalk.cyan(spaceId)}`,
           );
         }
       };
@@ -310,6 +343,56 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         process.exit(0);
       }
 
+      // Start simulation if requested
+      if (flags.simulate) {
+        this.logCliEvent(
+          flags,
+          "cursor",
+          "simulationStarted",
+          "Starting cursor movement simulation",
+        );
+
+        if (!this.shouldOutputJson(flags)) {
+          this.log("Starting cursor movement simulation every 250ms...");
+        }
+
+        this.simulationIntervalId = setInterval(async () => {
+          try {
+            // Generate random position within reasonable bounds
+            const simulatedX = Math.floor(Math.random() * 1000);
+            const simulatedY = Math.floor(Math.random() * 800);
+            
+            const simulatedCursor = { 
+              position: { x: simulatedX, y: simulatedY },
+              ...(cursorData.data ? { data: cursorData.data as CursorData } : {})
+            };
+
+            await this.space!.cursors.set(simulatedCursor);
+
+            this.logCliEvent(
+              flags,
+              "cursor",
+              "simulationUpdate",
+              "Simulated cursor position update",
+              { position: { x: simulatedX, y: simulatedY } }
+            );
+
+            if (!this.shouldOutputJson(flags)) {
+              this.log(
+                `${chalk.dim("Simulated:")} cursor at (${simulatedX}, ${simulatedY})`
+              );
+            }
+          } catch (error) {
+            this.logCliEvent(
+              flags,
+              "cursor",
+              "simulationError",
+              `Simulation error: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }, 250);
+      }
+
       // Inform the user and wait until interrupted or timeout (if provided)
       this.logCliEvent(
         flags,
@@ -362,6 +445,9 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         if (this.space) {
           try {
             await this.space.leave();
+            if (flags && !this.shouldOutputJson(flags)) {
+              this.log(`${chalk.green("Left space:")} ${chalk.cyan(spaceId)}`);
+            }
           } catch {
             // ignore
           }
