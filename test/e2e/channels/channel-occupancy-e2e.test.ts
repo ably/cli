@@ -57,7 +57,7 @@ describe('Channel Occupancy E2E Tests', function() {
           `bin/run.js channels subscribe ${occupancyChannel} --duration 20`,
           outputPath,
           { 
-            readySignal: "Subscribing to channel", 
+            readySignal: "Successfully attached to channel", 
             timeoutMs: process.env.CI ? 20000 : 15000, // Increased timeout for CI
             retryCount: 2 
           }
