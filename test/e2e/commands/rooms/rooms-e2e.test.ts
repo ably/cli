@@ -2,7 +2,6 @@ import { expect } from "@oclif/test";
 import { promisify } from "node:util";
 import { exec } from "node:child_process";
 import {
-  E2E_API_KEY,
   SHOULD_SKIP_E2E,
   getUniqueChannelName,
   getUniqueClientId,
@@ -147,14 +146,7 @@ describe('Rooms E2E Tests', function() {
       });
     });
     
-    // Only run interactive tests if we have a working API key
     describe('Presence functionality', function() {
-      before(function() {
-        if (!E2E_API_KEY || E2E_API_KEY.includes('fake')) {
-          this.skip();
-        }
-      });
-
       it('should allow two connections where one person entering is visible to the other', async function() {
           this.timeout(process.env.CI ? 90000 : 75000); // Restored and generous timeout
           let subscribeRunner: CliRunner | null = null;
@@ -280,13 +272,7 @@ describe('Rooms E2E Tests', function() {
         });
       });
     
-    describe('Command Structure Tests (No Real API Key)', function() {
-      before(function() {
-        if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
-          this.skip();
-        }
-      });
-
+    describe('Command Structure Tests', function() {
       it('should have properly structured presence commands', async function() {
           // Test help command to ensure command structure exists
           const helpResult = await runCommand(['rooms', 'presence', 'subscribe', '--help']);

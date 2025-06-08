@@ -104,82 +104,13 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
         this.log(`${chalk.dim("Staying present. Press Ctrl+C to exit.")}`);
       }
 
-      // For E2E tests with fake credentials, show ready signal immediately
-      const hasE2ECredentials = !this.shouldOutputJson(flags) && 
-          (flags["api-key"]?.includes("fake") || 
-           process.env.ABLY_API_KEY?.includes("fake") || 
-           process.env.E2E_ABLY_API_KEY?.includes("fake"));
-      
-      if (hasE2ECredentials) {
-        this.log(`✓ Entered room ${this.roomId || args.roomId} as ${flags["client-id"] || "test-client"} (E2E mode)`);
-        
-        // Wait for the duration in E2E mode
-        const effectiveDuration =
-          typeof flags.duration === "number" && flags.duration > 0
-            ? flags.duration
-            : process.env.ABLY_CLI_DEFAULT_DURATION
-            ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
-            : undefined;
 
-        const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
-        this.logCliEvent(flags, "presence", "runComplete", "Exiting wait loop (E2E fake mode)", { exitReason });
-        this.cleanupInProgress = exitReason === "signal";
-        return;
-      }
-
-      // Try to create clients, but don't fail if auth fails
-      try {
-        this.chatClient = await this.createChatClient(flags);
-        this.ablyClient = await this.createAblyClient(flags);
-      } catch (authError) {
-        // Auth failed, but we still want to show the signal and wait
-        this.logCliEvent(flags, "initialization", "authFailed", `Authentication failed: ${authError instanceof Error ? authError.message : String(authError)}`);
-        if (!this.shouldOutputJson(flags)) {
-          this.log(chalk.yellow("Warning: Failed to connect to Ably (authentication failed)"));
-          
-          // Show mock success behavior for testing when auth fails
-          this.log(`✓ Entered room ${this.roomId || args.roomId} as test-client-id (mock)`);
-        }
-        
-        // Wait for the duration even with auth failures
-        const effectiveDuration =
-          typeof flags.duration === "number" && flags.duration > 0
-            ? flags.duration
-            : process.env.ABLY_CLI_DEFAULT_DURATION
-            ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
-            : undefined;
-
-        const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
-        this.logCliEvent(flags, "presence", "runComplete", "Exiting wait loop (auth exception case)", { exitReason });
-        this.cleanupInProgress = exitReason === "signal";
-        return;
-      }
-
-      if (!this.shouldOutputJson(flags)) {
-        this.log(`${chalk.dim("Staying present. Press Ctrl+C to exit.")}`);
-      }
+      // Create clients
+      this.chatClient = await this.createChatClient(flags);
+      this.ablyClient = await this.createAblyClient(flags);
 
       if (!this.chatClient || !this.ablyClient || !this.roomId) {
-        // Don't exit immediately on auth failures - log the error but continue
-        this.logCliEvent(flags, "initialization", "failed", "Failed to initialize critical components - likely authentication issue");
-        if (!this.shouldOutputJson(flags)) {
-          this.log(chalk.yellow("Warning: Failed to connect to Ably (likely authentication issue)"));
-          
-          // Show mock success behavior for testing when auth fails
-          this.log(`✓ Entered room ${this.roomId || args.roomId} as test-client-id (mock)`);
-        }
-        
-        // Wait for the duration even with auth failures
-        const effectiveDuration =
-          typeof flags.duration === "number" && flags.duration > 0
-            ? flags.duration
-            : process.env.ABLY_CLI_DEFAULT_DURATION
-            ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
-            : undefined;
-
-        const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
-        this.logCliEvent(flags, "presence", "runComplete", "Exiting wait loop (auth failed case)", { exitReason });
-        this.cleanupInProgress = exitReason === "signal";
+        this.error("Failed to initialize chat client or room ID");
         return;
       }
       
