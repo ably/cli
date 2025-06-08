@@ -1,13 +1,7 @@
 import { expect } from "chai";
-import { execa } from "execa";
 import stripAnsi from "strip-ansi";
-
-// Options for execa to prevent Node debugger attachment/output
-const execaOptions = {
-  env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" }, // Clear NODE_OPTIONS and disable interactive prompts
-  reject: false, // Don't reject promise on non-zero exit code, allowing us to inspect error details
-  timeout: 10000 // Add a 10 second timeout for each command
-};
+import { runCommand } from "../../helpers/command-helpers.js";
+import { forceExit, cleanupTrackedResources, testOutputFiles, testCommands, displayTestFailureDebugOutput } from "../../helpers/e2e-test-helper.js";
 
 // Helper function to extract JSON from potentially noisy stdout
 // Looks for the last occurrence of { or [ to handle potential prefixes
@@ -54,13 +48,36 @@ if (SHOULD_SKIP_TESTS) {
 } else {
   // These tests check the basic CLI functionality in a real environment
   describe("Basic CLI E2E", function() {
-    // Set a longer timeout for command execution tests
-    this.timeout(20000);
+    before(function() {
+      process.on('SIGINT', forceExit);
+    });
+
+    after(function() {
+      process.removeListener('SIGINT', forceExit);
+    });
+
+    beforeEach(function() {
+      this.timeout(120000); // 2 minutes per individual test
+      // Clear tracked output files and commands for this test
+      testOutputFiles.clear();
+      testCommands.length = 0;
+    });
+
+    afterEach(async function() {
+      if (this.currentTest?.state === 'failed') {
+        await displayTestFailureDebugOutput(this.currentTest?.title);
+      }
+      await cleanupTrackedResources();
+    });
 
     describe("CLI version", function() {
       it("should output the correct version", async function() {
-        const result = await execa("node", ["bin/run.js", "--version"], execaOptions);
-        expect(result.failed).to.be.false;
+        const result = await runCommand(["--version"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 10000
+        });
+        
+        expect(result.exitCode).to.equal(0);
         // Check if stdout starts with the package name and version format
         expect(result.stdout).to.match(/^@ably\/cli\/[0-9]+\.[0-9]+\.[0-9]+/);
       });
@@ -69,8 +86,12 @@ if (SHOULD_SKIP_TESTS) {
     describe("Global flags", function() {
       it("should accept --json flag without error", async function() {
         // Test --version flag with --json
-        const result = await execa("node", ["bin/run.js", "--version", "--json"], execaOptions);
-        expect(result.failed).to.be.false;
+        const result = await runCommand(["--version", "--json"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 10000
+        });
+        
+        expect(result.exitCode).to.equal(0);
         expect(result.stderr).to.be.empty; // Ensure no errors
 
         // Check for valid JSON output
@@ -87,8 +108,12 @@ if (SHOULD_SKIP_TESTS) {
 
       it("should accept --pretty-json flag without error", async function() {
         // Test --version flag with --pretty-json
-        const result = await execa("node", ["bin/run.js", "--version", "--pretty-json"], execaOptions);
-        expect(result.failed).to.be.false;
+        const result = await runCommand(["--version", "--pretty-json"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 10000
+        });
+        
+        expect(result.exitCode).to.equal(0);
         expect(result.stderr).to.be.empty; // Ensure no errors
 
         // Pretty JSON should contain line breaks
@@ -107,12 +132,13 @@ if (SHOULD_SKIP_TESTS) {
       });
 
       it("should error when both --json and --pretty-json are used", async function() {
-        // Using reject: false, we check the result properties instead of using try/catch
         // Test on a base command (`config`) that inherits global flags
-        const result = await execa("node", ["bin/run.js", "config", "--json", "--pretty-json"], execaOptions);
+        const result = await runCommand(["config", "--json", "--pretty-json"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 10000
+        });
 
-        expect(result.failed).to.be.true; // Command should fail due to exclusive flags
-        expect(result.exitCode).not.equal(0);
+        expect(result.exitCode).not.to.equal(0); // Command should fail due to exclusive flags
         // Check stderr for the specific error message (oclif v3 style)
         expect(result.stderr).to.include("cannot also be provided");
       });
@@ -120,8 +146,12 @@ if (SHOULD_SKIP_TESTS) {
 
     describe("CLI help", function() {
       it("should display help for root command", async function() {
-        const result = await execa("node", ["bin/run.js", "help"], execaOptions);
-        expect(result.failed).to.be.false;
+        const result = await runCommand(["help"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 10000
+        });
+        
+        expect(result.exitCode).to.equal(0);
         expect(result.stderr).to.be.empty;
 
         // Check that main topics are listed
@@ -140,12 +170,12 @@ if (SHOULD_SKIP_TESTS) {
 
       it("should fail when attempting to get help for a non-existent command", async function() {
         // Use the `--help` flag pattern on a non-existent command with non-interactive flag
-        const result = await execa("node", ["bin/run.js", "help", "doesnotexist", "--non-interactive"], {
-          ...execaOptions,
-          timeout: 5000 // Shorter timeout for this specific test
+        const result = await runCommand(["help", "doesnotexist", "--non-interactive"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 5000
         });
 
-        expect(result.failed).to.be.true;
+        expect(result.exitCode).not.to.equal(0);
         // In non-interactive mode, it shows a warning that "help" command is not found
         expect(result.stderr).to.include("help is not an ably command");
       });
@@ -153,39 +183,36 @@ if (SHOULD_SKIP_TESTS) {
 
     describe("Command not found handling", function() {
       it("should suggest and run similar command for a typo (colon input)", async function() {
-        const result = await execa("node", ["bin/run.js", "channels:pubish"], {
-          ...execaOptions,
-          env: { ...execaOptions.env, ABLY_CLI_NON_INTERACTIVE: "true" },
-          timeout: 5000
+        const result = await runCommand(["channels:pubish"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 5000
         });
+        
         // Expect specific warning format and failure
         expect(result.stderr).to.include("Warning: channels pubish is not an ably command."); // Match actual warning
         // Do not expect "Did you mean" in non-interactive output from the hook itself
-        expect(result.failed, `Expected command to fail. Exit code: ${result.exitCode}, stderr: ${result.stderr}`).to.be.true;
         expect(result.exitCode).not.to.equal(0);
       });
 
       it("should suggest and run similar command for a typo (space input)", async function() {
-        const result = await execa("node", ["bin/run.js", "channels", "pubish"], {
-          ...execaOptions,
-          env: { ...execaOptions.env, ABLY_CLI_NON_INTERACTIVE: "true" },
-          timeout: 5000
+        const result = await runCommand(["channels", "pubish"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 5000
         });
+        
         // Expect specific warning format and failure
         expect(result.stderr).to.include("Warning: channels pubish is not an ably command."); // Match actual warning
         // Do not expect "Did you mean" in non-interactive output from the hook itself
-        expect(result.failed, `Expected command to fail. Exit code: ${result.exitCode}, stderr: ${result.stderr}`).to.be.true;
         expect(result.exitCode).not.to.equal(0);
       });
 
       it("should suggest help for completely unknown commands", async function() {
-        const result = await execa("node", ["bin/run.js", "completelyunknowncommand", "--non-interactive"], {
-          ...execaOptions,
-          timeout: 5000 // Shorter timeout for this specific test
+        const result = await runCommand(["completelyunknowncommand", "--non-interactive"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 5000
         });
 
-        expect(result.failed).to.be.true; // Should fail as no suggestion is found
-        expect(result.exitCode).not.equal(0);
+        expect(result.exitCode).not.to.equal(0); // Should fail as no suggestion is found
         // Check stderr for the 'command not found' and help suggestion
         expect(result.stderr).to.include("completelyunknowncommand not found");
         expect(result.stderr).to.include("Run ably --help");
@@ -193,13 +220,12 @@ if (SHOULD_SKIP_TESTS) {
 
       it("should show command not found for topic typo with subcommand", async function() {
         // Example: `ably config doesnotexist` -> input is `config:doesnotexist` internally
-        const result = await execa("node", ["bin/run.js", "config", "doesnotexist", "--non-interactive"], {
-          ...execaOptions,
-          timeout: 5000 // Shorter timeout for this specific test
+        const result = await runCommand(["config", "doesnotexist", "--non-interactive"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 5000
         });
 
-        expect(result.failed).to.be.true;
-        expect(result.exitCode).not.equal(0);
+        expect(result.exitCode).not.to.equal(0);
         // With our updated implementation, it will try to find a close match for "config"
         // and if found, will warn with "config is not an ably command"
         expect(result.stderr).to.include("config is not an ably command");

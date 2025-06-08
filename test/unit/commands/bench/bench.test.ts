@@ -35,6 +35,12 @@ class TestableBenchPublisher extends BenchPublisher {
     promptForText: sinon.stub().resolves("fake-input"),
     promptToSelect: sinon.stub().resolves("fake-selection"),
   } as any;
+
+  // Override to suppress console clearing escape sequences during tests
+  protected override shouldOutputJson(_flags?: any): boolean {
+    // Force JSON output mode during tests to bypass console clearing
+    return true;
+  }
 }
 
 describe("bench publisher control envelopes", function () {

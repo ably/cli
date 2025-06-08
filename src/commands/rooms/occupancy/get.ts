@@ -1,5 +1,6 @@
 import { Args } from "@oclif/core";
 import * as Ably from "ably";
+import { ChatClient, Room, OccupancyEvent } from "@ably/chat";
 import { ChatBaseCommand } from "../../../chat-base-command.js";
 
 export default class RoomsOccupancyGet extends ChatBaseCommand {
@@ -23,18 +24,79 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
     ...ChatBaseCommand.globalFlags,
   };
 
-  private ablyClient: Ably.Realtime | null = null; // Store Ably client for cleanup
+  private ablyClient: Ably.Realtime | null = null;
+  private chatClient: ChatClient | null = null;
+  private room: Room | null = null;
+
+  private async forceCloseConnections(): Promise<void> {
+    try {
+      // First try to release the room
+      if (this.room) {
+        await Promise.race([
+          this.room.detach(),
+          new Promise(resolve => setTimeout(resolve, 1000)) // 1s timeout
+        ]);
+      }
+    } catch {
+      // Ignore detach errors
+    }
+
+    try {
+      // Release room from chat client
+      if (this.chatClient && this.room) {
+        await Promise.race([
+          this.chatClient.rooms.release(this.room.roomId),
+          new Promise(resolve => setTimeout(resolve, 1000)) // 1s timeout
+        ]);
+      }
+    } catch {
+      // Ignore release errors
+    }
+
+    try {
+      // Force close the Ably client
+      if (this.ablyClient) {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            if (this.ablyClient!.connection.state === 'closed') {
+              resolve();
+              return;
+            }
+            
+            const onClosed = () => {
+              resolve();
+            };
+            
+            // Listen for closed and failed states
+            this.ablyClient!.connection.once('closed', onClosed);
+            this.ablyClient!.connection.once('failed', onClosed);
+            this.ablyClient!.close();
+            
+            // Cleanup listeners after 2 seconds
+            setTimeout(() => {
+              this.ablyClient!.connection.off('closed', onClosed);
+              this.ablyClient!.connection.off('failed', onClosed);
+              resolve();
+            }, 2000);
+          }),
+          new Promise<void>(resolve => setTimeout(resolve, 2000)) // 2s timeout
+        ]);
+      }
+    } catch {
+      // Ignore close errors
+    }
+  }
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(RoomsOccupancyGet);
 
     try {
       // Create Chat client
-      const chatClient = await this.createChatClient(flags);
+      this.chatClient = await this.createChatClient(flags);
       // Also get the underlying Ably client for cleanup
       this.ablyClient = await this.createAblyClient(flags);
 
-      if (!chatClient) {
+      if (!this.chatClient) {
         this.error("Failed to create Chat client");
         return;
       }
@@ -42,13 +104,23 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
       const { roomId } = args;
 
       // Get the room with occupancy enabled
-      const room = await chatClient.rooms.get(roomId, {});
+      this.room = await this.chatClient.rooms.get(roomId, {});
 
-      // Attach to the room to access occupancy
-      await room.attach();
+      // Attach to the room to access occupancy with timeout
+      await Promise.race([
+        this.room.attach(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Room attach timeout')), 10000)
+        )
+      ]);
 
       // Get occupancy metrics using the Chat SDK's occupancy API
-      const occupancyMetrics = await room.occupancy.get();
+      const occupancyMetrics = await Promise.race([
+        this.room.occupancy.get(),
+        new Promise<OccupancyEvent>((_, reject) => 
+          setTimeout(() => reject(new Error('Occupancy get timeout')), 5000)
+        )
+      ]);
 
       // Output the occupancy metrics based on format
       if (this.shouldOutputJson(flags)) {
@@ -66,13 +138,9 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
         this.log(`Occupancy metrics for room '${roomId}':\n`);
         this.log(`Connections: ${occupancyMetrics.connections ?? 0}`);
 
-        if (occupancyMetrics.presenceMembers !== undefined) {
-          this.log(`Presence Members: ${occupancyMetrics.presenceMembers}`);
-        }
+        this.log(`Presence Members: ${occupancyMetrics.presenceMembers ?? 0}`);
       }
 
-      // Release the room
-      await chatClient.rooms.release(roomId);
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(
@@ -91,9 +159,15 @@ export default class RoomsOccupancyGet extends ChatBaseCommand {
         );
       }
     } finally {
-      if (this.ablyClient && this.ablyClient.connection.state !== "closed") {
-        this.ablyClient.close();
-      }
+      // Force cleanup with timeouts to ensure the command exits
+      await this.forceCloseConnections();
+      
+      // Force exit after cleanup
+      setTimeout(() => {
+        if (process.env.NODE_ENV !== 'test') {
+          process.exit(0);
+        }
+      }, 100);
     }
   }
 }

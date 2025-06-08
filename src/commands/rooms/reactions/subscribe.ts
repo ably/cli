@@ -401,7 +401,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
           clearTimeout(forceExitTimeout);
           resolve();
 
-          process.exit(0); // Reinstated: Explicit exit after cleanup
+          // Allow natural process exit after cleanup without forcing termination.
         };
 
         process.on("SIGINT", () => void cleanup());

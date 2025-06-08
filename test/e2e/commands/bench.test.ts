@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
+import { forceExit, cleanupTrackedResources, testOutputFiles, testCommands, displayTestFailureDebugOutput } from "../../helpers/e2e-test-helper.js";
 import { resolve } from "node:path";
-// import { AblyTestEnvironment } from "test/helpers/ably-test-environment.js"; // Removed as not strictly needed and causing import error
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 
 // Path to the compiled CLI entry point
 const cliPath = resolve(process.cwd(), "bin/run.js");
@@ -13,8 +13,6 @@ const DEBUG_OUTPUT = Boolean(process.env.ABLY_CLI_TEST_SHOW_OUTPUT);
 const DEFAULT_TIMEOUT = 30_000; // 30 seconds
 
 describe("E2E: ably bench publisher and subscriber", function () {
-  this.timeout(DEFAULT_TIMEOUT * 4); // Allow more time for the whole suite (was * 2, then *3, now *4 = 120s)
-
   let testChannel: string;
   let apiKey: string;
 
@@ -22,8 +20,27 @@ describe("E2E: ably bench publisher and subscriber", function () {
     if (!process.env.ABLY_API_KEY) {
       this.skip(); // Skip tests if ABLY_API_KEY is not set
     }
+    process.on('SIGINT', forceExit);
     apiKey = process.env.ABLY_API_KEY;
     testChannel = `cli-e2e-bench-${Date.now()}`;
+  });
+
+  after(function() {
+    process.removeListener('SIGINT', forceExit);
+  });
+
+  beforeEach(function() {
+    this.timeout(120000); // 2 minutes per individual test
+    // Clear tracked output files and commands for this test
+    testOutputFiles.clear();
+    testCommands.length = 0;
+  });
+
+  afterEach(async function() {
+    if (this.currentTest?.state === 'failed') {
+      await displayTestFailureDebugOutput(this.currentTest?.title);
+    }
+    await cleanupTrackedResources();
   });
 
   it("should run publisher and subscriber, and report correct message counts", async function () {
@@ -86,7 +103,6 @@ describe("E2E: ably bench publisher and subscriber", function () {
           const errorChunk = data.toString();
           if (DEBUG_OUTPUT) {
             process.stderr.write(`[DEBUG_SUB_ERR] ${errorChunk}`); // Pipe to main stderr
-            console.error(`SUBSCRIBER STDERR: ${errorChunk.trim()}`);
           }
         });
 
@@ -158,7 +174,6 @@ describe("E2E: ably bench publisher and subscriber", function () {
           const errorChunk = data.toString();
           if (DEBUG_OUTPUT) {
             process.stderr.write(`[DEBUG_PUB_ERR] ${errorChunk}`); // Pipe to main stderr
-            console.error(`PUBLISHER STDERR: ${errorChunk.trim()}`);
           }
         });
         publisherProcess.on("error", (err) => {

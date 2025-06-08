@@ -5,7 +5,7 @@ import ConnectionsStats from "../../../../src/commands/connections/stats.js";
 import * as Ably from "ably";
 import { describe, beforeEach, afterEach } from 'mocha';
 
-/* eslint-disable mocha/no-setup-in-describe */
+ 
 
 // Create a testable version of ConnectionsStats
 class TestableConnectionsStats extends ConnectionsStats {
@@ -83,39 +83,40 @@ describe("ConnectionsStats", function() {
   let mockConfig: Config;
   let mockStatsMethod: sinon.SinonStub;
   let originalConsoleLog: typeof console.log;
-
-  // Mock stats data
-  const mockStats = [
-    {
-      intervalId: Date.now().toString(),
-      entries: {
-        'connections.all.peak': 10,
-        'connections.all.min': 5,
-        'connections.all.mean': 7.5,
-        'connections.all.opened': 15,
-        'connections.all.refused': 2,
-        'connections.all.count': 8,
-        'channels.peak': 25,
-        'channels.min': 10,
-        'channels.mean': 18,
-        'channels.opened': 30,
-        'channels.refused': 1,
-        'channels.count': 20,
-        'messages.inbound.all.messages.count': 100,
-        'messages.outbound.all.messages.count': 90,
-        'messages.all.all.count': 190,
-        'messages.all.all.data': 5000,
-        'apiRequests.all.succeeded': 50,
-        'apiRequests.all.failed': 3,
-        'apiRequests.all.refused': 1,
-        'apiRequests.tokenRequests.succeeded': 10,
-        'apiRequests.tokenRequests.failed': 0,
-        'apiRequests.tokenRequests.refused': 0
-      }
-    }
-  ];
+  let mockStats: any[]; // Declare without initialization
 
   beforeEach(function() {
+    // Initialize mockStats here to avoid function calls in describe block
+    mockStats = [
+      {
+        intervalId: Date.now().toString(), // Move the Date.now() call here
+        entries: {
+          'connections.all.peak': 10,
+          'connections.all.min': 5,
+          'connections.all.mean': 7.5,
+          'connections.all.opened': 15,
+          'connections.all.refused': 2,
+          'connections.all.count': 8,
+          'channels.peak': 25,
+          'channels.min': 10,
+          'channels.mean': 18,
+          'channels.opened': 30,
+          'channels.refused': 1,
+          'channels.count': 20,
+          'messages.inbound.all.messages.count': 100,
+          'messages.outbound.all.messages.count': 90,
+          'messages.all.all.count': 190,
+          'messages.all.all.data': 5000,
+          'apiRequests.all.succeeded': 50,
+          'apiRequests.all.failed': 3,
+          'apiRequests.all.refused': 1,
+          'apiRequests.tokenRequests.succeeded': 10,
+          'apiRequests.tokenRequests.failed': 0,
+          'apiRequests.tokenRequests.refused': 0
+        }
+      }
+    ];
+
     sandbox = sinon.createSandbox();
     mockConfig = { runHook: sinon.stub() } as unknown as Config;
     command = new TestableConnectionsStats([], mockConfig);
