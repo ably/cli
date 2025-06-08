@@ -320,11 +320,6 @@ describe('channels commands', function() {
 │   │   └── services/
 │   ├── setup.ts            # Full setup for E2E tests (runs in Mocha context)
 │   └── mini-setup.ts       # Minimal setup for Unit/Integration tests
-├── server/
-│   └── tests/              # Server-specific tests
-│       ├── unit/           # Server unit tests
-│       ├── integration/    # Server integration tests
-│       └── performance/    # Server load and performance tests
 └── ...
 ```
 

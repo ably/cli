@@ -20,10 +20,10 @@ This document outlines the directory structure of the Ably CLI project.
 ├── packages/               # Internal packages used by the project.
 │   └── react-web-cli/      # React component for the web-based CLI.
 ├── scripts/                # Utility scripts for development and deployment.
-│   ├── restricted-shell.sh # Shell script for the restricted Docker environment.
-│   ├── terminal-server.ts  # Server implementation for the web CLI terminal.
-│   ├── terminal-test-client.ts # Test client for the terminal server.
-│   └── test-web-cli.sh     # Script to test the web CLI functionality.
+│   ├── lint-test-paths.sh  # Script to validate test file paths.
+│   ├── postinstall-welcome.ts # Post-installation welcome message.
+│   ├── pre-push-validation.sh # Pre-push validation checks.
+│   └── run-tests.sh        # Test runner script.
 ├── src/                    # Source code for the CLI.
 │   ├── base-command.ts     # Base class for all CLI commands, containing common logic.
 │   ├── chat-base-command.ts # Base class specific to Ably Chat commands.

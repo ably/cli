@@ -38,3 +38,14 @@ Please report bugs or suggest features using GitHub Issues.
 5.  Push your branch to your fork.
 6.  Create a Pull Request against the `main` branch of the `ably/cli` repository.
 7.  Ensure all CI checks pass.
+
+## Testing Against Local Terminal Server
+
+For Ably engineers working on terminal server features:
+
+1. Clone the private `cli-terminal-server` repository
+2. Run the server locally: `pnpm dev`
+3. Set environment variable: `export TERMINAL_SERVER_URL=ws://localhost:8080`
+4. Run CLI tests: `pnpm test:e2e`
+
+This allows testing CLI changes against local server modifications before deployment.
