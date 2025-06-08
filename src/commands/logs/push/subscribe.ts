@@ -53,15 +53,9 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
       const channelName = "[meta]log:push";
       const channelOptions: Ably.ChannelOptions = {};
 
-      // Add listeners for connection state changes
-      client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-        this.logCliEvent(
-          flags,
-          "connection",
-          stateChange.current,
-          `Connection state changed to ${stateChange.current}`,
-          { reason: stateChange.reason },
-        );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(client, flags, {
+        includeUserFriendlyMessages: true
       });
 
       // Configure rewind if specified
@@ -81,15 +75,9 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
 
       const channel = client.channels.get(channelName, channelOptions);
 
-      // Listen to channel state changes
-      channel.on((stateChange: Ably.ChannelStateChange) => {
-        this.logCliEvent(
-          flags,
-          "channel",
-          stateChange.current,
-          `Channel '${channelName}' state changed to ${stateChange.current}`,
-          { channel: channelName, reason: stateChange.reason },
-        );
+      // Set up channel state logging
+      this.setupChannelStateLogging(channel, flags, {
+        includeUserFriendlyMessages: true
       });
 
       this.logCliEvent(

@@ -123,18 +123,10 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         return;
       }
 
-      // Add listeners for connection state changes
-      this.ablyClient.connection.on(
-        (stateChange: Ably.ConnectionStateChange) => {
-          this.logCliEvent(
-            flags,
-            "connection",
-            stateChange.current,
-            `Connection state changed to ${stateChange.current}`,
-            { reason: stateChange.reason },
-          );
-        },
-      );
+      // Set up connection state logging
+      this.setupConnectionStateLogging(this.ablyClient, flags, {
+        includeUserFriendlyMessages: true
+      });
 
       // Get the room with occupancy option enabled
       this.logCliEvent(

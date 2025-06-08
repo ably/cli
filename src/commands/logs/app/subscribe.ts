@@ -77,33 +77,9 @@ export default class LogsAppSubscribe extends AblyBaseCommand {
 
       const client = this.client;
 
-      // Setup connection state change handler
-      client.connection.on((stateChange: Ably.ConnectionStateChange) => {
-        this.logCliEvent(
-          flags,
-          "connection",
-          stateChange.current,
-          `Connection state changed to ${stateChange.current}`,
-          { reason: stateChange.reason },
-        );
-        if (!this.shouldOutputJson(flags)) {
-          switch (stateChange.current) {
-            case "connected": {
-              this.log("Successfully connected to Ably");
-              break;
-            }
-            case "disconnected": {
-              this.log("Disconnected from Ably");
-              break;
-            }
-            case "failed": {
-              this.error(
-                `Connection failed: ${stateChange.reason?.message || "Unknown error"}`,
-              );
-              break;
-            }
-          }
-        }
+      // Set up connection state logging
+      this.setupConnectionStateLogging(client, flags, {
+        includeUserFriendlyMessages: true
       });
 
       // Get the logs channel
@@ -115,37 +91,9 @@ export default class LogsAppSubscribe extends AblyBaseCommand {
       const logsChannelName = `[meta]log:app.${appConfig.appId}`;
       channel = client.channels.get(logsChannelName);
 
-      // Setup channel state change handler
-      channel.on((stateChange: Ably.ChannelStateChange) => {
-        this.logCliEvent(
-          flags,
-          "channel",
-          stateChange.current,
-          `Channel '${logsChannelName}' state changed to ${stateChange.current}`,
-          { reason: stateChange.reason },
-        );
-        if (!this.shouldOutputJson(flags)) {
-          switch (stateChange.current) {
-            case "attached": {
-              this.log(
-                `${chalk.green("✓")} Successfully attached to logs channel`,
-              );
-              break;
-            }
-            case "failed": {
-              this.log(
-                `${chalk.red("✗")} Failed to attach to logs channel: ${stateChange.reason?.message || "Unknown error"}`,
-              );
-              break;
-            }
-            case "detached": {
-              this.log(
-                `${chalk.yellow("!")} Detached from logs channel`,
-              );
-              break;
-            }
-          }
-        }
+      // Set up channel state logging
+      this.setupChannelStateLogging(channel, flags, {
+        includeUserFriendlyMessages: true
       });
 
       // Determine which log types to subscribe to

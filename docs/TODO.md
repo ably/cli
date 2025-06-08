@@ -35,7 +35,7 @@
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the server
 - [x] For commands that run indefinitely like subscribe, or enter, should we add an optional command line argument that allows them to timeout after X seconds. Then in CI, we can ensure that the default settings (with an ENV var) is say 20 seconds, so that at least we can ensure these commands can never mistakenly wait. Check where `timeout` has been uused in test suites and replace with the appropriate timeout argument (name still to be determined). Whilst CI will have a default timeout for all commands, the tests that rely on this should explicitly set a timeout. In addition, we should update the docs for agents to tell them that commands that run indefinitely like subscribe, enter, have these arguments, and they should be used when running tests, and when running commands locally, prefixing them with `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
 - [ ] Support new endpoint client optiosn when public -> https://github.com/ably/ably-js/pull/1973
-- [ ] For all commands that are long running, where we connect over a realtime client, the CLI should output connection failure events, like disconnected, suspended, failed and then from those states, if they reconnedt, we should output that. 
+- [X] For all commands that are long running, where we connect over a realtime client, the CLI should output connection failure events, like disconnected, suspended, failed and then from those states, if they reconnedt, we should output that. 
 - [X] E2E tests that fail should output the cmd output from the CLI commands run so that it's easier to debug these failures.
 
 ## Server Migration

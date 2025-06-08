@@ -1,5 +1,4 @@
 import { expect } from "@oclif/test";
-import { randomUUID } from "node:crypto";
 import {
   E2E_API_KEY,
   SHOULD_SKIP_E2E,
@@ -12,7 +11,6 @@ import {
   killProcess,
   forceExit,
   cleanupTrackedResources,
-  createAblyRealtimeClient,
   trackTestOutputFile,
   testOutputFiles,
   testCommands,
@@ -57,9 +55,14 @@ describe('Spaces E2E Tests', function() {
   });
 
   // Only run interactive tests if we have a working API key
-  if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
-    describe('Members presence functionality', function() {
-      it('should allow two connections where one person entering is visible to the other', async function() {
+  describe('Members presence functionality', function() {
+    before(function() {
+      if (!E2E_API_KEY || E2E_API_KEY.includes('fake')) {
+        this.skip();
+      }
+    });
+
+    it('should allow two connections where one person entering is visible to the other', async function() {
         let membersProcess: ChildProcess | null = null;
         let outputPath: string = '';
 
@@ -374,7 +377,8 @@ describe('Spaces E2E Tests', function() {
           expect(getAllResult.stdout).to.contain("TestUser2");
 
         } catch (error) {
-          throw error;
+          // Re-throw with additional context
+          throw new Error(`Test failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
           if (cursorsProcess) {
             await killProcess(cursorsProcess);
@@ -502,6 +506,8 @@ describe('Spaces E2E Tests', function() {
               lockReleasedReceived = true;
               break;
             } else if (i % 5 === 0 && output.length > 0 && process.env.E2E_DEBUG) {
+              // Debug output for troubleshooting
+              console.log(`[DEBUG] Lock release check attempt ${i}: ${output.slice(-200)}`);
             }
             await new Promise(resolve => setTimeout(resolve, 300));
           }
@@ -521,8 +527,14 @@ describe('Spaces E2E Tests', function() {
         }
       });
     });
-    } else {
+    
     describe('Command Structure Tests (No Real API Key)', function() {
+      before(function() {
+        if (E2E_API_KEY && !E2E_API_KEY.includes('fake')) {
+          this.skip();
+        }
+      });
+
       it('should have properly structured spaces member commands', async function() {
         // Test help command to ensure command structure exists
         const helpResult = await runBackgroundProcessAndGetOutput(
@@ -556,5 +568,4 @@ describe('Spaces E2E Tests', function() {
         expect(helpResult.stdout).to.contain("Subscribe to lock events");
       });
     });
-  }
 });
