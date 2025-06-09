@@ -107,7 +107,7 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
 
       // Create clients
       this.chatClient = await this.createChatClient(flags);
-      this.ablyClient = await this.createAblyClient(flags);
+      this.ablyClient = this._chatRealtimeClient;
 
       if (!this.chatClient || !this.ablyClient || !this.roomId) {
         this.error("Failed to initialize chat client or room ID");

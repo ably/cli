@@ -89,11 +89,21 @@ export default class BenchSubscriber extends AblyBaseCommand {
     try {
       channel = this.handleChannel(client, args.channel, flags);
 
+      // Show initial status
+      if (!this.shouldOutputJson(flags)) {
+        this.log(`Attaching to channel: ${chalk.cyan(args.channel)}...`);
+      }
+      
       await this.handlePresence(channel, metrics, flags);
 
       this.subscribeToMessages(channel, metrics, flags);
 
       await this.checkInitialPresence(channel, metrics, flags);
+      
+      // Show success message
+      if (!this.shouldOutputJson(flags)) {
+        this.log(chalk.green(`✓ Subscribed to channel: ${chalk.cyan(args.channel)}. Waiting for benchmark messages...`));
+      }
 
       await this.waitForTermination(flags);
     } catch (error) {
@@ -768,11 +778,6 @@ export default class BenchSubscriber extends AblyBaseCommand {
   private async waitForTermination(
     flags: Record<string, unknown>,
   ): Promise<void> {
-    if (!this.shouldOutputJson(flags)) {
-      this.log("\nSubscriber is ready. Waiting for messages...");
-      this.log("Press Ctrl+C to exit.");
-    }
-
     this.logCliEvent(
       flags,
       "benchmark",

@@ -112,7 +112,7 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
       // Create Chat client
       this.chatClient = await this.createChatClient(flags);
       // Also get the underlying Ably client for cleanup and state listeners
-      this.ablyClient = await this.createAblyClient(flags);
+      this.ablyClient = this._chatRealtimeClient;
 
       if (!this.chatClient) {
         this.error("Failed to create Chat client");

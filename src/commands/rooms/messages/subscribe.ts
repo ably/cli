@@ -157,87 +157,20 @@ export default class MessagesSubscribe extends ChatBaseCommand {
     this.logCliEvent(flags, "subscribe.run", "start", `Starting rooms messages subscribe for room: ${this.roomId}`);
 
     try {
-      // Always show the readiness signal first, before attempting auth
+      // Create clients
+      this.logCliEvent(flags, "subscribe.auth", "attemptingClientCreation", "Attempting to create Chat and Ably clients.");
+      // Create Chat client (which also creates the Ably client internally)
+      this.chatClient = await this.createChatClient(flags) as ChatClientType;
+      // Get the underlying Ably client for cleanup and state listeners
+      this.ablyClient = this._chatRealtimeClient;
+      this.logCliEvent(flags, "subscribe.auth", "clientCreationSuccess", "Chat and Ably clients created.");
+      
       if (!this.shouldOutputJson(flags)) {
-        this.log(`${chalk.dim("Listening for messages. Press Ctrl+C to exit.")}`);
-      }
-      this.logCliEvent(flags, "subscribe.run", "initialSignalLogged", "Initial readiness signal logged.");
-
-      // Try to create clients, but don't fail if auth fails
-      try {
-        this.logCliEvent(flags, "subscribe.auth", "attemptingClientCreation", "Attempting to create Chat and Ably clients.");
-        // Create Chat client
-        this.chatClient = await this.createChatClient(flags) as ChatClientType;
-        // Also get the underlying Ably client for cleanup and state listeners
-        this.ablyClient = await this.createAblyClient(flags);
-        this.logCliEvent(flags, "subscribe.auth", "clientCreationSuccess", "Chat and Ably clients created.");
-      } catch (authError) {
-        const errorMsg = authError instanceof Error ? authError.message : String(authError);
-        this.logCliEvent(flags, "initialization", "authFailed", `Authentication failed: ${errorMsg}`, { error: errorMsg });
-        if (!this.shouldOutputJson(flags)) {
-          this.log(`Connected to room: ${this.roomId || args.roomId} (mock)`);
-          this.log("Listening for messages");
-        }
-        
-        // Wait for the duration even with auth failures
-        const effectiveDuration =
-          typeof flags.duration === "number" && flags.duration > 0
-            ? flags.duration
-            : process.env.ABLY_CLI_DEFAULT_DURATION
-            ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
-            : undefined;
-
-        const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
-        this.logCliEvent(flags, "subscribe", "runComplete", "Exiting wait loop (auth exception case)", { exitReason });
-        this.cleanupInProgress = exitReason === "signal";
-        return;
+        this.log(`Attaching to room: ${chalk.cyan(this.roomId)}...`);
       }
 
-      if (!this.shouldOutputJson(flags)) {
-        this.log(`${chalk.dim("Listening for messages. Press Ctrl+C to exit.")}`);
-      }
-
-      if (!this.chatClient) {
-        // Don't exit immediately on auth failures - log the error but continue
-        this.logCliEvent(flags, "initialization", "failed", "Failed to create Chat client - likely authentication issue");
-        if (!this.shouldOutputJson(flags)) {
-          this.log(`Connected to room: ${this.roomId || args.roomId} (mock)`);
-          this.log("Listening for messages");
-        }
-        
-        // Wait for the duration even with auth failures
-        const effectiveDuration =
-          typeof flags.duration === "number" && flags.duration > 0
-            ? flags.duration
-            : process.env.ABLY_CLI_DEFAULT_DURATION
-            ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
-            : undefined;
-
-        const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
-        this.logCliEvent(flags, "subscribe", "runComplete", "Exiting wait loop (auth failed case)", { exitReason });
-        this.cleanupInProgress = exitReason === "signal";
-        return;
-      }
-      if (!this.ablyClient) {
-        // Don't exit immediately on auth failures - log the error but continue  
-        this.logCliEvent(flags, "initialization", "failed", "Failed to create Ably client - likely authentication issue");
-        if (!this.shouldOutputJson(flags)) {
-          this.log(`Connected to room: ${this.roomId || args.roomId} (mock)`);
-          this.log("Listening for messages");
-        }
-        
-        // Wait for the duration even with auth failures
-        const effectiveDuration =
-          typeof flags.duration === "number" && flags.duration > 0
-            ? flags.duration
-            : process.env.ABLY_CLI_DEFAULT_DURATION
-            ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
-            : undefined;
-
-        const exitReason = await waitUntilInterruptedOrTimeout(effectiveDuration);
-        this.logCliEvent(flags, "subscribe", "runComplete", "Exiting wait loop (auth failed case)", { exitReason });
-        this.cleanupInProgress = exitReason === "signal";
-        return;
+      if (!this.chatClient || !this.ablyClient) {
+        throw new Error("Failed to create Chat or Ably client");
       }
 
       // Set up connection state logging
@@ -318,20 +251,10 @@ export default class MessagesSubscribe extends ChatBaseCommand {
           this.logCliEvent(flags, "room", `status-${change.current}`, `Room status changed to ${change.current}`, { reason: change.reason, roomId: this.roomId });
           if (change.current === "attached") {
             this.logCliEvent(flags, "room", "statusAttached", "Room status is ATTACHED.");
-            if (!this.shouldSuppressOutput(flags)) {
-              if (this.shouldOutputJson(flags)) {
-                // Already logged via logCliEvent
-              } else {
-                this.log(
-                  `${chalk.green("Connected to room:")} ${chalk.bold(this.roomId)}`,
-                );
-                // Output the exact signal that E2E tests expect (without ANSI codes)
-                this.log("Listening for messages");
-                this.logCliEvent(flags, "room", "readySignalLogged", "Final readiness signal 'Listening for messages' logged.");
-                this.log(
-                  `${chalk.dim("Press Ctrl+C to exit.")}`,
-                );
-              }
+            // Log the ready signal for E2E tests
+            this.log(`Connected to room: ${this.roomId}`);
+            if (!this.shouldOutputJson(flags)) {
+              this.log(chalk.green(`✓ Subscribed to room: ${chalk.cyan(this.roomId)}. Listening for messages...`));
             }
             // If we want to suppress output, we just don't log anything
           } else if (change.current === "failed") {
@@ -418,14 +341,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
         "cleanupComplete",
         "Cleanup complete",
       );
-      if (!this.shouldOutputJson(flags || {})) {
-        if (this.cleanupInProgress) {
-          this.log(chalk.green("Graceful shutdown complete (user interrupt)."));
-        } else {
-          // Normal completion without user interrupt
-          this.logCliEvent(flags || {}, "subscribe", "completedNormally", "Command completed normally");
-        }
-      }
+      // Don't show cleanup messages for minimal output
     }
   }
 
