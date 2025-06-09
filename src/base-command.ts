@@ -225,7 +225,7 @@ export abstract class AblyBaseCommand extends Command {
     }
 
     // Show auth info at the start of the command (but not in Web CLI mode)
-    if (!this.isWebCliMode && !this._authInfoShown) {
+    if (!this.isWebCliMode) {
       this.showAuthInfoIfNeeded(flags);
     }
 
@@ -927,10 +927,9 @@ export abstract class AblyBaseCommand extends Command {
   protected showAuthInfoIfNeeded(flags: BaseFlags = {}): void {
     // Skip if already shown
     if (this._authInfoShown) {
-      this.debug(`Auth info already shown for command: ${this.id}, _authInfoShown = ${this._authInfoShown}`);
+      this.debug(`Auth info already shown for command: ${this.id}`);
       return;
     }
-    this.debug(`Auth info not yet shown, _authInfoShown = ${this._authInfoShown}`);
     
     // Skip auth info if specified in the exceptions list
     if (!this.shouldShowAuthInfo()) {

@@ -45,8 +45,8 @@ export default class MessagesGet extends ChatBaseCommand {
     try {
       // Create Chat client
       const chatClient = await this.createChatClient(flags);
-      // Also get the underlying Ably client for cleanup
-      this.ablyClient = await this.createAblyClient(flags);
+      // Get the underlying Ably client for cleanup
+      this.ablyClient = this._chatRealtimeClient;
 
       if (!chatClient) {
         this.error("Failed to create Chat client");
