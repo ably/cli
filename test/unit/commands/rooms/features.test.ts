@@ -27,6 +27,9 @@ class TestableRoomCommand {
   }
 
   public async createChatClient(_flags: any) {
+    // Mimic the behavior of ChatBaseCommand.createChatClient
+    // which sets _chatRealtimeClient
+    (this as any)._chatRealtimeClient = this.mockRealtimeClient;
     return this.mockChatClient;
   }
 
@@ -67,7 +70,12 @@ class TestableRoomsOccupancySubscribe extends RoomsOccupancySubscribe {
 
   public setParseResult(result: any) { this.testableCommand.setParseResult(result); }
   public override async parse() { return this.testableCommand.parse(); }
-  protected override async createChatClient(flags: any) { return this.testableCommand.createChatClient(flags); }
+  protected override async createChatClient(flags: any) { 
+    const client = this.testableCommand.createChatClient(flags);
+    // Set _chatRealtimeClient as the parent class expects
+    (this as any)._chatRealtimeClient = this.testableCommand.mockRealtimeClient;
+    return client;
+  }
   protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
@@ -83,7 +91,12 @@ class TestableRoomsPresenceEnter extends RoomsPresenceEnter {
 
   public setParseResult(result: any) { this.testableCommand.setParseResult(result); }
   public override async parse() { return this.testableCommand.parse(); }
-  protected override async createChatClient(flags: any) { return this.testableCommand.createChatClient(flags); }
+  protected override async createChatClient(flags: any) { 
+    const client = this.testableCommand.createChatClient(flags);
+    // Set _chatRealtimeClient as the parent class expects
+    (this as any)._chatRealtimeClient = this.testableCommand.mockRealtimeClient;
+    return client;
+  }
   protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
@@ -115,7 +128,12 @@ class TestableRoomsTypingKeystroke extends RoomsTypingKeystroke {
 
   public setParseResult(result: any) { this.testableCommand.setParseResult(result); }
   public override async parse() { return this.testableCommand.parse(); }
-  protected override async createChatClient(flags: any) { return this.testableCommand.createChatClient(flags); }
+  protected override async createChatClient(flags: any) { 
+    const client = this.testableCommand.createChatClient(flags);
+    // Set _chatRealtimeClient as the parent class expects
+    (this as any)._chatRealtimeClient = this.testableCommand.mockRealtimeClient;
+    return client;
+  }
   protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
@@ -175,6 +193,7 @@ describe("rooms feature commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),
@@ -210,11 +229,13 @@ describe("rooms feature commands", function () {
       mockOccupancy = {
         subscribe: subscribeStub,
         unsubscribe: sandbox.stub().resolves(),
+        get: sandbox.stub().resolves({ connections: 0, presenceMembers: 0 }),
       };
 
       mockRoom = {
         attach: sandbox.stub().resolves(),
         occupancy: mockOccupancy,
+        onStatusChange: sandbox.stub().returns({ off: sandbox.stub() }),
       };
 
       command.mockChatClient = {
@@ -227,6 +248,7 @@ describe("rooms feature commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),
@@ -374,6 +396,7 @@ describe("rooms feature commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),
@@ -445,6 +468,7 @@ describe("rooms feature commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),

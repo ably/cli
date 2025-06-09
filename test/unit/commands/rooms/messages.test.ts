@@ -55,6 +55,8 @@ class TestableRoomsMessagesSubscribe extends RoomsMessagesSubscribe {
   }
 
   protected override async createChatClient(_flags: any) {
+    // Set _chatRealtimeClient as the parent class expects
+    (this as any)._chatRealtimeClient = this.mockRealtimeClient;
     return this.mockChatClient;
   }
 
@@ -136,6 +138,7 @@ describe("rooms messages commands", function () {
       mockRoom = {
         attach: sandbox.stub().resolves(),
         messages: mockMessages,
+        onStatusChange: sandbox.stub().returns({ off: sandbox.stub() }),
       };
 
       command.mockChatClient = {
@@ -148,6 +151,8 @@ describe("rooms messages commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          once: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),
@@ -245,6 +250,7 @@ describe("rooms messages commands", function () {
       mockRoom = {
         attach: sandbox.stub().resolves(),
         messages: mockMessages,
+        onStatusChange: sandbox.stub().returns({ off: sandbox.stub() }),
       };
 
       command.mockChatClient = {
@@ -257,6 +263,8 @@ describe("rooms messages commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          once: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),
@@ -276,9 +284,11 @@ describe("rooms messages commands", function () {
         // Simulate receiving a message
         setTimeout(() => {
           callback({
-            text: "Test message",
-            clientId: "test-client",
-            timestamp: new Date(),
+            message: {
+              text: "Test message",
+              clientId: "test-client",
+              timestamp: new Date(),
+            }
           });
         }, 10);
         return Promise.resolve();
@@ -330,6 +340,7 @@ describe("rooms messages commands", function () {
       mockRoom = {
         attach: sandbox.stub().resolves(),
         messages: mockMessages,
+        onStatusChange: sandbox.stub().returns({ off: sandbox.stub() }),
       };
 
       command.mockChatClient = {
@@ -342,6 +353,8 @@ describe("rooms messages commands", function () {
       command.mockRealtimeClient = {
         connection: {
           on: sandbox.stub(),
+          once: sandbox.stub(),
+          off: sandbox.stub(),
           state: "connected",
         },
         close: sandbox.stub(),

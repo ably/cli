@@ -83,7 +83,7 @@ export default class MessagesReactionsSubscribe extends ChatBaseCommand {
     try {
       // Create Chat client
       this.chatClient = await this.createChatClient(flags);
-      this.ablyClient = await this.createAblyClient(flags);
+      this.ablyClient = this._chatRealtimeClient;
       
       if (!this.chatClient || !this.ablyClient) {
         this.error("Failed to initialize clients");
