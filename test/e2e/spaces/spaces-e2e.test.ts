@@ -14,7 +14,7 @@ import {
   testOutputFiles,
   testCommands,
   displayTestFailureDebugOutput
-} from "../../../helpers/e2e-test-helper.js";
+} from "../../helpers/e2e-test-helper.js";
 import { ChildProcess } from "node:child_process";
 
 
