@@ -187,6 +187,8 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
       });
 
       // Subscribe to messages on all channels
+      const attachPromises: Promise<void>[] = [];
+      
       for (const channel of channels) {
         this.logCliEvent(
           flags,
@@ -197,7 +199,7 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         );
         if (!this.shouldOutputJson(flags)) {
           this.log(
-            `${chalk.green("Subscribing to channel:")} ${chalk.cyan(channel.name)}`,
+            `Attaching to channel: ${chalk.cyan(channel.name)}...`,
           );
         }
 
@@ -205,6 +207,18 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         this.setupChannelStateLogging(channel, flags, {
           includeUserFriendlyMessages: true
         });
+        
+        // Track attachment promise
+        const attachPromise = new Promise<void>((resolve) => {
+          const checkAttached = () => {
+            if (channel.state === 'attached') {
+              resolve();
+            }
+          };
+          channel.once('attached', checkAttached);
+          checkAttached(); // Check if already attached
+        });
+        attachPromises.push(attachPromise);
 
         channel.subscribe((message: Ably.Message) => {
           const timestamp = message.timestamp
@@ -250,6 +264,23 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
           }
         });
       }
+      
+      // Wait for all channels to attach
+      await Promise.all(attachPromises);
+      
+      // Log the ready signal for E2E tests
+      if (channelNames.length === 1) {
+        this.log(`Successfully attached to channel ${channelNames[0]}`);
+      }
+      
+      // Show success message once all channels are attached
+      if (!this.shouldOutputJson(flags)) {
+        if (channelNames.length === 1) {
+          this.log(chalk.green(`✓ Subscribed to channel: ${chalk.cyan(channelNames[0])}. Listening for messages...`));
+        } else {
+          this.log(chalk.green(`✓ Subscribed to ${channelNames.length} channels. Listening for messages...`));
+        }
+      }
 
       this.logCliEvent(
         flags,
@@ -257,9 +288,6 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         "listening",
         "Listening for messages. Press Ctrl+C to exit.",
       );
-      if (!this.shouldOutputJson(flags)) {
-        this.log("Listening for messages. Press Ctrl+C to exit.");
-      }
 
       // Wait until the user interrupts or the optional duration elapses
       const effectiveDuration =
@@ -304,13 +332,7 @@ export default class ChannelsSubscribe extends AblyBaseCommand {
         })
       ]);
 
-      if (!this.shouldOutputJson(flags || {})) {
-        if (this.cleanupInProgress) {
-          this.log(chalk.green("Graceful shutdown complete (user interrupt)."));
-        } else {
-          this.log(chalk.green("Duration elapsed – command finished cleanly."));
-        }
-      }
+      // Don't show cleanup messages for minimal output
     }
   }
 

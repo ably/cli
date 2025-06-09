@@ -88,7 +88,7 @@ export default class RoomsPresenceSubscribe extends ChatBaseCommand {
       // Try to create clients, but don't fail if auth fails
       try {
         this.chatClient = await this.createChatClient(flags);
-        this.ablyClient = await this.createAblyClient(flags);
+        this.ablyClient = this._chatRealtimeClient;
       } catch (authError) {
         // Auth failed, but we still want to show the signal and wait
         this.logCliEvent(flags, "initialization", "authFailed", `Authentication failed: ${authError instanceof Error ? authError.message : String(authError)}`);

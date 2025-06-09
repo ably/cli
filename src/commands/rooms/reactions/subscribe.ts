@@ -65,7 +65,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
       // Create Chat client
       // this.clients = await this.createChatClient(flags) // Assign to chatClient
       this.chatClient = await this.createChatClient(flags);
-      this.ablyClient = await this.createAblyClient(flags); // Also create Ably client
+      this.ablyClient = this._chatRealtimeClient; // Also create Ably client
       // if (!this.clients) return // Check both clients
       if (!this.chatClient || !this.ablyClient) {
         this.error("Failed to initialize clients");

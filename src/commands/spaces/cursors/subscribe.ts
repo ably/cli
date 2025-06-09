@@ -313,9 +313,12 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
         "Listening for cursor updates...",
       );
 
-      // Print user-facing message that tests expect
+      // Log the ready signal for E2E tests
+      this.log("Subscribing to cursor movements");
+      
+      // Print success message
       if (!this.shouldOutputJson(flags)) {
-        this.log("Subscribing to cursor movements. Press Ctrl+C to exit.");
+        this.log(chalk.green(`✓ Subscribed to space: ${chalk.cyan(spaceId)}. Listening for cursor movements...`));
       }
       
       // Wait until the user interrupts or the optional duration elapses
@@ -365,12 +368,11 @@ export default class SpacesCursorsSubscribe extends SpacesBaseCommand {
         ]);
       }
 
-      if (!this.shouldOutputJson(flags || {})) {
-        this.log(chalk.green("Command finished."));
-      }
-
+      // Don't show cleanup messages for minimal output
       // Ensure process exits cleanly so user doesn't need to press Ctrl+C twice
-      process.exit(0);
+      if (process.env.NODE_ENV !== 'test') {
+        process.exit(0);
+      }
     }
   }
 

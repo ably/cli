@@ -38,6 +38,8 @@ const SKIP_AUTH_INFO_COMMANDS = [
 ];
 
 export abstract class AblyBaseCommand extends Command {
+  protected _authInfoShown = false;
+  
   // Add static flags that will be available to all commands
   static globalFlags = {
     "access-token": Flags.string({
@@ -223,7 +225,7 @@ export abstract class AblyBaseCommand extends Command {
     }
 
     // Show auth info at the start of the command (but not in Web CLI mode)
-    if (!this.isWebCliMode) {
+    if (!this.isWebCliMode && !this._authInfoShown) {
       this.showAuthInfoIfNeeded(flags);
     }
 
@@ -923,6 +925,13 @@ export abstract class AblyBaseCommand extends Command {
    * This should be called at the start of run() in command implementations
    */
   protected showAuthInfoIfNeeded(flags: BaseFlags = {}): void {
+    // Skip if already shown
+    if (this._authInfoShown) {
+      this.debug(`Auth info already shown for command: ${this.id}, _authInfoShown = ${this._authInfoShown}`);
+      return;
+    }
+    this.debug(`Auth info not yet shown, _authInfoShown = ${this._authInfoShown}`);
+    
     // Skip auth info if specified in the exceptions list
     if (!this.shouldShowAuthInfo()) {
       this.debug(`Skipping auth info display for command: ${this.id}`);
@@ -959,12 +968,14 @@ export abstract class AblyBaseCommand extends Command {
     ) {
       // Data plane commands (product API)
       this.displayDataPlaneInfo(flags);
+      this._authInfoShown = true;
     } else if (
       this.id?.startsWith("accounts") ||
       this.id?.startsWith("integrations")
     ) {
       // Control plane commands
       this.displayControlPlaneInfo(flags);
+      this._authInfoShown = true;
     }
   }
 
@@ -1099,7 +1110,7 @@ export abstract class AblyBaseCommand extends Command {
       if (showUserMessages && !this.shouldOutputJson(flags)) {
         switch (stateChange.current) {
           case "connected": {
-            this.log(chalk.green("✓ Connected to Ably"));
+            // Don't show connected message - it's implied by successful channel/space operations
             break;
           }
           case "disconnected": {
@@ -1115,7 +1126,7 @@ export abstract class AblyBaseCommand extends Command {
             break;
           }
           case "connecting": {
-            this.log(chalk.blue("Connecting to Ably..."));
+            // Don't show connecting message - it's too transient
             break;
           }
         }
@@ -1150,7 +1161,7 @@ export abstract class AblyBaseCommand extends Command {
       if (showUserMessages && !this.shouldOutputJson(flags)) {
         switch (stateChange.current) {
           case "attached": {
-            this.log(chalk.green(`✓ Successfully attached to channel: ${chalk.cyan(channel.name)}`));
+            // Success will be shown by the command itself in context
             break;
           }
           case "failed": {
@@ -1162,7 +1173,7 @@ export abstract class AblyBaseCommand extends Command {
             break;
           }
           case "attaching": {
-            this.log(chalk.blue(`Attaching to channel: ${chalk.cyan(channel.name)}...`));
+            // Don't show attaching message - only show when attached or failed
             break;
           }
         }
