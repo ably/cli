@@ -69,51 +69,11 @@ jobs:
           echo "ABLY_API_KEY=${{ secrets.E2E_ABLY_API_KEY }}" > .env.test
           echo "E2E_ABLY_API_KEY=${{ secrets.E2E_ABLY_API_KEY }}" >> .env.test
 
-      - name: Run E2E Basic CLI Tests  
+      - name: Run All E2E CLI Tests  
         run: |
-          echo "Running E2E Basic CLI Tests..."
-          timeout 900s pnpm test:e2e:basic || {
-            echo "E2E Basic CLI tests failed or timed out"
-            exit 1
-          }
-
-      - name: Run E2E Channel Tests
-        run: |
-          echo "Running E2E Channel Tests..."
-          timeout 900s pnpm test:e2e:channels || {
-            echo "E2E Channel tests failed or timed out"
-            exit 1
-          }
-
-      - name: Run E2E Commands Tests
-        run: |
-          echo "Running E2E Commands Tests..."
-          timeout 900s pnpm test:e2e:commands || {
-            echo "E2E Commands tests failed or timed out"
-            exit 1
-          }
-
-      - name: Run E2E Spaces Tests
-        run: |
-          echo "Running E2E Spaces Tests..."
-          timeout 900s pnpm test:e2e:spaces || {
-            echo "E2E Spaces tests failed or timed out"
-            exit 1
-          }
-
-      - name: Run E2E Rooms Tests  
-        run: |
-          echo "Running E2E Rooms Tests..."
-          timeout 900s pnpm test:e2e:rooms || {
-            echo "E2E Rooms tests failed or timed out"
-            exit 1
-          }
-
-      - name: Run E2E Control API Tests
-        run: |
-          echo "Running E2E Control API Tests..."
-          timeout 900s pnpm test:e2e:control || {
-            echo "E2E Control API tests failed or timed out"
+          echo "Running All E2E CLI Tests..."
+          timeout 1800s pnpm test:e2e || {
+            echo "E2E CLI tests failed or timed out"
             exit 1
           }
 
