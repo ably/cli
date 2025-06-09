@@ -98,8 +98,8 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
 
       // Create Chat client
       this.chatClient = await this.createChatClient(flags);
-      // Also get the underlying Ably client for connection state changes
-      this.ablyClient = await this.createAblyClient(flags);
+      // Get the underlying Ably client for connection state changes
+      this.ablyClient = this._chatRealtimeClient;
 
       if (!this.chatClient) {
         this.error("Failed to create Chat client");
