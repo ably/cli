@@ -180,8 +180,7 @@ export default class TypingSubscribe extends ChatBaseCommand {
             // Clear-line updates are helpful in an interactive TTY but they make
             // the mocha output hard to read when the CLI is invoked from unit
             // tests (ABLY_CLI_TEST_MODE=true) or when stdout is not a TTY (CI).
-            const shouldInlineUpdate =
-              process.stdout.isTTY && process.env.ABLY_CLI_TEST_MODE !== "true";
+            const shouldInlineUpdate = this.shouldUseTerminalUpdates();
 
             if (shouldInlineUpdate) {
               // Clear the current line and rewrite it in-place.

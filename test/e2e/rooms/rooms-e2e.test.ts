@@ -50,8 +50,8 @@ async function _waitForStringInOutput(
 
 // Helper function to strip ANSI codes
 function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex, unicorn/escape-case, unicorn/no-hex-escape
-  return str.replaceAll(/\x1b\[[0-9;]*m/g, '');
+  // eslint-disable-next-line no-control-regex
+  return str.replaceAll(/\u001B\[[0-9;]*m/g, '');
 }
 
 describe('Rooms E2E Tests', function() {

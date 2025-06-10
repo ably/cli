@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@ably/cli': 'link:'
+
 importers:
 
   .:
@@ -11,6 +14,9 @@ importers:
       '@ably/chat':
         specifier: ^0.7.0
         version: 0.7.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@ably/cli':
+        specifier: 'link:'
+        version: 'link:'
       '@ably/spaces':
         specifier: ^0.4.0
         version: 0.4.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

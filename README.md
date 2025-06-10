@@ -3053,7 +3053,7 @@ Subscribe to live connection lifecycle logs
 ```
 USAGE
   $ ably logs connection-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--rewind <value>]
 
 FLAGS
   -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
@@ -3066,6 +3066,7 @@ FLAGS
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
       --pretty-json           Output in colorized JSON format
+      --rewind=<value>        Number of messages to replay from history when subscribing
       --token=<value>         Authenticate using an Ably Token or JWT Token instead of an API key
 
 DESCRIPTION
@@ -4297,7 +4298,9 @@ EXAMPLES
 
   $ ably spaces cursors set my-space --x 100 --y 200 --data '{"name": "John", "color": "#ff0000"}'
 
-  $ ably spaces cursors set my-space --x 100 --y 200 --simulate
+  $ ably spaces cursors set my-space --simulate
+
+  $ ably spaces cursors set my-space --simulate --x 500 --y 500
 
   $ ably spaces cursors set my-space --data '{"position": {"x": 100, "y": 200}}'
 
