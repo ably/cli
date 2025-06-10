@@ -123,6 +123,17 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   /**
+   * Check if terminal updates (like carriage returns and line clearing) should be used.
+   * Returns true only when:
+   * - Output is to a TTY (interactive terminal)
+   * - Not in test mode
+   * - Not in CI environment
+   */
+  protected shouldUseTerminalUpdates(): boolean {
+    return process.stdout.isTTY && !this.isTestMode() && !process.env.CI;
+  }
+
+  /**
    * Get test mocks if in test mode
    * @returns Test mocks object or undefined if not in test mode
    */
@@ -1092,11 +1103,11 @@ export abstract class AblyBaseCommand extends Command {
       component?: string;
       includeUserFriendlyMessages?: boolean;
     }
-  ): void {
+  ): (() => void) {
     const component = options?.component || "connection";
     const showUserMessages = options?.includeUserFriendlyMessages || false;
 
-    client.connection.on((stateChange: Ably.ConnectionStateChange) => {
+    const connectionStateHandler = (stateChange: Ably.ConnectionStateChange) => {
       this.logCliEvent(
         flags,
         component,
@@ -1130,7 +1141,14 @@ export abstract class AblyBaseCommand extends Command {
           }
         }
       }
-    });
+    };
+
+    client.connection.on(connectionStateHandler);
+
+    // Return cleanup function
+    return () => {
+      client.connection.off(connectionStateHandler);
+    };
   }
 
   /**
@@ -1144,11 +1162,11 @@ export abstract class AblyBaseCommand extends Command {
       component?: string;
       includeUserFriendlyMessages?: boolean;
     }
-  ): void {
+  ): (() => void) {
     const component = options?.component || "channel";
     const showUserMessages = options?.includeUserFriendlyMessages || false;
 
-    channel.on((stateChange: Ably.ChannelStateChange) => {
+    const stateChangeHandler = (stateChange: Ably.ChannelStateChange) => {
       this.logCliEvent(
         flags,
         component,
@@ -1177,7 +1195,14 @@ export abstract class AblyBaseCommand extends Command {
           }
         }
       }
-    });
+    };
+
+    channel.on(stateChangeHandler);
+
+    // Return cleanup function
+    return () => {
+      channel.off(stateChangeHandler);
+    };
   }
 }
 export { BaseFlags } from "./types/cli.js";

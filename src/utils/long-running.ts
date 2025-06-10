@@ -11,6 +11,15 @@ export type ExitReason = "signal" | "timeout";
 export async function waitUntilInterruptedOrTimeout(
   durationSeconds?: number,
 ): Promise<ExitReason> {
+  // In test mode, we may have many instances running concurrently
+  // Increase the max listeners to avoid warnings
+  if (process.env.ABLY_CLI_TEST_MODE === "true") {
+    const currentMax = process.getMaxListeners();
+    if (currentMax < 50) {
+      process.setMaxListeners(50);
+    }
+  }
+
   return new Promise<ExitReason>((resolve) => {
     const handleExit = (reason: ExitReason): void => {
       if (timeoutId) clearTimeout(timeoutId);
@@ -19,7 +28,7 @@ export async function waitUntilInterruptedOrTimeout(
       
       // For timeout cases in CLI commands, exit immediately to prevent hanging
       // This is especially important for E2E tests and automated scenarios
-      if (reason === "timeout") {
+      if (reason === "timeout" && process.env.ABLY_CLI_TEST_MODE !== "true") {
         console.log("Duration elapsed – command finished cleanly.");
         // Small delay to ensure output is written to files/streams
         setTimeout(() => process.exit(0), 200);

@@ -23,10 +23,16 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
       char: "D",
       required: false,
     }),
+    rewind: Flags.integer({
+      description: "Number of messages to replay from history when subscribing",
+      default: 0,
+      required: false,
+    }),
   };
 
   private cleanupInProgress = false;
   private client: Ably.Realtime | null = null;
+  private cleanupChannelStateLogging: (() => void) | null = null;
 
   private async properlyCloseAblyClient(): Promise<void> {
     if (!this.client || this.client.connection.state === 'closed' || this.client.connection.state === 'failed') {
@@ -70,12 +76,13 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
         includeUserFriendlyMessages: true
       });
 
-      // Get the logs channel
+      // Get the logs channel with optional rewind
       const logsChannelName = `[meta]log:connection.lifecycle`;
-      channel = client.channels.get(logsChannelName);
+      const channelOptions = flags.rewind ? { params: { rewind: String(flags.rewind) } } : undefined;
+      channel = client.channels.get(logsChannelName, channelOptions);
 
       // Set up channel state logging
-      this.setupChannelStateLogging(channel, flags, {
+      this.cleanupChannelStateLogging = this.setupChannelStateLogging(channel, flags, {
         includeUserFriendlyMessages: true
       });
 
@@ -189,6 +196,12 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
   }
 
   private async performCleanup(flags: BaseFlags, channel: Ably.RealtimeChannel | null): Promise<void> {
+    // Clean up channel state logging
+    if (this.cleanupChannelStateLogging) {
+      this.cleanupChannelStateLogging();
+      this.cleanupChannelStateLogging = null;
+    }
+    
     // Unsubscribe from connection lifecycle logs with timeout
     if (channel) {
       try {

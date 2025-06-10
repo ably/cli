@@ -495,7 +495,10 @@ export default class BenchSubscriber extends AblyBaseCommand {
   }
 
   private resetDisplay(displayTable: InstanceType<typeof Table>): void {
-    process.stdout.write("\u001B[2J\u001B[0f"); // Clear screen, move cursor
+    // Skip terminal control in CI/test mode
+    if (this.shouldUseTerminalUpdates()) {
+      process.stdout.write("\u001B[2J\u001B[0f"); // Clear screen, move cursor
+    }
     this.log(displayTable.toString());
     this.log("\n--- Logs (Last 10) ---");
   }

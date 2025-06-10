@@ -107,7 +107,50 @@ export default class ConnectionsTest extends AblyBaseCommand {
       summary,
     );
 
-    if (!this.shouldOutputJson(flags)) {
+    if (this.shouldOutputJson(flags)) {
+      // Output JSON summary
+      let jsonOutput: Record<string, unknown>;
+      
+      switch (flags.transport) {
+        case "all": {
+          jsonOutput = {
+            success: wsSuccess && xhrSuccess,
+            transport: "all",
+            ws: summary.ws,
+            xhr: summary.xhr,
+          };
+          break;
+        }
+        case "ws": {
+          jsonOutput = {
+            success: wsSuccess,
+            transport: "ws",
+            connectionId: wsSuccess ? this.wsClient?.connection.id : undefined,
+            connectionKey: wsSuccess ? this.wsClient?.connection.key : undefined,
+            error: wsError?.message || undefined,
+          };
+          break;
+        }
+        case "xhr": {
+          jsonOutput = {
+            success: xhrSuccess,
+            transport: "xhr",
+            connectionId: xhrSuccess ? this.xhrClient?.connection.id : undefined,
+            connectionKey: xhrSuccess ? this.xhrClient?.connection.key : undefined,
+            error: xhrError?.message || undefined,
+          };
+          break;
+        }
+        default: {
+          jsonOutput = {
+            success: false,
+            error: "Unknown transport",
+          };
+        }
+      }
+      
+      this.log(this.formatJsonOutput(jsonOutput, flags));
+    } else {
       this.log("");
       this.log("Connection Test Summary:");
 

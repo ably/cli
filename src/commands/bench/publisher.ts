@@ -525,7 +525,8 @@ export default class BenchPublisher extends AblyBaseCommand {
     if (this.shouldOutputJson(flags)) {
       this.log(this.formatJsonOutput(summaryData, flags));
     } else {
-      if (progressDisplay) {
+      if (progressDisplay && this.shouldUseTerminalUpdates()) {
+        // Skip terminal control in CI/test mode
         process.stdout.write("\u001B[2J\u001B[0f");
       }
 

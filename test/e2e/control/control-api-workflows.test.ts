@@ -1,8 +1,8 @@
 import { expect } from 'chai';
 import { describe, it, before, after, beforeEach, afterEach } from 'mocha';
-import { ControlApi } from '../../src/services/control-api.js';
-import { runBackgroundProcessAndGetOutput, forceExit, cleanupTrackedResources, testOutputFiles, testCommands, displayTestFailureDebugOutput } from '../helpers/e2e-test-helper.js';
-import { runCommand } from '../helpers/command-helpers.js';
+import { ControlApi } from '../../../src/services/control-api.js';
+import { runBackgroundProcessAndGetOutput, forceExit, cleanupTrackedResources, testOutputFiles, testCommands, displayTestFailureDebugOutput } from '../../helpers/e2e-test-helper.js';
+import { runCommand } from '../../helpers/command-helpers.js';
 
 describe('Control API E2E Workflow Tests', () => {
   

@@ -77,13 +77,15 @@ describe("LogsConnectionLifecycleSubscribe", function() {
     mockConfig = { runHook: sinon.stub() } as unknown as Config;
     command = new TestableLogsConnectionLifecycleSubscribe([], mockConfig);
 
-    // Set up a complete mock client structure for the [meta]connection.lifecycle channel
+    // Set up a complete mock client structure for the [meta]log:connection.lifecycle channel
     const mockChannelInstance = {
-      name: '[meta]connection.lifecycle',
+      name: '[meta]log:connection.lifecycle',
       subscribe: sandbox.stub(),
       attach: sandbox.stub().resolves(),
       detach: sandbox.stub().resolves(),
       on: sandbox.stub(),
+      off: sandbox.stub(),
+      unsubscribe: sandbox.stub(),
     };
 
     command.mockClient = {
@@ -100,9 +102,9 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       close: sandbox.stub(),
     };
 
-    // Set default parse result
+    // Set default parse result with duration to prevent hanging
     command.setParseResult({
-      flags: { rewind: 0 },
+      flags: { rewind: 0, duration: 0.1 },
       args: {},
       argv: [],
       raw: []
@@ -126,25 +128,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start the command but interrupt it quickly to avoid hanging
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch (error: any) {
-      // Expected timeout
-      if (!error.message.includes('Test timeout')) {
-        throw error;
-      }
-    }
+    // Run the command with a short duration
+    await command.run();
 
     expect(createClientStub.calledOnce).to.be.true;
   });
@@ -161,31 +146,17 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start the command but interrupt it quickly
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
+    // Run the command with a short duration
+    await command.run();
 
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
-
-    // Verify that we got the [meta]connection.lifecycle channel and subscribed to it
-    expect(command.mockClient.channels.get.calledWith('[meta]connection.lifecycle')).to.be.true;
+    // Verify that we got the [meta]log:connection.lifecycle channel and subscribed to it
+    expect(command.mockClient.channels.get.calledWith('[meta]log:connection.lifecycle')).to.be.true;
     expect(subscribeStub.called).to.be.true;
   });
 
   it("should handle rewind parameter", async function() {
     command.setParseResult({
-      flags: { rewind: 10 },
+      flags: { rewind: 10, duration: 0.1 },
       args: {},
       argv: [],
       raw: []
@@ -198,25 +169,11 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start and quickly abort
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
+    // Run the command with a short duration
+    await command.run();
 
     // Verify channel was created with rewind parameter
-    expect(command.mockClient.channels.get.calledWith('[meta]connection.lifecycle', {
+    expect(command.mockClient.channels.get.calledWith('[meta]log:connection.lifecycle', {
       params: { rewind: '10' }
     })).to.be.true;
   });
@@ -225,22 +182,14 @@ describe("LogsConnectionLifecycleSubscribe", function() {
     const connectionOnStub = command.mockClient.connection.on;
     const channelOnStub = command.mockClient.channels.get().on;
 
-    // Start and quickly abort
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 50);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
+    // Set duration and run
+    command.setParseResult({
+      flags: { rewind: 0, duration: 0.05 },
+      args: {},
+      argv: [],
+      raw: []
+    });
+    await command.run();
 
     // Verify that connection state change handlers were set up
     expect(connectionOnStub.called).to.be.true;
@@ -258,22 +207,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start and quickly abort
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
+    // Run the command with a short duration
+    await command.run();
 
     // Verify subscribe was called
     expect(subscribeStub.called).to.be.true;
@@ -312,22 +247,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start and quickly abort
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
+    // Run the command with a short duration
+    await command.run();
 
     // Test different event types
     const messageCallback = subscribeStub.firstCall.args[0];
@@ -377,22 +298,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start and quickly abort
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
+    // Run the command with a short duration
+    await command.run();
 
     // Simulate receiving a message in JSON mode
     const messageCallback = subscribeStub.firstCall.args[0];
@@ -412,7 +319,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       const jsonOutput = command.logOutput.find(log => {
         try {
           const parsed = JSON.parse(log);
-          return parsed.success === true && parsed.event === 'connection.opened';
+          return parsed.event === 'connection.opened' && parsed.timestamp && parsed.id === 'msg-123';
         } catch {
           return false;
         }
@@ -424,6 +331,14 @@ describe("LogsConnectionLifecycleSubscribe", function() {
   it("should handle channel state changes", async function() {
     const channelOnStub = command.mockClient.channels.get().on;
 
+    // Set verbose mode to see channel state changes in logs
+    command.setParseResult({
+      flags: { rewind: 0, duration: 0.1, verbose: true },
+      args: {},
+      argv: [],
+      raw: []
+    });
+
     // Mock connection
     command.mockClient.connection.on.callsFake((callback: any) => {
       if (typeof callback === 'function') {
@@ -431,22 +346,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
       }
     });
 
-    // Start and quickly abort
-    const controller = new AbortController();
-    const testPromise = command.run();
-    
-    setTimeout(() => controller.abort(), 100);
-
-    try {
-      await Promise.race([
-        testPromise,
-        new Promise((_, reject) => 
-          controller.signal.addEventListener('abort', () => reject(new Error('Test timeout')))
-        )
-      ]);
-    } catch {
-      // Expected timeout
-    }
+    // Run the command with a short duration
+    await command.run();
 
     // Verify that channel state change handlers were set up
     expect(channelOnStub.called).to.be.true;

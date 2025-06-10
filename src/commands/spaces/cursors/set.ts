@@ -31,7 +31,8 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
   static override examples = [
     '$ ably spaces cursors set my-space --x 100 --y 200',
     '$ ably spaces cursors set my-space --x 100 --y 200 --data \'{"name": "John", "color": "#ff0000"}\'',
-    '$ ably spaces cursors set my-space --x 100 --y 200 --simulate',
+    '$ ably spaces cursors set my-space --simulate',
+    '$ ably spaces cursors set my-space --simulate --x 500 --y 500',
     '$ ably spaces cursors set my-space --data \'{"position": {"x": 100, "y": 200}}\'',
     '$ ably spaces cursors set my-space --data \'{"position": {"x": 100, "y": 200}, "data": {"name": "John", "color": "#ff0000"}}\'',
     '$ ably spaces cursors set --api-key "YOUR_API_KEY" my-space --x 100 --y 200',
@@ -75,10 +76,6 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
 
   // Override finally to ensure resources are cleaned up
   async finally(err: Error | undefined): Promise<void> {
-    // For E2E tests, skip cleanup to avoid hanging
-    if (process.env.E2E_ABLY_API_KEY !== undefined) {
-      return;
-    }
 
     if (this.simulationIntervalId) {
       clearInterval(this.simulationIntervalId);
@@ -100,22 +97,30 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
     const { args, flags } = await this.parse(SpacesCursorsSet);
     const { spaceId } = args;
 
-    // Check if we're in E2E mode (no duration flag, so use env var detection)
-    const isE2EMode = process.env.E2E_ABLY_API_KEY !== undefined;
-    
-    if (isE2EMode) {
-      // Set up unhandled promise rejection handler for E2E mode
-      process.on('unhandledRejection', (reason) => {
-        console.error('Unhandled promise rejection:', reason);
-        process.exit(1);
-      });
-    }
 
     try {
       // Validate and parse cursor data - either x/y flags or --data JSON
       let cursorData: Record<string, unknown>;
 
-      if (flags.x !== undefined && flags.y !== undefined) {
+      if (flags.simulate) {
+        // For simulate mode, use provided x/y or generate random starting position
+        const startX = flags.x ?? Math.floor(Math.random() * 1000);
+        const startY = flags.y ?? Math.floor(Math.random() * 1000);
+        cursorData = {
+          position: { x: startX, y: startY }
+        };
+        
+        // If --data is also provided with simulate, treat it as additional cursor data
+        if (flags.data) {
+          try {
+            const additionalData = JSON.parse(flags.data);
+            cursorData.data = additionalData;
+          } catch {
+            this.error("Invalid JSON in --data flag. Expected format: {\"name\":\"value\",...}");
+            return;
+          }
+        }
+      } else if (flags.x !== undefined && flags.y !== undefined) {
         // Use x & y flags
         cursorData = {
           position: { x: flags.x, y: flags.y }
@@ -148,7 +153,7 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
           return;
         }
       } else {
-        this.error("Cursor position is required. Use either --x and --y flags, or --data flag with position and optional data.");
+        this.error("Cursor position is required. Use either --x and --y flags, --data flag with position, or --simulate for random movement.");
         return;
       }
 
@@ -334,12 +339,12 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
           ? Number(process.env.ABLY_CLI_DEFAULT_DURATION)
           : undefined;
 
-      if (isE2EMode || effectiveDuration === 0) {
+      if (effectiveDuration === 0) {
         // Give Ably a moment to propagate the cursor update before exiting so that
         // subscribers in automated tests have a chance to receive the event.
         await new Promise(resolve => setTimeout(resolve, 600));
 
-        // In E2E / immediate exit mode, we don't keep the process alive beyond this.
+        // In immediate exit mode, we don't keep the process alive beyond this.
         process.exit(0);
       }
 
@@ -440,8 +445,8 @@ export default class SpacesCursorsSet extends SpacesBaseCommand {
         this.error(`Failed to set cursor: ${errorMsg}`);
       }
     } finally {
-      // Leave space and close connection (unless in E2E mode where we force exit)
-      if (!isE2EMode && !this.cleanupInProgress) {
+      // Leave space and close connection
+      if (!this.cleanupInProgress) {
         if (this.space) {
           try {
             await this.space.leave();
