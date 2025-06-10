@@ -267,6 +267,7 @@ describe('Spaces E2E Tests', function() {
         let cursorsProcess: ChildProcess | null = null;
         let client1SpaceProcess: ChildProcess | null = null;
         let client2SpaceProcess: ChildProcess | null = null;
+        let cursorSetProcess: ChildProcess | null = null;
         let outputPath: string = '';
 
         try {
@@ -322,8 +323,7 @@ describe('Spaces E2E Tests', function() {
           const subscriptionWait = 10000; // 10 seconds
           await new Promise(resolve => setTimeout(resolve, subscriptionWait));
 
-          // Have client2 set a cursor position and data
-          const cursorPosition = { x: 100, y: 200 };
+          // Have client2 set cursor data (position will be random with --simulate)
           const cursorData = { name: 'TestUser2', color: '#ff0000' };
           // First check if the cursor subscribe process is still running and has proper output
           let currentOutput = await readProcessOutput(outputPath);
@@ -333,14 +333,19 @@ describe('Spaces E2E Tests', function() {
             return;
           }
 
-          const setCursorResult = await runBackgroundProcessAndGetOutput(
-            `bin/run.js spaces cursors set ${testSpaceId} --data '${JSON.stringify({ position: cursorPosition, data: cursorData })}' --client-id ${client2Id} --duration 0`,
-            30000 // Increased timeout
+          // Start cursor set with simulation as a long-running process
+          const cursorSetOutputPath = await createTempOutputFile();
+          trackTestOutputFile(cursorSetOutputPath);
+          
+          const cursorSetInfo = await runLongRunningBackgroundProcess(
+            `bin/run.js spaces cursors set ${testSpaceId} --simulate --data '${JSON.stringify({ data: cursorData })}' --client-id ${client2Id} --duration 30`,
+            cursorSetOutputPath,
+            { 
+              readySignal: "Starting cursor movement simulation", 
+              timeoutMs: 15000
+            }
           );
-
-          // Be more flexible about exit codes since the command might be killed after success
-          const isCursorSetSuccessful = setCursorResult.exitCode === 0 || setCursorResult.stdout.includes("Set cursor in space");
-          expect(isCursorSetSuccessful, `Cursor should be set successfully. Exit code: ${setCursorResult.exitCode}, stdout: ${setCursorResult.stdout}, stderr: ${setCursorResult.stderr}`).to.be.true;
+          cursorSetProcess = cursorSetInfo.process;
 
           // Wait for cursor update to be received by client1
           let cursorUpdateReceived = false;
@@ -349,7 +354,7 @@ describe('Spaces E2E Tests', function() {
           for (let i = 0; i < maxAttempts; i++) { 
             const output = await readProcessOutput(outputPath);
             
-            if (output.includes(client2Id) && output.includes("TestUser2") && output.includes("#ff0000")) {
+            if (output.includes(client2Id) && output.includes("position:") && output.includes("TestUser2") && output.includes("#ff0000")) {
               cursorUpdateReceived = true;
               break;
             }
@@ -357,6 +362,9 @@ describe('Spaces E2E Tests', function() {
           }
 
           expect(cursorUpdateReceived, "Client1 should receive cursor update from client2").to.be.true;
+
+          // Wait a bit to ensure cursor is stable
+          await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Test getAll functionality 
           const getAllResult = await runBackgroundProcessAndGetOutput(
@@ -372,6 +380,9 @@ describe('Spaces E2E Tests', function() {
           // Re-throw with additional context
           throw new Error(`Test failed: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
+          if (cursorSetProcess) {
+            await killProcess(cursorSetProcess);
+          }
           if (cursorsProcess) {
             await killProcess(cursorsProcess);
           }

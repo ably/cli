@@ -166,8 +166,10 @@ export class CliRunner extends EventTarget {
     // For E2E tests, ensure proper environment setup
     if (process.env.E2E_ABLY_API_KEY) {
       // Running in E2E mode - use real Ably connections
+      // Remove test mode to allow real Ably connections
       delete env.ABLY_CLI_TEST_MODE;
       env.ABLY_API_KEY = process.env.E2E_ABLY_API_KEY;
+      env.ABLY_E2E_TEST = 'true';
     }
     
     // Determine if this is a CLI command or shell command
