@@ -4,11 +4,9 @@
     "src/**/*",
     "test/**/*.ts", // Include all test files
     "scripts/**/*", // Keep scripts included for linting too
-    "server/src/**/*", // Include server source files
-    "server/tests/**/*.ts", // Include server test files
     "packages/react-web-cli/src/**/*", // Include all source files (ts, tsx, mocks)
     "packages/react-web-cli/vitest.config.ts", // Added for Vitest config
     "*.config.js" // Include root config files if needed
   ],
-  "exclude": ["node_modules", "dist", "server/dist", "server/node_modules"]
+  "exclude": ["node_modules", "dist"]
 }

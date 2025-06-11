@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // Constants
 const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
-const TERMINAL_SERVER_SCRIPT = path.resolve(__dirname, '../../../dist/scripts/terminal-server.js');
+// Terminal server is now hosted externally at wss://web-cli.ably.com
 
 // Helper function to wait for server startup
 export async function waitForServer(url: string, timeout = 30000): Promise<void> {
@@ -26,34 +26,6 @@ export async function waitForServer(url: string, timeout = 30000): Promise<void>
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   throw new Error(`Server ${url} did not start within ${timeout}ms`);
-}
-
-export async function startTerminalServer(port: number): Promise<ChildProcess> {
-  console.log('Starting terminal server...');
-  // Run the compiled JS script directly with node
-  const terminalServerProcess = spawn('node', [
-    TERMINAL_SERVER_SCRIPT
-  ], {
-    env: {
-      ...process.env,
-      PORT: port.toString(),
-      NODE_ENV: 'test',
-      // Provide credentials for tests (use env vars if set)
-      ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || 'dummy.key:secret',
-      ABLY_ACCESS_TOKEN: 'dummy-token',
-      TS_NODE_PROJECT: 'tsconfig.json' // Ensure ts-node uses the correct config
-    },
-    stdio: 'pipe',
-    // Need to run from the root to resolve paths correctly in server script
-    cwd: path.resolve(__dirname, '../../..')
-  });
-
-  terminalServerProcess.stdout?.on('data', (data) => console.log(`[Terminal Server]: ${data.toString().trim()}`));
-  terminalServerProcess.stderr?.on('data', (data) => console.error(`[Terminal Server ERR]: ${data.toString().trim()}`));
-  await waitForServer(`http://localhost:${port}/health`);
-  console.log('Terminal server started.');
-
-  return terminalServerProcess;
 }
 
 export async function startWebServer(port: number): Promise<ChildProcess> {

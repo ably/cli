@@ -41,11 +41,8 @@ pnpm test test/unit/commands/bench/bench.test.ts
 # CLI Tests - Run all tests in a directory
 pnpm test test/unit/commands/auth/**/*.test.ts
 
-# Server Tests - Run a specific server test file
-cd server && pnpm test tests/unit/placeholder-cleanup.test.ts
-
-# Server Tests - Run all server integration tests
-cd server && pnpm test:integration
+# Testing against local terminal server
+# See CONTRIBUTING.md for instructions on running a local terminal server
 ```
 
 ---
@@ -134,9 +131,8 @@ The `scripts/pre-push-validation.sh` script runs a comprehensive test suite incl
 ```
 
 The script will:
-- Find a free port for the terminal server (avoiding conflicts with your local development)
+- Run all tests with the configured terminal server endpoint
 - Run all unit, integration, and E2E tests
-- Execute fast load tests against the temporarily started server
 - Clean up automatically after completion
 
 ---
@@ -269,10 +265,10 @@ describe('channels commands', function() {
 ### 🎭 Playwright Tests (`test/e2e/web-cli`)
 
 *   **Primary Purpose:** Verify the functionality of the Web CLI example application (`examples/web-cli`) running in a real browser.
-*   **Dependencies:** Requires Docker, Node.js, a browser (installed via Playwright), and the Web CLI example app to be built.
-*   **Speed:** Slow; involves starting servers, Docker containers, and browser automation.
-*   **Value:** Ensures the embeddable React component, terminal server, and containerized CLI work together as expected.
-*   **Tools:** Playwright Test runner (`@playwright/test`), Docker.
+*   **Dependencies:** Requires Node.js, a browser (installed via Playwright), and the Web CLI example app to be built.
+*   **Speed:** Slow; involves browser automation and WebSocket connections.
+*   **Value:** Ensures the embeddable React component works correctly with the hosted terminal server.
+*   **Tools:** Playwright Test runner (`@playwright/test`).
 *   **Frequency:** Run automatically in CI, separate from Mocha tests.
 
 </details>
