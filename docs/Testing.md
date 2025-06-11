@@ -40,9 +40,6 @@ pnpm test test/unit/commands/bench/bench.test.ts
 
 # CLI Tests - Run all tests in a directory
 pnpm test test/unit/commands/auth/**/*.test.ts
-
-# Testing against local terminal server
-# See CONTRIBUTING.md for instructions on running a local terminal server
 ```
 
 ---
@@ -123,15 +120,16 @@ Executing command: CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS="..." node --import
 
 ### 🔧 Pre-Push Validation
 
-The `scripts/pre-push-validation.sh` script runs a comprehensive test suite including fast load tests. It automatically detects free ports to avoid collisions with your local development servers:
+The `scripts/pre-push-validation.sh` script runs a comprehensive test suite:
 
 ```bash
-# Run the full pre-push validation (safe to run with local servers running)
+# Run the full pre-push validation
 ./scripts/pre-push-validation.sh
 ```
 
 The script will:
-- Run all tests with the configured terminal server endpoint
+- Build and prepare the project
+- Run linter checks
 - Run all unit, integration, and E2E tests
 - Clean up automatically after completion
 
@@ -339,7 +337,6 @@ E2E tests are organized by feature/topic (e.g., `channels-e2e.test.ts`, `presenc
 7. **❌ DON'T** leave resources unclosed (memory leaks)
 8. **❌ DON'T** use brittle `setTimeout` when avoidable
 9. **❌ DON'T** hardcode credentials or API keys in tests
-10. **❌ DON'T** worry about port collisions when running pre-push validation
 
 ---
 

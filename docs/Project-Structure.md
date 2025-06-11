@@ -2,6 +2,8 @@
 
 This document outlines the directory structure of the Ably CLI project.
 
+> **Note:** The terminal server functionality has been moved to a separate repository (`cli-terminal-server`). For information about the server architecture, please refer to the [cli-terminal-server repository](https://github.com/ably/cli-terminal-server).
+
 /
 ├── assets/                 # Static assets like images.
 │   └── cli-screenshot.png  # Screenshot of the CLI.

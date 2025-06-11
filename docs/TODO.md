@@ -32,54 +32,12 @@
 - [x] [feat/terminal-server-improvements] The terminal server now supports connection resumption using `sessionId`. When a client reconnects within 60 s with the same `sessionId` and credentials, the server re-attaches to the existing Docker exec, replays the last buffered output (≈1 000 lines) and streams stdin/stdout; the newer connection automatically supersedes any older socket.
 - [x] [feat/terminal-server-improvements] The Web CLI React component persists and re-uses `sessionId`. It exposes the value via `onSessionId`, automatically includes it in reconnects, and—when `resumeOnReload` is enabled—stores it in `sessionStorage` so a full page reload resumes the session.
 - [x] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, connection status indicators per-pane, and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
-- [ ] Consider changing the transport to use Ably instead of direct WebSocket to the server
+- [ ] Consider changing the transport to use Ably instead of direct WebSocket to the terminal server
 - [x] For commands that run indefinitely like subscribe, or enter, should we add an optional command line argument that allows them to timeout after X seconds. Then in CI, we can ensure that the default settings (with an ENV var) is say 20 seconds, so that at least we can ensure these commands can never mistakenly wait. Check where `timeout` has been uused in test suites and replace with the appropriate timeout argument (name still to be determined). Whilst CI will have a default timeout for all commands, the tests that rely on this should explicitly set a timeout. In addition, we should update the docs for agents to tell them that commands that run indefinitely like subscribe, enter, have these arguments, and they should be used when running tests, and when running commands locally, prefixing them with `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
 - [ ] Support new endpoint client optiosn when public -> https://github.com/ably/ably-js/pull/1973
 - [X] For all commands that are long running, where we connect over a realtime client, the CLI should output connection failure events, like disconnected, suspended, failed and then from those states, if they reconnedt, we should output that. 
 - [X] E2E tests that fail should output the cmd output from the CLI commands run so that it's easier to debug these failures.
 
-## Server Migration
-
-- [x] **Phase 1: Identify and Categorize Components**
-  - [x] Move all server-related code into `server/` folder structure
-  - [x] Copy Docker configurations to `server/docker/`
-  - [x] Copy server scripts to `server/scripts/`
-  - [x] Copy server-related tests to `server/tests/`
-  - [x] Identify client-side components that remain in main repository
-  - [x] Create comprehensive migration plan documentation
-  - [x] Set up proper directory structure for future refactoring
-- [x] **Phase 2: Refactor terminal-server.ts**
-  - [x] Create modular service files from monolithic terminal-server.ts (1713 lines → 13 modules)
-  - [x] Split into websocket-server, docker-manager, session-manager, auth-service, security-service, etc.
-  - [x] Update import paths and dependencies across all modules
-  - [x] Create server package.json and tsconfig.json with proper TypeScript configuration
-  - [x] Refactor types into dedicated type definition files (docker, session, websocket)
-  - [x] Centralize configuration in server-config.ts
-  - [x] Update all server tests with new modular import structure
-  - [x] Implement proper ESLint configuration for server directory
-  - [x] Ensure all linting, building, and testing passes for new modular structure
-  - [x] Preserve diagnostics-server.ts utility for debugging/testing
-  - [x] Update .gitignore to exclude server build artifacts (server/dist/, server/node_modules)
-- [x] **Phase 3: Migrate Server Code**
-  - [x] Remove old server files from main repository scripts/ directory (terminal-server.ts, session-utils.ts, diagnostics-server.ts, etc.)
-  - [x] Update all test imports to use new modular server structure (server/src/index.js)
-  - [x] Update TypeScript and ESLint configurations to remove references to deleted files
-  - [x] Update server setup script to use new modular entry point (server/src/index.ts)
-  - [x] Ensure all linting, building, and testing passes after migration
-  - [x] Verify server and client code are now fully separated
-- [x] **Phase 4: Update Client Tests**
-  - [x] Update example tests to use `web-cli.ably.com`
-  - [x] Update React component tests to use public endpoint
-  - [x] Ensure client tests have no server dependencies
-  - [x] Update example application to smart-default to public endpoint in production
-  - [x] Update all E2E web CLI tests to use public endpoint
-  - [x] Remove Docker dependencies from client-side testing
-  - [x] Simplify test infrastructure and improve development experience
-  - [x] Move server diagnostic tests to server test suite with proper local server testing functionality
-- [x] **Phase 5: Clean Up**
-  - [x] Update CI/CD configurations
-  - [x] Final testing and verification
-  - [x] Update documentation references to old file locations
 
 ## UI/UX Improvements
 

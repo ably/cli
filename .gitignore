@@ -13,8 +13,6 @@ tmp
 /packages/*/dist/
 # Explicitly ignore examples dist folders
 /examples/*/dist/
-# Explicitly ignore server dist folder
-/server/dist/
 # Ignore root lib folder
 /lib/
 # Explicitly ignore package lib folders
