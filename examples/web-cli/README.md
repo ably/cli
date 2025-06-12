@@ -5,7 +5,7 @@ It connects to the Ably terminal server via WebSocket, handles authentication us
 
 ## Features
 
-- Connects to a WebSocket endpoint for the terminal server (defaults to public endpoint in production, localhost in development).
+- Connects to a WebSocket endpoint for the terminal server (defaults to `wss://web-cli.ably.com`).
 - Authentication using environment variables or interactive input.
 - Full terminal interface with command execution.
 - Auto-completion and command history.
@@ -15,57 +15,37 @@ It connects to the Ably terminal server via WebSocket, handles authentication us
 
 ## Quick Start
 
-### Development Mode
-
-For local development, the example will connect to `ws://localhost:8080` by default. You'll need to run the terminal server locally:
+The example connects to the public Ably terminal server by default:
 
 ```bash
-# In the main CLI repository
-pnpm dev:server
-
-# In another terminal, run the example
 cd examples/web-cli
 pnpm dev
 ```
 
-### Production Mode
-
-In production builds, the example automatically connects to the public Ably terminal server at `wss://web-cli.ably.com`:
-
-```bash
-cd examples/web-cli
-pnpm build
-pnpm preview
-```
+Open http://localhost:5173 and enter your Ably API key when prompted.
 
 ## Configuration
 
-You can override the default server URL in several ways:
+### Terminal Server URL
 
-### Environment Variables
+By default, the example connects to the public Ably terminal server at `wss://web-cli.ably.com`.
 
-Set a custom terminal server URL with `VITE_TERMINAL_SERVER_URL`:
+To connect to a local terminal server (e.g., when developing the terminal server itself):
+
+1. **Clone and run the terminal server** from [@ably/cli-terminal-server](https://github.com/ably/cli-terminal-server)
+2. **Override the server URL** using the `serverUrl` query parameter:
+
+```
+http://localhost:5173?serverUrl=ws://localhost:8080
+```
+
+You can also set it via environment variable:
 
 ```bash
-VITE_TERMINAL_SERVER_URL=wss://your-custom-server:8080
+VITE_TERMINAL_SERVER_URL=ws://localhost:8080 pnpm dev
 ```
 
-### URL Parameters
-
-- Append the `serverUrl` parameter to the URL:
-
-```
-http://localhost:5173?serverUrl=wss://your-custom-server:8080
-```
-
-### Default Behavior
-
-- **Development** (`pnpm dev`): Defaults to `ws://localhost:8080`
-- **Production** (`pnpm build`): Defaults to `wss://web-cli.ably.com`
-- **URL parameter takes precedence** over environment variables
-- **Environment variables take precedence** over defaults
-
-If neither option is provided, the application will use the appropriate default based on the build mode.
+**Note**: The query parameter takes precedence over the environment variable.
 
 ## Authentication
 

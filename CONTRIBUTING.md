@@ -45,7 +45,7 @@ For Ably engineers working on terminal server features:
 
 1. Clone the private `cli-terminal-server` repository
 2. Run the server locally: `pnpm dev`
-3. Set environment variable: `export TERMINAL_SERVER_URL=ws://localhost:8080`
+3. Set environment variable: `export TERMINAL_SERVER_URL=ws://localhost:8080` (adjust the port if your local server runs on a different port)
 4. Run CLI tests: `pnpm test:e2e`
 
 This allows testing CLI changes against local server modifications before deployment.

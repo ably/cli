@@ -243,7 +243,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   const renderTerminal = (props: Partial<React.ComponentProps<typeof AblyCliTerminal>> = {}) => {
     return render(
       <AblyCliTerminal
-        websocketUrl="ws://localhost:8080"
+        websocketUrl="wss://web-cli.ably.com"
         ablyAccessToken="test-token"
         ablyApiKey="test-key"
         onConnectionStatusChange={onConnectionStatusChangeMock}

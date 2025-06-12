@@ -5,7 +5,7 @@ import "./App.css";
 import { CliDrawer } from "./components/CliDrawer";
 
 // Default WebSocket URL - use public endpoint for production, localhost for development
-const DEFAULT_WEBSOCKET_URL = import.meta.env.DEV ? "ws://localhost:8080" : "wss://web-cli.ably.com";
+const DEFAULT_WEBSOCKET_URL = "wss://web-cli.ably.com";
 
 // Get WebSocket URL from Vite environment variables or query parameters
 const getWebSocketUrl = () => {
