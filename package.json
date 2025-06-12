@@ -167,6 +167,8 @@
     "chat",
     "spaces"
   ],
+  "readme": "README.md",
+  "readmeFilename": "README.md",
   "publishConfig": {
     "access": "public"
   },
