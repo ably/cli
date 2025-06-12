@@ -49,3 +49,14 @@ For Ably engineers working on terminal server features:
 4. Run CLI tests: `pnpm test:e2e`
 
 This allows testing CLI changes against local server modifications before deployment.
+
+## Release Workflow
+
+1. Make sure all checks are passing on main
+2. Create a new release branch, in the format `release/<version>` where the version is the SemVer version of the release. In that branch:
+    - Update the `package.json` version to the new version.
+    - Update the `CHANGELOG.md` with any user-affecting changes since the last release.
+    - Update `README.md` if it references the old version.
+3. Once the release branch is approved, merge it into main.
+4. Create a new tag, which will run the release workflow.
+5. Verify that the new release has been published to NPM.
