@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-06-12
+
+### Changed
+
+- **BREAKING**: Terminal server functionality has been moved to a separate private repository (`@ably/cli-terminal-server`).
+  - Removed server-specific dependencies and configurations
+  - Updated documentation to reflect the separation
+  - Web CLI now connects to the production endpoint `wss://web-cli.ably.com` by default
+
+### Added
+
+- Instructions in CONTRIBUTING.md for Ably engineers to test against local terminal server
+
+### Removed
+
+- Server directory and all terminal server implementation code
+- Server-related test files that were specific to server implementation
+
+### Notes
+
+- The terminal server is now maintained in a private repository
+- Web CLI functionality remains fully operational using the production terminal server endpoint
+- For local development against terminal server, see CONTRIBUTING.md
+
 ## [0.5.0] - 2024-05-15
 
 ### Added
