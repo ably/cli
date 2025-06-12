@@ -34,7 +34,7 @@
     "test:coverage:report": "nyc report --reporter=html --reporter=text",
     "test:coverage:check": "nyc check-coverage --lines 75 --functions 75 --branches 65 --statements 75",
     "prepack": "pnpm run build && ([ -f node_modules/.bin/oclif ] && node_modules/.bin/oclif manifest && node_modules/.bin/oclif readme || echo 'Skipping oclif commands in production')",
-    "prepare": "pnpm run build && CI=true ABLY_INTERACTIVE=false oclif manifest && CI=true ABLY_INTERACTIVE=false oclif readme --no-aliases",
+    "prepare": "pnpm run build && CI=true ABLY_INTERACTIVE=false oclif manifest && CI=true ABLY_INTERACTIVE=false oclif readme --no-aliases && [ -f README.md ] || echo 'Warning: README.md not found after oclif generation'",
     "postinstall": "[ \"$CI\" = \"true\" ] || (test -f ./dist/scripts/postinstall-welcome.js && node ./dist/scripts/postinstall-welcome.js || echo \"Skipping welcome script (not found)\")",
     "preversion": "pnpm run prepare",
     "version": "oclif readme && git add README.md",
