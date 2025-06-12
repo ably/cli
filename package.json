@@ -147,7 +147,10 @@
     "bin",
     "dist",
     "examples/web-cli",
-    "oclif.manifest.json"
+    "oclif.manifest.json",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "repository": {
     "type": "git",
