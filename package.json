@@ -170,7 +170,10 @@
   },
   "pnpm": {
     "overrides": {
-      "@ably/cli": "link:"
+      "@ably/cli": "link:",
+      "brace-expansion@1": "1.1.12",
+      "brace-expansion@2": "2.0.2",
+      "tar-fs": "2.1.3"
     }
   }
 }
