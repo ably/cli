@@ -41,7 +41,7 @@ pnpm add @ably/react-web-cli
 ## Prerequisites
 
 - React 17.0.0 or higher
-- A running instance of the Ably CLI terminal server (provided in the main CLI package)
+- A running instance of the Ably CLI terminal server (see [@ably/cli-terminal-server](https://github.com/ably/cli-terminal-server))
 - Valid Ably API Key (required) and – optionally – an Access Token for Control-API commands
 
 ## Usage
@@ -56,7 +56,7 @@ export default function MyTerminal() {
   return (
     <div style={{ height: 500 }}>
       <AblyCliTerminal
-        websocketUrl="ws://localhost:8080"
+        websocketUrl="wss://web-cli.ably.com"
         /* required API key … */
         ablyApiKey="YOUR_ABLY_API_KEY"
         /* optional Access-Token (Control-plane JWT) */
@@ -140,23 +140,14 @@ The feature is designed for developers who need to run multiple commands simulta
 
 ## Setting Up a Terminal Server
 
-The terminal server required for this component is provided in the main Ably CLI package. To run it:
+The terminal server required for this component is provided in a separate repository. Please refer to the [@ably/cli-terminal-server](https://github.com/ably/cli-terminal-server) repository for:
 
-1. Ensure you have the Ably CLI Docker image built:
+- Installation instructions
+- Configuration options
+- Running the server locally
+- Docker deployment instructions
 
-   ```bash
-   # In the Ably CLI repository root
-   docker build --no-cache -t ably-cli-sandbox .
-   ```
-
-2. Start the terminal server:
-
-   ```bash
-   # In the Ably CLI repository root
-   pnpm terminal-server
-   ```
-
-3. The server will start on `ws://localhost:8080` by default.
+For production use, the Ably Web CLI connects to `wss://web-cli.ably.com` by default, which is a hosted instance of the terminal server.
 
 ## Notes
 
