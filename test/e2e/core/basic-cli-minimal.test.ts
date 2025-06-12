@@ -8,15 +8,9 @@ const commandOptions = {
   timeoutMs: 5000 // 5 second timeout for commands
 };
 
-// Skip tests if we're in CI without API keys
-const SHOULD_SKIP_TESTS = process.env.SKIP_E2E_TESTS === 'true';
-
 // Very simple tests to see if the CLI works at all
 describe("Minimal CLI E2E Tests", function() {
   before(function() {
-    if (SHOULD_SKIP_TESTS) {
-      this.skip();
-    }
     process.on('SIGINT', forceExit);
   });
 

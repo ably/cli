@@ -19,7 +19,7 @@ describe('Control API E2E Workflow Tests', () => {
 
   before(async function() {
     // Skip if no access token is provided
-    if (!process.env.ABLY_ACCESS_TOKEN) {
+    if (!process.env.E2E_ABLY_ACCESS_TOKEN) {
       this.skip();
     }
     process.on('SIGINT', forceExit);
@@ -27,7 +27,7 @@ describe('Control API E2E Workflow Tests', () => {
     // Set up CLI path and API client
     cliPath = './bin/run.js';
     controlApi = new ControlApi({
-      accessToken: process.env.ABLY_ACCESS_TOKEN!,
+      accessToken: process.env.E2E_ABLY_ACCESS_TOKEN!,
       logErrors: false
     });
 
@@ -143,7 +143,7 @@ describe('Control API E2E Workflow Tests', () => {
       
       // 1. Create app
       const createResult = await runBackgroundProcessAndGetOutput(
-        `ABLY_ACCESS_TOKEN=${process.env.ABLY_ACCESS_TOKEN} ${cliPath} apps create --name "${appName}" --json`,
+        `ABLY_ACCESS_TOKEN=${process.env.E2E_ABLY_ACCESS_TOKEN} ${cliPath} apps create --name "${appName}" --json`,
         30000
       );
       
@@ -158,7 +158,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       // 2. List apps and verify our app is included
       const listResult = await runBackgroundProcessAndGetOutput(
-        `ABLY_ACCESS_TOKEN=${process.env.ABLY_ACCESS_TOKEN} ${cliPath} apps list --json`,
+        `ABLY_ACCESS_TOKEN=${process.env.E2E_ABLY_ACCESS_TOKEN} ${cliPath} apps list --json`,
         30000
       );
       
@@ -173,7 +173,7 @@ describe('Control API E2E Workflow Tests', () => {
       // 3. Update app
       const updatedName = `Updated ${appName}`;
       const updateResult = await runCommand(["apps", "update", appId, "--name", updatedName, "--tls-only", "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       expect(updateResult.stderr).to.be.empty;
@@ -191,7 +191,7 @@ describe('Control API E2E Workflow Tests', () => {
       // Create a test app first
       const appName = `E2E Key Test App ${Date.now()}`;
       const createResult = await runCommand(["apps", "create", "--name", appName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -203,7 +203,7 @@ describe('Control API E2E Workflow Tests', () => {
       if (testAppId) {
         try {
           await runCommand(["apps", "delete", testAppId, "--force"], {
-            env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+            env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
           });
         } catch (error) {
           console.log('Error cleaning up test app:', error);
@@ -214,7 +214,7 @@ describe('Control API E2E Workflow Tests', () => {
     it('should create a new API key', async function() {
       const keyName = `Test Key ${Date.now()}`;
       const createResult = await runCommand(["auth", "keys", "create", "--app", testAppId, "--name", keyName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -225,7 +225,7 @@ describe('Control API E2E Workflow Tests', () => {
 
     it('should list API keys', async function() {
       const listResult = await runCommand(["auth", "keys", "list", "--app", testAppId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(listResult.stdout);
@@ -242,7 +242,7 @@ describe('Control API E2E Workflow Tests', () => {
       // Create a test app first
       const appName = `E2E Queue Test App ${Date.now()}`;
       const createResult = await runCommand(["apps", "create", "--name", appName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -254,7 +254,7 @@ describe('Control API E2E Workflow Tests', () => {
       if (testAppId) {
         try {
           await runCommand(["apps", "delete", testAppId, "--force"], {
-            env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+            env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
           });
         } catch (error) {
           console.log('Error cleaning up test app:', error);
@@ -265,7 +265,7 @@ describe('Control API E2E Workflow Tests', () => {
     it('should create a new queue', async function() {
       const queueName = `test-queue-${Date.now()}`;
       const createResult = await runCommand(["queues", "create", "--app", testAppId, "--name", queueName, "--max-length", "5000", "--ttl", "1800", "--region", "eu-west-1-a", "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -277,7 +277,7 @@ describe('Control API E2E Workflow Tests', () => {
 
     it('should list queues', async function() {
       const listResult = await runCommand(["queues", "list", "--app", testAppId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(listResult.stdout);
@@ -289,11 +289,11 @@ describe('Control API E2E Workflow Tests', () => {
       const queueName = `test-delete-queue-${Date.now()}`;
       // First create a queue
       await runCommand(["queues", "create", "--app", testAppId, "--name", queueName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
 
       const deleteResult = await runCommand(["queues", "delete", queueName, "--app", testAppId, "--force"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       expect(deleteResult.stderr).to.be.empty;
@@ -314,7 +314,7 @@ describe('Control API E2E Workflow Tests', () => {
       // Create a test app first
       const appName = `E2E Integration Test App ${Date.now()}`;
       const createResult = await runCommand(["apps", "create", "--name", appName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -326,7 +326,7 @@ describe('Control API E2E Workflow Tests', () => {
       if (testAppId) {
         try {
           await runCommand(["apps", "delete", testAppId, "--force"], {
-            env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+            env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
           });
         } catch (error) {
           console.log('Error cleaning up test app:', error);
@@ -336,7 +336,7 @@ describe('Control API E2E Workflow Tests', () => {
 
     it('should create a new integration rule', async function() {
       const createResult = await runCommand(["integrations", "create", "--app", testAppId, "--rule-type", "http", "--channel-filter", "e2e-test-*", "--source-type", "channel.message", "--target-url", "https://httpbin.org/post", "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -348,7 +348,7 @@ describe('Control API E2E Workflow Tests', () => {
 
     it('should list integration rules', async function() {
       const listResult = await runCommand(["integrations", "list", "--app", testAppId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(listResult.stdout);
@@ -365,7 +365,7 @@ describe('Control API E2E Workflow Tests', () => {
       // Create a test app first
       const appName = `E2E Channel Rules Test App ${Date.now()}`;
       const createResult = await runCommand(["apps", "create", "--name", appName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const result = JSON.parse(createResult.stdout);
@@ -377,7 +377,7 @@ describe('Control API E2E Workflow Tests', () => {
       if (testAppId) {
         try {
           await runCommand(["apps", "delete", testAppId, "--force"], {
-            env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+            env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
           });
         } catch (error) {
           console.log('Error cleaning up test app:', error);
@@ -392,7 +392,7 @@ describe('Control API E2E Workflow Tests', () => {
       
       // 1. Create channel rule
       const createResult = await runCommand(["channel-rule", "create", "--app", testAppId, "--name", ruleName, "--persisted", "--push-enabled", "--authenticated", "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       expect(createResult.stderr).to.be.empty;
@@ -409,7 +409,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       // 2. List channel rules and verify our rule is included
       const listResult = await runCommand(["channel-rule", "list", "--app", testAppId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       expect(listResult.stderr).to.be.empty;
@@ -446,7 +446,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       try {
         const _result = await runCommand(["apps", "update", "non-existent-app-id", "--name", "Test", "--json"], {
-          env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+          env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
         });
         
         expect.fail('Should have thrown an error');
@@ -461,7 +461,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       try {
         const _result = await runCommand(["apps", "create"], {
-          env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+          env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
         });
         
         expect.fail('Should have thrown an error');
@@ -483,7 +483,7 @@ describe('Control API E2E Workflow Tests', () => {
       
       // 1. Create app
       const createAppResult = await runCommand(["apps", "create", "--name", appName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const appOutput = JSON.parse(createAppResult.stdout);
@@ -492,7 +492,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       // 2. Create API key
       const createKeyResult = await runCommand(["auth", "keys", "create", "--app", appId, "--name", keyName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const keyOutput = JSON.parse(createKeyResult.stdout);
@@ -501,7 +501,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       // 3. Create queue
       const createQueueResult = await runCommand(["queues", "create", "--app", appId, "--name", queueName, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const queueOutput = JSON.parse(createQueueResult.stdout);
@@ -510,7 +510,7 @@ describe('Control API E2E Workflow Tests', () => {
 
       // 4. Create integration
       const createIntegrationResult = await runCommand(["integrations", "create", "--app", appId, "--rule-type", "http", "--channel-filter", "workflow-test", "--source-type", "channel.message", "--target-url", "https://httpbin.org/post", "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const integrationOutput = JSON.parse(createIntegrationResult.stdout);
@@ -519,28 +519,28 @@ describe('Control API E2E Workflow Tests', () => {
 
       // 5. Verify all resources exist by listing them
       const listAppsResult = await runCommand(["apps", "list", "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const appsOutput = JSON.parse(listAppsResult.stdout);
       expect(appsOutput.apps.find((app: any) => app.id === appId)).to.exist;
 
       const listKeysResult = await runCommand(["auth", "keys", "list", "--app", appId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const keysOutput = JSON.parse(listKeysResult.stdout);
       expect(keysOutput.keys.find((key: any) => key.id === keyId)).to.exist;
 
       const listQueuesResult = await runCommand(["queues", "list", "--app", appId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const queuesOutput = JSON.parse(listQueuesResult.stdout);
       expect(queuesOutput.queues.find((queue: any) => queue.name === queueName)).to.exist;
 
       const listIntegrationsResult = await runCommand(["integrations", "list", "--app", appId, "--json"], {
-        env: { ABLY_ACCESS_TOKEN: process.env.ABLY_ACCESS_TOKEN }
+        env: { ABLY_ACCESS_TOKEN: process.env.E2E_ABLY_ACCESS_TOKEN }
       });
       
       const integrationsOutput = JSON.parse(listIntegrationsResult.stdout);

@@ -16,12 +16,12 @@ describe('Control API Integration Tests', () => {
 
   before(async function() {
     // Skip if no access token is provided
-    if (!process.env.ABLY_ACCESS_TOKEN) {
+    if (!process.env.E2E_ABLY_ACCESS_TOKEN) {
       this.skip();
     }
 
     controlApi = new ControlApi({
-      accessToken: process.env.ABLY_ACCESS_TOKEN!,
+      accessToken: process.env.E2E_ABLY_ACCESS_TOKEN!,
       logErrors: false
     });
 

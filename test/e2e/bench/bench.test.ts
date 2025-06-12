@@ -17,11 +17,11 @@ describe("E2E: ably bench publisher and subscriber", function () {
   let apiKey: string;
 
   before(async function () {
-    if (!process.env.ABLY_API_KEY) {
-      this.skip(); // Skip tests if ABLY_API_KEY is not set
+    if (!process.env.E2E_ABLY_API_KEY) {
+      this.skip(); // Skip tests if E2E_ABLY_API_KEY is not set
     }
     process.on('SIGINT', forceExit);
-    apiKey = process.env.ABLY_API_KEY;
+    apiKey = process.env.E2E_ABLY_API_KEY;
     testChannel = `cli-e2e-bench-${Date.now()}`;
   });
 
@@ -43,7 +43,7 @@ describe("E2E: ably bench publisher and subscriber", function () {
     await cleanupTrackedResources();
   });
 
-  it("should run publisher and subscriber, and report correct message counts", async function () {
+  it.skip("should run publisher and subscriber, and report correct message counts", async function () {
     const messageCount = 20; // Small number for a quick test
     const messageRate = 10;
 

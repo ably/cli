@@ -2,17 +2,6 @@ import { expect } from "chai";
 import nock from "nock";
 import { ControlApi } from "../../../src/services/control-api.js";
 
-// Skip tests if we're in CI without API keys
-const SHOULD_SKIP_TESTS = process.env.SKIP_E2E_TESTS === 'true';
-
-if (SHOULD_SKIP_TESTS) {
-  // If tests should be skipped, create a simple describe with a skip
-  describe("ControlApi (skipped)", function() {
-    it("tests skipped due to missing API key", function() {
-      this.skip();
-    });
-  });
-} else {
 describe("ControlApi", function() {
   const accessToken = "test-access-token";
   const controlHost = "control.ably.test";
@@ -434,4 +423,3 @@ describe("ControlApi", function() {
     });
   });
 });
-}

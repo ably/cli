@@ -44,11 +44,6 @@ describe("Authentication E2E", function() {
 
   describe("config persistence", function() {
     it("should persist config in real file system", async function() {
-      // Skip if E2E_ABLY_API_KEY is not set
-      if (!process.env.E2E_ABLY_API_KEY) {
-        this.skip();
-        return;
-      }
 
       // Verify config directory is created
       expect(fs.existsSync(tempConfigDir)).to.be.true;
@@ -97,11 +92,6 @@ describe("Authentication E2E", function() {
 
   describe("error scenarios", function() {
     it("should handle invalid credentials gracefully", function() {
-      // Skip if E2E_ABLY_API_KEY is not set
-      if (!process.env.E2E_ABLY_API_KEY) {
-        this.skip();
-        return;
-      }
 
       // Set invalid API key
       process.env.ABLY_API_KEY = "invalid.key:format";

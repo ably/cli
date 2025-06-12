@@ -35,19 +35,8 @@ const _parseJsonFromOutput = (output: string): any => {
   }
 };
 
-// Skip tests if we're in CI without API keys
-const SHOULD_SKIP_TESTS = process.env.SKIP_E2E_TESTS === 'true';
-
-if (SHOULD_SKIP_TESTS) {
-  // If tests should be skipped, create a simple describe with a skip
-  describe("Basic CLI E2E (skipped)", function() {
-    it("tests skipped due to missing API key", function() {
-      this.skip();
-    });
-  });
-} else {
-  // These tests check the basic CLI functionality in a real environment
-  describe("Basic CLI E2E", function() {
+// These tests check the basic CLI functionality in a real environment
+describe("Basic CLI E2E", function() {
     before(function() {
       process.on('SIGINT', forceExit);
     });
@@ -232,4 +221,3 @@ if (SHOULD_SKIP_TESTS) {
       });
     });
   });
-}

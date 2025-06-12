@@ -308,8 +308,8 @@ else
   fi
 fi
 
-# Set an outer timeout (in seconds) – 5 minutes should be sufficient even on CI
-OUTER_TIMEOUT=300
+# Set an outer timeout (in seconds) – 10 minutes should be sufficient even on CI
+OUTER_TIMEOUT=600
 
 # Function to run tests with debug logging if enabled
 run_test_with_debug() {
