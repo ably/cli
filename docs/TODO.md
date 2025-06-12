@@ -153,7 +153,7 @@
 - [x] Ensure all changes meet the linting requirements, `pnpm exec eslint [file]`
 - [ ] Look for areas of unnecessary duplication as help.ts checking "commandId.includes('accounts login')" when the list of unsupported web CLI commands exists already in BaseCommand WEB_CLI_RESTRICTED_COMMANDS
 - [x] [feat/terminal-server-improvements] Add inactivity timeout to the terminal server
-- [ ] Release new versions automatically from Github for NPM
+- [x] Release new versions automatically from Github for NPM
 - [ ] Now that we have .editorconfig, ensure all files adhere in one commit
 - [ ] We are using a PNPM workspace, but I am not convinced that's a good thing. We should consider not letting the examples or React component dependencies affect the core CLI packaging.
 - [ ] Publish Docker image to Github registry and use a path such as `ghcr.io/ably/ably-cli-sandbox` for the published artefact. Building and publishing should use the locally built Ably CLI binary as opposed to the latest version so that local changes can be tested locally.
