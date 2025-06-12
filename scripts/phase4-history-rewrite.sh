@@ -109,7 +109,6 @@ echo "Step 3: Creating commit message scrubbing script..."
 
 # Create the scrub script
 cat > /tmp/scrub-messages.py << 'EOF'
-#!/usr/bin/env python3
 import re
 
 # Sensitive patterns to scrub
@@ -135,32 +134,22 @@ combined_sensitive_regex = re.compile(
     re.IGNORECASE
 )
 
-def scrub_message(message_bytes):
-    try:
-        message = message_bytes.decode('utf-8')
-        
-        # Check if message contains sensitive content
-        if combined_sensitive_regex.search(message) and not benign_context.search(message):
-            # Log to a file for audit (optional)
-            with open('/tmp/scrubbed-commits.log', 'a') as f:
-                f.write(f"Scrubbed: {message.splitlines()[0][:80]}...\n")
-            
-            # Return generic message
-            return b'[commit message redacted for security review]'
-        
-        return message_bytes
-    except:
-        return message_bytes
-
-# This is called by git-filter-repo
-message = scrub_message(message)
+# Check if message contains sensitive content
+message_str = commit.message.decode('utf-8')
+if combined_sensitive_regex.search(message_str) and not benign_context.search(message_str):
+    # Log to a file for audit
+    with open('/tmp/scrubbed-commits.log', 'a') as f:
+        f.write(f"Scrubbed: {message_str.splitlines()[0][:80]}...\n")
+    
+    # Replace with generic message
+    commit.message = b'[commit message redacted for security review]'
 EOF
 
 chmod +x /tmp/scrub-messages.py
 
 echo ""
 echo "Step 4: Scrubbing sensitive commit messages..."
-git filter-repo --commit-callback "$(cat /tmp/scrub-messages.py)"
+git filter-repo --commit-callback 'exec(open("/tmp/scrub-messages.py").read())'
 
 echo ""
 echo "Step 5: Creating placeholder file..."
