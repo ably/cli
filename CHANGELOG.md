@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-06-13
+
+### Security
+
+- Fixed critical security vulnerabilities in dependencies:
+  - Updated `brace-expansion` to 1.1.12+ and 2.0.2+ to fix ReDoS vulnerability
+  - Updated `tar-fs` to 2.1.3+ to fix directory traversal vulnerability
+  - Applied pnpm overrides to enforce secure versions across all transitive dependencies
+
+### Changed
+
+- **BREAKING**: Complete removal of all server-related code from git history
+  - Git history has been rewritten to remove all traces of terminal server implementation
+  - Repository size reduced by 71% (from 68MB to 20MB)
+  - All old branches and tags that referenced server code have been removed
+  - Contributors will need to re-clone the repository after this update
+
+### Fixed
+
+- Fixed environment-dependent test skips by correcting environment variable names
+- Updated .env.example to remove obsolete variables
+- Ensured all tests run consistently in CI environments
+
+### Added
+
+- Added placeholder file (server/REMOVED.md) to indicate server code has been moved
+- Added comprehensive documentation for the server migration process
+
+### Removed
+
+- Removed all server-related files from git history including:
+  - Server directory and all its contents
+  - Docker configurations
+  - Terminal server scripts
+  - Server-specific tests and documentation
+- Removed unnecessary test skip logic that was checking for environment variables
+
 ## [0.6.0] - 2025-06-12
 
 ### Changed
