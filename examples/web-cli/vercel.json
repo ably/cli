@@ -1,0 +1,12 @@
+{
+  "buildCommand": "cd ../.. && pnpm install && pnpm build:packages && cd examples/web-cli && pnpm build",
+  "outputDirectory": "dist",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+# Ignore test files
+test/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/tests/
+
+# Ignore development files
+.git/
+.github/
+.idea/
+.vscode/
+.specstory/
+.claude/
+
+# Ignore documentation
+*.md
+docs/
+
+# Ignore scripts and configs not needed for build
+scripts/
+.eslintrc*
+.prettierrc*
+jest.config.*
+playwright.config.*
+
+# Ignore local env files
+.env.local
+.env.*.local
+
+# Ignore other unnecessary files
+.DS_Store
+*.log
+coverage/
+.nyc_output/
