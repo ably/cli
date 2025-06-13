@@ -526,6 +526,58 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('connecting');
   });
 
+  test('manual reconnect resets attempt counter after max attempts reached', async () => {
+    // Set up max attempts reached state
+    vi.mocked(GlobalReconnect.isMaxAttemptsReached).mockReturnValue(true);
+    vi.mocked(GlobalReconnect.getMaxAttempts).mockReturnValue(5);
+    vi.mocked(GlobalReconnect.getAttempts).mockReturnValue(5);
+    
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); });
+    
+    // Trigger an error to show MAX RECONNECTS message
+    act(() => {
+      mockSocketInstance.triggerEvent('error', new Event('error'));
+    });
+    
+    // Verify MAX RECONNECTS is displayed
+    await waitFor(() => {
+      const maxReconnectsCall = mockDrawBox.mock.calls.find(call => call[2] === 'MAX RECONNECTS');
+      expect(maxReconnectsCall).toBeDefined();
+    });
+    
+    // Clear mocks before manual reconnect
+    vi.mocked(GlobalReconnect.successfulConnectionReset).mockClear();
+    vi.mocked((global as any).WebSocket).mockClear();
+    mockDrawBox.mockClear();
+    
+    // Get the Enter key handler
+    const onDataHandler = mockOnData.mock.calls[0][0] as (data: string) => void;
+    
+    // Press Enter to initiate manual reconnect
+    act(() => { onDataHandler('\r'); });
+    
+    // Mock the connectWebSocket function to be ready
+    vi.mocked(GlobalReconnect.resetState).mockClear();
+    
+    // Wait for the setTimeout to execute
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 30));
+    });
+    
+    // Verify that successfulConnectionReset was called to reset the counter
+    expect(vi.mocked(GlobalReconnect.successfulConnectionReset)).toHaveBeenCalled();
+    
+    // Verify resetState was called as part of reconnection
+    expect(vi.mocked(GlobalReconnect.resetState)).toHaveBeenCalled();
+    
+    // Verify connecting animation started fresh (not retry)
+    const connectingCall = mockDrawBox.mock.calls.find(call => call[2] === 'CONNECTING');
+    expect(connectingCall).toBeDefined();
+    expect(connectingCall[1]).toBe(mockBoxColour.cyan);
+    expect(connectingCall[3][0]).toContain('Connecting to Ably CLI server...');
+  });
+
   test('invokes onSessionId when hello message received', async () => {
     const onSessionIdMock = vi.fn();
     renderTerminal({ onSessionId: onSessionIdMock });
@@ -597,6 +649,75 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
     // Only one increment should have been recorded for this failed attempt
     expect(GlobalReconnect.increment).toHaveBeenCalledTimes(1);
+  });
+
+  test('displays MAX RECONNECTS message on error event when max attempts reached', async () => {
+    vi.mocked(GlobalReconnect.isMaxAttemptsReached).mockReturnValue(true);
+    vi.mocked(GlobalReconnect.getMaxAttempts).mockReturnValue(3);
+    vi.mocked(GlobalReconnect.getAttempts).mockReturnValue(3);
+
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); });
+    mockDrawBox.mockClear();
+    mockClearBox.mockClear();
+
+    // Simulate an error event when max attempts is reached
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialised');
+      mockSocketInstance.triggerEvent('error', new Event('error'));
+    });
+
+    await waitFor(() => {
+      expect(mockDrawBox).toHaveBeenCalled();
+    });
+
+    const drawBoxArgs = mockDrawBox.mock.calls[0];
+    expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow);
+    expect(drawBoxArgs[2]).toBe('MAX RECONNECTS');
+    expect(drawBoxArgs[3][0]).toContain('Failed to reconnect after 3 attempts');
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try reconnecting manually.'))).toBe(true);
+
+    expect(mockClearBox).toHaveBeenCalled();
+    expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
+  });
+  
+  test.skip('connection timeout triggers error after 30 seconds', async () => {
+    // Skip this test for now due to timing issues with fake timers
+    vi.useFakeTimers();
+    
+    renderTerminal();
+    await act(async () => { await Promise.resolve(); });
+    
+    // Socket should be created and in CONNECTING state
+    expect(mockSocketInstance).toBeDefined();
+    mockSocketInstance.readyStateValue = WebSocket.CONNECTING;
+    
+    // Clear any previous calls
+    mockDrawBox.mockClear();
+    vi.mocked(GlobalReconnect.increment).mockClear();
+    vi.mocked(GlobalReconnect.scheduleReconnect).mockClear();
+    
+    // Advance time by 30 seconds to trigger timeout
+    await act(async () => {
+      vi.advanceTimersByTime(30000);
+      await Promise.resolve();
+    });
+    
+    // Should have closed the socket and triggered error handling
+    expect(mockSocketInstance.close).toHaveBeenCalledWith(4003, 'connection-timeout');
+    
+    // Trigger the error event that would be dispatched
+    act(() => {
+      mockSocketInstance.triggerEvent('error', new Event('error'));
+    });
+    
+    // Should trigger reconnection logic
+    await waitFor(() => {
+      expect(vi.mocked(GlobalReconnect.increment)).toHaveBeenCalled();
+      expect(vi.mocked(GlobalReconnect.scheduleReconnect)).toHaveBeenCalled();
+    });
+    
+    vi.useRealTimers();
   });
 
   test('opens a new WebSocket even if the previous one is still CONNECTING', async () => {

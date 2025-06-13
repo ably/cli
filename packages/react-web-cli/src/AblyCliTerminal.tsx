@@ -586,6 +586,17 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // lastWriteLine.current = ''; // No longer directly managing this for single status line
   }, [clearStatusDisplay]);
   
+  // Connection timeout management
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
+  
+  const clearConnectionTimeout = useCallback(() => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+  }, []);
+  
   const startConnectingAnimation = useCallback((isRetry: boolean) => {
     if (!term.current) return;
     clearAnimationMessages(); // This already calls clearStatusDisplay
@@ -692,17 +703,37 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // attempt.  Any failure events for this socket may schedule (at most) one
     // reconnect.
     reconnectScheduledThisCycleRef.current = false;
+    
+    // Set up connection timeout
+    clearConnectionTimeout(); // Clear any existing timeout
+    connectionTimeoutRef.current = setTimeout(() => {
+      debugLog('⚠️ CONNECTION TIMEOUT: WebSocket connection attempt timed out after', CONNECTION_TIMEOUT_MS, 'ms');
+      
+      // Close the socket if it's still connecting
+      if (socketRef.current && socketRef.current.readyState === WebSocket.CONNECTING) {
+        debugLog('⚠️ CONNECTION TIMEOUT: Closing socket that is still in CONNECTING state');
+        socketRef.current.close(4003, 'connection-timeout');
+        
+        // Manually trigger error handling since the browser might not fire events for a stuck connection
+        const timeoutError = new Event('error');
+        Object.defineProperty(timeoutError, 'message', { value: 'Connection timeout' });
+        socketRef.current.dispatchEvent(timeoutError);
+      }
+    }, CONNECTION_TIMEOUT_MS);
 
     // new WebSocket created
     debugLog('⚠️ DIAGNOSTIC: WebSocket connection initiation complete. sessionId:', sessionId, 'showManualReconnectPrompt:', showManualReconnectPromptRef.current);
 
     return;
-  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation, isVisible, sessionId, showManualReconnectPromptRef]);
+  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation, isVisible, sessionId, showManualReconnectPromptRef, clearConnectionTimeout]);
 
   const socketRef = useRef<WebSocket | null>(null); // Ref to hold the current socket for cleanup
 
   const handleWebSocketOpen = useCallback(() => {
     // console.log('[AblyCLITerminal] WebSocket opened');
+    // Clear connection timeout since we successfully connected
+    clearConnectionTimeout();
+    
     // Do not reset reconnection attempts here; wait until terminal prompt confirms full session
     setShowManualReconnectPrompt(false);
     clearPtyBuffer(); // Clear buffer for new session prompt detection
@@ -760,7 +791,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // persistence handled by dedicated useEffect
     debugLog('WebSocket OPEN handler completed. sessionId:', sessionId);
-  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, isSessionActive]);
+  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, isSessionActive, clearConnectionTimeout]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
@@ -875,12 +906,44 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   const handleWebSocketError = useCallback((event: Event) => {
     console.error('[AblyCLITerminal] WebSocket error event received:', event);
+    // Clear connection timeout on error
+    clearConnectionTimeout();
+    
     // Add more details if possible, though Event object is generic
     if (event instanceof ErrorEvent) {
       console.error(`[AblyCLITerminal] WebSocket ErrorEvent: message=${event.message}, filename=${event.filename}, lineno=${event.lineno}, colno=${event.colno}`);
     }
 
-    if (!grIsCancelledState() && !grIsMaxAttemptsReached() && !reconnectScheduledThisCycleRef.current) {
+    // Check if max attempts reached or cancelled
+    if (grIsCancelledState() || grIsMaxAttemptsReached()) {
+      // Clear any existing animations
+      clearTerminalBoxOnly();
+      updateConnectionStatusAndExpose('disconnected');
+      
+      if (term.current) {
+        let displayTitle = "ERROR: CONNECTION FAILED";
+        let displayMessage = `Connection error occurred.`;
+        const message2 = '';
+        const message3 = `Press ⏎ to try reconnecting manually.`;
+
+        if (grIsMaxAttemptsReached()) {
+          displayTitle = "MAX RECONNECTS";
+          displayMessage = `Failed to reconnect after ${grGetMaxAttempts()} attempts.`;
+        } else { // Cancelled
+          displayTitle = "RECONNECT CANCELLED";
+          displayMessage = `Reconnection attempts cancelled.`;
+        }
+        
+        statusBoxRef.current = drawBox(term.current, boxColour.yellow, displayTitle, [displayMessage, message2, message3], 60);
+        setOverlay({variant:'error',title:displayTitle,lines:[displayMessage, message2, message3]});
+      }
+      
+      setShowManualReconnectPrompt(true);
+      reconnectScheduledThisCycleRef.current = true; // Prevent double handling
+      return;
+    }
+
+    if (!reconnectScheduledThisCycleRef.current) {
       // Immediately enter "reconnecting" state so countdown / spinner UI is active
       updateConnectionStatusAndExpose('reconnecting');
 
@@ -908,10 +971,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // handshake failure) does NOT double-increment or re-schedule.
       reconnectScheduledThisCycleRef.current = true;
     }
-  }, [updateConnectionStatusAndExpose, startConnectingAnimation, websocketUrl]);
+  }, [updateConnectionStatusAndExpose, startConnectingAnimation, websocketUrl, clearTerminalBoxOnly, clearConnectionTimeout]);
 
   const handleWebSocketClose = useCallback((event: CloseEvent) => {
     debugLog(`[AblyCLITerminal] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
+    clearConnectionTimeout(); // Clear timeout on close
     clearTerminalBoxOnly();
     setIsSessionActive(false); 
 
@@ -1005,7 +1069,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Prevent any (unlikely) duplicate scheduling from other late events
       reconnectScheduledThisCycleRef.current = true;
     }
-  }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId]);
+  }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId, clearConnectionTimeout]);
 
   useEffect(() => {
     // Setup terminal
@@ -1057,6 +1121,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             setTimeout(() => {
               debugLog('[AblyCLITerminal] [setTimeout] Starting fresh reconnect sequence');
               grResetState();
+              // Reset the attempt counter for manual reconnect
+              grSuccessfulConnectionReset();
               clearPtyBuffer();
               debugLog('[AblyCLITerminal] [setTimeout] Invoking latest connectWebSocket');
               connectWebSocketRef.current?.();
@@ -1175,6 +1241,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         socketRef.current.close();
       }
       grResetState(); // Ensure global state is clean
+      clearConnectionTimeout(); // Clear any pending connection timeout
     };
   }, []);
 
