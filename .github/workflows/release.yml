@@ -21,9 +21,13 @@ jobs:
           version: 10 # Use pnpm version 10
       - name: Set up Node.js
         uses: actions/setup-node@v4
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
           node-version: "22.x" # Use Node.js 22.x
           cache: "pnpm"
+          registry-url: "https://registry.npmjs.org/"
+
       - name: Install dependencies and publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
