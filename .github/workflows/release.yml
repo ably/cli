@@ -28,6 +28,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm install --frozen-lockfile --no-git-checks
+          pnpm install --frozen-lockfile
           pnpm run build
-          pnpm publish --provenance --access public
+          pnpm publish --provenance --access public --no-git-checks
