@@ -24,12 +24,10 @@ jobs:
         with:
           node-version: "22.x" # Use Node.js 22.x
           cache: "pnpm"
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
       - name: Install dependencies and publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --no-git-checks
           pnpm run build
           pnpm publish --provenance --access public
