@@ -329,7 +329,7 @@ describe("Connections E2E Tests", function() {
               // Also check if our test client ID appears anywhere in the event
               const eventStr = JSON.stringify(logEvent);
               if (eventStr.includes(testClientId)) {
-                console.log(`[TEST] Found event containing test client ID: ${eventStr.substring(0, 200)}...`);
+                console.log(`[TEST] Found event containing test client ID: ${eventStr.slice(0, 200)}...`);
               }
               
               // Check different possible locations for client ID
@@ -359,7 +359,7 @@ describe("Connections E2E Tests", function() {
                   connectionId: logEvent.data?.connectionId || logEvent.connectionId || null
                 });
               }
-            } catch (err) {
+            } catch {
               // Ignore non-JSON lines
             }
           }
@@ -409,7 +409,7 @@ describe("Connections E2E Tests", function() {
       console.log(`[TEST] Total events received: ${eventCount}`);
       console.log(`[TEST] Connection events for ${testClientId}: ${connectionEvents.length}`);
       if (connectionEvents.length === 0 && process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
-        console.log("[TEST] Sample of monitor output:", monitorOutput.substring(0, 1000));
+        console.log("[TEST] Sample of monitor output:", monitorOutput.slice(0, 1000));
       }
       
       // Verify we captured connection lifecycle for our specific client

@@ -77,9 +77,9 @@ describe("LogsConnectionSubscribe", function() {
     mockConfig = { runHook: sinon.stub() } as unknown as Config;
     command = new TestableLogsConnectionSubscribe([], mockConfig);
 
-    // Set up a complete mock client structure for the [meta]connection.lifecycle channel
+    // Set up a complete mock client structure for the [meta]log:connection.{appId} channel
     const mockChannelInstance = {
-      name: '[meta]connection.lifecycle',
+      name: '[meta]log:connection.dummy-app',
       subscribe: sandbox.stub(),
       attach: sandbox.stub().resolves(),
       detach: sandbox.stub().resolves(),
@@ -151,8 +151,9 @@ describe("LogsConnectionSubscribe", function() {
     // Run the command with a short duration
     await command.run();
 
-    // Verify that we got the [meta]connection.lifecycle channel and subscribed to it
-    expect(command.mockClient.channels.get.calledWith('[meta]connection.lifecycle')).to.be.true;
+    // Verify that we got the [meta]log:connection.{appId} channel and subscribed to it
+    // The test's ensureAppAndKey returns appId: 'dummy-app'
+    expect(command.mockClient.channels.get.calledWith('[meta]log:connection.dummy-app')).to.be.true;
     expect(subscribeStub.called).to.be.true;
   });
 

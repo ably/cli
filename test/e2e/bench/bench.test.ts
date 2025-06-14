@@ -67,7 +67,7 @@ describe("E2E: ably bench publisher and subscriber", function () {
         // console.log("Spawning original subscriber command..."); // Debug
         const subEnv = { ...process.env };
         delete subEnv.ABLY_CLI_TEST_MODE;
-        console.log(`[TEST] Spawning subscriber with API key: ${apiKey.substring(0, 20)}...`);
+        console.log(`[TEST] Spawning subscriber with API key: ${apiKey.slice(0, 20)}...`);
         console.log(`[TEST] CLI path: ${cliPath}`);
         console.log(`[TEST] Test channel: ${testChannel}`);
         
@@ -79,10 +79,10 @@ describe("E2E: ably bench publisher and subscriber", function () {
         
         console.log(`[TEST] Subscriber process spawned with PID: ${subscriberProcess.pid}`);
         
-        if (!subscriberProcess.stdout) {
-          console.error("[TEST] ERROR: subscriberProcess.stdout is null!");
-        } else {
+        if (subscriberProcess.stdout) {
           console.log("[TEST] subscriberProcess.stdout is available");
+        } else {
+          console.error("[TEST] ERROR: subscriberProcess.stdout is null!");
         }
 
         let jsonBuffer = '';
@@ -129,7 +129,7 @@ describe("E2E: ably bench publisher and subscriber", function () {
                 braceCount--;
                 if (braceCount === 0) {
                   // Found complete JSON object
-                  const jsonStr = jsonBuffer.substring(startIndex, i + 1);
+                  const jsonStr = jsonBuffer.slice(startIndex, i + 1);
                   try {
                     const logEntry = JSON.parse(jsonStr);
                     console.log(`[TEST] Successfully parsed JSON: ${logEntry.component}/${logEntry.event}`);
@@ -156,7 +156,7 @@ describe("E2E: ably bench publisher and subscriber", function () {
           
           // Remove processed JSON from buffer
           if (braceCount === 0 && startIndex > 0) {
-            jsonBuffer = jsonBuffer.substring(startIndex);
+            jsonBuffer = jsonBuffer.slice(Math.max(0, startIndex));
           }
         });
 
@@ -294,7 +294,7 @@ describe("E2E: ably bench publisher and subscriber", function () {
               console.log(`[TEST] Parsed publisher JSON: ${entry.component}/${entry.event}`);
             }
           }
-        } catch (err) {
+        } catch {
           // Ignore non-JSON matches
         }
       }
