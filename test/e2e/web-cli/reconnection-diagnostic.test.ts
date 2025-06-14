@@ -13,6 +13,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { navigateAndAuthenticate } from './auth-helper.js';
 
 const execAsync = promisify(exec);
 
@@ -126,10 +127,7 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
 
   test('can diagnose connection behavior against public server', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await page.goto(pageUrl);
-
-    // Wait for initial connection
-    await page.waitForSelector('.xterm', { timeout: 30000 });
+    await navigateAndAuthenticate(page, pageUrl);
     await page.waitForFunction(() => {
       const s = (window as any).getAblyCliTerminalReactState?.();
       return s?.componentConnectionStatus === 'connected';
@@ -154,14 +152,11 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
 
   test('connection state transitions work correctly with public server', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await page.goto(pageUrl);
+    await navigateAndAuthenticate(page, pageUrl);
 
     // Track status changes by polling React state
     const statusChanges: string[] = [];
     let lastStatus = '';
-
-    // Wait for connection and monitor state changes
-    await page.waitForSelector('.xterm', { timeout: 30000 });
     
     // Wait for connection to fully establish first
     await page.waitForFunction(() => {

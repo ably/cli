@@ -4,6 +4,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { navigateAndAuthenticate } from './auth-helper.js';
 
 const execAsync = promisify(exec);
 
@@ -90,7 +91,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   });
 
   test('Page reload resumes session without injecting extra blank prompts', async ({ page }) => {
-    await page.goto(`http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`, { waitUntil: 'networkidle' });
+    await navigateAndAuthenticate(page, `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
     const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
 
     // Wait for terminal to be ready and connected to shell
@@ -160,7 +161,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   });
 
   test('Typing `exit` ends session and page refresh starts a NEW session automatically', async ({ page }) => {
-    await page.goto(`http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`, { waitUntil: 'networkidle' });
+    await navigateAndAuthenticate(page, `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
     const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
 
     // Wait for connection and capture initial session ID
@@ -232,7 +233,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   });
 
   test('After `exit`, Session Ended dialog appears and pressing Enter starts a new session', async ({ page }) => {
-    await page.goto(`http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`, { waitUntil: 'networkidle' });
+    await navigateAndAuthenticate(page, `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
     const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
 
     // Wait for connection
