@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hashCredentials } from './crypto';
+import { hashCredentials } from './crypto.js';
 
 describe('hashCredentials', () => {
   it('should generate consistent hashes for the same credentials', async () => {
@@ -27,20 +27,20 @@ describe('hashCredentials', () => {
   });
 
   it('should handle undefined access token', async () => {
-    const hash1 = await hashCredentials('test-api-key', undefined);
-    const hash2 = await hashCredentials('test-api-key', undefined);
+    const hash1 = await hashCredentials('test-api-key');
+    const hash2 = await hashCredentials('test-api-key');
     expect(hash1).toBe(hash2);
   });
 
   it('should handle both undefined credentials', async () => {
-    const hash1 = await hashCredentials(undefined, undefined);
-    const hash2 = await hashCredentials(undefined, undefined);
+    const hash1 = await hashCredentials();
+    const hash2 = await hashCredentials();
     expect(hash1).toBe(hash2);
   });
 
   it('should treat empty string same as undefined', async () => {
     const hash1 = await hashCredentials('', '');
-    const hash2 = await hashCredentials(undefined, undefined);
+    const hash2 = await hashCredentials();
     expect(hash1).toBe(hash2);
   });
 
