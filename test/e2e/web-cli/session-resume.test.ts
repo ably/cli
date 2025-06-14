@@ -4,6 +4,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { navigateAndAuthenticate } from './auth-helper.js';
 
 const execAsync = promisify(exec);
 
@@ -145,7 +146,7 @@ test.describe('Session Resume E2E Tests', () => {
   });
 
   test('preserves session across page reload when resumeOnReload is enabled', async ({ page }) => {
-    await page.goto(`http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
+    await navigateAndAuthenticate(page, `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`);
     const terminal = page.locator('.xterm');
 
     await waitForPrompt(page, '.xterm', 90000);

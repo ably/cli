@@ -141,6 +141,22 @@ test.describe('Web CLI E2E Tests', () => {
 
     await page.goto(pageUrl);
 
+    // Handle authentication
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
+    }
+
+    // Wait for auth screen and fill in credentials
+    console.log('Waiting for authentication screen...');
+    const apiKeyInput = await page.waitForSelector('input[placeholder="your_app.key_name:key_secret"]', { timeout: 15000 });
+    await apiKeyInput.fill(apiKey);
+    
+    // Submit the form
+    const submitButton = await page.waitForSelector('button:has-text("Connect to Terminal")');
+    await submitButton.click();
+    console.log('Authentication submitted.');
+
     // Wait for the terminal element to be present
     const terminalSelector = '.xterm'; // Adjust if the selector changes in the React component
     const _terminalElement = await page.waitForSelector(terminalSelector, { timeout: 15000 });
@@ -193,6 +209,8 @@ test.describe('Web CLI E2E Tests', () => {
   // --- NEW TESTS FOR DRAWER AND STATE ---
 
   test.describe('Drawer Functionality and State Persistence', () => {
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    
     const drawerButtonSelector = 'button:has-text("Ably CLI")'; // Selector for the button that opens the drawer
     // Make the selector more specific by adding another class
     const drawerSelector = 'div.fixed.bottom-0.left-0.right-0.bg-zinc-900'; // Selector for the main drawer panel
@@ -202,8 +220,22 @@ test.describe('Web CLI E2E Tests', () => {
     const terminalSelector = '.xterm'; // Common terminal selector
 
     test.beforeEach(async ({ page }) => {
+      if (!apiKey) {
+        throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
+      }
+      
       // Start fresh for each test in this group
       await page.goto(`http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`);
+      
+      // Handle authentication if needed
+      const authScreenVisible = await page.locator('input[placeholder="your_app.key_name:key_secret"]').isVisible().catch(() => false);
+      if (authScreenVisible) {
+        console.log('Auth screen detected, logging in...');
+        await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+        await page.click('button:has-text("Connect to Terminal")');
+        console.log('Authentication submitted.');
+      }
+      
       await page.waitForSelector(fullscreenButtonSelector);
       // Clear localStorage before each test
       await page.evaluate(() => {
@@ -211,6 +243,14 @@ test.describe('Web CLI E2E Tests', () => {
         ctx.localStorage.clear();
       });
       await page.reload();
+      
+      // Re-authenticate after reload
+      const authScreenVisibleAfterReload = await page.locator('input[placeholder="your_app.key_name:key_secret"]').isVisible().catch(() => false);
+      if (authScreenVisibleAfterReload) {
+        console.log('Re-authenticating after reload...');
+        await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+        await page.click('button:has-text("Connect to Terminal")');
+      }
     });
 
     // Test 1 & 5: View Mode Switching, URL Persistence, Basic Rendering
@@ -330,9 +370,22 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('should handle connection interruptions gracefully', async ({ page }) => {
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
+    }
+    
     // Connect to the terminal using the public server
     const url = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
     await page.goto(url);
+    
+    // Handle authentication
+    console.log('Authenticating for connection test...');
+    const apiKeyInput = await page.waitForSelector('input[placeholder="your_app.key_name:key_secret"]', { timeout: 15000 });
+    await apiKeyInput.fill(apiKey);
+    const submitButton = await page.waitForSelector('button:has-text("Connect to Terminal")');
+    await submitButton.click();
+    console.log('Authentication submitted.');
     
     // Wait for the terminal to connect and show a prompt
     const _terminalElement = await page.waitForSelector('.xterm', { timeout: 15000 });
