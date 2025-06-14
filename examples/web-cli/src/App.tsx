@@ -1,8 +1,11 @@
 import { AblyCliTerminal } from "@ably/react-web-cli";
 import { useCallback, useEffect, useState } from "react";
+import { Key, Settings, Shield } from "lucide-react";
 
 import "./App.css";
 import { CliDrawer } from "./components/CliDrawer";
+import { AuthSettings } from "./components/AuthSettings";
+import { AuthScreen } from "./components/AuthScreen";
 
 // Default WebSocket URL - use public endpoint for production, localhost for development
 const DEFAULT_WEBSOCKET_URL = "wss://web-cli.ably.com";
@@ -24,20 +27,47 @@ const getWebSocketUrl = () => {
   return DEFAULT_WEBSOCKET_URL;
 };
 
-// Credentials: query parameters take precedence over env variables
-const urlParamsForCreds = new URLSearchParams(window.location.search);
-const qsApiKey = urlParamsForCreds.get('apikey') || urlParamsForCreds.get('apiKey');
-const qsAccessToken = urlParamsForCreds.get('accessToken') || urlParamsForCreds.get('accesstoken');
+// Get credentials from various sources
+const getInitialCredentials = () => {
+  // Check sessionStorage first for persisted session credentials
+  const storedApiKey = sessionStorage.getItem('ably.web-cli.apiKey');
+  const storedAccessToken = sessionStorage.getItem('ably.web-cli.accessToken');
+  if (storedApiKey) {
+    return { 
+      apiKey: storedApiKey, 
+      accessToken: storedAccessToken || undefined,
+      source: 'session' as const
+    };
+  }
 
-// Fallback to Vite env vars if query params absent
-const envApiKey = import.meta.env.VITE_ABLY_API_KEY as string | undefined;
-const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN as string | undefined;
+  // Then check query parameters
+  const urlParams = new URLSearchParams(window.location.search);
+  const qsApiKey = urlParams.get('apikey') || urlParams.get('apiKey');
+  const qsAccessToken = urlParams.get('accessToken') || urlParams.get('accesstoken');
+  if (qsApiKey) {
+    return { 
+      apiKey: qsApiKey, 
+      accessToken: qsAccessToken || undefined,
+      source: 'query' as const
+    };
+  }
 
-const initialApiKey = qsApiKey ?? envApiKey;
-const initialAccessToken = qsAccessToken ?? envAccessToken;
+  // Finally check environment variables
+  const envApiKey = import.meta.env.VITE_ABLY_API_KEY as string | undefined;
+  const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN as string | undefined;
+  if (envApiKey) {
+    return { 
+      apiKey: envApiKey, 
+      accessToken: envAccessToken || undefined,
+      source: 'env' as const
+    };
+  }
 
-// Determine whether we already have cred inputs (either source)
-const hasInitialCredentials = Boolean(initialApiKey || initialAccessToken);
+  return { apiKey: undefined, accessToken: undefined, source: 'none' as const };
+};
+
+// Check if environment variables are available
+const hasEnvCredentials = Boolean(import.meta.env.VITE_ABLY_API_KEY);
 
 function App() {
   // Read initial mode from URL, default to fullscreen
@@ -45,14 +75,15 @@ function App() {
 
   type TermStatus = 'initial' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
   const [connectionStatus, setConnectionStatus] = useState<TermStatus>('disconnected');
-  const [apiKey, setApiKey] = useState<string | undefined>(initialApiKey);
-  const [accessToken, setAccessToken] = useState<string | undefined>(initialAccessToken);
   const [displayMode, setDisplayMode] = useState<"fullscreen" | "drawer">(initialMode);
-
-  // Remove state vars that cause remounting issues
-  const [shouldConnect, setShouldConnect] = useState<boolean>(
-    hasInitialCredentials,
-  );
+  const [showAuthSettings, setShowAuthSettings] = useState(false);
+  
+  // Initialize credentials
+  const initialCreds = getInitialCredentials();
+  const [apiKey, setApiKey] = useState<string | undefined>(initialCreds.apiKey);
+  const [accessToken, setAccessToken] = useState<string | undefined>(initialCreds.accessToken);
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey));
+  const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session');
 
   // Store the latest sessionId globally for E2E tests / debugging
   const handleSessionId = useCallback((id: string) => {
@@ -69,6 +100,50 @@ function App() {
     console.log("Session ended:", reason);
   }, []);
 
+  // Handle authentication
+  const handleAuthenticate = useCallback((newApiKey: string, newAccessToken: string) => {
+    // Clear any existing session data when credentials change
+    sessionStorage.removeItem('ably.cli.sessionId');
+    sessionStorage.removeItem('ably.cli.secondarySessionId');
+    sessionStorage.removeItem('ably.cli.isSplit');
+    
+    setApiKey(newApiKey);
+    setAccessToken(newAccessToken);
+    setIsAuthenticated(true);
+    setShowAuthSettings(false);
+    
+    // Store in session storage
+    sessionStorage.setItem('ably.web-cli.apiKey', newApiKey);
+    if (newAccessToken) {
+      sessionStorage.setItem('ably.web-cli.accessToken', newAccessToken);
+    } else {
+      sessionStorage.removeItem('ably.web-cli.accessToken');
+    }
+    setIsUsingCustomAuth(true);
+  }, []);
+
+  // Handle auth settings save
+  const handleAuthSettingsSave = useCallback((newApiKey: string, newAccessToken: string, useDefaults: boolean) => {
+    if (useDefaults && hasEnvCredentials) {
+      // Clear any existing session data when credentials change
+      sessionStorage.removeItem('ably.cli.sessionId');
+      sessionStorage.removeItem('ably.cli.secondarySessionId');
+      sessionStorage.removeItem('ably.cli.isSplit');
+      
+      // Reset to environment defaults
+      const envApiKey = import.meta.env.VITE_ABLY_API_KEY as string;
+      const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN as string | undefined;
+      setApiKey(envApiKey);
+      setAccessToken(envAccessToken);
+      sessionStorage.removeItem('ably.web-cli.apiKey');
+      sessionStorage.removeItem('ably.web-cli.accessToken');
+      setIsUsingCustomAuth(false);
+      setShowAuthSettings(false);
+    } else if (newApiKey) {
+      handleAuthenticate(newApiKey, newAccessToken);
+    }
+  }, [handleAuthenticate]);
+
   // Effect to update URL when displayMode changes
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -78,24 +153,12 @@ function App() {
     }
   }, [displayMode]);
 
-  // Set up credentials once on mount and immediately connect
-  useEffect(() => {
-    if (!hasInitialCredentials) {
-      // For demo purposes only - in production get these from a secure API
-      console.log("Setting demo credentials");
-      setApiKey("dummy.key:secret"); // Use a realistic-looking key format
-      // Provide a structurally valid (but fake) JWT
-      setAccessToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c");
-      setShouldConnect(true);
-    }
-  }, []);
-
   // Get the URL *inside* the component body
   const currentWebsocketUrl = getWebSocketUrl();
 
   // Prepare the terminal component instance to pass it down
   const TerminalInstance = useCallback(() => (
-    shouldConnect && apiKey && accessToken ? (
+    isAuthenticated && apiKey ? (
       <AblyCliTerminal
         ablyAccessToken={accessToken}
         ablyApiKey={apiKey}
@@ -106,18 +169,42 @@ function App() {
         resumeOnReload={true}
         enableSplitScreen={true}
         maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
+        initialCommand="echo 'Connecting to Ably CLI Terminal...'"
       />
     ) : null
-  ), [shouldConnect, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
+  ), [isAuthenticated, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
+
+  // Show auth screen if not authenticated
+  if (!isAuthenticated) {
+    return <AuthScreen onAuthenticate={handleAuthenticate} />;
+  }
 
   return (
     <div className="App fixed">
-      {/* Restore header */}
+      {/* Updated header with auth button */}
       <header className="App-header">
         <span className="font-semibold text-base">Ably Web CLI Terminal</span>
         <div className="header-info">
           <span>Status: <span className={`status status-${connectionStatus}`}>{connectionStatus}</span></span>
           <span>Server: {currentWebsocketUrl}</span>
+          <button
+            onClick={() => setShowAuthSettings(true)}
+            className="auth-button flex items-center space-x-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
+            title="Authentication Settings"
+          >
+            {isUsingCustomAuth ? (
+              <>
+                <Key size={16} />
+                <span className="text-sm">Custom Auth</span>
+              </>
+            ) : (
+              <>
+                <Shield size={16} className="text-green-500" />
+                <span className="text-sm">Default Auth</span>
+              </>
+            )}
+            <Settings size={14} className="ml-1 opacity-50" />
+          </button>
         </div>
         <div className="toggle-group">
           <button
@@ -135,7 +222,7 @@ function App() {
         </div>
       </header>
 
-      {/* Restore conditional rendering */}
+      {/* Main content */}
       {displayMode === 'fullscreen' ? (
         <main className="App-main no-padding">
           <div className="Terminal-container">
@@ -146,6 +233,16 @@ function App() {
         <CliDrawer TerminalComponent={TerminalInstance} />
       )}
 
+      {/* Auth settings modal */}
+      <AuthSettings
+        isOpen={showAuthSettings}
+        onClose={() => setShowAuthSettings(false)}
+        onSave={handleAuthSettingsSave}
+        currentApiKey={apiKey}
+        currentAccessToken={accessToken}
+        hasEnvDefaults={hasEnvCredentials}
+        isUsingCustomAuth={isUsingCustomAuth}
+      />
     </div>
   );
 }
