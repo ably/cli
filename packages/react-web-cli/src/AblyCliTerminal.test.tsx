@@ -114,6 +114,15 @@ vi.mock('lucide-react', () => ({
   X: (props: any) => null,
 }));
 
+// Mock the crypto utility
+vi.mock('./utils/crypto', () => ({
+  hashCredentials: vi.fn(async (apiKey?: string, accessToken?: string) => {
+    // Return a deterministic hash based on the input
+    const input = `${apiKey || ''}:${accessToken || ''}`;
+    return `hash-${input}`;
+  })
+}));
+
 // Simple minimal test component to verify hooks work in the test environment
 const MinimalHookComponent = () => {
   const [state] = React.useState('test');
@@ -593,8 +602,10 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   });
 
   test('includes stored sessionId in auth payload when resumeOnReload enabled', async () => {
-    // Pre-populate sessionStorage with a sessionId to be resumed
+    // Pre-populate sessionStorage with a sessionId and matching credential hash
+    const expectedHash = 'hash-test-key:test-token'; // Based on our mock
     window.sessionStorage.setItem('ably.cli.sessionId', 'resume-123');
+    window.sessionStorage.setItem('ably.cli.credentialHash', expectedHash);
 
     // Render component with resumeOnReload enabled so it reads the stored sessionId
     renderTerminal({ resumeOnReload: true });
@@ -1111,4 +1122,177 @@ function flushPromises() {
 } 
 
 // after imports
-// vi.setTimeout?.(10000); 
+// vi.setTimeout?.(10000);
+
+describe('AblyCliTerminal - Credential Validation', () => {
+  let onConnectionStatusChangeMock: ReturnType<typeof vi.fn>;
+  
+  beforeEach(() => {
+    onConnectionStatusChangeMock = vi.fn();
+    
+    // Clear standard mocks
+    mockWrite.mockClear();
+    mockWriteln.mockClear();
+    mockSend.mockClear();
+    mockClose.mockClear();
+    vi.mocked(mockOnData).mockClear();
+    
+    // Clear sessionStorage before each test
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.clear();
+    }
+    
+    // Reset GlobalReconnect mocks
+    vi.mocked(GlobalReconnect.resetState).mockClear();
+    vi.mocked(GlobalReconnect.getAttempts).mockReset().mockReturnValue(0);
+    
+    // Reset WebSocket mock
+    vi.mocked((global as any).WebSocket).mockClear();
+  });
+
+  const renderTerminal = (props: Partial<React.ComponentProps<typeof AblyCliTerminal>> = {}) => {
+    return render(
+      <AblyCliTerminal
+        websocketUrl="wss://web-cli.ably.com"
+        ablyAccessToken="test-token"
+        ablyApiKey="test-key"
+        onConnectionStatusChange={onConnectionStatusChangeMock}
+        resumeOnReload={true}
+        {...props}
+      />
+    );
+  };
+
+  test('does not restore session when credentials have changed', async () => {
+    // Pre-populate sessionStorage with a sessionId and credential hash
+    window.sessionStorage.setItem('ably.cli.sessionId', 'old-session-123');
+    window.sessionStorage.setItem('ably.cli.credentialHash', 'old-hash-value');
+
+    // Render with different credentials (which will generate a different hash)
+    // The mock will generate 'hash-new-key:new-token' which won't match 'old-hash-value'
+    renderTerminal({ ablyApiKey: 'new-key', ablyAccessToken: 'new-token' });
+
+    // Wait for WebSocket connection and check the auth payload
+    await waitFor(() => {
+      expect(mockSend).toHaveBeenCalled();
+      const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+      // Should NOT include the old sessionId since credentials don't match
+      expect(sentPayload.sessionId).toBeUndefined();
+    });
+
+    // Eventually the storage should be cleared
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+    
+    // Verify storage was cleared due to credential mismatch
+    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
+  });
+
+  test('restores session when credentials match', async () => {
+    // First setup the stored session with matching hash
+    const expectedHash = 'hash-test-key:test-token'; // Based on our mock
+    window.sessionStorage.setItem('ably.cli.sessionId', 'session-456');
+    window.sessionStorage.setItem('ably.cli.credentialHash', expectedHash);
+    
+    // Render with matching credentials
+    renderTerminal({ ablyApiKey: 'test-key', ablyAccessToken: 'test-token' });
+    
+    // Wait for WebSocket connection
+    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    
+    // Parse the auth payload
+    const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    
+    // Should include the stored sessionId since credentials match
+    expect(sentPayload.sessionId).toBe('session-456');
+    
+    // Verify storage wasn't cleared
+    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('session-456');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe(expectedHash);
+  });
+
+  test('stores credential hash when new session is created', async () => {
+    renderTerminal({ ablyApiKey: 'test-key-123', ablyAccessToken: 'test-token-456' });
+
+    // Wait for initialization
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    // Simulate the server sending a hello message with a new sessionId
+    await act(async () => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'new-session-789' }) });
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    
+    // Both sessionId and credential hash should be stored
+    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-789');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe('hash-test-key-123:test-token-456');
+  });
+
+  test('clears credential hash when session is purged due to server disconnect', async () => {
+    // Set up initial state with stored session and hash
+    window.sessionStorage.setItem('ably.cli.sessionId', 'session-to-purge');
+    window.sessionStorage.setItem('ably.cli.credentialHash', 'hash-to-purge');
+    
+    renderTerminal({ ablyApiKey: 'test-key', ablyAccessToken: 'test-token' });
+    
+    await act(async () => { await Promise.resolve(); });
+    
+    // Simulate server sending a disconnected status
+    act(() => {
+      if (!mockSocketInstance) throw new Error("mockSocketInstance not initialized");
+      mockSocketInstance.readyStateValue = WebSocket.OPEN;
+      const disconnectMessage = { type: 'status', payload: 'disconnected', reason: 'Server error' };
+      mockSocketInstance.triggerEvent('message', { data: JSON.stringify(disconnectMessage) });
+    });
+    
+    await flushPromises();
+    
+    // Both sessionId and credential hash should be cleared
+    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
+  });
+
+  test('handles missing credentials (undefined apiKey)', async () => {
+    renderTerminal({ ablyApiKey: undefined, ablyAccessToken: 'test-token' });
+
+    // Wait for initialization
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    // Should still create a connection
+    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+
+    // Simulate hello message
+    await act(async () => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'session-no-key' }) });
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    
+    // Should store session and hash even with undefined apiKey
+    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('session-no-key');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe('hash-:test-token');
+  });
+
+  test('does not store session when resumeOnReload is false', async () => {
+    renderTerminal({ resumeOnReload: false });
+
+    // Simulate the server sending a hello message
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'should-not-store' }) });
+    });
+
+    await flushPromises();
+    
+    // Nothing should be stored in sessionStorage
+    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
+  });
+}); 
