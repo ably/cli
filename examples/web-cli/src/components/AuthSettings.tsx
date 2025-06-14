@@ -19,15 +19,15 @@ const redactCredential = (credential: string | undefined): string => {
   if (credential.includes(':')) {
     const [keyName, secret] = credential.split(':');
     // Show full app ID and key ID, but redact the secret
-    return `${keyName}:.....`;
+    return `${keyName}:****`;
   }
   
   // For tokens, show first few and last few characters
   if (credential.length > 20) {
-    return `${credential.substring(0, 6)}.....${credential.substring(credential.length - 4)}`;
+    return `${credential.substring(0, 6)}...${credential.substring(credential.length - 4)}`;
   }
   
-  return credential.substring(0, 4) + '.....';
+  return credential.substring(0, 4) + '...';
 };
 
 export const AuthSettings: React.FC<AuthSettingsProps> = ({
@@ -153,6 +153,29 @@ export const AuthSettings: React.FC<AuthSettingsProps> = ({
                   </div>
                 </label>
               </div>
+            </div>
+          )}
+
+          {isUsingCustomAuth && currentApiKey && (
+            <div className="mb-6 p-4 bg-gray-800 rounded-lg">
+              <p className="text-sm font-medium text-gray-300 mb-2">Current Credentials</p>
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">
+                  API Key: <span className="font-mono text-gray-400">{redactCredential(currentApiKey)}</span>
+                </p>
+                {currentAccessToken && (
+                  <p className="text-xs text-gray-500">
+                    Access Token: <span className="font-mono text-gray-400">{redactCredential(currentAccessToken)}</span>
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => onSave('', '', false)}
+                className="mt-3 text-xs text-red-400 hover:text-red-300 transition-colors"
+              >
+                Clear Credentials
+              </button>
             </div>
           )}
 

@@ -111,7 +111,12 @@ test.describe('Web CLI E2E Tests', () => {
     // Use npx vite preview directly
     webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], { // Using npx vite preview
       stdio: 'pipe',
-      cwd: EXAMPLE_DIR // Run command within the example directory
+      cwd: EXAMPLE_DIR, // Run command within the example directory
+      env: {
+        ...process.env,
+        // Pass through API key from E2E environment variable if available
+        VITE_ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY || ''
+      }
     });
 
     webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));

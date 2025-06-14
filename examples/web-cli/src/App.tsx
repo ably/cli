@@ -82,7 +82,7 @@ function App() {
   const initialCreds = getInitialCredentials();
   const [apiKey, setApiKey] = useState<string | undefined>(initialCreds.apiKey);
   const [accessToken, setAccessToken] = useState<string | undefined>(initialCreds.accessToken);
-  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey));
+  const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey && initialCreds.apiKey.trim()));
   const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session');
 
   // Store the latest sessionId globally for E2E tests / debugging
@@ -141,6 +141,18 @@ function App() {
       setShowAuthSettings(false);
     } else if (newApiKey) {
       handleAuthenticate(newApiKey, newAccessToken);
+    } else if (!newApiKey && !useDefaults) {
+      // Clear credentials - go back to auth screen
+      sessionStorage.removeItem('ably.cli.sessionId');
+      sessionStorage.removeItem('ably.cli.secondarySessionId');
+      sessionStorage.removeItem('ably.cli.isSplit');
+      sessionStorage.removeItem('ably.web-cli.apiKey');
+      sessionStorage.removeItem('ably.web-cli.accessToken');
+      setApiKey(undefined);
+      setAccessToken(undefined);
+      setIsAuthenticated(false);
+      setIsUsingCustomAuth(false);
+      setShowAuthSettings(false);
     }
   }, [handleAuthenticate]);
 
@@ -158,7 +170,7 @@ function App() {
 
   // Prepare the terminal component instance to pass it down
   const TerminalInstance = useCallback(() => (
-    isAuthenticated && apiKey ? (
+    isAuthenticated && apiKey && apiKey.trim() ? (
       <AblyCliTerminal
         ablyAccessToken={accessToken}
         ablyApiKey={apiKey}

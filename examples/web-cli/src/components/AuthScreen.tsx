@@ -50,7 +50,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
                 id="apiKey"
                 type="text"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setError(''); // Clear error when user types
+                }}
                 placeholder="your_app.key_name:key_secret"
                 className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 autoFocus
@@ -69,7 +72,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
                 id="accessToken"
                 type="text"
                 value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
+                onChange={(e) => {
+                  setAccessToken(e.target.value);
+                  setError(''); // Clear error when user types
+                }}
                 placeholder="Your JWT access token"
                 className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               />
