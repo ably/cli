@@ -7,14 +7,14 @@ export async function hashCredentials(apiKey?: string, accessToken?: string): Pr
   const input = `${apiKey || ''}:${accessToken || ''}`;
   
   // Use Web Crypto API if available
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+  if (globalThis.window !== undefined && globalThis.crypto && globalThis.crypto.subtle) {
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(input);
-      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+      const hashArray = [...new Uint8Array(hashBuffer)];
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) {
+    } catch {
       // Fall back to simple hash if Web Crypto fails
     }
   }
@@ -22,7 +22,7 @@ export async function hashCredentials(apiKey?: string, accessToken?: string): Pr
   // Simple fallback hash function
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
+    const char = input.codePointAt(i) ?? 0;
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convert to 32-bit integer
   }
