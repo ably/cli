@@ -4,6 +4,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { authenticateWebCli } from './auth-helper.js';
 
 // Type for browser context in evaluate() calls
 type BrowserContext = {
@@ -111,12 +112,7 @@ test.describe('Web CLI E2E Tests', () => {
     // Use npx vite preview directly
     webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], { // Using npx vite preview
       stdio: 'pipe',
-      cwd: EXAMPLE_DIR, // Run command within the example directory
-      env: {
-        ...process.env,
-        // Pass through API key from E2E environment variable if available
-        VITE_ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY || ''
-      }
+      cwd: EXAMPLE_DIR // Run command within the example directory
     });
 
     webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
@@ -146,21 +142,8 @@ test.describe('Web CLI E2E Tests', () => {
 
     await page.goto(pageUrl);
 
-    // Handle authentication
-    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
-    if (!apiKey) {
-      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
-    }
-
-    // Wait for auth screen and fill in credentials
-    console.log('Waiting for authentication screen...');
-    const apiKeyInput = await page.waitForSelector('input[placeholder="your_app.key_name:key_secret"]', { timeout: 15000 });
-    await apiKeyInput.fill(apiKey);
-    
-    // Submit the form
-    const submitButton = await page.waitForSelector('button:has-text("Connect to Terminal")');
-    await submitButton.click();
-    console.log('Authentication submitted.');
+    // Handle authentication if needed
+    await authenticateWebCli(page);
 
     // Wait for the terminal element to be present
     const terminalSelector = '.xterm'; // Adjust if the selector changes in the React component
@@ -375,21 +358,12 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('should handle connection interruptions gracefully', async ({ page }) => {
-    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
-    if (!apiKey) {
-      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
-    }
-    
     // Connect to the terminal using the public server
     const url = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
     await page.goto(url);
     
-    // Handle authentication
-    console.log('Authenticating for connection test...');
-    const apiKeyInput = await page.waitForSelector('input[placeholder="your_app.key_name:key_secret"]', { timeout: 15000 });
-    await apiKeyInput.fill(apiKey);
-    const submitButton = await page.waitForSelector('button:has-text("Connect to Terminal")');
-    await submitButton.click();
+    // Handle authentication if needed
+    await authenticateWebCli(page);
     console.log('Authentication submitted.');
     
     // Wait for the terminal to connect and show a prompt

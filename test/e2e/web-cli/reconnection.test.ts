@@ -11,7 +11,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { navigateAndAuthenticate } from './auth-helper.js';
+import { authenticateWebCli } from './auth-helper.js';
 
 const execAsync = promisify(exec);
 
@@ -106,12 +106,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     const { spawn } = await import('node:child_process');
     webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], {
       stdio: 'pipe',
-      cwd: EXAMPLE_DIR,
-      env: {
-        ...process.env,
-        // Pass through API key from E2E environment variable if available
-        VITE_ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY || ''
-      }
+      cwd: EXAMPLE_DIR
     });
 
     webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
@@ -161,7 +156,8 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
 
   test('connects to public server and handles client-side disconnection', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await navigateAndAuthenticate(page, pageUrl);
+    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await authenticateWebCli(page);
 
     // Wait for initial connection and prompt
     await waitForPrompt(page, '.xterm');
@@ -191,7 +187,8 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
 
   test('handles multiple disconnections gracefully', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await navigateAndAuthenticate(page, pageUrl);
+    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await authenticateWebCli(page);
     await expect(page.locator('.xterm')).toContainText('ably', { timeout: 30000 });
 
     // Wait for prompt
@@ -242,7 +239,8 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
 
   test('preserves session across page reload', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await navigateAndAuthenticate(page, pageUrl);
+    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await authenticateWebCli(page);
 
     // Wait for initial connection
     await waitForPrompt(page, '.xterm');
