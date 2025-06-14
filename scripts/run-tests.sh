@@ -244,10 +244,40 @@ if $USE_PLAYWRIGHT; then
   # ALSO rebuild the React Web CLI package so that its dist/ output includes recent edits.
   echo "Building @ably/react-web-cli package (tsup)..."
   pnpm --filter @ably/react-web-cli run build || { echo "react-web-cli build failed, aborting Playwright run."; exit 1; }
+  
+  # Set up cleanup handler to restore .env file
+  ENV_FILE_PATH="./examples/web-cli/.env"
+  ENV_FILE_BACKUP="./examples/web-cli/.env.backup"
+  
+  cleanup_env_file() {
+    if [[ -f "$ENV_FILE_BACKUP" ]]; then
+      echo "Restoring .env file in cleanup..."
+      mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"
+    fi
+  }
+  
+  # Ensure cleanup runs on exit
+  trap cleanup_env_file EXIT
+
+  # Temporarily move .env file to prevent credentials from being baked into the build
+  # (Individual tests will handle their own authentication needs)
+  if [[ -f "$ENV_FILE_PATH" ]]; then
+    echo "Moving .env file temporarily to ensure clean build for tests..."
+    mv "$ENV_FILE_PATH" "$ENV_FILE_BACKUP"
+  fi
 
   # Rebuild the example app so the preview server serves the latest bundle that includes changed library code.
   echo "Building example web-cli app (vite build)..."
-  pnpm --filter ./examples/web-cli run build || { echo "example web-cli build failed, aborting Playwright run."; exit 1; }
+  pnpm --filter ./examples/web-cli run build || { 
+    # Restore .env file if build fails
+    if [[ -f "$ENV_FILE_BACKUP" ]]; then
+      mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"
+    fi
+    echo "example web-cli build failed, aborting Playwright run."; 
+    exit 1; 
+  }
+  
+  # Don't restore here - let the trap handle it to ensure it's always restored
 
   if [[ "$DEBUG_MODE" == "true" ]]; then
     echo "=== Running Playwright Tests ==="
