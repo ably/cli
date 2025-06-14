@@ -93,7 +93,12 @@ test.describe('Session Resume E2E Tests', () => {
     const { spawn } = await import('node:child_process');
     webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], {
       stdio: 'pipe',
-      cwd: EXAMPLE_DIR
+      cwd: EXAMPLE_DIR,
+      env: {
+        ...process.env,
+        // Pass through API key from E2E environment variable if available
+        VITE_ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY || ''
+      }
     });
 
     webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
