@@ -43,7 +43,7 @@ describe("E2E: ably bench publisher and subscriber", function () {
     await cleanupTrackedResources();
   });
 
-  it.skip("should run publisher and subscriber, and report correct message counts", async function () {
+  it("should run publisher and subscriber, and report correct message counts", async function () {
     const messageCount = 20; // Small number for a quick test
     const messageRate = 10;
 

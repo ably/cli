@@ -170,7 +170,7 @@ export function CliDrawer({ TerminalComponent }: CliDrawerProps) {
             <div className="flex items-center gap-3">
               <SquareTerminal size={18} className="text-white" />
               <span className="font-medium text-sm">Ably Shell</span>
-              <span className="text-xs px-2 py-0.5 bg-[#3A3A3A] text-[#F5A623] rounded-sm font-medium">TEST MODE</span>
+              { /* Env lozenge hidden for now: <span className="text-xs px-2 py-0.5 bg-[#3A3A3A] text-[#F5A623] rounded-sm font-medium">TEST MODE</span> */ }
             </div>
             <button
               onClick={toggleDrawer}

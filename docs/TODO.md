@@ -5,39 +5,16 @@
 - [ ] Support auto-complete for commands
 - [ ] Support auto-update
 - [ ] Send ably-cli agent in data plane and control plane requests to support usage analytics
-- [x] [feat/terminal-server-improvements] Connection handling of Web CLI no longer seems to show the connecting state and number of attempts correctly. Leaving the local web CLI running, I currently see "Connecting to Ably CLI... (Attempt 776/15)". Firstly, the fact that it's attempting 776 out of 15 is a bug, secondly attempts are happening too quickly and should have some backoff strategy. The intended behaviour is a) if the connection attempt fails due to a network / unexpected server failure, the CLI will reattempt connecting automatically up to 15 times, with a back off strategy that ensures the first reconnection attempt is done immediately, the next one is done after 2 seconds, the next 4, then 8, then each subsequent attempt is 8 seconds after that. Once the automatic reconnection attempts succeed, the user is automatically reconnected, if they fail, the user is notified and required to press enter to begin a new set of 15 automatic reconnection attempts - each reconnection reset should reset the counter.
-- [x] [feat/terminal-server-improvements] The Web CLI React component should interact with the user as one would expect from a terminal interface. As such, any disconnection events should be shown to the user in the terminal interface with an overlay, and the user should be given the option to interact with the React component to, for example, stop reconnecting automatically. The user, could, for example, be told to press [Enter] to stop autoamtic erconnection attempts. And when the CLI has been explicitly disconnected by the server, the user could be told to press [Enter] to attempt to reconnect. This way the user has a true terminal experience with the component, and we're not assuming that the consumer of the React component will show a UI with additional buttons etc. outside of the component. We should also ensure this is all nicely tested with unit tests and playwright tests.
-- [ ] [feat/terminal-server-improvements] Web example should tell the user to install the CLI locally if there are connection issues / CLI has not loaded. This should be displayed inline in the terminal of the React component, however the state should be made available as a property of the component, so that the application embedding this component can detect events like connection failed / connecting etc. The user should be given the option to try and reconnect again by, for example, pressing [Enter]. The installation message should be simple such as `pnpm install -g @ably/web-cli`
-- [ ] [feat/terminal-server-improvements] After installing the CLI via `npm install -g @ably/web-cli` or with `pnpm` or `yard`, the user should be shown a simple instruction on how to get started similar to what we do in the `README.md` file which is simply to run `ably` to see a list of commands. The Ably logo should also be shown.
-- [ ] [feat/terminal-server-improvements] When the `ably` command is run on its own and the user is not logged into an account (i.e. no account config exists) and the CLI is not running in web terminal mode, then the user should be shown a notice after the output, telling the user that they should login with `ably login` to make using the CLI easier as explicit API keys and access control tokens won't be needed and have the best experience of the CLI.
-- [ ] [feat/terminal-server-improvements] Web example should support a restricted mode which will be used for anonymous users of the Ably docs website. This version of the CLI will still be provided with a working API key, however no control API access token will be provided (as only valid registered users have access tokens). When an access token is not provided and the CLI is in web terminal mode, all commands that rely on the control API will not work and the user will be told to sign up / login to use these features. In addition, a few additional commands will be disallowed, including channel enumeration (list commands for channels, spaces or rooms), all log commands (i.e. ably logs * or ably * logs) as these commands could theoretically surface other user activity in the docs demo app for anonymous users. The web CLI will "know" that is in limited docs mode as no access token will be provided to it as an environment variable whilst in web CLI mode. The user will be encouraged to sign up at https://ably.com/signup or login at https://ably.com/login.
-- [x] [feat/terminal-server-improvements] Connection handling of Web CLI no longer seems to show the connecting state and number of attempts correctly. Leaving the local web CLI running, I currently see "Connecting to Ably CLI... (Attempt 776/15)". Firstly, the fact that it's attempting 776 out of 15 is a bug, secondly attempts are happening too quickly and should have some backoff strategy. The intended behaviour is a) if the connection attempt fails due to a network / unexpected server failure, the CLI will reattempt connecting automatically up to 15 times, with a back off strategy that ensures the first reconnection attempt is done immediately, the next one is done after 2 seconds, the next 4, then 8, then each subsequent attempt is 8 seconds after that. Once it has failed 15 times, the CLI will show a message to the user stating it was unable to connect, and the user should be given the option to try reconnecting. This ensures that a client won't reconnect indefinitely and requires human interaction to reconnect after a number of failures, and this logic is implemented inside the React component to ensure this connection strategy is used. The user should be given feedback when reconnectiona attempts are happening automatically and the user should be shown how long until the next reconnection attempt in seconds with the total in seconds shown live. The UI logic should exist in the React component and be shown inside the terminal itself, giving the user the option to cancel the reconnection attempts. Once the reconnection attempts have stopped, due to the user explicitly stopping the reconnections, or the max attempts being hit, the user will be given the option to manually reconnect.
-- [x] [feat/terminal-server-improvements] The Web CLI drawer is buggy in the sense that sometimes when you click close drawer, the drawer does not close. This is not critical but nice to have fixed. I suspect there is a race condition with the hide animation.
-- [x] [feat/terminal-server-improvements] Connections should not auto-reconnect if the server is sending an error, such as invalid token, or session terminated after idle timeout. Implemented by detecting server close codes (4001 invalid token, 4002 inactivity-timeout, 1013 capacity) in `AblyCliTerminal.tsx`; client shows error box & prompts manual reconnect. Server now uses these codes.
-- [ ] [feat/terminal-server-improvements] When an API key or Access Token fails with a 40x error, it should show the error message without a stack trace, and should tell the user to reauth appropriately i.e. using `ably login` for access tokens, or `ably auth keys switch` for API keys. Here is the error message from an access token that failed:
-  ```sh
-  $ ably apps stats
-  ›   Error: No app ID provided and no default app selected. Please specify an app ID or select a default app with "ably apps
-  ›   switch".
-  $ ably apps switch
-  Select an app to switch to:
-  Error fetching apps: Error: Control API request failed: 401 Unauthorized - {"message":"Access denied","code":40100,"statusCode":401,"href":"https://help.ably.io/error/40100","details":null}
-  ```
-- [x] [feat/terminal-server-improvements] Web example will automatically authenticate from the .env file in the example. However, there is no option to change the authentication afterwards in the web example. There should be a small button/link to change the auth, which takes you to the form which shows you the current API key and access token, that can be changed and logged back in.
-- [x] [feat/terminal-server-improvements] Web example index page should provide two options to view the web CLI example. 1) What is the current version, which is just a full screen terminal, 2) A drawer version that sits at the bottom of the page with a small icon, that when clicked opens up a drawer that connects and loads the CLI in the drawer. The drawer by default will take up 40% of the vertical space, but can be expanded or contracted with the user dragging the top of the drawer up or down. State (open/closed/height/mode) is persisted.
-- [x] [feat/terminal-server-improvements] Web CLI component should the user that it is connecting to the terminal server in the terminal interface with a visual indication (in ASCII) that it's connecting. Once the terminal loads, the terminal interface is cleared and the standard terminal is shown.
+- [ ] Web example should tell the user to install the CLI locally if there are connection issues / CLI has not loaded. This should be displayed inline in the terminal of the React component, however the state should be made available as a property of the component, so that the application embedding this component can detect events like connection failed / connecting etc. The user should be given the option to try and reconnect again by, for example, pressing [Enter]. The installation message should be simple such as `pnpm install -g @ably/web-cli`
+- [ ] After installing the CLI via `npm install -g @ably/web-cli` or with `pnpm` or `yard`, the user should be shown a simple instruction on how to get started similar to what we do in the `README.md` file which is simply to run `ably` to see a list of commands. The Ably logo should also be shown.
+- [ ] When the `ably` command is run on its own and the user is not logged into an account (i.e. no account config exists) and the CLI is not running in web terminal mode, then the user should be shown a notice after the output, telling the user that they should login with `ably login` to make using the CLI easier as explicit API keys and access control tokens won't be needed and have the best experience of the CLI.
+- [ ] Web example should support a restricted mode which will be used for anonymous users of the Ably docs website. This version of the CLI will still be provided with a working API key, however no control API access token will be provided (as only valid registered users have access tokens). When an access token is not provided and the CLI is in web terminal mode, all commands that rely on the control API will not work and the user will be told to sign up / login to use these features. In addition, a few additional commands will be disallowed, including channel enumeration (list commands for channels, spaces or rooms), all log commands (i.e. ably logs * or ably * logs) as these commands could theoretically surface other user activity in the docs demo app for anonymous users. The web CLI will "know" that is in limited docs mode as no access token will be provided to it as an environment variable whilst in web CLI mode. The user will be encouraged to sign up at https://ably.com/signup or login at https://ably.com/login.
 - [ ] Ensure `ably account current`, `ably apps current`, and `ably auth keys current` commands exist consisetntly so that the user can see which account, app, and key are currently being used. Additionally, if `ably accounts switch` is called, and the user has not logged in yet, instead of showing the error "Error: No accounts configured. Use "ably accounts login" to add an account.", simply go proxy the request to `ably accounts login`.
-- [x] [feat/terminal-server-improvements] When the server terminates a session because of a client-side or server capacity or constraint reason, then it should send an error code to the web CLI React component that indicates the termination should not trigger an automatic reconnect. The user should be shown the error message sent from the server, and a reconnect of the terminal should only happen if the user explicitly chooses to reconnect.
-- [ ] [feat/terminal-server-improvements] The terminal server is considered experimental at this stage as we've not "productionised" it beyond handling the anticipated traffic for Ably users, which is realistically going to be a low number of concurrent users (less than 100). As such, we expect one well resourced server can handle the web CLI needs, however it's important until we "productionise" the service that users still get a good experience, even if the server is offline or at capacity. As such, whenever the web CLI is connecting, or has been forcefully disconnected due to capacity etc. the user should be told that whilst the web CLI is curently not available, the installable CLI is operational and can be installed and used locally, with basic instructions to do that. This information should be shown to the user in the terminal itself, as opposed to any UI element on top of the web CLI interface.
-- [x] [feat/terminal-server-improvements] The terminal server now supports connection resumption using `sessionId`. When a client reconnects within 60 s with the same `sessionId` and credentials, the server re-attaches to the existing Docker exec, replays the last buffered output (≈1 000 lines) and streams stdin/stdout; the newer connection automatically supersedes any older socket.
-- [x] [feat/terminal-server-improvements] The Web CLI React component persists and re-uses `sessionId`. It exposes the value via `onSessionId`, automatically includes it in reconnects, and—when `resumeOnReload` is enabled—stores it in `sessionStorage` so a full page reload resumes the session.
-- [x] [feat/terminal-server-improvements] Implement split-screen terminal functionality in the Web CLI React component. This includes UI for a "split" icon, tabbed interface for two concurrent sessions, independent session management (sharing auth), a prop to enable/disable the feature, connection status indicators per-pane, and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
+- [ ] The terminal server is considered experimental at this stage as we've not "productionised" it. As such, we expect a few well resourced servers can handle the web CLI needs, however it's important until we "productionise" the service that users still get a good experience, even if the server is offline or at capacity. As such, whenever the web CLI is connecting, or has been forcefully disconnected due to capacity etc. the user should be told that whilst the web CLI is curently not available, the installable CLI is operational and can be installed and used locally, with basic instructions to do that. This information should be shown to the user in the terminal itself, as opposed to any UI element on top of the web CLI interface.
+and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server-improvements.md#phase-6`.
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the terminal server
-- [x] For commands that run indefinitely like subscribe, or enter, should we add an optional command line argument that allows them to timeout after X seconds. Then in CI, we can ensure that the default settings (with an ENV var) is say 20 seconds, so that at least we can ensure these commands can never mistakenly wait. Check where `timeout` has been uused in test suites and replace with the appropriate timeout argument (name still to be determined). Whilst CI will have a default timeout for all commands, the tests that rely on this should explicitly set a timeout. In addition, we should update the docs for agents to tell them that commands that run indefinitely like subscribe, enter, have these arguments, and they should be used when running tests, and when running commands locally, prefixing them with `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
-- [ ] Support new endpoint client optiosn when public -> https://github.com/ably/ably-js/pull/1973
-- [X] For all commands that are long running, where we connect over a realtime client, the CLI should output connection failure events, like disconnected, suspended, failed and then from those states, if they reconnedt, we should output that. 
-- [X] E2E tests that fail should output the cmd output from the CLI commands run so that it's easier to debug these failures.
-
+`timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
+- [ ] Support new endpoint client options when available in our public APIs -> https://github.com/ably/ably-js/pull/1973
 
 ## UI/UX Improvements
 
@@ -45,47 +22,8 @@
   - [ ] Note the examples are generally spaced out vertically with a blank line between each, we should be consistent in keeping the vertical spacing concise and remove unnecessary white space.
   - [ ] All CLI commands should be listed in the index.ts files for each topic, and whenever a new command is added, the index.ts file for that topic should be updated.
   - [ ] The output for each empty topic, such as `ably spaces`, should be consistent in format, with the title "Ably [Topic] commands:", then a list of all the commands available, and then provide a comment beneath stating "Run `ably [Topic] COMMAND --help` for more information on a command."
-  - [ ] Much like we do for the root help in createCustomWelcomeScreen in help.ts, we should autogenerate this to avoid unnecessary maintenance of the help for the root topics.
+  - [ ] Much like we do fox§r the root help in createCustomWelcomeScreen in help.ts, we should autogenerate this to avoid unnecessary maintenance of the help for the root topics.
   - [ ] Additionally, when the command with --help is run for each command, the auto-generated output should also be colour coded to make it more legible (is this a job for standard oclif themes), and the examples listed should not have vertical space between each one like they currently are.
-- [x] The terminal interface resizes vertically as expected, however the bottom line of the terminal is often partially cropped as a result of it expanding by a few pixels, which appears to add a text line to the terminal, but there is not enough vertical space to show it. As such, the terminal is sort of broken once full as the bottom line is always cropped. Can you ensure that a complete line of text is always visible at the bottom of the terminal.
-
-## Security
-
-- [x] The Docker web terminal restrictions on what commands can be run is pretty poor as you can use & or | operators to simply get around this. For example, running `$ ably > /dev/null | echo "Hello"` returns "Hello", showing that the user can run additional commands.
-- [x] Implement read-only filesystem with controlled write access for Docker containers
-  - [x] Make the root filesystem read-only using `ReadonlyRootfs: true`
-  - [x] Add tmpfs mounts for necessary writable directories with noexec flag
-  - [x] Create a dedicated volume for the `~/.ably` config directory
-- [x] Add resource limits to Docker containers
-  - [x] Set process limits using `PidsLimit`
-  - [x] Configure memory limits to prevent resource exhaustion
-  - [x] Add CPU quotas to prevent CPU abuse
-- [x] Enhance session management with timeouts
-  - [x] Add inactivity timeout for terminal sessions
-  - [x] Implement maximum session duration limits
-  - [x] Ensure proper notification to users before session termination
-- [x] Enhance network security for containers
-  - [x] Create a restricted network with controlled egress to Ably endpoints only
-  - [x] Explicitly block raw socket access
-  - [x] Verify that the container drops all unnecessary capabilities
-- [x] Implement Docker user namespace remapping for additional isolation
-  - [x] Configure Docker daemon for user namespace remapping
-  - [x] Ensure container runs with correct mapped user
-- [x] Create and apply custom seccomp profile for system call filtering
-  - [x] Develop a seccomp profile that allows only necessary syscalls
-  - [x] Test and apply the profile to containers
-- [x] Implement AppArmor profile for mandatory access control
-  - [x] Develop an AppArmor profile with strict filesystem access controls
-  - [x] Allow execution only of required binaries
-  - [x] Test and apply the profile to containers
-- [x] Set up enhanced logging and monitoring for security events
-  - [x] Configure logging for blocked syscalls and AppArmor violations
-  - [x] Implement monitoring for container resource usage
-  - [x] Create alerting for potential security breaches
-- [x] Create security testing and audit procedures (See `docs/Security-Testing-Auditing.md`)
-- [x] Develop automated tests for container security configuration (Outlined in `docs/Security-Testing-Auditing.md`)
-- [x] Create regular security audit workflow (Outlined in `docs/Security-Testing-Auditing.md`)
-- [x] Document security hardening measures for future reference (See `docs/Security-Hardening.md` and `docs/Security-Testing-Auditing.md`)
 
 ## API and Architecture
 
@@ -107,48 +45,22 @@
 
 ## Best Practices
 
-- [x] Document the folder structures and place this in a markdown file. Instruct local IDE to maintain this file.
-- [x] Ensure all changes meet the linting requirements, `pnpm exec eslint [file]`
 - [ ] Look for areas of unnecessary duplication as help.ts checking "commandId.includes('accounts login')" when the list of unsupported web CLI commands exists already in BaseCommand WEB_CLI_RESTRICTED_COMMANDS
-- [x] [feat/terminal-server-improvements] Add inactivity timeout to the terminal server
-- [x] Release new versions automatically from Github for NPM
+- [ ] Release new versions automatically from Github for NPM
 - [ ] Now that we have .editorconfig, ensure all files adhere in one commit
 - [ ] We are using a PNPM workspace, but I am not convinced that's a good thing. We should consider not letting the examples or React component dependencies affect the core CLI packaging.
 - [ ] Publish Docker image to Github registry and use a path such as `ghcr.io/ably/ably-cli-sandbox` for the published artefact. Building and publishing should use the locally built Ably CLI binary as opposed to the latest version so that local changes can be tested locally.
-- [x] Review the Cursor rules and Docs to ensure they are effective for prompting
-  -   *Done: 2025-04-27*
-  -   *Summary: Refactored `.cursor/rules`, updated `docs/Testing.md`, added `CONTRIBUTING.md` and `docs/DEBUGGING.md` based on analysis of the `.specstory` files and Anthropic best practices. Added code examples, troubleshooting guide, and agent-agnostic AI assistance rules. Enhanced visual hierarchy and progressive disclosure in documentation. Created `WORKFLOW.mdc` to centralize mandatory steps.*
-- [x] Refactor terminal-server.ts as it's grown organically and become a little bit of a beast. Treating it as a "script" is no longer applicable.
-  -   *Done: 2025-05-29 (Phase 2)*
-  -   *Summary: Refactored monolithic 1713-line terminal-server.ts into 13 focused modules with clean separation of concerns. Created proper TypeScript architecture with services (websocket-server, docker-manager, session-manager, auth-service, security-service), utilities (logger, stream-handler), type definitions, and centralized configuration. All tests updated and passing.*
 - [ ] Implement token bearer auth for web CLI usage to minimise exposure of API keys and access tokens. This same thinking should apply to anonymous users (in spite of the API key being recycled), and the CLI needs to handle expiring tokens. See https://ably.atlassian.net/wiki/spaces/product/pages/4033511425/PDR-070+Web+CLI+technical+architecture?focusedCommentId=4051042310.
 
 ## Bugs
 
 - [ ] Running `pnpm test [filepath]` does not run the test file only, it runs all tests. The docs state this works so needs fixing.
 - [ ] Running the tests in debug mode seem to indicate here is a loop of some sort causing slowness: `DEBUG=* pnpm test test/e2e/core/basic-cli.test.ts` to replicate this issue, see how man times `config loading plugins [ './dist/src' ]` is loadedx
-- [x] [feat/terminal-server-improvements] Running web CLI terminal has some bugs a) running a command such as `ably help status` clears the display instead of showing progress updates, b) " and ' are not recognise correctly, running the command `ably help ask "what is ably"`
 - [ ] Test filters don't appear to be working with pnpm `pnpm test --filter 'resume helpers'` shows warning 'Warning: Cannot find any files matching pattern "helpers"' and then runs all tests.
 - [ ] When the server times out due to inactivity, the message "--- Session Ended (from server): Session timed out due to inactivity ---" is shown. At this time, the CLI should have shown a dialog saying the client was disconnected and prompting the user to interact by pressing Enter to reconnect. It should not automatically reconnect to conserve resources for idle connections.
 - [ ] The text inside the web terminal is now not wrapping, but instead it's scrolling off to the left showing a "<" char to the left of teh line. THis is not what is expected and should wrap to the next line. Need to tweak the bash settings.
 - [ ] One of the Playwright tests is flakey -> https://github.com/mattheworiordan/ably-cli/actions/runs/15327667612/job/43126212502
       `test/e2e/web-cli/prompt-integrity.test.ts:94:3 › Prompt integrity & exit behaviour › Typing `exit` ends session and page refresh starts a NEW session automatically`
-- [ ] Sometimes running commands, especially from tests, I see the Using command shown twice:
-```
-ABLY_API_KEY=$E2E_ABLY_API_KEY bin/run.js rooms presence enter myroom123 --profile-data '{"name":"Test User 2","status":"active"}' --client-id sub2-client
-
-Using: App=Unknown App (xVLyHw) • Key=All access (xVLyHw.-pwh7w)
-
-Using: App=Unknown App (xVLyHw) • Key=All access (xVLyHw.-pwh7w)
-
-Successfully connected to room: myroom123
-✓ Entered room myroom123 as sub2-client
-
-No other users are present in this room
-
-Listening for presence events until terminated. Press Ctrl+C to exit.
-```
-
 
 ## Test coverage
 

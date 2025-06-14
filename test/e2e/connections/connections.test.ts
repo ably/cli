@@ -274,7 +274,7 @@ describe("Connections E2E Tests", function() {
   });
 
   describe("Live Connection Monitoring E2E", function() {
-    it.skip("should monitor live connections with real client lifecycle", async function() {
+    it("should monitor live connections with real client lifecycle", async function() {
       this.timeout(180000); // 3 minute timeout for comprehensive test
       
       const cliPath = join(process.cwd(), "bin", "run.js");

@@ -19,6 +19,7 @@ import {
 } from './global-reconnect';
 import { useTerminalVisibility } from './use-terminal-visibility.js';
 import { SplitSquareHorizontal, X } from 'lucide-react';
+import { hashCredentials } from './utils/crypto';
 
 /**
  * Simple debounce utility function to prevent rapid successive calls
@@ -342,14 +343,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   }, [resumeOnReload]);
 
   // Track the current sessionId received from the server (if any)
-  const [sessionId, setSessionId] = useState<string | null>(
-    () => {
-      if (resumeOnReload && typeof window !== 'undefined') {
-        return window.sessionStorage.getItem('ably.cli.sessionId');
-      }
-      return null;
-    }
-  );
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [credentialHash, setCredentialHash] = useState<string | null>(null);
+  const [credentialsInitialized, setCredentialsInitialized] = useState(false);
+  const [sessionIdInitialized, setSessionIdInitialized] = useState(false);
 
   // Track the second terminal's sessionId
   const [secondarySessionId, setSecondarySessionId] = useState<string | null>(
@@ -791,7 +788,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // persistence handled by dedicated useEffect
     debugLog('WebSocket OPEN handler completed. sessionId:', sessionId);
-  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, isSessionActive, clearConnectionTimeout]);
+  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, isSessionActive, clearConnectionTimeout, credentialHash]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
@@ -806,8 +803,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
             
             // Persist to session storage if enabled
-            if (resumeOnReload && typeof window !== 'undefined') {
+            if (resumeOnReload && typeof window !== 'undefined' && credentialHash) {
               window.sessionStorage.setItem('ably.cli.sessionId', msg.sessionId);
+              window.sessionStorage.setItem('ably.cli.credentialHash', credentialHash);
             }
             
             return;
@@ -863,6 +861,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               // Persisted session is no longer valid – forget it
               if (resumeOnReload && typeof window !== 'undefined') {
                 window.sessionStorage.removeItem('ably.cli.sessionId');
+                window.sessionStorage.removeItem('ably.cli.credentialHash');
                 setSessionId(null);
               }
 
@@ -902,7 +901,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       handlePtyData(dataStr); // Pass PTY data for prompt detection
 
     } catch (_e) { console.error('[AblyCLITerminal] Error processing message:', _e); }
-  }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose]);
+  }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose, credentialHash, resumeOnReload, sessionId]);
 
   const handleWebSocketError = useCallback((event: Event) => {
     console.error('[AblyCLITerminal] WebSocket error event received:', event);
@@ -1290,12 +1289,15 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   // Persist sessionId to localStorage whenever it changes (if enabled)
   useEffect(() => {
     if (!resumeOnReload || typeof window === 'undefined') return;
+    // Don't clear sessionId until credentials have been validated
+    if (!sessionIdInitialized) return;
+    
     if (sessionId) {
       window.sessionStorage.setItem('ably.cli.sessionId', sessionId);
     } else {
       window.sessionStorage.removeItem('ably.cli.sessionId');
     }
-  }, [sessionId, resumeOnReload]);
+  }, [sessionId, resumeOnReload, sessionIdInitialized]);
 
   // Debug: log layout metrics when an overlay is rendered
   useEffect(() => {
@@ -1328,6 +1330,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   useEffect(() => {
     if (componentConnectionStatus !== 'initial') return; // already attempted
     if (!isVisible) return; // still not visible → wait
+    if (!credentialsInitialized) return; // wait for credentials to be validated
 
     if (maxReconnectAttempts && maxReconnectAttempts !== grGetMaxAttempts()) {
       grSetMaxAttempts(maxReconnectAttempts);
@@ -1336,7 +1339,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     grResetState();
     clearPtyBuffer();
     connectWebSocket();
-  }, [isVisible, maxReconnectAttempts, componentConnectionStatus, clearPtyBuffer, connectWebSocket]);
+  }, [isVisible, maxReconnectAttempts, componentConnectionStatus, clearPtyBuffer, connectWebSocket, credentialsInitialized]);
 
   const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1382,9 +1385,47 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   useEffect(() => () => clearInactivityTimer(), [clearInactivityTimer]);
 
+  // Initialize session and validate credentials
   useEffect(() => {
-    debugLog('[AblyCLITerminal] MOUNT: sessionId from storage:', sessionId);
-  }, []);
+    const initializeSession = async () => {
+      // Calculate current credential hash
+      const currentHash = await hashCredentials(ablyApiKey, ablyAccessToken);
+      setCredentialHash(currentHash);
+      
+      if (!resumeOnReload || typeof window === 'undefined') {
+        setCredentialsInitialized(true);
+        return;
+      }
+      
+      // Check if we have a stored session
+      const storedSessionId = window.sessionStorage.getItem('ably.cli.sessionId');
+      const storedHash = window.sessionStorage.getItem('ably.cli.credentialHash');
+      
+      console.log('[AblyCLITerminal] Credential validation:', { 
+        storedSessionId, 
+        storedHash, 
+        currentHash,
+        match: storedHash === currentHash
+      });
+      
+      // Only restore session if credentials match
+      if (storedSessionId && storedHash === currentHash) {
+        setSessionId(storedSessionId);
+        console.log('[AblyCLITerminal] Restored session with matching credentials');
+      } else if ((storedSessionId || storedHash) && storedHash !== currentHash) {
+        // Clear invalid session - either if we have a sessionId with mismatched hash
+        // or if we have a stored hash that doesn't match current credentials
+        window.sessionStorage.removeItem('ably.cli.sessionId');
+        window.sessionStorage.removeItem('ably.cli.credentialHash');
+        console.log('[AblyCLITerminal] Cleared session due to credential mismatch');
+      }
+      
+      setCredentialsInitialized(true);
+      setSessionIdInitialized(true);
+    };
+    
+    initializeSession();
+  }, [ablyApiKey, ablyAccessToken, resumeOnReload]);
 
   // Keep latest instance of connectWebSocket for async callbacks
   const connectWebSocketRef = useRef(connectWebSocket);
