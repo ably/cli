@@ -14,7 +14,6 @@ const __dirname = path.dirname(__filename);
 // Constants
 const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
 const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
-const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
 
 // Shared variables
 let webServerProcess: any;
@@ -109,8 +108,7 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     // Debug: Take a screenshot
     await page.screenshot({ path: 'test-results/auth-screen-debug.png' });
     
-    // Debug: Log page content
-    const pageContent = await page.content();
+    // Debug: Log page info
     console.log('Page title:', await page.title());
     console.log('Page URL:', page.url());
     
