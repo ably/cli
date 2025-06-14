@@ -788,7 +788,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
   }
 
   private async waitForTermination(
-    flags: Record<string, unknown>,
+    _flags: Record<string, unknown>,
   ): Promise<void> {
     // Keep the connection open indefinitely until Ctrl+C
     await new Promise(() => {
