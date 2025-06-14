@@ -13,7 +13,7 @@ import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { navigateAndAuthenticate } from './auth-helper.js';
+import { authenticateWebCli } from './auth-helper.js';
 
 const execAsync = promisify(exec);
 
@@ -89,12 +89,7 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
     const { spawn } = await import('node:child_process');
     webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], {
       stdio: 'pipe',
-      cwd: EXAMPLE_DIR,
-      env: {
-        ...process.env,
-        // Pass through API key from E2E environment variable if available
-        VITE_ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY || ''
-      }
+      cwd: EXAMPLE_DIR
     });
 
     webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
@@ -132,7 +127,8 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
 
   test('can diagnose connection behavior against public server', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await navigateAndAuthenticate(page, pageUrl);
+    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await authenticateWebCli(page);
     await page.waitForFunction(() => {
       const s = (window as any).getAblyCliTerminalReactState?.();
       return s?.componentConnectionStatus === 'connected';
@@ -157,7 +153,8 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
 
   test('connection state transitions work correctly with public server', async ({ page }) => {
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await navigateAndAuthenticate(page, pageUrl);
+    await page.goto(pageUrl, { waitUntil: 'networkidle' });
+    await authenticateWebCli(page);
 
     // Track status changes by polling React state
     const statusChanges: string[] = [];

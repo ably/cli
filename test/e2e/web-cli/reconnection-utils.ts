@@ -33,12 +33,7 @@ export async function startWebServer(port: number): Promise<ChildProcess> {
   // Use npx vite preview directly
   const webServerProcess = spawn('npx', ['vite', 'preview', '--port', port.toString(), '--strictPort'], {
     stdio: 'pipe',
-    cwd: EXAMPLE_DIR, // Run command within the example directory
-    env: {
-      ...process.env,
-      // Pass through API key from E2E environment variable if available
-      VITE_ABLY_API_KEY: process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY || ''
-    }
+    cwd: EXAMPLE_DIR // Run command within the example directory
   });
 
   webServerProcess.stdout?.on('data', (data) => console.log(`[Web Server]: ${data.toString().trim()}`));
