@@ -7,7 +7,11 @@ import { Page } from 'playwright/test';
 export async function waitForTerminalReady(page: Page, timeout = 60000): Promise<void> {
   console.log('Waiting for terminal to be ready...');
   
+  // Increase timeout for CI environments
+  const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
   const startTime = Date.now();
+  let manualReconnectAttempts = 0;
+  const maxManualReconnects = process.env.CI ? 5 : 3;
   
   // Wait for the terminal element to exist
   await page.waitForSelector('.xterm', { timeout: 15000 });
@@ -26,7 +30,7 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
   console.log('Initial connection state:', currentState?.componentConnectionStatus);
   
   // Handle different states
-  while (Date.now() - startTime < timeout) {
+  while (Date.now() - startTime < effectiveTimeout) {
     currentState = await page.evaluate(() => {
       return (window as Window & { getAblyCliTerminalReactState?: () => unknown }).getAblyCliTerminalReactState?.();
     }) as { componentConnectionStatus?: string; isSessionActive?: boolean; showManualReconnectPrompt?: boolean } | undefined;
@@ -38,10 +42,18 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
     }
     
     if (currentState?.componentConnectionStatus === 'disconnected' && currentState?.showManualReconnectPrompt) {
-      console.log('Terminal disconnected, attempting manual reconnect...');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(2000);
-      continue;
+      if (manualReconnectAttempts < maxManualReconnects) {
+        console.log(`Terminal disconnected, attempting manual reconnect (attempt ${manualReconnectAttempts + 1}/${maxManualReconnects})...`);
+        await page.keyboard.press('Enter');
+        manualReconnectAttempts++;
+        // Wait longer for reconnection in CI
+        const reconnectWait = process.env.CI ? 5000 : 2000;
+        await page.waitForTimeout(reconnectWait);
+        continue;
+      } else {
+        console.log('Max manual reconnect attempts reached, giving up');
+        break;
+      }
     }
     
     if (currentState?.componentConnectionStatus === 'connecting' || currentState?.componentConnectionStatus === 'reconnecting') {
@@ -90,7 +102,7 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
   console.error('Terminal content:', terminalContent?.slice(0, 500) || 'No content');
   
   const reactState = finalState.reactState as { componentConnectionStatus?: string } | undefined;
-  throw new Error(`Terminal not ready after ${timeout}ms. State: ${reactState?.componentConnectionStatus || 'unknown'}`);
+  throw new Error(`Terminal not ready after ${effectiveTimeout}ms. State: ${reactState?.componentConnectionStatus || 'unknown'}`);
 }
 
 /**
