@@ -290,7 +290,7 @@ describe("Connections E2E Tests", function() {
       }
       
       // Use connection-lifecycle command which uses the correct meta channel
-      const connectionsMonitor = spawn("node", [cliPath, "logs", "connection-lifecycle", "subscribe", "--api-key", apiKey, "--json", "--verbose"], {
+      const connectionsMonitor = spawn("node", [cliPath, "logs", "connection-lifecycle", "subscribe", "--api-key", apiKey, "--json"], {
         env: monitorEnv,
       });
       
@@ -304,17 +304,25 @@ describe("Connections E2E Tests", function() {
       
       // Collect output from the live connection monitor
       let eventCount = 0;
+      let jsonBuffer = '';
+      let braceDepth = 0;
+      
       connectionsMonitor.stdout?.on("data", (data) => {
         const output = data.toString();
         monitorOutput += output;
         
-        // Parse JSON output to look for connection events
-        const lines = output.split('\n');
-        for (const line of lines) {
-          if (line.trim()) {
+        // Handle multi-line JSON output
+        for (const char of output) {
+          jsonBuffer += char;
+          if (char === '{') braceDepth++;
+          if (char === '}') braceDepth--;
+          
+          // When we have a complete JSON object
+          if (braceDepth === 0 && jsonBuffer.trim().endsWith('}')) {
             try {
-              const logEvent = JSON.parse(line);
+              const logEvent = JSON.parse(jsonBuffer.trim());
               eventCount++;
+              jsonBuffer = ''; // Reset buffer
               
               // Debug: log first few events to understand structure
               if (eventCount <= 10 && process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
@@ -330,24 +338,18 @@ describe("Connections E2E Tests", function() {
               // Check different possible locations for client ID
               let foundClientId: string | null = null;
               
-              // The connection lifecycle event structure has been updated
-              // Check in data.clientId (most common location)
-              if (logEvent.data?.clientId) {
+              // Based on actual connection lifecycle events, clientId is in data.transport.requestParams.clientId as an array
+              if (logEvent.data?.transport?.requestParams?.clientId) {
+                const clientIdArray = logEvent.data.transport.requestParams.clientId;
+                foundClientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
+              }
+              // Also check in data.clientId (for backwards compatibility)
+              else if (logEvent.data?.clientId) {
                 foundClientId = logEvent.data.clientId;
               }
               // Check in data.connectionDetails.clientId
               else if (logEvent.data?.connectionDetails?.clientId) {
                 foundClientId = logEvent.data.connectionDetails.clientId;
-              }
-              // Check in data.transport.requestParams
-              else if (logEvent.data?.transport?.requestParams?.clientId) {
-                const clientIdArray = logEvent.data.transport.requestParams.clientId;
-                foundClientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
-              }
-              // Check in transport.requestParams (without data wrapper)
-              else if (logEvent.transport?.requestParams?.clientId) {
-                const clientIdArray = logEvent.transport.requestParams.clientId;
-                foundClientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
               }
               
               if (foundClientId === testClientId) {
@@ -360,7 +362,11 @@ describe("Connections E2E Tests", function() {
                 });
               }
             } catch {
-              // Ignore non-JSON lines
+              // Reset buffer if parsing fails
+              if (jsonBuffer.trim()) {
+                jsonBuffer = '';
+                braceDepth = 0;
+              }
             }
           }
         }

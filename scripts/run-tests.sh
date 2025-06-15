@@ -271,6 +271,7 @@ if $USE_PLAYWRIGHT; then
   BUILD_ENV=""
   if [[ -n "$E2E_ABLY_API_KEY" ]]; then
     BUILD_ENV="VITE_ABLY_API_KEY=$E2E_ABLY_API_KEY"
+    echo "Loaded environment variables from .env file for tests"
   fi
   
   # Rebuild the example app so the preview server serves the latest bundle that includes changed library code.
