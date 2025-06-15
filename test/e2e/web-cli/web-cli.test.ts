@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { authenticateWebCli } from './auth-helper.js';
+import { waitForTerminalReady } from './wait-helpers.js';
 
 // Type for browser context in evaluate() calls
 type BrowserContext = {
@@ -54,22 +55,55 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
  * @param timeout Maximum time to wait in milliseconds
  */
 async function waitForPrompt(page: _Page, terminalSelector: string, timeout = 60000): Promise<void> {
-  const promptText = '$'; // Prompt symbol (space may be trimmed in DOM)
   console.log('Waiting for terminal prompt...');
+  
+  // Alternative approach: wait for either the prompt text OR the connected status
+  // This handles both cases where server sends status message or prompt appears
   try {
-    await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout });
-    console.log('Terminal prompt found.');
-  } catch (error) {
-    console.error('Error waiting for terminal prompt:', error);
-    console.log('--- Terminal Content on Prompt Timeout ---');
-    try {
-      const terminalContent = await page.locator(terminalSelector).textContent();
-      console.log(terminalContent);
-    } catch (logError) {
-      console.error('Could not get terminal content after timeout:', logError);
-    }
+    await Promise.race([
+      // Option 1: Wait for prompt text to appear
+      page.waitForSelector(`${terminalSelector} >> text=/\\$/`, { timeout }),
+      
+      // Option 2: Wait for React component to report connected status
+      page.waitForFunction(() => {
+        const state = (window as any).getAblyCliTerminalReactState?.();
+        return state?.componentConnectionStatus === 'connected' && state?.isSessionActive === true;
+      }, null, { timeout })
+    ]);
+    
+    console.log('Terminal is ready (prompt detected or connected status).');
+    
+    // Small delay to ensure terminal is fully ready
+    await page.waitForTimeout(500);
+    
+  } catch (_error) {
+    console.error('Terminal did not become ready within timeout.');
+    
+    // Get debug information
+    const debugInfo = await page.evaluate(() => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      const socketStates = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
+      const socketState = (window as any).ablyCliSocket?.readyState;
+      const logs = (window as any).__consoleLogs || [];
+      
+      return {
+        reactState: state,
+        socketReadyState: socketState,
+        socketStateText: socketStates[socketState] || 'UNKNOWN',
+        sessionId: (window as any)._sessionId,
+        hasStateFunction: typeof (window as any).getAblyCliTerminalReactState === 'function',
+        recentConsoleLogs: logs.slice(-20)
+      };
+    });
+    
+    console.log('--- Terminal Debug Info ---');
+    console.log('Debug state:', JSON.stringify(debugInfo, null, 2));
+    
+    const terminalContent = await page.locator(terminalSelector).textContent();
+    console.log('Terminal content:', terminalContent?.slice(0, 500) || 'No content');
     console.log('-----------------------------------------');
-    throw error; // Re-throw the error to fail the test
+    
+    throw new Error(`Terminal not ready: ${debugInfo.reactState?.componentConnectionStatus || 'unknown state'}`);
   }
 }
 
@@ -133,8 +167,37 @@ test.describe('Web CLI E2E Tests', () => {
 
   test('should load the terminal, connect to public server, and run basic commands', async ({ page }) => {
     // Capture browser console messages
-    page.on('console', msg => console.log(`[Browser Console] ${msg.type()}: ${msg.text()}`));
-    page.on('pageerror', error => console.error(`[Browser Page Error]: ${error}`));
+    const consoleLogs: string[] = [];
+    page.on('console', msg => {
+      const logMessage = `[Browser Console] ${msg.type()}: ${msg.text()}`;
+      console.log(logMessage);
+      consoleLogs.push(logMessage);
+    });
+    page.on('pageerror', error => {
+      const errorMessage = `[Browser Page Error]: ${error}`;
+      console.error(errorMessage);
+      consoleLogs.push(errorMessage);
+    });
+    
+    // Expose console logs to the page for debugging
+    await page.addInitScript(() => {
+      (window as any).__consoleLogs = [];
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      console.log = (...args) => {
+        (window as any).__consoleLogs.push({ type: 'log', args, time: new Date().toISOString() });
+        originalLog.apply(console, args);
+      };
+      console.error = (...args) => {
+        (window as any).__consoleLogs.push({ type: 'error', args, time: new Date().toISOString() });
+        originalError.apply(console, args);
+      };
+      console.warn = (...args) => {
+        (window as any).__consoleLogs.push({ type: 'warn', args, time: new Date().toISOString() });
+        originalWarn.apply(console, args);
+      };
+    });
 
     // Use the public terminal server
     const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
@@ -149,25 +212,18 @@ test.describe('Web CLI E2E Tests', () => {
     const terminalSelector = '.xterm'; // Adjust if the selector changes in the React component
     const _terminalElement = await page.waitForSelector(terminalSelector, { timeout: 15000 });
     console.log('Terminal element found.');
+    
+    // Add a small delay to ensure React has mounted and exposed the state function
+    await page.waitForTimeout(1000);
+    
+    // Check if the React state function is available
+    const hasStateFunction = await page.evaluate(() => {
+      return typeof (window as any).getAblyCliTerminalReactState === 'function';
+    });
+    console.log('React state function available:', hasStateFunction);
 
-    // Wait for the initial prompt to appear, indicating connection and container ready
-    const promptText = '$'; // Prompt symbol (space may be trimmed in DOM)
-    console.log('Attempting to wait for initial prompt...'); // Log before wait
-    try {
-      await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout: 30000 });
-      console.log('Initial prompt found.');
-    } catch (error) {
-      console.error('Error waiting for initial prompt:', error);
-      console.log('--- Terminal Content on Prompt Timeout ---');
-      try {
-        const terminalContent = await page.locator(terminalSelector).textContent();
-        console.log(terminalContent);
-      } catch (logError) {
-        console.error('Could not get terminal content after timeout:', logError);
-      }
-      console.log('-----------------------------------------');
-      throw error; // Re-throw the error to fail the test
-    }
+    // Wait for the terminal to be ready
+    await waitForTerminalReady(page);
 
     // --- Run 'ably --help' ---
     console.log('Executing: ably --help');

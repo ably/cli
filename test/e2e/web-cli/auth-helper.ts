@@ -1,4 +1,26 @@
 import { Page } from 'playwright/test';
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+
+// Load environment variables from .env for Playwright tests
+// First try root .env (normal location)
+const rootEnvPath = resolve(process.cwd(), '.env');
+if (existsSync(rootEnvPath)) {
+  config({ path: rootEnvPath });
+}
+
+// Also try the example app's .env (in case test script hasn't moved it yet)
+const exampleEnvPath = resolve(process.cwd(), 'examples/web-cli/.env');
+if (existsSync(exampleEnvPath)) {
+  config({ path: exampleEnvPath });
+}
+
+// Finally try the backup location (where test script moves it)
+const backupEnvPath = resolve(process.cwd(), 'examples/web-cli/.env.backup');
+if (existsSync(backupEnvPath)) {
+  config({ path: backupEnvPath });
+}
 
 /**
  * Helper function to handle authentication in Web CLI e2e tests
