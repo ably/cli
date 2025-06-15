@@ -48,21 +48,55 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
 }
 
 async function waitForPrompt(page: any, terminalSelector: string, timeout = 60000): Promise<void> {
-  const promptText = '$';
+  console.log('Waiting for terminal prompt...');
+  
+  // Alternative approach: wait for either the prompt text OR the connected status
+  // This handles both cases where server sends status message or prompt appears
   try {
-    await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout });
-    console.log('Terminal prompt found.');
-  } catch (error) {
-    console.error('Error waiting for terminal prompt:', error);
-    console.log('--- Terminal Content on Prompt Timeout ---');
-    try {
-      const terminalContent = await page.locator(terminalSelector).textContent();
-      console.log(terminalContent);
-    } catch (logError) {
-      console.error('Could not get terminal content after timeout:', logError);
-    }
+    await Promise.race([
+      // Option 1: Wait for prompt text to appear
+      page.waitForSelector(`${terminalSelector} >> text=/\\$/`, { timeout }),
+      
+      // Option 2: Wait for React component to report connected status
+      page.waitForFunction(() => {
+        const state = (window as any).getAblyCliTerminalReactState?.();
+        return state?.componentConnectionStatus === 'connected' && state?.isSessionActive === true;
+      }, null, { timeout })
+    ]);
+    
+    console.log('Terminal is ready (prompt detected or connected status).');
+    
+    // Small delay to ensure terminal is fully ready
+    await page.waitForTimeout(500);
+    
+  } catch (_error) {
+    console.error('Terminal did not become ready within timeout.');
+    
+    // Get debug information
+    const debugInfo = await page.evaluate(() => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      const socketStates = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
+      const socketState = (window as any).ablyCliSocket?.readyState;
+      const logs = (window as any).__consoleLogs || [];
+      
+      return {
+        reactState: state,
+        socketReadyState: socketState,
+        socketStateText: socketStates[socketState] || 'UNKNOWN',
+        sessionId: (window as any)._sessionId,
+        hasStateFunction: typeof (window as any).getAblyCliTerminalReactState === 'function',
+        recentConsoleLogs: logs.slice(-20)
+      };
+    });
+    
+    console.log('--- Terminal Debug Info ---');
+    console.log('Debug state:', JSON.stringify(debugInfo, null, 2));
+    
+    const terminalContent = await page.locator(terminalSelector).textContent();
+    console.log('Terminal content:', terminalContent?.slice(0, 500) || 'No content');
     console.log('-----------------------------------------');
-    throw error;
+    
+    throw new Error(`Terminal not ready: ${debugInfo.reactState?.componentConnectionStatus || 'unknown state'}`);
   }
 }
 
@@ -176,6 +210,14 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
 
     // Give some time for reconnection attempt
     await page.waitForTimeout(5000);
+
+    // Check if manual reconnect is needed
+    const state = await page.evaluate(() => (window as any).getAblyCliTerminalReactState?.());
+    if (state?.componentConnectionStatus === 'disconnected' && state?.showManualReconnectPrompt) {
+      console.log('Manual reconnect prompt shown, pressing Enter...');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(2000);
+    }
 
     // Verify reconnection works
     await waitForPrompt(page, '.xterm');

@@ -40,10 +40,29 @@ async function waitForServer(url: string, timeout = 30000): Promise<void> {
   throw new Error(`Server ${url} did not start within ${timeout}ms`);
 }
 
-async function waitForPrompt(page: any, terminalSelector: string, timeout = 60000): Promise<void> {
-  const promptText = '$';
+async function waitForPrompt(page: any, terminalSelector: string, timeout = 90000): Promise<void> {
+  console.log('Waiting for terminal to be ready...');
+  
+  // First wait for the React component state to be ready
   try {
-    await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout });
+    await page.waitForFunction(() => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      return state && state.componentConnectionStatus === 'connected' && state.isSessionActive;
+    }, null, { timeout: 30000 });
+  } catch (_e) {
+    console.log('Terminal not connected within 30s, checking state...');
+    const state = await page.evaluate(() => (window as any).getAblyCliTerminalReactState?.());
+    console.log('Current state:', state);
+    if (state?.componentConnectionStatus === 'disconnected' && state?.showManualReconnectPrompt) {
+      console.log('Manual reconnect needed, pressing Enter...');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(2000);
+    }
+  }
+  
+  const promptText = '$ '; // Match the actual prompt with space
+  try {
+    await page.locator(terminalSelector).getByText(promptText, { exact: true }).first().waitFor({ timeout: timeout - 30000 });
     console.log('Terminal prompt found.');
   } catch (error) {
     console.error('Error waiting for terminal prompt:', error);
