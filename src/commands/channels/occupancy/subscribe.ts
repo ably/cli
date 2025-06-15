@@ -76,7 +76,12 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
       const client = this.client;
       const channelName = args.channel;
 
-      channel = client.channels.get(channelName);
+      // Get channel with occupancy option enabled
+      channel = client.channels.get(channelName, {
+        params: {
+          occupancy: 'metrics'
+        }
+      });
 
       // Set up connection state logging
       this.setupConnectionStateLogging(client, flags, {
@@ -88,7 +93,8 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
         includeUserFriendlyMessages: true
       });
 
-      // Subscribe to occupancy events using internal occupancy events
+      // Subscribe to occupancy events - these are delivered as channel events
+      // According to docs, occupancy updates come as [meta]occupancy events
       const occupancyEventName = "[meta]occupancy";
       this.logCliEvent(
         flags,

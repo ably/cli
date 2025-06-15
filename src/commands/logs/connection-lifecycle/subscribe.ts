@@ -77,7 +77,7 @@ export default class LogsConnectionLifecycleSubscribe extends AblyBaseCommand {
       });
 
       // Get the logs channel with optional rewind
-      const logsChannelName = `[meta]log:connection-lifecycle`;
+      const logsChannelName = `[meta]connection.lifecycle`;
       const channelOptions = flags.rewind ? { params: { rewind: String(flags.rewind) } } : undefined;
       channel = client.channels.get(logsChannelName, channelOptions);
 

@@ -88,7 +88,7 @@ export default class LogsAppSubscribe extends AblyBaseCommand {
         this.error("Unable to determine app configuration");
         return;
       }
-      const logsChannelName = `[meta]log:app.${appConfig.appId}`;
+      const logsChannelName = `[meta]log`;
       channel = client.channels.get(logsChannelName);
 
       // Set up channel state logging

@@ -12,21 +12,9 @@ class TestableChannelsOccupancyGet extends ChannelsOccupancyGet {
   private _shouldOutputJson = false;
   private _formatJsonOutputFn: ((data: Record<string, unknown>) => string) | null = null;
 
-  // Mock client and channel for testing
+  // Mock REST client for testing
   public mockClient: any = {
-    channels: {
-      get: sinon.stub(),
-    },
-    close: sinon.stub(),
-  };
-
-  // Mock channel instance
-  public mockChannel: any = {
-    once: sinon.stub(),
-    attach: sinon.stub(),
-    subscribe: sinon.stub(),
-    unsubscribe: sinon.stub(),
-    detach: sinon.stub().resolves(),
+    request: sinon.stub(),
   };
 
   // Override parse to return test data
@@ -43,11 +31,13 @@ class TestableChannelsOccupancyGet extends ChannelsOccupancyGet {
     this._parseResult = result;
   }
 
-  // Override createAblyClient to return mock client
-  public override async createAblyClient(_flags: any): Promise<Ably.Realtime | null> {
-    // Set up our channel mock for this test
-    this.mockClient.channels.get.returns(this.mockChannel);
+  // Override getClientOptions to return test options
+  public override getClientOptions(_flags: any): Ably.ClientOptions {
+    return { key: 'test:key' };
+  }
 
+  // Override createAblyRestClient to return mock client
+  public override createAblyRestClient(_options: Ably.ClientOptions): Ably.Rest {
     return this.mockClient as any;
   }
 
@@ -102,29 +92,17 @@ describe("ChannelsOccupancyGet", function() {
       raw: [],
     });
 
-    // Set up mock behaviors for Ably channel
-    command.mockChannel.once.withArgs('attached').callsFake((event: string, callback: () => void) => {
-      // Simulate an immediate attachment
-      callback();
-    });
-
-    command.mockChannel.subscribe.callsFake((eventName: string, callback: (message: any) => void) => {
-      if (eventName === '[meta]occupancy') {
-        // Simulate receiving occupancy data
-        setTimeout(() => {
-          callback({
-            data: {
-              metrics: {
-                connections: 10,
-                presenceConnections: 5,
-                presenceMembers: 8,
-                presenceSubscribers: 4,
-                publishers: 2,
-                subscribers: 6,
-              }
-            }
-          });
-        }, 10);
+    // Set up mock behavior for REST request
+    command.mockClient.request.resolves({
+      occupancy: {
+        metrics: {
+          connections: 10,
+          presenceConnections: 5,
+          presenceMembers: 8,
+          presenceSubscribers: 4,
+          publishers: 2,
+          subscribers: 6,
+        }
       }
     });
   });
@@ -133,24 +111,17 @@ describe("ChannelsOccupancyGet", function() {
     sandbox.restore();
   });
 
-  it("should successfully retrieve and display occupancy", async function() {
+  it("should successfully retrieve and display occupancy using REST API", async function() {
     await command.run();
 
-    // Check that channel.get was called with the right parameters
-    expect(command.mockClient.channels.get.calledOnce).to.be.true;
-    expect(command.mockClient.channels.get.firstCall.args[0]).to.equal('test-occupancy-channel');
-    expect(command.mockClient.channels.get.firstCall.args[1]).to.deep.include({
-      params: { occupancy: 'metrics' }
-    });
-
-    // Check that channel.attach was called
-    expect(command.mockChannel.attach.calledOnce).to.be.true;
-
-    // Check that channel.subscribe was called for [meta]occupancy
-    expect(command.mockChannel.subscribe.calledWith('[meta]occupancy')).to.be.true;
-
-    // Check that unsubscribe was called after getting data
-    expect(command.mockChannel.unsubscribe.calledWith('[meta]occupancy')).to.be.true;
+    // Check that request was called with the right parameters
+    expect(command.mockClient.request.calledOnce).to.be.true;
+    const [method, path, version, params, body] = command.mockClient.request.firstCall.args;
+    expect(method).to.equal('get');
+    expect(path).to.equal('/channels/test-occupancy-channel');
+    expect(version).to.equal(2);
+    expect(params).to.deep.equal({ occupancy: 'metrics' });
+    expect(body).to.be.null;
 
     // Check for expected output in logs
     const output = command.logOutput.join('\n');
@@ -161,9 +132,6 @@ describe("ChannelsOccupancyGet", function() {
     expect(output).to.include('Presence Subscribers: 4');
     expect(output).to.include('Publishers: 2');
     expect(output).to.include('Subscribers: 6');
-
-    // Check that channel.detach was called for cleanup
-    expect(command.mockChannel.detach.calledOnce).to.be.true;
   });
 
   it("should output occupancy in JSON format when requested", async function() {
@@ -189,5 +157,23 @@ describe("ChannelsOccupancyGet", function() {
       subscribers: 6,
     });
     expect(parsedOutput).to.have.property('success', true);
+  });
+
+  it("should handle empty occupancy metrics", async function() {
+    // Override mock to return empty metrics
+    command.mockClient.request.resolves({
+      occupancy: {
+        metrics: null
+      }
+    });
+
+    await command.run();
+
+    // Check for expected output with zeros
+    const output = command.logOutput.join('\n');
+    expect(output).to.include('test-occupancy-channel');
+    expect(output).to.include('Connections: 0');
+    expect(output).to.include('Publishers: 0');
+    expect(output).to.include('Subscribers: 0');
   });
 });

@@ -4,12 +4,12 @@ import * as Ably from "ably";
 import { AblyBaseCommand } from "../../../base-command.js";
 
 interface OccupancyMetrics {
-  connections?: number;
-  presenceConnections?: number;
-  presenceMembers?: number;
-  presenceSubscribers?: number;
-  publishers?: number;
-  subscribers?: number;
+  connections: number;
+  presenceConnections: number;
+  presenceMembers: number;
+  presenceSubscribers: number;
+  publishers: number;
+  subscribers: number;
 }
 
 export default class ChannelsOccupancyGet extends AblyBaseCommand {
@@ -36,52 +36,33 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsOccupancyGet);
 
-    let client: Ably.Realtime | null = null;
+    let client: Ably.Rest | null = null;
 
     try {
-      // Create the Ably Realtime client
-      client = await this.createAblyClient(flags);
-      if (!client) return;
+      // Create the Ably REST client (not Realtime)
+      const clientOptions = this.getClientOptions(flags);
+      client = this.createAblyRestClient(clientOptions);
 
       const channelName = args.channel;
 
-      // Use the realtime client to get channel details
-      const channel = client.channels.get(channelName, {
-        params: {
-          occupancy: "metrics",
-        },
-      });
-
-      // Attach to the channel to get occupancy metrics
-      await new Promise<void>((resolve) => {
-        channel.once("attached", () => {
-          resolve();
-        });
-
-        channel.attach();
-      });
-
-      // Listen for the first occupancy update
-      const occupancyMetrics = await new Promise<OccupancyMetrics>(
-        (resolve, reject) => {
-          const timeout = setTimeout(() => {
-            channel.unsubscribe("[meta]occupancy");
-            reject(new Error("Timed out waiting for occupancy metrics"));
-          }, 5000); // 5 second timeout
-
-          channel.subscribe("[meta]occupancy", (message: Ably.Message) => {
-            clearTimeout(timeout);
-            channel.unsubscribe("[meta]occupancy");
-
-            const metrics = message.data?.metrics;
-            if (metrics) {
-              resolve(metrics);
-            } else {
-              reject(new Error("No occupancy metrics received"));
-            }
-          });
-        },
+      // Use the REST API to get channel details with occupancy
+      const channelDetails = await client.request(
+        'get',
+        `/channels/${encodeURIComponent(channelName)}`,
+        2, // version
+        { occupancy: 'metrics' }, // params
+        null // body
       );
+
+      const occupancyData = channelDetails.items?.[0] || channelDetails;
+      const occupancyMetrics: OccupancyMetrics = occupancyData.occupancy?.metrics || {
+        connections: 0,
+        presenceConnections: 0,
+        presenceMembers: 0,
+        presenceSubscribers: 0,
+        publishers: 0,
+        subscribers: 0
+      };
 
       // Output the occupancy metrics based on format
       if (this.shouldOutputJson(flags)) {
@@ -118,8 +99,6 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
         }
       }
 
-      // Clean up
-      await channel.detach();
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
         this.log(
@@ -137,8 +116,6 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
           `Error fetching channel occupancy: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-    } finally {
-      if (client) client.close();
     }
   }
 }

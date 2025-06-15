@@ -77,9 +77,9 @@ describe("LogsConnectionLifecycleSubscribe", function() {
     mockConfig = { runHook: sinon.stub() } as unknown as Config;
     command = new TestableLogsConnectionLifecycleSubscribe([], mockConfig);
 
-    // Set up a complete mock client structure for the [meta]log:connection-lifecycle channel
+    // Set up a complete mock client structure for the [meta]connection.lifecycle channel
     const mockChannelInstance = {
-      name: '[meta]log:connection-lifecycle',
+      name: '[meta]connection.lifecycle',
       subscribe: sandbox.stub(),
       attach: sandbox.stub().resolves(),
       detach: sandbox.stub().resolves(),
@@ -149,8 +149,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
     // Run the command with a short duration
     await command.run();
 
-    // Verify that we got the [meta]log:connection-lifecycle channel and subscribed to it
-    expect(command.mockClient.channels.get.calledWith('[meta]log:connection-lifecycle')).to.be.true;
+    // Verify that we got the [meta]connection.lifecycle channel and subscribed to it
+    expect(command.mockClient.channels.get.calledWith('[meta]connection.lifecycle')).to.be.true;
     expect(subscribeStub.called).to.be.true;
   });
 
@@ -173,7 +173,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
     await command.run();
 
     // Verify channel was created with rewind parameter
-    expect(command.mockClient.channels.get.calledWith('[meta]log:connection-lifecycle', {
+    expect(command.mockClient.channels.get.calledWith('[meta]connection.lifecycle', {
       params: { rewind: '10' }
     })).to.be.true;
   });

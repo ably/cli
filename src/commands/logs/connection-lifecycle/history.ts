@@ -45,7 +45,7 @@ export default class LogsConnectionLifecycleHistory extends AblyBaseCommand {
       const client = this.createAblyRestClient(options);
 
       // Get the channel
-      const channel = client.channels.get("[meta]log:connection-lifecycle");
+      const channel = client.channels.get("[meta]connection.lifecycle");
 
       // Build history query parameters
       const historyParams: Ably.RealtimeHistoryParams = {

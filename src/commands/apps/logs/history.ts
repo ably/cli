@@ -58,7 +58,7 @@ export default class AppsLogsHistory extends AblyBaseCommand {
       const client = this.createAblyRestClient(options);
 
       // Get the channel
-      const channel = client.channels.get("[meta]log:app");
+      const channel = client.channels.get("[meta]log");
 
       // Build history query parameters
       const historyParams: Ably.RealtimeHistoryParams = {
