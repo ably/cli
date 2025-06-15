@@ -139,7 +139,7 @@ The CLI uses topics (space-separated) to group related commands logically.
 - `$ ably logs channel-lifecycle subscribe`: Streams logs from `[meta]channel.lifecycle`.
 - `$ ably logs connection-lifecycle subscribe`: Streams logs from `[meta]connection.lifecycle`.
 - `$ ably logs connection-lifecycle history`: Retrieves historical connection logs. Supports `--limit`, `--direction`.
-- `$ ably logs connection subscribe`: Streams logs from `[meta]connection`. Supports `--rewind`.
+- `$ ably logs connection subscribe`: Streams logs from `[meta]connection.lifecycle`. Supports `--rewind`.
 - `$ ably logs push subscribe`: Streams logs from `[meta]log:push`. Supports `--rewind`.
 - `$ ably logs push history`: Retrieves historical push logs from `[meta]log:push`. Supports `--limit`, `--direction`.
 
