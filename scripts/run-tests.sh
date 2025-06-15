@@ -266,9 +266,16 @@ if $USE_PLAYWRIGHT; then
     mv "$ENV_FILE_PATH" "$ENV_FILE_BACKUP"
   fi
 
+  # Pass E2E API key as VITE env var during build if available
+  # This allows the app to have API key available even though .env file is moved
+  BUILD_ENV=""
+  if [[ -n "$E2E_ABLY_API_KEY" ]]; then
+    BUILD_ENV="VITE_ABLY_API_KEY=$E2E_ABLY_API_KEY"
+  fi
+  
   # Rebuild the example app so the preview server serves the latest bundle that includes changed library code.
   echo "Building example web-cli app (vite build)..."
-  pnpm --filter ./examples/web-cli run build || { 
+  env $BUILD_ENV pnpm --filter ./examples/web-cli run build || { 
     # Restore .env file if build fails
     if [[ -f "$ENV_FILE_BACKUP" ]]; then
       mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"

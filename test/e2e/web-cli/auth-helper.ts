@@ -45,6 +45,12 @@ export async function authenticateWebCli(page: Page, apiKey?: string): Promise<v
     
     // Wait for terminal to be visible
     await page.waitForSelector('.xterm', { timeout: 15000 });
+    
+    // In CI, wait a bit longer for the connection to stabilize
+    if (process.env.CI) {
+      console.log('CI environment detected, waiting for connection to stabilize...');
+      await page.waitForTimeout(3000);
+    }
   }
 }
 

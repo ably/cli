@@ -330,14 +330,19 @@ describe("Connections E2E Tests", function() {
               // Check different possible locations for client ID
               let foundClientId: string | null = null;
               
+              // The connection lifecycle event structure has been updated
+              // Check in data.clientId (most common location)
+              if (logEvent.data?.clientId) {
+                foundClientId = logEvent.data.clientId;
+              }
+              // Check in data.connectionDetails.clientId
+              else if (logEvent.data?.connectionDetails?.clientId) {
+                foundClientId = logEvent.data.connectionDetails.clientId;
+              }
               // Check in data.transport.requestParams
-              if (logEvent.data?.transport?.requestParams?.clientId) {
+              else if (logEvent.data?.transport?.requestParams?.clientId) {
                 const clientIdArray = logEvent.data.transport.requestParams.clientId;
                 foundClientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
-              }
-              // Check in data directly
-              else if (logEvent.data?.clientId) {
-                foundClientId = logEvent.data.clientId;
               }
               // Check in transport.requestParams (without data wrapper)
               else if (logEvent.transport?.requestParams?.clientId) {
