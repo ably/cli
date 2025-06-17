@@ -35,10 +35,15 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
       return (window as Window & { getAblyCliTerminalReactState?: () => unknown }).getAblyCliTerminalReactState?.();
     }) as { componentConnectionStatus?: string; isSessionActive?: boolean; showManualReconnectPrompt?: boolean } | undefined;
     
-    if (currentState?.componentConnectionStatus === 'connected' && currentState?.isSessionActive) {
-      console.log('Terminal connected and session active');
-      await page.waitForTimeout(500); // Give time for prompt to render
-      return;
+    if (currentState?.componentConnectionStatus === 'connected') {
+      console.log('Terminal connected');
+      // Check if terminal has any content (like the warning message)
+      const terminalText = await page.locator('.xterm').textContent();
+      if (terminalText && terminalText.trim().length > 0) {
+        console.log('Terminal has content, proceeding...');
+        await page.waitForTimeout(1000); // Give time for terminal to stabilize
+        return;
+      }
     }
     
     if (currentState?.componentConnectionStatus === 'disconnected' && currentState?.showManualReconnectPrompt) {

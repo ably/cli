@@ -114,11 +114,17 @@ fi
 
 # Detect if we are about to run a Playwright browser test (any file inside test/e2e/web-cli/)
 USE_PLAYWRIGHT=false
-PLAYWRIGHT_TEST_FILE=""
+PLAYWRIGHT_TEST_FILES=""
 for arg in "${ARGS[@]}"; do
   if [[ "$arg" == *"test/e2e/web-cli/"*".test.ts" ]]; then
     USE_PLAYWRIGHT=true
-    PLAYWRIGHT_TEST_FILE="$arg" # Keep updating, last one found will be used
+    # If it's a glob pattern, keep it as is for Playwright to expand
+    if [[ "$arg" == *"*"* ]]; then
+      PLAYWRIGHT_TEST_FILES="$arg"
+    else
+      # For specific files, accumulate them
+      PLAYWRIGHT_TEST_FILES="$PLAYWRIGHT_TEST_FILES $arg"
+    fi
   fi
 done
 
@@ -245,54 +251,49 @@ if $USE_PLAYWRIGHT; then
   echo "Building @ably/react-web-cli package (tsup)..."
   pnpm --filter @ably/react-web-cli run build || { echo "react-web-cli build failed, aborting Playwright run."; exit 1; }
   
-  # Set up cleanup handler to restore .env file
-  ENV_FILE_PATH="./examples/web-cli/.env"
-  ENV_FILE_BACKUP="./examples/web-cli/.env.backup"
+  # Build the example app without any credentials
+  # Tests will provide credentials via query parameters as needed
+  echo "Building example web-cli app without credentials for testing..."
   
-  cleanup_env_file() {
-    if [[ -f "$ENV_FILE_BACKUP" ]]; then
-      echo "Restoring .env file in cleanup..."
-      mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"
-    fi
-  }
+  # Temporarily move any .env file to prevent credentials from being baked into the build
+  WEB_CLI_ENV_FILE="./examples/web-cli/.env"
+  WEB_CLI_ENV_BACKUP="./examples/web-cli/.env.backup"
   
-  # Ensure cleanup runs on exit
-  trap cleanup_env_file EXIT
-
-  # Temporarily move .env file to prevent credentials from being baked into the build
-  # (Individual tests will handle their own authentication needs)
-  if [[ -f "$ENV_FILE_PATH" ]]; then
-    echo "Moving .env file temporarily to ensure clean build for tests..."
-    mv "$ENV_FILE_PATH" "$ENV_FILE_BACKUP"
-  fi
-
-  # Pass E2E API key as VITE env var during build if available
-  # This allows the app to have API key available even though .env file is moved
-  BUILD_ENV=""
-  if [[ -n "$E2E_ABLY_API_KEY" ]]; then
-    BUILD_ENV="VITE_ABLY_API_KEY=$E2E_ABLY_API_KEY"
-    echo "Loaded environment variables from .env file for tests"
+  if [[ -f "$WEB_CLI_ENV_FILE" ]]; then
+    echo "Moving web-cli .env file temporarily..."
+    mv "$WEB_CLI_ENV_FILE" "$WEB_CLI_ENV_BACKUP"
   fi
   
-  # Rebuild the example app so the preview server serves the latest bundle that includes changed library code.
-  echo "Building example web-cli app (vite build)..."
-  env $BUILD_ENV pnpm --filter ./examples/web-cli run build || { 
+  # Build without any env vars
+  (
+    unset VITE_ABLY_API_KEY
+    unset VITE_ABLY_ACCESS_TOKEN
+    unset ABLY_API_KEY
+    unset E2E_ABLY_API_KEY
+    pnpm --filter ./examples/web-cli run build
+  ) || { 
     # Restore .env file if build fails
-    if [[ -f "$ENV_FILE_BACKUP" ]]; then
-      mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"
+    if [[ -f "$WEB_CLI_ENV_BACKUP" ]]; then
+      mv "$WEB_CLI_ENV_BACKUP" "$WEB_CLI_ENV_FILE"
     fi
     echo "example web-cli build failed, aborting Playwright run."; 
     exit 1; 
   }
   
-  # Don't restore here - let the trap handle it to ensure it's always restored
+  # Restore .env file after build
+  if [[ -f "$WEB_CLI_ENV_BACKUP" ]]; then
+    echo "Restoring web-cli .env file..."
+    mv "$WEB_CLI_ENV_BACKUP" "$WEB_CLI_ENV_FILE"
+  fi
+  
+  echo "Web CLI app built successfully without credentials."
 
   if [[ "$DEBUG_MODE" == "true" ]]; then
     echo "=== Running Playwright Tests ==="
   fi
   echo "Using Playwright test runner for Web CLI tests..."
-  # Pass ONLY the specific web-cli test file to Playwright
-  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
+  # Pass the web-cli test files to Playwright with the config file
+  COMMAND="pnpm exec playwright test --config test/e2e/web-cli/playwright.config.ts $PLAYWRIGHT_TEST_FILES"
   echo "Executing command: $COMMAND"
 elif [[ -n "$TEST_PATTERN" ]]; then
   # Running a specific test file or pattern

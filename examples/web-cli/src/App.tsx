@@ -40,16 +40,31 @@ const getInitialCredentials = () => {
     };
   }
 
-  // Then check query parameters
+  // Then check query parameters (only in non-production environments)
   const urlParams = new URLSearchParams(window.location.search);
   const qsApiKey = urlParams.get('apikey') || urlParams.get('apiKey');
   const qsAccessToken = urlParams.get('accessToken') || urlParams.get('accesstoken');
+  
+  // Security check: only allow query param auth in development/test environments
+  const isProduction = import.meta.env.PROD && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
+  
   if (qsApiKey) {
-    return { 
-      apiKey: qsApiKey, 
-      accessToken: qsAccessToken || undefined,
-      source: 'query' as const
-    };
+    if (isProduction) {
+      console.error('Security Warning: API keys in query parameters are not allowed in production environments. Please use environment variables or the authentication form.');
+      // Clear the sensitive query parameters from the URL
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('apikey');
+      cleanUrl.searchParams.delete('apiKey');
+      cleanUrl.searchParams.delete('accessToken');
+      cleanUrl.searchParams.delete('accesstoken');
+      window.history.replaceState(null, '', cleanUrl.toString());
+    } else {
+      return { 
+        apiKey: qsApiKey, 
+        accessToken: qsAccessToken || undefined,
+        source: 'query' as const
+      };
+    }
   }
 
   // Finally check environment variables
@@ -84,6 +99,7 @@ function App() {
   const [accessToken, setAccessToken] = useState<string | undefined>(initialCreds.accessToken);
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey && initialCreds.apiKey.trim()));
   const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session');
+  const [authSource, setAuthSource] = useState(initialCreds.source);
 
   // Store the latest sessionId globally for E2E tests / debugging
   const handleSessionId = useCallback((id: string) => {
@@ -120,6 +136,7 @@ function App() {
       sessionStorage.removeItem('ably.web-cli.accessToken');
     }
     setIsUsingCustomAuth(true);
+    setAuthSource('session');
   }, []);
 
   // Handle auth settings save
@@ -204,15 +221,25 @@ function App() {
             className="auth-button flex items-center space-x-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
             title="Authentication Settings"
           >
-            {isUsingCustomAuth ? (
+            {authSource === 'session' ? (
               <>
                 <Key size={16} />
                 <span className="text-sm">Custom Auth</span>
               </>
-            ) : (
+            ) : authSource === 'query' ? (
+              <>
+                <Key size={16} className="text-blue-500" />
+                <span className="text-sm">Query Params</span>
+              </>
+            ) : authSource === 'env' ? (
               <>
                 <Shield size={16} className="text-green-500" />
                 <span className="text-sm">Default Auth</span>
+              </>
+            ) : (
+              <>
+                <Shield size={16} />
+                <span className="text-sm">Auth</span>
               </>
             )}
             <Settings size={14} className="ml-1 opacity-50" />

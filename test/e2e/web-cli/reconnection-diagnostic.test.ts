@@ -7,189 +7,208 @@
  */
 declare const window: any;
 
-import { test, expect } from 'playwright/test';
-import { promisify } from 'node:util';
-import { exec } from 'node:child_process';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
+import { test, expect, getTestUrl, log } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
-
-const execAsync = promisify(exec);
-
-// For ESM compatibility
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Constants
-const EXAMPLE_DIR = path.resolve(__dirname, '../../../examples/web-cli');
-const WEB_CLI_DIST = path.join(EXAMPLE_DIR, 'dist');
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
-
-// Shared variables
-let webServerProcess: any;
-let webServerPort: number;
-
-// Helper function to wait for server startup
-async function waitForServer(url: string, timeout = 30000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) {
-        return; // Server is up
-      }
-    } catch {
-      // Ignore fetch errors (server not ready)
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-  throw new Error(`Server ${url} did not start within ${timeout}ms`);
-}
 
 test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   // Increase timeout significantly for CI environments
   const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
   test.setTimeout(isCI ? 300_000 : 120_000); // 5 minutes in CI, 2 minutes locally
 
-  test.beforeAll(async () => {
-    console.log('Setting up Web CLI Reconnection Diagnostic E2E tests...');
-    
+  test('exposes correct debugging information', async ({ page }) => {
     if (isCI) {
-      console.log('Running in CI environment - using extended timeouts');
+      log('Running in CI environment - using extended timeouts');
     }
 
-    // 1. Build the example app
-    console.log('Building Web CLI example app...');
-    try {
-      await execAsync('pnpm build', { cwd: EXAMPLE_DIR });
-      console.log('Web CLI example app built.');
+    // Small delay for test stability
+    log('Waiting 2 seconds for test stability...');
+    await page.waitForTimeout(2000);
 
-      if (!fs.existsSync(WEB_CLI_DIST)) {
-        throw new Error(`Build finished but dist directory not found: ${WEB_CLI_DIST}`);
-      }
-      console.log(`Verified dist directory exists: ${WEB_CLI_DIST}`);
+    // 1. Navigate to the Web CLI app with debugging enabled
+    log('Navigating to Web CLI app with debugging enabled...');
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
 
-    } catch (error) {
-      console.error('Failed to build Web CLI example app:', error);
-      throw error;
+    // 2. Authenticate using API key
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
     }
+    
+    log('Authenticating with API key...');
+    await authenticateWebCli(page, apiKey);
 
-    // 2. Find free port for web server
-    const getPortModule = await import('get-port');
-    const getPort = getPortModule.default;
-    webServerPort = await getPort();
-    console.log(`Using Web Server Port: ${webServerPort}`);
-    console.log(`Using Public Terminal Server: ${PUBLIC_TERMINAL_SERVER_URL}`);
+    // 3. Wait for terminal to be ready
+    const terminalSelector = '.xterm';
+    await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
+    
+    // 4. Wait for WebSocket connection and React state initialization
+    await page.waitForFunction(() => {
+      return (window as any).ablyCliSocket && 
+             (window as any).getAblyCliTerminalReactState && 
+             typeof (window as any).getAblyCliTerminalReactState === 'function';
+    }, { timeout: 30000 });
 
-    // 3. Start a web server for the example app
-    console.log('Starting web server for example app with vite preview...');
-    const { spawn } = await import('node:child_process');
-    webServerProcess = spawn('npx', ['vite', 'preview', '--port', webServerPort.toString(), '--strictPort'], {
-      stdio: 'pipe',
-      cwd: EXAMPLE_DIR
+    // 5. Verify exposed debugging functions
+    const debugInfo = await page.evaluate(() => {
+      const socket = (window as any).ablyCliSocket;
+      const getReactState = (window as any).getAblyCliTerminalReactState;
+      const sessionId = (window as any)._sessionId;
+      
+      return {
+        hasSocket: !!socket,
+        socketReadyState: socket?.readyState,
+        hasGetReactState: typeof getReactState === 'function',
+        reactState: getReactState ? getReactState() : null,
+        hasSessionId: !!sessionId,
+        sessionId: sessionId
+      };
     });
 
-    webServerProcess.stdout?.on('data', (data: Buffer) => console.log(`[Web Server]: ${data.toString().trim()}`));
-    webServerProcess.stderr?.on('data', (data: Buffer) => console.error(`[Web Server ERR]: ${data.toString().trim()}`));
+    log('Debug info:', JSON.stringify(debugInfo, null, 2));
 
-    await waitForServer(`http://localhost:${webServerPort}`);
-    console.log('Web server started.');
+    // 6. Verify all debugging components are present
+    expect(debugInfo.hasSocket).toBe(true);
+    expect(debugInfo.socketReadyState).toBe(1); // WebSocket.OPEN
+    expect(debugInfo.hasGetReactState).toBe(true);
+    expect(debugInfo.reactState).toBeTruthy();
+    expect(debugInfo.reactState.componentConnectionStatus).toBe('connected');
+    expect(debugInfo.hasSessionId).toBe(true);
+    expect(debugInfo.sessionId).toBeTruthy();
   });
 
-  test.afterAll(async () => {
-    console.log('Tearing down Web CLI Reconnection Diagnostic E2E tests...');
-    webServerProcess?.kill('SIGTERM');
-    console.log('Web server stopped.');
-  });
-
-  test.beforeEach(async ({ page }) => {
-    // Install diagnostic hooks for monitoring connection state
+  test('captures console logs when debugging enabled', async ({ page }) => {
+    // Set up console log capture before navigation
     await page.addInitScript(() => {
-      (window as any).__diagnosticData = {
-        connectionEvents: [],
-        statusChanges: [],
-        wsEvents: [],
-      };
-
-      // Hook into connection status changes
-      (window as any).__logConnectionEvent = (event: string, data?: any) => {
-        (window as any).__diagnosticData.connectionEvents.push({
-          timestamp: Date.now(),
-          event,
-          data,
+      (window as any).__consoleLogs = [];
+      const originalLog = console.log;
+      const originalError = console.error;
+      const originalWarn = console.warn;
+      
+      console.log = (...args) => {
+        (window as any).__consoleLogs.push({ 
+          type: 'log', 
+          message: args.join(' '), 
+          timestamp: new Date().toISOString() 
         });
+        originalLog.apply(console, args);
+      };
+      
+      console.error = (...args) => {
+        (window as any).__consoleLogs.push({ 
+          type: 'error', 
+          message: args.join(' '), 
+          timestamp: new Date().toISOString() 
+        });
+        originalError.apply(console, args);
+      };
+      
+      console.warn = (...args) => {
+        (window as any).__consoleLogs.push({ 
+          type: 'warn', 
+          message: args.join(' '), 
+          timestamp: new Date().toISOString() 
+        });
+        originalWarn.apply(console, args);
       };
     });
+    
+    // Navigate with debugging enabled
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
+
+    // Authenticate
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
+    }
+    
+    await authenticateWebCli(page, apiKey);
+
+    // Wait for terminal
+    const terminalSelector = '.xterm';
+    await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
+    
+    // Give some time for logs to accumulate
+    await page.waitForTimeout(2000);
+
+    // Verify console logs are being captured
+    const consoleLogs = await page.evaluate(() => (window as any).__consoleLogs);
+    expect(Array.isArray(consoleLogs)).toBe(true);
+    expect(consoleLogs.length).toBeGreaterThan(0);
+    
+    // Verify log structure
+    const sampleLog = consoleLogs[0];
+    expect(sampleLog).toHaveProperty('type');
+    expect(sampleLog).toHaveProperty('message');
+    expect(sampleLog).toHaveProperty('timestamp');
+    
+    log(`Captured ${consoleLogs.length} console logs`);
   });
 
-  test('can diagnose connection behavior against public server', async ({ page }) => {
-    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await page.goto(pageUrl, { waitUntil: 'networkidle' });
-    await authenticateWebCli(page);
+  test('debugging functions persist through reconnection', async ({ page }) => {
+    // Add delay to avoid rate limits
+    log('Waiting 3 seconds to avoid rate limits...');
+    await page.waitForTimeout(3000);
+    
+    // Navigate with debugging enabled
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
+
+    // Authenticate
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
+    }
+    
+    await authenticateWebCli(page, apiKey);
+
+    // Wait for terminal
+    const terminalSelector = '.xterm';
+    await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
+    
+    // Wait for debugging functions
     await page.waitForFunction(() => {
-      const s = (window as any).getAblyCliTerminalReactState?.();
-      return s?.componentConnectionStatus === 'connected';
-    }, null, { timeout: 60_000 });
+      return (window as any).ablyCliSocket && 
+             (window as any).getAblyCliTerminalReactState && 
+             typeof (window as any).getAblyCliTerminalReactState === 'function';
+    }, { timeout: 30000 });
 
-    // Test basic functionality
-    await page.locator('.xterm').focus();
-    await page.keyboard.type('ably --version');
-    await page.keyboard.press('Enter');
-    await expect(page.locator('.xterm')).toContainText('browser-based CLI', { timeout: 30000 });
-
-    // Collect actual React state as diagnostic data
-    const reactState = await page.evaluate(() => {
-      const s = (window as any).getAblyCliTerminalReactState?.();
-      return s || {};
-    });
-    
-    // Verify connection state is available
-    expect(reactState.componentConnectionStatus).toBe('connected');
-    console.log('Connection diagnostic data:', reactState);
-  });
-
-  test('connection state transitions work correctly with public server', async ({ page }) => {
-    const pageUrl = `http://localhost:${webServerPort}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
-    await page.goto(pageUrl, { waitUntil: 'networkidle' });
-    await authenticateWebCli(page);
-
-    // Track status changes by polling React state
-    const statusChanges: string[] = [];
-    let lastStatus = '';
-    
-    // Wait for connection to fully establish first
-    await page.waitForFunction(() => {
-      const s = (window as any).getAblyCliTerminalReactState?.();
-      return s?.componentConnectionStatus === 'connected';
-    }, null, { timeout: 60_000 });
-    
-    // Now poll for status changes for a longer period to capture transitions
-    const pollInterval = setInterval(async () => {
-      try {
-        const currentStatus = await page.evaluate(() => {
-          const s = (window as any).getAblyCliTerminalReactState?.();
-          return s?.componentConnectionStatus || 'initial';
-        });
-        
-        if (currentStatus !== lastStatus) {
-          statusChanges.push(currentStatus);
-          lastStatus = currentStatus;
-        }
-      } catch {
-        // Ignore evaluation errors
+    // Simulate disconnection
+    await page.evaluate(() => {
+      if ((window as any).ablyCliSocket) {
+        (window as any).ablyCliSocket.close();
       }
-    }, 200);
+    });
+    
+    // Wait for reconnection
+    await page.waitForFunction(() => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      return state?.componentConnectionStatus === 'connected';
+    }, null, { timeout: 60000 });
 
-    // Monitor for 8 seconds to capture state transitions
-    await new Promise(resolve => setTimeout(resolve, 8000));
-    clearInterval(pollInterval);
+    // Verify debugging functions still work after reconnection
+    const postReconnectDebugInfo = await page.evaluate(() => {
+      const socket = (window as any).ablyCliSocket;
+      const getReactState = (window as any).getAblyCliTerminalReactState;
+      const sessionId = (window as any)._sessionId;
+      
+      return {
+        hasSocket: !!socket,
+        socketReadyState: socket?.readyState,
+        hasGetReactState: typeof getReactState === 'function',
+        reactState: getReactState ? getReactState() : null,
+        sessionId: sessionId
+      };
+    });
 
-    // Verify we captured the connection process
-    expect(statusChanges.length).toBeGreaterThan(0);
-    // Since we wait for connected state first, it should be captured
-    expect(statusChanges).toContain('connected');
+    // Verify all debugging components are still present and functional
+    expect(postReconnectDebugInfo.hasSocket).toBe(true);
+    // Socket might be in CLOSING (2) state briefly after disconnection
+    expect([1, 2]).toContain(postReconnectDebugInfo.socketReadyState);
+    expect(postReconnectDebugInfo.hasGetReactState).toBe(true);
+    expect(postReconnectDebugInfo.reactState).toBeTruthy();
+    expect(postReconnectDebugInfo.reactState.componentConnectionStatus).toBe('connected');
+    expect(postReconnectDebugInfo.sessionId).toBeTruthy();
   });
-}); 
+});

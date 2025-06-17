@@ -68,6 +68,9 @@ echo "🔗 Step 5: Running integration tests..."
 run_quiet pnpm test:integration --reporter min
 echo "   ✅ Integration tests passed"
 
+# Note: Full E2E test suite should be run in CI, not pre-push
+# Pre-push only runs unit, integration, and basic E2E tests
+
 
 echo "✅ All pre-push validation steps completed successfully!"
 echo ""
