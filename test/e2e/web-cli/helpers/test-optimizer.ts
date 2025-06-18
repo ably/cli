@@ -65,7 +65,7 @@ export const TEST_PROFILES: TestConnectionProfile[] = [
 /**
  * Calculate optimal test execution order
  */
-export function getOptimalTestOrder(maxConnectionsPerMinute: number): string[] {
+export function getOptimalTestOrder(_maxConnectionsPerMinute: number): string[] {
   // Sort tests by priority and connection count
   const sorted = [...TEST_PROFILES].sort((a, b) => {
     // Priority first

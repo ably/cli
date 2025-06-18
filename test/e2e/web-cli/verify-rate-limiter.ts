@@ -1,8 +1,7 @@
-#!/usr/bin/env node
 /**
  * Quick script to verify rate limiter configuration
  */
-import { getRateLimiterState, shouldDelayForRateLimit, getRateLimitDelay } from './test-rate-limiter.js';
+import { getRateLimiterState, getRateLimitDelay } from './test-rate-limiter.js';
 
 console.log('Rate Limiter Configuration Check');
 console.log('================================');

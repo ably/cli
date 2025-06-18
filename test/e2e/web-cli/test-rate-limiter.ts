@@ -36,26 +36,30 @@ const getConfig = () => {
   console.log(`[RateLimit Config] Using ${configType} configuration`);
   
   switch (configType) {
-    case 'CI':
+    case 'CI': {
       return {
         connectionsPerBatch: 6,    // Conservative for CI (10 per minute limit)
         pauseDuration: 65000,      // 65 seconds to ensure rate limit window reset
       };
-    case 'LOCAL':
+    }
+    case 'LOCAL': {
       return {
         connectionsPerBatch: 8,    // Closer to limit but still safe (10 - 2 buffer)
         pauseDuration: 62000,      // 62 seconds to ensure rate limit window reset
       };
-    case 'AGGRESSIVE':
+    }
+    case 'AGGRESSIVE': {
       return {
         connectionsPerBatch: 9,    // Max safe value (10 - buffer of 1)
         pauseDuration: 61000,      // Just over 1 minute
       };
-    default:
+    }
+    default: {
       return {
         connectionsPerBatch: 8,
         pauseDuration: 61000,
       };
+    }
   }
 };
 
