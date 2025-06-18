@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, Lock, AlertCircle, CheckCircle, Shield } from 'lucide-react';
+import { X, Key, Lock, AlertCircle, CheckCircle, Save } from 'lucide-react';
 
 interface AuthSettingsProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (apiKey: string, accessToken: string, useDefaults: boolean) => void;
+  onSave: (apiKey: string, accessToken: string, remember: boolean) => void;
   currentApiKey?: string;
   currentAccessToken?: string;
-  hasEnvDefaults: boolean;
-  isUsingCustomAuth: boolean;
+  rememberCredentials: boolean;
 }
 
 // Helper function to redact sensitive credentials
@@ -36,52 +35,35 @@ export const AuthSettings: React.FC<AuthSettingsProps> = ({
   onSave,
   currentApiKey = '',
   currentAccessToken = '',
-  hasEnvDefaults,
-  isUsingCustomAuth
+  rememberCredentials
 }) => {
-  const [useCustomAuth, setUseCustomAuth] = useState(isUsingCustomAuth);
-  const [apiKey, setApiKey] = useState(isUsingCustomAuth ? currentApiKey : '');
-  const [accessToken, setAccessToken] = useState(isUsingCustomAuth ? currentAccessToken : '');
+  const [apiKey, setApiKey] = useState(currentApiKey);
+  const [accessToken, setAccessToken] = useState(currentAccessToken);
+  const [remember, setRemember] = useState(rememberCredentials);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setUseCustomAuth(isUsingCustomAuth);
-    if (isUsingCustomAuth) {
-      setApiKey(currentApiKey);
-      setAccessToken(currentAccessToken);
-    }
-  }, [currentApiKey, currentAccessToken, isUsingCustomAuth]);
+    setApiKey(currentApiKey);
+    setAccessToken(currentAccessToken);
+    setRemember(rememberCredentials);
+  }, [currentApiKey, currentAccessToken, rememberCredentials, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (useCustomAuth) {
-      if (!apiKey.trim()) {
-        setError('API Key is required');
-        return;
-      }
-
-      // Basic validation for API key format
-      if (!apiKey.includes(':')) {
-        setError('API Key should be in the format: app_name.key_name:key_secret');
-        return;
-      }
-
-      onSave(apiKey.trim(), accessToken.trim(), false);
-    } else {
-      // Use environment defaults
-      onSave('', '', true);
+    if (!apiKey.trim()) {
+      setError('API Key is required');
+      return;
     }
-  };
 
-  const handleAuthMethodChange = (useCustom: boolean) => {
-    setUseCustomAuth(useCustom);
-    setError('');
-    if (!useCustom) {
-      setApiKey('');
-      setAccessToken('');
+    // Basic validation for API key format
+    if (!apiKey.includes(':')) {
+      setError('API Key should be in the format: app_name.key_name:key_secret');
+      return;
     }
+
+    onSave(apiKey.trim(), accessToken.trim(), remember);
   };
 
   if (!isOpen) return null;
@@ -101,62 +83,7 @@ export const AuthSettings: React.FC<AuthSettingsProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6">
-          {hasEnvDefaults && (
-            <div className="space-y-4 mb-6">
-              <label className="text-sm font-medium text-gray-300">Authentication Method</label>
-              <div className="space-y-3">
-                <label className="flex items-start space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors">
-                  <input
-                    type="radio"
-                    name="authMethod"
-                    checked={!useCustomAuth}
-                    onChange={() => handleAuthMethodChange(false)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 text-white font-medium">
-                      <Shield size={16} />
-                      <span>Use Default Credentials</span>
-                    </div>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Secure credentials configured by your administrator
-                    </p>
-                    <div className="mt-2 space-y-1">
-                      <p className="text-xs text-gray-500">
-                        API Key: <span className="font-mono text-gray-400">{redactCredential(import.meta.env.VITE_ABLY_API_KEY)}</span>
-                      </p>
-                      {import.meta.env.VITE_ABLY_ACCESS_TOKEN && (
-                        <p className="text-xs text-gray-500">
-                          Access Token: <span className="font-mono text-gray-400">{redactCredential(import.meta.env.VITE_ABLY_ACCESS_TOKEN)}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </label>
-
-                <label className="flex items-start space-x-3 p-4 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors">
-                  <input
-                    type="radio"
-                    name="authMethod"
-                    checked={useCustomAuth}
-                    onChange={() => handleAuthMethodChange(true)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 text-white font-medium">
-                      <Key size={16} />
-                      <span>Use Custom Credentials</span>
-                    </div>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Enter your own API key and optional access token
-                    </p>
-                  </div>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {isUsingCustomAuth && currentApiKey && (
+          {currentApiKey && (
             <div className="mb-6 p-4 bg-gray-800 rounded-lg">
               <p className="text-sm font-medium text-gray-300 mb-2">Current Credentials</p>
               <div className="space-y-1">
@@ -179,7 +106,7 @@ export const AuthSettings: React.FC<AuthSettingsProps> = ({
             </div>
           )}
 
-          {(!hasEnvDefaults || useCustomAuth) && (
+          {(
             <div className="space-y-6">
               <div>
                 <label htmlFor="apiKey" className="flex items-center space-x-2 text-sm font-medium text-gray-300 mb-2">
@@ -193,7 +120,6 @@ export const AuthSettings: React.FC<AuthSettingsProps> = ({
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="your_app.key_name:key_secret"
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={hasEnvDefaults && !useCustomAuth}
                 />
                 <p className="mt-1 text-xs text-gray-500">
                   Find your API key in your Ably dashboard
@@ -212,11 +138,24 @@ export const AuthSettings: React.FC<AuthSettingsProps> = ({
                   onChange={(e) => setAccessToken(e.target.value)}
                   placeholder="Your JWT access token"
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={hasEnvDefaults && !useCustomAuth}
                 />
                 <p className="mt-1 text-xs text-gray-500">
                   Optional: Use if you have a JWT token for authentication
                 </p>
+              </div>
+              
+              <div className="flex items-center space-x-3">
+                <input
+                  id="rememberCredentialsSettings"
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-700 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="rememberCredentialsSettings" className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                  <Save size={16} />
+                  <span>Remember credentials for future sessions</span>
+                </label>
               </div>
             </div>
           )}

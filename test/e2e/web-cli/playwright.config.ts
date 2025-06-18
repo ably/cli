@@ -1,6 +1,6 @@
 import { defineConfig, devices } from 'playwright/test';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +20,7 @@ export default defineConfig({
   // Parallel execution settings - CRITICAL for rate limiting
   fullyParallel: false, // MUST run tests serially to enforce rate limits
   workers: 1, // MUST use single worker to prevent concurrent connections
+  maxFailures: 0, // Stop on first failure to identify issues quickly
   
   // Retry configuration
   retries: 0, // No retries to identify flaky tests clearly

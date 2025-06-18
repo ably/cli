@@ -1,4 +1,4 @@
-import { test, expect, getTestUrl, log } from './helpers/base-test';
+import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
 
 // Public terminal server endpoint
@@ -41,9 +41,9 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     // Take a screenshot before reload for debugging
     await page.screenshot({ path: 'test-results/prompt-before-reload.png' });
 
-    // Reload the page
+    // Reload the page with rate limiting
     log('Reloading page...');
-    await page.reload({ waitUntil: 'networkidle' });
+    await reloadPageWithRateLimit(page);
 
     // Wait for terminal to reappear after reload
     await terminal.waitFor({ timeout: 60000 });
@@ -67,7 +67,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
 
     // Log terminal content for debugging
     log('Terminal content after reload:');
-    log(terminalTextAfter?.substring(0, 500) || 'No content');
+    log(terminalTextAfter?.slice(0, 500) || 'No content');
 
     // The prompt count should not increase after reload
     // We allow for at most 1 additional prompt to account for potential timing
@@ -106,13 +106,14 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     await page.keyboard.press('Enter');
     await expect(terminal).toContainText('Initial state', { timeout: 5000 });
 
-    const initialPromptCount = (await terminal.textContent())?.match(/\$/g)?.length || 0;
+    const initialTerminalContent = await terminal.textContent();
+    const initialPromptCount = initialTerminalContent?.match(/\$/g)?.length || 0;
     log(`Initial prompt count: ${initialPromptCount}`);
 
     // Perform multiple reloads
     for (let i = 0; i < 3; i++) {
       log(`Reload ${i + 1}/3...`);
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadPageWithRateLimit(page);
 
       // Wait for terminal to reappear
       await terminal.waitFor({ timeout: 60000 });
@@ -126,7 +127,8 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     }
 
     // Check final prompt count
-    const finalPromptCount = (await terminal.textContent())?.match(/\$/g)?.length || 0;
+    const finalTerminalContent = await terminal.textContent();
+    const finalPromptCount = finalTerminalContent?.match(/\$/g)?.length || 0;
     log(`Final prompt count after 3 reloads: ${finalPromptCount}`);
 
     // The prompt count should not grow significantly after multiple reloads

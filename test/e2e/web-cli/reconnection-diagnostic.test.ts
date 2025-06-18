@@ -7,7 +7,8 @@
  */
 declare const window: any;
 
-import { test, expect, getTestUrl, log } from './helpers/base-test';
+import { test, expect, getTestUrl } from './helpers/base-test';
+const log = console.log.bind(console);
 import { authenticateWebCli } from './auth-helper.js';
 
 // Public terminal server endpoint
@@ -148,9 +149,9 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   });
 
   test('debugging functions persist through reconnection', async ({ page }) => {
-    // Add delay to avoid rate limits
-    log('Waiting 3 seconds to avoid rate limits...');
-    await page.waitForTimeout(3000);
+    // Add longer delay to avoid rate limits since this test creates multiple connections
+    log('Waiting 10 seconds before test to avoid rate limits...');
+    await page.waitForTimeout(10000);
     
     // Navigate with debugging enabled
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);

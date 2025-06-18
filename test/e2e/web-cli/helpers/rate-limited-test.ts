@@ -31,7 +31,7 @@ export const test = base.extend({
   rateLimitedPage: async ({ page }, use, testInfo) => {
     const rateLimitedPage = {
       ...page,
-      goto: async (url: string, options?: any) => {
+      goto: async (url: string, _options?: any) => {
         // Use rate-limited navigation
         await navigateWithRateLimit(page, url, testInfo.title);
         return page;

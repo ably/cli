@@ -2,24 +2,12 @@ import { Page } from 'playwright/test';
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
 
 // Load environment variables from .env for Playwright tests
-// First try root .env (normal location)
 const rootEnvPath = resolve(process.cwd(), '.env');
 if (existsSync(rootEnvPath)) {
   config({ path: rootEnvPath });
-}
-
-// Also try the example app's .env (in case test script hasn't moved it yet)
-const exampleEnvPath = resolve(process.cwd(), 'examples/web-cli/.env');
-if (existsSync(exampleEnvPath)) {
-  config({ path: exampleEnvPath });
-}
-
-// Finally try the backup location (where test script moves it)
-const backupEnvPath = resolve(process.cwd(), 'examples/web-cli/.env.backup');
-if (existsSync(backupEnvPath)) {
-  config({ path: backupEnvPath });
 }
 
 /**
@@ -34,11 +22,20 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
   if (!key) {
     throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
   }
+  
+  // Log API key format validation
+  console.log(`[Auth Helper] API key length: ${key.length}`);
+  console.log(`[Auth Helper] API key format valid: ${/^.+\..+:.+$/.test(key)}`);
+  console.log(`[Auth Helper] Using ${useQueryParam ? 'query param' : 'form'} authentication`);
+
+  // Check rate limit before attempting connection
+  await waitForRateLimitIfNeeded();
 
   // If the page already has the API key in query params, just wait for terminal
   const currentUrl = page.url();
   if (currentUrl.includes('apiKey=') || currentUrl.includes('apikey=')) {
     console.log('API key already in URL, waiting for terminal...');
+    incrementConnectionCount();
     await page.waitForSelector('.xterm', { timeout: 15000 });
     
     // In CI, wait a bit longer for the connection to stabilize
@@ -54,6 +51,9 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
     console.log('Adding API key to URL and reloading...');
     const url = new URL(currentUrl);
     url.searchParams.set('apiKey', key);
+    // Always clear credentials in tests to ensure consistent state
+    url.searchParams.set('clearCredentials', 'true');
+    incrementConnectionCount();
     await page.goto(url.toString());
     
     // Wait for terminal to be visible
@@ -77,6 +77,7 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
   if (authScreenVisible) {
     console.log('Authentication screen detected, logging in...');
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', key);
+    incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
     console.log('Authentication submitted.');
     
@@ -103,10 +104,16 @@ export async function navigateAndAuthenticate(page: Page, url: string, apiKey?: 
     throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
   }
   
+  // Check rate limit before attempting connection
+  await waitForRateLimitIfNeeded();
+  
   // Add API key as query parameter for test environments
   const urlWithAuth = new URL(url);
   urlWithAuth.searchParams.set('apiKey', key);
+  // Always clear credentials in tests to ensure consistent state
+  urlWithAuth.searchParams.set('clearCredentials', 'true');
   
+  incrementConnectionCount();
   await page.goto(urlWithAuth.toString());
   
   // Wait for terminal to be visible (should auto-authenticate with query param)

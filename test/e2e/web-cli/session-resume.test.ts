@@ -1,10 +1,10 @@
-import { test, expect, getTestUrl, log } from './helpers/base-test';
+import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
 
-async function waitForPrompt(page: any, terminalSelector: string, timeout = 90000): Promise<void> {
+async function _waitForPrompt(page: any, terminalSelector: string, timeout = 90000): Promise<void> {
   log('Waiting for terminal to be ready...');
   
   // First wait for the React component state to be ready
@@ -46,11 +46,21 @@ test.describe('Session Resume E2E Tests', () => {
   test.setTimeout(120_000);
 
   test('connects to public server and can resume session after reconnection', async ({ page }) => {
-    // Small delay for test stability
-    log('Waiting 2 seconds for test stability...');
-    await page.waitForTimeout(2000);
+    // Longer delay to avoid rate limits for session resume test
+    log('Waiting 10 seconds before test to avoid rate limits...');
+    await page.waitForTimeout(10000);
+    
+    // Get API key
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
+    }
     
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
+    
+    // Authenticate first
+    await authenticateWebCli(page, apiKey);
+    
     const terminal = page.locator('.xterm');
 
     // Wait for terminal to be ready (connected state)
@@ -68,12 +78,10 @@ test.describe('Session Resume E2E Tests', () => {
 
     // Simulate a WebSocket disconnection by closing it programmatically
     await page.evaluate(() => {
-      const activeConnections = (window as any).__activeWebSockets || [];
-      activeConnections.forEach((ws: WebSocket) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(3000, 'Test disconnect');
-        }
-      });
+      // Use the same approach as reconnection test for consistency
+      if ((window as any).ablyCliSocket) {
+        (window as any).ablyCliSocket.close();
+      }
     });
 
     // Give the browser a moment to notice the disconnect and attempt reconnection
@@ -117,7 +125,7 @@ test.describe('Session Resume E2E Tests', () => {
 
     // Perform multiple successive reloads to verify robustness
     for (let i = 0; i < 2; i++) {
-      await page.reload({ waitUntil: 'networkidle' });
+      await reloadPageWithRateLimit(page);
       // Wait for reconnection and CLI to be ready again
     await page.waitForFunction(() => {
       const state = (window as any).getAblyCliTerminalReactState?.();
@@ -164,12 +172,10 @@ test.describe('Session Resume E2E Tests', () => {
 
     // Simulate session timeout by disconnecting for an extended period
     await page.evaluate(() => {
-      const activeConnections = (window as any).__activeWebSockets || [];
-      activeConnections.forEach((ws: WebSocket) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(3000, 'Simulating timeout');
-        }
-      });
+      // Use the same approach as reconnection test for consistency
+      if ((window as any).ablyCliSocket) {
+        (window as any).ablyCliSocket.close();
+      }
     });
 
     // Wait for a longer period to simulate timeout

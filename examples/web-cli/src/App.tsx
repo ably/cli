@@ -10,7 +10,7 @@ import { AuthScreen } from "./components/AuthScreen";
 // Default WebSocket URL - use public endpoint for production, localhost for development
 const DEFAULT_WEBSOCKET_URL = "wss://web-cli.ably.com";
 
-// Get WebSocket URL from Vite environment variables or query parameters
+// Get WebSocket URL from query parameters only
 const getWebSocketUrl = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const serverParam = urlParams.get("serverUrl");
@@ -18,30 +18,54 @@ const getWebSocketUrl = () => {
     console.log(`[App.tsx] Found serverUrl param: ${serverParam}`);
     return serverParam;
   }
-  const envServerUrl = import.meta.env.VITE_TERMINAL_SERVER_URL;
-  if (envServerUrl) {
-    console.log(`[App.tsx] Using env var VITE_TERMINAL_SERVER_URL: ${envServerUrl}`);
-    return envServerUrl;
-  }
-  console.log(`[App.tsx] Falling back to default URL: ${DEFAULT_WEBSOCKET_URL}`);
+  console.log(`[App.tsx] Using default URL: ${DEFAULT_WEBSOCKET_URL}`);
   return DEFAULT_WEBSOCKET_URL;
 };
 
 // Get credentials from various sources
 const getInitialCredentials = () => {
-  // Check sessionStorage first for persisted session credentials
-  const storedApiKey = sessionStorage.getItem('ably.web-cli.apiKey');
-  const storedAccessToken = sessionStorage.getItem('ably.web-cli.accessToken');
-  if (storedApiKey) {
+  const urlParams = new URLSearchParams(window.location.search);
+  
+  // Check if we should clear credentials (for testing)
+  if (urlParams.get('clearCredentials') === 'true') {
+    localStorage.removeItem('ably.web-cli.apiKey');
+    localStorage.removeItem('ably.web-cli.accessToken');
+    localStorage.removeItem('ably.web-cli.rememberCredentials');
+    // Also clear from sessionStorage
+    sessionStorage.removeItem('ably.web-cli.apiKey');
+    sessionStorage.removeItem('ably.web-cli.accessToken');
+    // Remove the clearCredentials param from URL
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('clearCredentials');
+    window.history.replaceState(null, '', cleanUrl.toString());
+  }
+  
+  // Check localStorage for persisted credentials (if user chose to remember)
+  const rememberCredentials = localStorage.getItem('ably.web-cli.rememberCredentials') === 'true';
+  if (rememberCredentials) {
+    const storedApiKey = localStorage.getItem('ably.web-cli.apiKey');
+    const storedAccessToken = localStorage.getItem('ably.web-cli.accessToken');
+    if (storedApiKey) {
+      return { 
+        apiKey: storedApiKey, 
+        accessToken: storedAccessToken || undefined,
+        source: 'localStorage' as const
+      };
+    }
+  }
+  
+  // Check sessionStorage for session-only credentials
+  const sessionApiKey = sessionStorage.getItem('ably.web-cli.apiKey');
+  const sessionAccessToken = sessionStorage.getItem('ably.web-cli.accessToken');
+  if (sessionApiKey) {
     return { 
-      apiKey: storedApiKey, 
-      accessToken: storedAccessToken || undefined,
+      apiKey: sessionApiKey, 
+      accessToken: sessionAccessToken || undefined,
       source: 'session' as const
     };
   }
 
   // Then check query parameters (only in non-production environments)
-  const urlParams = new URLSearchParams(window.location.search);
   const qsApiKey = urlParams.get('apikey') || urlParams.get('apiKey');
   const qsAccessToken = urlParams.get('accessToken') || urlParams.get('accesstoken');
   
@@ -50,7 +74,7 @@ const getInitialCredentials = () => {
   
   if (qsApiKey) {
     if (isProduction) {
-      console.error('Security Warning: API keys in query parameters are not allowed in production environments. Please use environment variables or the authentication form.');
+      console.error('Security Warning: API keys in query parameters are not allowed in production environments.');
       // Clear the sensitive query parameters from the URL
       const cleanUrl = new URL(window.location.href);
       cleanUrl.searchParams.delete('apikey');
@@ -67,22 +91,8 @@ const getInitialCredentials = () => {
     }
   }
 
-  // Finally check environment variables
-  const envApiKey = import.meta.env.VITE_ABLY_API_KEY as string | undefined;
-  const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN as string | undefined;
-  if (envApiKey) {
-    return { 
-      apiKey: envApiKey, 
-      accessToken: envAccessToken || undefined,
-      source: 'env' as const
-    };
-  }
-
   return { apiKey: undefined, accessToken: undefined, source: 'none' as const };
 };
-
-// Check if environment variables are available
-const hasEnvCredentials = Boolean(import.meta.env.VITE_ABLY_API_KEY);
 
 function App() {
   // Read initial mode from URL, default to fullscreen
@@ -98,8 +108,9 @@ function App() {
   const [apiKey, setApiKey] = useState<string | undefined>(initialCreds.apiKey);
   const [accessToken, setAccessToken] = useState<string | undefined>(initialCreds.accessToken);
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey && initialCreds.apiKey.trim()));
-  const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session');
+  const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session' || initialCreds.source === 'localStorage');
   const [authSource, setAuthSource] = useState(initialCreds.source);
+  const [rememberCredentials, setRememberCredentials] = useState(localStorage.getItem('ably.web-cli.rememberCredentials') === 'true');
 
   // Store the latest sessionId globally for E2E tests / debugging
   const handleSessionId = useCallback((id: string) => {
@@ -117,7 +128,7 @@ function App() {
   }, []);
 
   // Handle authentication
-  const handleAuthenticate = useCallback((newApiKey: string, newAccessToken: string) => {
+  const handleAuthenticate = useCallback((newApiKey: string, newAccessToken: string, remember?: boolean) => {
     // Clear any existing session data when credentials change
     sessionStorage.removeItem('ably.cli.sessionId');
     sessionStorage.removeItem('ably.cli.secondarySessionId');
@@ -128,48 +139,58 @@ function App() {
     setIsAuthenticated(true);
     setShowAuthSettings(false);
     
-    // Store in session storage
-    sessionStorage.setItem('ably.web-cli.apiKey', newApiKey);
-    if (newAccessToken) {
-      sessionStorage.setItem('ably.web-cli.accessToken', newAccessToken);
+    // Determine if we should remember based on parameter or current state
+    const shouldRemember = remember !== undefined ? remember : rememberCredentials;
+    
+    if (shouldRemember) {
+      // Store in localStorage for persistence
+      localStorage.setItem('ably.web-cli.apiKey', newApiKey);
+      localStorage.setItem('ably.web-cli.rememberCredentials', 'true');
+      if (newAccessToken) {
+        localStorage.setItem('ably.web-cli.accessToken', newAccessToken);
+      } else {
+        localStorage.removeItem('ably.web-cli.accessToken');
+      }
+      setAuthSource('localStorage');
     } else {
-      sessionStorage.removeItem('ably.web-cli.accessToken');
+      // Store only in sessionStorage
+      sessionStorage.setItem('ably.web-cli.apiKey', newApiKey);
+      if (newAccessToken) {
+        sessionStorage.setItem('ably.web-cli.accessToken', newAccessToken);
+      } else {
+        sessionStorage.removeItem('ably.web-cli.accessToken');
+      }
+      // Clear from localStorage if it was there
+      localStorage.removeItem('ably.web-cli.apiKey');
+      localStorage.removeItem('ably.web-cli.accessToken');
+      localStorage.removeItem('ably.web-cli.rememberCredentials');
+      setAuthSource('session');
     }
+    
+    setRememberCredentials(shouldRemember);
     setIsUsingCustomAuth(true);
-    setAuthSource('session');
-  }, []);
+  }, [rememberCredentials]);
 
   // Handle auth settings save
-  const handleAuthSettingsSave = useCallback((newApiKey: string, newAccessToken: string, useDefaults: boolean) => {
-    if (useDefaults && hasEnvCredentials) {
-      // Clear any existing session data when credentials change
-      sessionStorage.removeItem('ably.cli.sessionId');
-      sessionStorage.removeItem('ably.cli.secondarySessionId');
-      sessionStorage.removeItem('ably.cli.isSplit');
-      
-      // Reset to environment defaults
-      const envApiKey = import.meta.env.VITE_ABLY_API_KEY as string;
-      const envAccessToken = import.meta.env.VITE_ABLY_ACCESS_TOKEN as string | undefined;
-      setApiKey(envApiKey);
-      setAccessToken(envAccessToken);
-      sessionStorage.removeItem('ably.web-cli.apiKey');
-      sessionStorage.removeItem('ably.web-cli.accessToken');
-      setIsUsingCustomAuth(false);
-      setShowAuthSettings(false);
-    } else if (newApiKey) {
-      handleAuthenticate(newApiKey, newAccessToken);
-    } else if (!newApiKey && !useDefaults) {
-      // Clear credentials - go back to auth screen
+  const handleAuthSettingsSave = useCallback((newApiKey: string, newAccessToken: string, remember: boolean) => {
+    if (newApiKey) {
+      handleAuthenticate(newApiKey, newAccessToken, remember);
+    } else {
+      // Clear all credentials - go back to auth screen
       sessionStorage.removeItem('ably.cli.sessionId');
       sessionStorage.removeItem('ably.cli.secondarySessionId');
       sessionStorage.removeItem('ably.cli.isSplit');
       sessionStorage.removeItem('ably.web-cli.apiKey');
       sessionStorage.removeItem('ably.web-cli.accessToken');
+      localStorage.removeItem('ably.web-cli.apiKey');
+      localStorage.removeItem('ably.web-cli.accessToken');
+      localStorage.removeItem('ably.web-cli.rememberCredentials');
       setApiKey(undefined);
       setAccessToken(undefined);
       setIsAuthenticated(false);
       setIsUsingCustomAuth(false);
       setShowAuthSettings(false);
+      setRememberCredentials(false);
     }
   }, [handleAuthenticate]);
 
@@ -205,7 +226,11 @@ function App() {
 
   // Show auth screen if not authenticated
   if (!isAuthenticated) {
-    return <AuthScreen onAuthenticate={handleAuthenticate} />;
+    return <AuthScreen 
+      onAuthenticate={handleAuthenticate} 
+      rememberCredentials={rememberCredentials}
+      onRememberChange={setRememberCredentials}
+    />;
   }
 
   return (
@@ -224,17 +249,17 @@ function App() {
             {authSource === 'session' ? (
               <>
                 <Key size={16} />
-                <span className="text-sm">Custom Auth</span>
+                <span className="text-sm">Session Auth</span>
+              </>
+            ) : authSource === 'localStorage' ? (
+              <>
+                <Shield size={16} className="text-green-500" />
+                <span className="text-sm">Saved Auth</span>
               </>
             ) : authSource === 'query' ? (
               <>
                 <Key size={16} className="text-blue-500" />
                 <span className="text-sm">Query Params</span>
-              </>
-            ) : authSource === 'env' ? (
-              <>
-                <Shield size={16} className="text-green-500" />
-                <span className="text-sm">Default Auth</span>
               </>
             ) : (
               <>
@@ -279,8 +304,7 @@ function App() {
         onSave={handleAuthSettingsSave}
         currentApiKey={apiKey}
         currentAccessToken={accessToken}
-        hasEnvDefaults={hasEnvCredentials}
-        isUsingCustomAuth={isUsingCustomAuth}
+        rememberCredentials={rememberCredentials}
       />
     </div>
   );

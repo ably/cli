@@ -2,21 +2,13 @@ import { test as base } from 'playwright/test';
 import { 
   setupConsoleCapture, 
   dumpConsoleOnFailure, 
-  markTestAsFailing,
-  getTestUrl,
-  buildTestUrl,
-  log
+  markTestAsFailing
 } from './test-helpers';
-import { incrementTestCount, waitForRateLimitIfNeeded } from '../test-rate-limiter';
 
 // Extend the base test with our helpers
 export const test = base.extend({
   // Auto-inject helpers into each test
   page: async ({ page }, use, testInfo) => {
-    // Rate limit check before test starts
-    incrementTestCount();
-    await waitForRateLimitIfNeeded();
-    
     // Setup console capture
     setupConsoleCapture(page);
     
@@ -38,4 +30,4 @@ export const test = base.extend({
 
 // Re-export expect and other utilities
 export { expect } from 'playwright/test';
-export { getTestUrl, buildTestUrl, log };
+export { getTestUrl, buildTestUrl, log, reloadPageWithRateLimit } from './test-helpers';

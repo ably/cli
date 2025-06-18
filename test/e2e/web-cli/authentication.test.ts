@@ -1,5 +1,6 @@
-import { test, expect, getTestUrl, buildTestUrl, log } from './helpers/base-test';
+import { test, expect, getTestUrl, buildTestUrl, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper';
+import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
 
 test.describe('Web CLI Authentication E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
@@ -88,10 +89,10 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     await expect(page.getByText('Enter your credentials to start a terminal session')).not.toBeVisible();
     
     // Header should show authenticated status
-    await expect(page.getByText('Custom Auth')).toBeVisible();
+    await expect(page.getByText('Session Auth')).toBeVisible();
   });
 
-  test('should persist authentication state across page reloads', async ({ page }) => {
+  test('should persist authentication state across page reloads with remember checked', async ({ page }) => {
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -100,21 +101,69 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     // Navigate to the page
     await page.goto(getTestUrl());
     
+    // Check remember credentials checkbox
+    await page.check('#rememberCredentials');
+    
+    // Check rate limit before attempting connection
+    await waitForRateLimitIfNeeded();
+    
     // Authenticate
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+    incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
     
     // Wait for terminal to be visible
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
-    // Reload the page (don't clear sessionStorage this time)
-    await page.reload();
+    // Reload the page with rate limiting
+    await reloadPageWithRateLimit(page);
     
     // Should still be authenticated - terminal should be visible
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
     // Auth screen should not be shown
     await expect(page.getByText('Enter your credentials to start a terminal session')).not.toBeVisible();
+    
+    // Header should show saved auth status
+    await expect(page.getByText('Saved Auth')).toBeVisible();
+  });
+
+  test('should not persist authentication state across page reloads when remember is unchecked', async ({ page }) => {
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
+    }
+
+    // Navigate to the page
+    await page.goto(getTestUrl());
+    
+    // Make sure remember credentials is unchecked
+    const rememberCheckbox = await page.locator('#rememberCredentials');
+    if (await rememberCheckbox.isChecked()) {
+      await rememberCheckbox.uncheck();
+    }
+    
+    // Check rate limit before attempting connection
+    await waitForRateLimitIfNeeded();
+    
+    // Authenticate
+    await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+    incrementConnectionCount();
+    await page.click('button:has-text("Connect to Terminal")');
+    
+    // Wait for terminal to be visible
+    await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
+    
+    // Header should show session auth status
+    await expect(page.getByText('Session Auth')).toBeVisible();
+    
+    // Clear session storage and reload
+    await page.evaluate(() => sessionStorage.clear());
+    await page.reload(); // No rate limit needed - won't auto-connect after clearing
+    
+    // Should NOT be authenticated - auth screen should be visible
+    await expect(page.getByText('Enter your credentials to start a terminal session')).toBeVisible();
+    await expect(page.locator('.xterm')).not.toBeVisible();
   });
 
   test('should allow changing credentials via auth settings', async ({ page }) => {
@@ -131,8 +180,12 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     
     await page.goto(getTestUrl());
     
+    // Check rate limit before attempting connection
+    await waitForRateLimitIfNeeded();
+    
     // Initial authentication
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+    incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
@@ -169,8 +222,12 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     
     await page.goto(getTestUrl());
     
+    // Check rate limit before attempting connection
+    await waitForRateLimitIfNeeded();
+    
     // Authenticate
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+    incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
@@ -202,9 +259,13 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     
     await page.goto(getTestUrl());
     
+    // Check rate limit before attempting connection
+    await waitForRateLimitIfNeeded();
+    
     // Fill in API key and a test access token
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
     await page.fill('input[placeholder="Your JWT access token"]', 'test-access-token');
+    incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
     
     // Should still authenticate with API key (access token is optional)
@@ -245,8 +306,12 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     
     await page.goto(getTestUrl());
     
+    // Check rate limit before attempting connection
+    await waitForRateLimitIfNeeded();
+    
     // Authenticate
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey);
+    incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
@@ -320,8 +385,8 @@ test.describe('Web CLI Auto-Login E2E Tests', () => {
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', apiKey!);
     await page.click('button:has-text("Connect to Terminal")');
     
-    // Should connect with custom auth
+    // Should connect with session auth
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('Custom Auth')).toBeVisible();
+    await expect(page.getByText('Session Auth')).toBeVisible();
   });
 });

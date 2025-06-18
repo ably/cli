@@ -1002,7 +1002,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       4002, // Session resume rejected
       4000, // Generic server error
       4004, // Unsupported protocol version
-      1005, // No status received – used when server terminates gracefully after `exit`
+      // Note: 1005 removed - it's used for both graceful exit AND network disconnections
+      // We should handle exit commands differently, not by close code
     ]);
 
     const inactivityRegex = /inactiv|timed out/i;

@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
-import { Key, Lock, Terminal, AlertCircle, ArrowRight } from 'lucide-react';
+import { Key, Lock, Terminal, AlertCircle, ArrowRight, Save, RefreshCw } from 'lucide-react';
 
 interface AuthScreenProps {
-  onAuthenticate: (apiKey: string, accessToken: string) => void;
+  onAuthenticate: (apiKey: string, accessToken: string, remember?: boolean) => void;
+  rememberCredentials: boolean;
+  onRememberChange: (remember: boolean) => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ 
+  onAuthenticate, 
+  rememberCredentials,
+  onRememberChange 
+}) => {
   const [apiKey, setApiKey] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [error, setError] = useState('');
+  
+  // Check if there are saved credentials to clear
+  const hasSavedCredentials = localStorage.getItem('ably.web-cli.apiKey') !== null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +34,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
       return;
     }
 
-    onAuthenticate(apiKey.trim(), accessToken.trim());
+    onAuthenticate(apiKey.trim(), accessToken.trim(), rememberCredentials);
+  };
+  
+  const handleClearSavedCredentials = () => {
+    localStorage.removeItem('ably.web-cli.apiKey');
+    localStorage.removeItem('ably.web-cli.accessToken');
+    localStorage.removeItem('ably.web-cli.rememberCredentials');
+    setError('');
+    // Force a refresh to show the change
+    window.location.reload();
   };
 
   return (
@@ -91,6 +109,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
               </div>
             )}
 
+            <div className="flex items-center space-x-3">
+              <input
+                id="rememberCredentials"
+                type="checkbox"
+                checked={rememberCredentials}
+                onChange={(e) => onRememberChange(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-700 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="rememberCredentials" className="flex items-center space-x-2 text-sm text-gray-300 cursor-pointer">
+                <Save size={16} />
+                <span>Remember credentials for future sessions</span>
+              </label>
+            </div>
+
             <button
               type="submit"
               className="w-full px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2 font-medium"
@@ -100,7 +132,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-gray-800">
+          <div className="mt-6 pt-6 border-t border-gray-800 space-y-3">
             <p className="text-xs text-gray-500 text-center">
               Don't have an Ably account?{' '}
               <a 
@@ -112,6 +144,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticate }) => {
                 Sign up for free
               </a>
             </p>
+            {hasSavedCredentials && (
+              <p className="text-xs text-center">
+                <button
+                  type="button"
+                  onClick={handleClearSavedCredentials}
+                  className="text-red-400 hover:text-red-300 underline inline-flex items-center space-x-1"
+                >
+                  <RefreshCw size={12} />
+                  <span>Clear saved credentials</span>
+                </button>
+              </p>
+            )}
           </div>
         </div>
       </div>
