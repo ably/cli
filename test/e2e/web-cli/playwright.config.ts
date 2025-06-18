@@ -15,7 +15,7 @@ export default defineConfig({
   
   // Timeout configuration
   timeout: 90000, // 90s per test (increased for rate limiting)
-  globalTimeout: 900000, // 15 minutes total (increased for rate limiting)
+  globalTimeout: 1200000, // 20 minutes total (increased for rate limiting)
   
   // Parallel execution settings - CRITICAL for rate limiting
   fullyParallel: false, // MUST run tests serially to enforce rate limits

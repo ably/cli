@@ -16,17 +16,17 @@ const isStressTest = process.env.STRESS_TEST === 'true';
 const configs = {
   // Conservative configuration for CI environments
   ci: {
-    maxConnectionsPerMinute: 5, // Very conservative for CI to avoid flakiness
+    maxConnectionsPerMinute: 8, // Increased from 5 to allow more parallel tests
     windowDurationMs: 60000,
-    retryDelayMs: 20000, // 20 seconds between retries
+    retryDelayMs: 10000, // Reduced from 20s to 10s
     maxRetries: 3
   },
   
   // Standard configuration for local development
   local: {
-    maxConnectionsPerMinute: 6, // Well below the 10/min limit to account for reconnections
+    maxConnectionsPerMinute: 9, // Increased from 6, still safe margin from 10/min limit
     windowDurationMs: 60000,
-    retryDelayMs: 15000, // 15 seconds between retries
+    retryDelayMs: 8000, // Reduced from 15s to 8s
     maxRetries: 2
   },
   

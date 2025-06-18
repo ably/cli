@@ -19,6 +19,15 @@ interface RateLimiterState {
 
 // Configuration
 const getConfig = () => {
+  // Allow disabling rate limiting for local development
+  if (process.env.DISABLE_RATE_LIMIT === 'true') {
+    console.log(`[RateLimit Config] Rate limiting DISABLED`);
+    return {
+      connectionsPerBatch: 1000,  // Effectively no limit
+      pauseDuration: 0,          // No pause
+    };
+  }
+  
   // Default to CI configuration
   const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
   
@@ -34,8 +43,8 @@ const getConfig = () => {
       };
     case 'LOCAL':
       return {
-        connectionsPerBatch: 6,    // More conservative to avoid hitting limits
-        pauseDuration: 65000,      // 65 seconds to ensure clean slate
+        connectionsPerBatch: 8,    // Closer to limit but still safe (10 - 2 buffer)
+        pauseDuration: 62000,      // 62 seconds to ensure rate limit window reset
       };
     case 'AGGRESSIVE':
       return {
