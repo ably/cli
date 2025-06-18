@@ -55,12 +55,33 @@ export function getTestUrl(): string {
 // Helper to build URL with query params
 export function buildTestUrl(params?: Record<string, string>): string {
   const url = new URL(getTestUrl());
+  // Always clear credentials in tests to ensure consistent state
+  url.searchParams.set('clearCredentials', 'true');
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.set(key, value);
     });
   }
   return url.toString();
+}
+
+// Helper to track reload connections
+export async function reloadPageWithRateLimit(page: Page): Promise<void> {
+  const { incrementConnectionCount, waitForRateLimitIfNeeded } = await import('../test-rate-limiter');
+  
+  // Check if the page will auto-connect after reload (has credentials or apiKey in URL)
+  const currentUrl = page.url();
+  const willAutoConnect = currentUrl.includes('apiKey=') || 
+    await page.evaluate(() => {
+      return !!(sessionStorage.getItem('ably.web-cli.apiKey') || localStorage.getItem('ably.web-cli.apiKey'));
+    });
+  
+  if (willAutoConnect) {
+    await waitForRateLimitIfNeeded();
+    incrementConnectionCount();
+  }
+  
+  await page.reload();
 }
 
 // Quiet console log that only outputs in verbose mode

@@ -152,7 +152,7 @@ class GlobalRateLimiter {
         const result = await connectionFn();
         
         // Mark as successful
-        this.connectionAttempts[this.connectionAttempts.length - 1].success = true;
+        this.connectionAttempts.at(-1)!.success = true;
         console.log(`[RateLimiter] Test "${testName}" connected successfully`);
         
         return result;

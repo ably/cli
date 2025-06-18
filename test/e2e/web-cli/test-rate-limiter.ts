@@ -1,53 +1,144 @@
 /**
  * Test rate limiter to ensure we don't exceed server rate limits
  * The server allows 10 connections per minute per IP
+ * Uses file-based state to persist across test processes
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-let testCount = 0;
-let lastResetTime = Date.now();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STATE_FILE = path.join(__dirname, '.rate-limiter-state.json');
 
-// Initialize on module load
-console.log(`[TestRateLimiter] Initialized at ${new Date().toISOString()}`);
-console.log(`[TestRateLimiter] Will pause after every 6 tests to respect server rate limits`);
+interface RateLimiterState {
+  connectionCount: number;
+  lastResetTime: number;
+  initialized: boolean;
+}
 
-export function incrementTestCount(): void {
-  testCount++;
-  console.log(`[TestRateLimiter] Test count: ${testCount}`);
+// Configuration
+const getConfig = () => {
+  // Default to CI configuration
+  const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
+  
+  // Can be overridden by environment variable
+  const configType = process.env.RATE_LIMIT_CONFIG || (isCI ? 'CI' : 'LOCAL');
+  console.log(`[RateLimit Config] Using ${configType} configuration`);
+  
+  switch (configType) {
+    case 'CI':
+      return {
+        connectionsPerBatch: 6,    // Conservative for CI (10 per minute limit)
+        pauseDuration: 65000,      // 65 seconds to ensure rate limit window reset
+      };
+    case 'LOCAL':
+      return {
+        connectionsPerBatch: 6,    // More conservative to avoid hitting limits
+        pauseDuration: 65000,      // 65 seconds to ensure clean slate
+      };
+    case 'AGGRESSIVE':
+      return {
+        connectionsPerBatch: 9,    // Max safe value (10 - buffer of 1)
+        pauseDuration: 61000,      // Just over 1 minute
+      };
+    default:
+      return {
+        connectionsPerBatch: 8,
+        pauseDuration: 61000,
+      };
+  }
+};
+
+const config = getConfig();
+
+function readState(): RateLimiterState {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const data = fs.readFileSync(STATE_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.warn('[TestRateLimiter] Failed to read state file:', error);
+  }
+  
+  // Default state
+  return {
+    connectionCount: 0,
+    lastResetTime: Date.now(),
+    initialized: false
+  };
+}
+
+function writeState(state: RateLimiterState): void {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (error) {
+    console.error('[TestRateLimiter] Failed to write state file:', error);
+  }
+}
+
+// Initialize on first load
+const initialState = readState();
+if (!initialState.initialized) {
+  console.log(`[TestRateLimiter] Initialized at ${new Date().toISOString()}`);
+  console.log(`[TestRateLimiter] Will pause after every ${config.connectionsPerBatch} connections to respect server rate limits`);
+  console.log(`[TestRateLimiter] Each pause will be ${Math.round(config.pauseDuration/1000)} seconds to ensure rate limit window reset`);
+  writeState({ ...initialState, initialized: true });
+}
+
+export function incrementConnectionCount(): void {
+  const state = readState();
+  state.connectionCount++;
+  console.log(`[TestRateLimiter] Connection count: ${state.connectionCount}`);
+  writeState(state);
 }
 
 export function shouldDelayForRateLimit(): boolean {
-  // After every 6 tests, we should wait to ensure rate limit window resets
-  // This is conservative - allows for tests that might make 1-2 connections each
-  return testCount > 0 && testCount % 6 === 0;
+  const state = readState();
+  // After every N connections, we should wait to ensure rate limit window resets
+  return state.connectionCount > 0 && state.connectionCount % config.connectionsPerBatch === 0;
 }
 
 export function getRateLimitDelay(): number {
-  // Calculate how long we need to wait for the rate limit window to reset
-  const timeSinceReset = Date.now() - lastResetTime;
-  const windowDuration = 60000; // 60 seconds
-  
-  if (timeSinceReset < windowDuration) {
-    // Wait for the remainder of the window plus a buffer
-    return windowDuration - timeSinceReset + 5000; // 5 second buffer
-  }
-  
-  return 5000; // Minimum 5 second delay
+  return config.pauseDuration;
 }
 
 export function resetRateLimitWindow(): void {
-  lastResetTime = Date.now();
-  console.log(`[TestRateLimiter] Rate limit window reset at ${new Date(lastResetTime).toISOString()}`);
+  const state = readState();
+  state.lastResetTime = Date.now();
+  console.log(`[TestRateLimiter] Rate limit window reset at ${new Date(state.lastResetTime).toISOString()}`);
+  writeState(state);
 }
 
 export async function waitForRateLimitIfNeeded(): Promise<void> {
   if (shouldDelayForRateLimit()) {
+    const state = readState();
     const delay = getRateLimitDelay();
     console.log(`[TestRateLimiter] === RATE LIMIT PAUSE ===`);
-    console.log(`[TestRateLimiter] Completed ${testCount} tests`);
-    console.log(`[TestRateLimiter] Waiting ${delay}ms to reset rate limit window...`);
+    console.log(`[TestRateLimiter] Completed ${state.connectionCount} connections`);
+    console.log(`[TestRateLimiter] Waiting ${delay}ms (${Math.round(delay/1000)}s) to reset rate limit window...`);
     console.log(`[TestRateLimiter] This ensures we stay under 10 connections/minute`);
+    console.log(`[TestRateLimiter] Pause started at ${new Date().toISOString()}`);
     await new Promise(resolve => setTimeout(resolve, delay));
     resetRateLimitWindow();
+    console.log(`[TestRateLimiter] Pause ended at ${new Date().toISOString()}`);
     console.log(`[TestRateLimiter] === RESUMING TESTS ===`);
   }
 }
+
+export function getRateLimiterState(): RateLimiterState {
+  return readState();
+}
+
+export function resetConnectionCount(): void {
+  const state = readState();
+  state.connectionCount = 0;
+  state.lastResetTime = Date.now();
+  console.log(`[TestRateLimiter] Connection count reset`);
+  writeState(state);
+}
+
+// Legacy exports for backward compatibility
+export const incrementTestCount = incrementConnectionCount;
+export const resetTestCount = resetConnectionCount;

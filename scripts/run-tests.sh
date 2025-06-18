@@ -251,42 +251,15 @@ if $USE_PLAYWRIGHT; then
   echo "Building @ably/react-web-cli package (tsup)..."
   pnpm --filter @ably/react-web-cli run build || { echo "react-web-cli build failed, aborting Playwright run."; exit 1; }
   
-  # Build the example app without any credentials
-  # Tests will provide credentials via query parameters as needed
-  echo "Building example web-cli app without credentials for testing..."
-  
-  # Temporarily move any .env file to prevent credentials from being baked into the build
-  WEB_CLI_ENV_FILE="./examples/web-cli/.env"
-  WEB_CLI_ENV_BACKUP="./examples/web-cli/.env.backup"
-  
-  if [[ -f "$WEB_CLI_ENV_FILE" ]]; then
-    echo "Moving web-cli .env file temporarily..."
-    mv "$WEB_CLI_ENV_FILE" "$WEB_CLI_ENV_BACKUP"
-  fi
-  
-  # Build without any env vars
-  (
-    unset VITE_ABLY_API_KEY
-    unset VITE_ABLY_ACCESS_TOKEN
-    unset ABLY_API_KEY
-    unset E2E_ABLY_API_KEY
-    pnpm --filter ./examples/web-cli run build
-  ) || { 
-    # Restore .env file if build fails
-    if [[ -f "$WEB_CLI_ENV_BACKUP" ]]; then
-      mv "$WEB_CLI_ENV_BACKUP" "$WEB_CLI_ENV_FILE"
-    fi
+  # Build the example app
+  # No need to manage env files anymore since we removed env var support
+  echo "Building example web-cli app for testing..."
+  pnpm --filter ./examples/web-cli run build || { 
     echo "example web-cli build failed, aborting Playwright run."; 
     exit 1; 
   }
   
-  # Restore .env file after build
-  if [[ -f "$WEB_CLI_ENV_BACKUP" ]]; then
-    echo "Restoring web-cli .env file..."
-    mv "$WEB_CLI_ENV_BACKUP" "$WEB_CLI_ENV_FILE"
-  fi
-  
-  echo "Web CLI app built successfully without credentials."
+  echo "Web CLI app built successfully."
 
   if [[ "$DEBUG_MODE" == "true" ]]; then
     echo "=== Running Playwright Tests ==="

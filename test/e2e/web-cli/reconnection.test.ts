@@ -7,11 +7,12 @@ declare const window: any;
 
 import { test, expect, getTestUrl, log } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
+import { waitForTerminalReady } from './wait-helpers.js';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
 
-async function waitForPrompt(page: any, terminalSelector: string, timeout = 60000): Promise<void> {
+async function _waitForPrompt(page: any, terminalSelector: string, timeout = 60000): Promise<void> {
   log('Waiting for terminal prompt...');
   
   // Alternative approach: wait for either the prompt text OR the connected status
@@ -77,9 +78,16 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should handle disconnection and reconnection gracefully', async ({ page }) => {
-    // Small delay for test stability
-    log('Waiting 2 seconds for test stability...');
-    await page.waitForTimeout(2000);
+    // Enable console logging to see what's happening
+    page.on('console', msg => {
+      if (msg.type() === 'log' || msg.type() === 'error' || msg.type() === 'warning') {
+        console.log(`[Browser ${msg.type()}] ${msg.text()}`);
+      }
+    });
+    
+    // Longer delay to avoid rate limits for reconnection test
+    log('Waiting 10 seconds before test to avoid rate limits...');
+    await page.waitForTimeout(10000);
     
     // 1. Navigate to the Web CLI app
     log('Navigating to Web CLI app...');
@@ -92,14 +100,18 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     }
     
     log('Authenticating with API key...');
-    await authenticateWebCli(page, apiKey);
+    await authenticateWebCli(page, apiKey); // Use default query param authentication
 
     // 3. Wait for terminal to be ready
     const terminalSelector = '.xterm';
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
     
-    // 4. Wait for terminal to be ready (don't wait for prompt as it may not come)
-    await page.waitForTimeout(3000); // Give terminal time to initialize
+    // 4. Wait for terminal to be ready using proper helper
+    await waitForTerminalReady(page);
+    
+    // Additional delay to ensure terminal is fully connected
+    log('Waiting 5 seconds for terminal to fully stabilize...');
+    await page.waitForTimeout(5000);
 
     // 5. Type initial command to establish session state
     log('Testing initial terminal functionality...');
@@ -125,56 +137,66 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     await page.evaluate(() => {
       // Force disconnect the WebSocket if available
       if ((window as any).ablyCliSocket) {
+        // Calling close() without parameters simulates an unexpected disconnection
+        // This will trigger a close event with code 1005 which should now
+        // trigger automatic reconnection (not manual)
         (window as any).ablyCliSocket.close();
       }
     });
     
-    // 7. Verify disconnection state by checking React state
+    // 7. Verify disconnection or reconnecting state
+    log('Waiting for disconnection/reconnecting state...');
     await page.waitForFunction(() => {
       const state = (window as any).getAblyCliTerminalReactState?.();
-      return state?.componentConnectionStatus === 'disconnected';
+      // Component might go directly to 'reconnecting' without stopping at 'disconnected'
+      return state?.componentConnectionStatus === 'disconnected' || state?.componentConnectionStatus === 'reconnecting';
     }, { timeout: 10000 });
+    log('Disconnection/reconnection initiated');
     
     // 8. Verify the component starts attempting to reconnect
     log('Waiting for reconnection to complete...');
     
-    // Monitor the reconnection process
+    // First check if it shows manual reconnect prompt (which would be the bug)
+    await page.waitForTimeout(2000); // Give it time to decide
+    const requiresManualReconnect = await page.evaluate(() => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      return state?.showManualReconnectPrompt === true;
+    });
+    
+    if (requiresManualReconnect) {
+      throw new Error('Test failed: Terminal requires manual reconnection (Enter key) instead of automatically reconnecting. This is a bug!');
+    }
+    
+    // Wait for automatic reconnection to complete
+    log('Waiting for automatic reconnection...');
+    
+    // Simply wait for the connection status to become 'connected'
+    await page.waitForFunction(() => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      return state?.componentConnectionStatus === 'connected';
+    }, { timeout: 30000 });
+    
+    // Give a moment for the session to stabilize
+    log('Connection restored, waiting for session to stabilize...');
+    await page.waitForTimeout(2000);
+    
+    // Get reconnection info for logging
     const reconnectionInfo = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        let checkCount = 0;
-        const checkInterval = setInterval(() => {
-          const state = (window as any).getAblyCliTerminalReactState?.();
-          const socketState = (window as any).ablyCliSocket?.readyState;
-          
-          console.log('Reconnection check', checkCount++, 'State:', {
-            componentStatus: state?.componentConnectionStatus,
-            socketState: socketState,
-            sessionActive: state?.isSessionActive
-          });
-          
-          if (state?.componentConnectionStatus === 'connected') {
-            clearInterval(checkInterval);
-            resolve({
-              status: 'reconnected',
-              sessionId: (window as any)._sessionId,
-              attempts: checkCount
-            });
-          }
-          
-          // Timeout after many attempts
-          if (checkCount > 60) {
-            clearInterval(checkInterval);
-            resolve({
-              status: 'timeout',
-              lastState: state,
-              attempts: checkCount
-            });
-          }
-        }, 1000);
-      });
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      return {
+        status: 'reconnected',
+        sessionId: (window as any)._sessionId,
+        componentConnectionStatus: state?.componentConnectionStatus,
+        isSessionActive: state?.isSessionActive
+      };
     });
     
     log('Reconnection result:', reconnectionInfo);
+    
+    // Verify reconnection was successful
+    expect(reconnectionInfo.status).toBe('reconnected');
+    expect(reconnectionInfo.componentConnectionStatus).toBe('connected');
+    expect(reconnectionInfo.isSessionActive).toBe(true);
     
     // 9. Verify reconnection succeeded and terminal is operational
     await expect(page.locator(terminalSelector)).toBeVisible();
@@ -200,9 +222,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should show reconnection status messages', async ({ page }) => {
-    // Small delay for test stability
-    log('Waiting 2 seconds for test stability...');
-    await page.waitForTimeout(2000);
+    // Longer delay to avoid rate limits for reconnection test
+    log('Waiting 10 seconds before test to avoid rate limits...');
+    await page.waitForTimeout(10000);
     
     // Navigate and authenticate
     await page.goto(getTestUrl());
@@ -211,12 +233,16 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
     }
     
-    await authenticateWebCli(page, apiKey);
+    await authenticateWebCli(page, apiKey); // Use default query param authentication
     
     // Wait for terminal
     const terminalSelector = '.xterm';
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
-    await page.waitForTimeout(3000); // Give terminal time to initialize
+    await waitForTerminalReady(page);
+    
+    // Additional delay to ensure terminal is fully connected
+    log('Waiting 5 seconds for terminal to fully stabilize...');
+    await page.waitForTimeout(5000);
     
     // Simulate disconnection
     await page.evaluate(() => {
@@ -225,19 +251,43 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       }
     });
     
-    // Should see disconnection state
+    // Should see disconnection or reconnecting state
     await page.waitForFunction(() => {
       const state = (window as any).getAblyCliTerminalReactState?.();
-      return state?.componentConnectionStatus === 'disconnected';
+      return state?.componentConnectionStatus === 'disconnected' || state?.componentConnectionStatus === 'reconnecting';
     }, { timeout: 10000 });
     
-    // Wait for reconnection
+    // Check disconnected or reconnecting status is shown to user
+    // The status is in a nested span with class status-disconnected or status-reconnecting
+    
+    // Wait for either disconnected or reconnecting status to appear
+    const statusVisible = await Promise.race([
+      page.locator('.App-header span.status-disconnected').waitFor({ state: 'visible', timeout: 5000 }).then(() => 'disconnected'),
+      page.locator('.App-header span.status-reconnecting').waitFor({ state: 'visible', timeout: 5000 }).then(() => 'reconnecting')
+    ]).catch(() => null);
+    
+    if (!statusVisible) {
+      throw new Error('Neither disconnected nor reconnecting status appeared');
+    }
+    
+    // If we saw disconnected first, wait for reconnecting
+    if (statusVisible === 'disconnected') {
+      await expect(page.locator('.App-header span.status-reconnecting')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('.App-header span.status-reconnecting')).toHaveText('reconnecting');
+    } else {
+      // Already in reconnecting state
+      await expect(page.locator('.App-header span.status-reconnecting')).toHaveText('reconnecting');
+    }
+    
+    // Wait for reconnection to complete
     await page.waitForFunction(() => {
       const state = (window as any).getAblyCliTerminalReactState?.();
       return state?.componentConnectionStatus === 'connected';
     }, null, { timeout: 60000 });
     
-    // Verify reconnection completed
+    // Verify connected status is shown to user
+    await expect(page.locator('.App-header span.status-connected')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.App-header span.status-connected')).toHaveText('connected');
   });
 
   test('should handle disconnection gracefully', async ({ page }) => {
@@ -252,12 +302,16 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
     }
     
-    await authenticateWebCli(page, apiKey);
+    await authenticateWebCli(page, apiKey); // Use default query param authentication
     
     // Wait for terminal
     const terminalSelector = '.xterm';
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
-    await page.waitForTimeout(3000); // Give terminal time to initialize
+    await waitForTerminalReady(page);
+    
+    // Additional delay to ensure terminal is fully connected
+    log('Waiting 5 seconds for terminal to fully stabilize...');
+    await page.waitForTimeout(5000);
     
     // Run initial command
     await page.locator(terminalSelector).click();
