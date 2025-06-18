@@ -1,4 +1,3 @@
-#!/usr/bin/env tsx
 /**
  * Optimized test runner for web-cli E2E tests
  * 
@@ -6,7 +5,7 @@
  * and provides better progress reporting.
  */
 
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 import { calculateTestBatches, estimateExecutionTime, getTestProfile } from './helpers/test-optimizer';
 import { setupRateLimiter, configs } from './rate-limit-config';
 
@@ -57,10 +56,11 @@ for (let i = 0; i < batches.length; i++) {
   }
   
   // Calculate batch connection count
-  const batchConnections = batch.reduce((sum, test) => {
+  let batchConnections = 0;
+  for (const test of batch) {
     const profile = getTestProfile(test);
-    return sum + (profile?.estimatedConnections || 1);
-  }, 0);
+    batchConnections += profile?.estimatedConnections || 1;
+  }
   
   console.log(`  Total connections: ${batchConnections}/${config.maxConnectionsPerMinute}`);
   console.log(`\n  Running batch...`);
@@ -84,7 +84,7 @@ for (let i = 0; i < batches.length; i++) {
     const duration = Date.now() - startTime;
     console.log(`\n✅ Batch ${i + 1} completed in ${Math.ceil(duration / 1000)}s`);
     passedTests += batch.length;
-  } catch (error) {
+  } catch (_error) {
     console.log(`\n❌ Batch ${i + 1} failed`);
     failedTests += batch.length;
     

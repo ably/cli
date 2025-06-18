@@ -35,7 +35,6 @@ test.describe('Z-Rate Limit Config Test - MUST RUN LAST', () => {
     // Check if we have any error state
     const hasCode4000Error = await page.getByText(/Connection closed by server \(4000\)/i).isVisible({ timeout: 1000 }).catch(() => false);
     const hasRateLimitError = await page.getByText(/429|rate limit/i).isVisible({ timeout: 1000 }).catch(() => false);
-    const hasAnyError = await page.getByText(/ERROR:/i).isVisible({ timeout: 1000 }).catch(() => false);
     
     if (hasCode4000Error) {
       log('Server returned code 4000 (user-exit) - verifying proper handling');
