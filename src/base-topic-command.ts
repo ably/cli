@@ -20,7 +20,7 @@ export abstract class BaseTopicCommand extends Command {
     }
     
     this.log('');
-    this.log(`Run \`${chalk.cyan(`ably ${this.topicName} COMMAND --help`)}\` for more information on a command.`);
+    this.log(`Run \`${chalk.cyan(`ably ${this.topicName.replace(/:/g, ' ')} COMMAND --help`)}\` for more information on a command.`);
   }
   
   private async getTopicCommands(): Promise<Array<{id: string; description: string}>> {
@@ -29,16 +29,22 @@ export abstract class BaseTopicCommand extends Command {
     
     for (const cmd of this.config.commands) {
       if (cmd.id.startsWith(topicPrefix) && !cmd.hidden) {
-        try {
-          const loadedCmd = await cmd.load();
-          if (!loadedCmd.hidden) {
-            commands.push({
-              id: cmd.id.replace(':', ' '),
-              description: loadedCmd.description || ''
-            });
+        // Check if this is a direct child (no additional colons after the topic prefix)
+        const remainingId = cmd.id.substring(topicPrefix.length);
+        const isDirectChild = !remainingId.includes(':');
+        
+        if (isDirectChild) {
+          try {
+            const loadedCmd = await cmd.load();
+            if (!loadedCmd.hidden) {
+              commands.push({
+                id: cmd.id.replace(/:/g, ' '),
+                description: loadedCmd.description || ''
+              });
+            }
+          } catch {
+            // Skip commands that can't be loaded
           }
-        } catch {
-          // Skip commands that can't be loaded
         }
       }
     }

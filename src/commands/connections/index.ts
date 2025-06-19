@@ -8,6 +8,7 @@ export default class Connections extends BaseTopicCommand {
   
   static override examples = [
     '<%= config.bin %> <%= command.id %> stats',
+    '<%= config.bin %> <%= command.id %> logs connections-lifecycle',
     '<%= config.bin %> <%= command.id %> test',
   ];
 }

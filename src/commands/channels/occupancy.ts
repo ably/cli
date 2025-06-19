@@ -1,17 +1,13 @@
-import { Command } from "@oclif/core";
+import { BaseTopicCommand } from '../../base-topic-command.js';
 
-export default class ChannelsOccupancy extends Command {
-  static description = "Get occupancy metrics for a channel";
-
+export default class ChannelsOccupancy extends BaseTopicCommand {
+  protected topicName = 'channels:occupancy';
+  protected commandGroup = 'channel occupancy';
+  
+  static description = 'Get occupancy metrics for a channel';
+  
   static examples = [
-    "$ ably channels occupancy get my-channel",
-    "$ ably channels occupancy live my-channel",
+    '$ ably channels occupancy get my-channel',
+    '$ ably channels occupancy subscribe my-channel',
   ];
-
-  async run(): Promise<void> {
-    this.log("This is a placeholder. Please use a subcommand: get or live");
-    this.log("Examples:");
-    this.log("  $ ably channels occupancy get my-channel");
-    this.log("  $ ably channels occupancy live my-channel");
-  }
 }

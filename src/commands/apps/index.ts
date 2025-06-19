@@ -7,9 +7,13 @@ export default class AppsCommand extends BaseTopicCommand {
   static description = 'Manage Ably apps';
   
   static examples = [
-    '<%= config.bin %> <%= command.id %> list',
-    '<%= config.bin %> <%= command.id %> create',
-    '<%= config.bin %> <%= command.id %> update',
-    '<%= config.bin %> <%= command.id %> delete',
+    '$ ably apps list',
+    '$ ably apps create',
+    '$ ably apps update',
+    '$ ably apps delete',
+    '$ ably apps set-apns-p12',
+    '$ ably apps stats',
+    '$ ably apps channel-rules list',
+    '$ ably apps switch my-app',
   ];
 }

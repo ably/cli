@@ -7,8 +7,11 @@ export default class AccountsCommand extends BaseTopicCommand {
   static description = 'Manage Ably accounts and your configured access tokens';
   
   static examples = [
-    '<%= config.bin %> <%= command.id %> login',
-    '<%= config.bin %> <%= command.id %> list',
-    '<%= config.bin %> <%= command.id %> current',
+    '$ ably accounts login',
+    '$ ably accounts list', 
+    '$ ably accounts current',
+    '$ ably accounts logout',
+    '$ ably accounts switch my-account',
+    '$ ably accounts stats',
   ];
 }
