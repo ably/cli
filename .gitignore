@@ -41,6 +41,7 @@ tsconfig.tsbuildinfo
 
 # Playwright test results
 /test-results/
+/playwright-report/
 
 # Test coverage
 /coverage/

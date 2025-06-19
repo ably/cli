@@ -44,7 +44,8 @@ export default [
       "test/integration/commands/spaces.test.ts", 
       "test/e2e/commands/rooms-e2e.test.ts",
       "test/e2e/commands/spaces-e2e.test.ts",
-      "test/integration/test-utils.ts"
+      "test/integration/test-utils.ts",
+      "playwright-report/**"
     ], // Updated to match all ignorePatterns from .eslintrc.json
   },
   {
