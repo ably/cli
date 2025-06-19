@@ -114,11 +114,17 @@ fi
 
 # Detect if we are about to run a Playwright browser test (any file inside test/e2e/web-cli/)
 USE_PLAYWRIGHT=false
-PLAYWRIGHT_TEST_FILE=""
+PLAYWRIGHT_TEST_FILES=""
 for arg in "${ARGS[@]}"; do
   if [[ "$arg" == *"test/e2e/web-cli/"*".test.ts" ]]; then
     USE_PLAYWRIGHT=true
-    PLAYWRIGHT_TEST_FILE="$arg" # Keep updating, last one found will be used
+    # If it's a glob pattern, keep it as is for Playwright to expand
+    if [[ "$arg" == *"*"* ]]; then
+      PLAYWRIGHT_TEST_FILES="$arg"
+    else
+      # For specific files, accumulate them
+      PLAYWRIGHT_TEST_FILES="$PLAYWRIGHT_TEST_FILES $arg"
+    fi
   fi
 done
 
@@ -245,46 +251,22 @@ if $USE_PLAYWRIGHT; then
   echo "Building @ably/react-web-cli package (tsup)..."
   pnpm --filter @ably/react-web-cli run build || { echo "react-web-cli build failed, aborting Playwright run."; exit 1; }
   
-  # Set up cleanup handler to restore .env file
-  ENV_FILE_PATH="./examples/web-cli/.env"
-  ENV_FILE_BACKUP="./examples/web-cli/.env.backup"
-  
-  cleanup_env_file() {
-    if [[ -f "$ENV_FILE_BACKUP" ]]; then
-      echo "Restoring .env file in cleanup..."
-      mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"
-    fi
-  }
-  
-  # Ensure cleanup runs on exit
-  trap cleanup_env_file EXIT
-
-  # Temporarily move .env file to prevent credentials from being baked into the build
-  # (Individual tests will handle their own authentication needs)
-  if [[ -f "$ENV_FILE_PATH" ]]; then
-    echo "Moving .env file temporarily to ensure clean build for tests..."
-    mv "$ENV_FILE_PATH" "$ENV_FILE_BACKUP"
-  fi
-
-  # Rebuild the example app so the preview server serves the latest bundle that includes changed library code.
-  echo "Building example web-cli app (vite build)..."
+  # Build the example app
+  # No need to manage env files anymore since we removed env var support
+  echo "Building example web-cli app for testing..."
   pnpm --filter ./examples/web-cli run build || { 
-    # Restore .env file if build fails
-    if [[ -f "$ENV_FILE_BACKUP" ]]; then
-      mv "$ENV_FILE_BACKUP" "$ENV_FILE_PATH"
-    fi
     echo "example web-cli build failed, aborting Playwright run."; 
     exit 1; 
   }
   
-  # Don't restore here - let the trap handle it to ensure it's always restored
+  echo "Web CLI app built successfully."
 
   if [[ "$DEBUG_MODE" == "true" ]]; then
     echo "=== Running Playwright Tests ==="
   fi
   echo "Using Playwright test runner for Web CLI tests..."
-  # Pass ONLY the specific web-cli test file to Playwright
-  COMMAND="pnpm exec playwright test $PLAYWRIGHT_TEST_FILE"
+  # Pass the web-cli test files to Playwright with the config file
+  COMMAND="pnpm exec playwright test --config test/e2e/web-cli/playwright.config.ts $PLAYWRIGHT_TEST_FILES"
   echo "Executing command: $COMMAND"
 elif [[ -n "$TEST_PATTERN" ]]; then
   # Running a specific test file or pattern

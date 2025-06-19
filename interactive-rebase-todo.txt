@@ -1,0 +1,39 @@
+# Reorder and squash commits into logical groups
+
+# 1. Vercel deployment support
+pick b48eec9 Support Vercel deployment for web CLI example
+
+# 2. Authentication feature (squash lint fix into main commit)
+pick 1d6ee85 feat: Add authentication UI and credential validation for web CLI
+squash 8bb3c2f fix: Resolve lint errors for crypto module
+
+# 3. Connection lifecycle and meta channel fixes (squash all related)
+pick 1d2c5d3 Fix bench test by handling multi-line JSON output
+squash 7cdc0dc Fix meta channel names for connection lifecycle logs
+squash 4f82906 fix: update unit tests for correct connection lifecycle channel names
+squash 8318891 fix: Use valid [meta] channels
+squash ffeb237 fix: Handle multi-line JSON in connection lifecycle tests
+
+# 4. Enable skipped tests
+pick 6e98da7 fix: Enable skipped e2e tests for connections and bench
+
+# 5. E2E test authentication support (squash all auth test fixes)
+pick 6dd8575 feat: Add authentication support to Web CLI e2e tests
+squash 94b853a fix: resolve authentication e2e test failures
+squash 19baae2 fix: resolve lint warnings in authentication tests
+squash 5adc5ee fix: update web-cli e2e tests to handle both auth scenarios
+
+# 6. Prevent credentials in builds
+pick 1594537 fix: prevent credentials from being baked into test builds
+
+# 7. E2E test fixes and rate limiting (squash all test fixes)
+pick 4d89566 fix: Fix up e2e web CLI tests
+squash 850468b fix: CI tests
+squash 6eea326 ci: Overhaul of tests to cope with new auth model + rate limits
+squash 68fb930 Fix Playwright E2E tests for web-cli application
+squash 1031791 Fix web-cli E2E test failures and optimize rate limiting
+squash 05d15b5 fix: Handle server disconnection scenarios in rate limit test
+squash 68e3661 fix: Resolve all linting errors in E2E test files
+
+# 8. Documentation cleanup
+pick 77dadb7 Clean up old tasks in TODO

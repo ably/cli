@@ -282,11 +282,16 @@ describe("Connections E2E Tests", function() {
       const testClientId = `test-client-${Date.now()}`;
       
       // Step 1: Start live connection log monitoring
-      const connectionsMonitor = spawn("node", [cliPath, "logs", "connection", "subscribe", "--json"], {
-        env: {
-          ...process.env,
-          ABLY_CLI_TEST_MODE: "false", // Use real Ably operations
-        },
+      const monitorEnv = { ...process.env };
+      delete monitorEnv.ABLY_CLI_TEST_MODE;
+      const apiKey = process.env.E2E_ABLY_API_KEY;
+      if (!apiKey) {
+        throw new Error("E2E_ABLY_API_KEY environment variable is required");
+      }
+      
+      // Use connection-lifecycle command which uses the correct meta channel
+      const connectionsMonitor = spawn("node", [cliPath, "logs", "connection-lifecycle", "subscribe", "--api-key", apiKey, "--json"], {
+        env: monitorEnv,
       });
       
       let monitorOutput = "";
@@ -298,53 +303,90 @@ describe("Connections E2E Tests", function() {
       }> = [];
       
       // Collect output from the live connection monitor
+      let eventCount = 0;
+      let jsonBuffer = '';
+      let braceDepth = 0;
+      
       connectionsMonitor.stdout?.on("data", (data) => {
         const output = data.toString();
         monitorOutput += output;
         
-        // Parse JSON output to look for connection events
-        const lines = output.split('\n');
-        for (const line of lines) {
-          if (line.trim()) {
+        // Handle multi-line JSON output
+        for (const char of output) {
+          jsonBuffer += char;
+          if (char === '{') braceDepth++;
+          if (char === '}') braceDepth--;
+          
+          // When we have a complete JSON object
+          if (braceDepth === 0 && jsonBuffer.trim().endsWith('}')) {
             try {
-              const logEvent = JSON.parse(line);
+              const logEvent = JSON.parse(jsonBuffer.trim());
+              eventCount++;
+              jsonBuffer = ''; // Reset buffer
               
-              // Look for connection events with our client ID
-              if (logEvent.transport && logEvent.transport.requestParams) {
-                const clientIdArray = logEvent.transport.requestParams.clientId;
-                const clientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
-                const connectionId = logEvent.connectionId;
-                
-                if (clientId === testClientId) {
-                  connectionEvents.push({
-                    timestamp: Date.now(),
-                    eventType: logEvent.eventType || 'connection',
-                    clientId: clientId,
-                    connectionId: connectionId
-                  });
-                  
-                }
+              // Debug: log first few events to understand structure
+              if (eventCount <= 10 && process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
+                console.log("[TEST] Received log event:", JSON.stringify(logEvent, null, 2));
+              }
+              
+              // Also check if our test client ID appears anywhere in the event
+              const eventStr = JSON.stringify(logEvent);
+              if (eventStr.includes(testClientId)) {
+                console.log(`[TEST] Found event containing test client ID: ${eventStr.slice(0, 200)}...`);
+              }
+              
+              // Check different possible locations for client ID
+              let foundClientId: string | null = null;
+              
+              // Based on actual connection lifecycle events, clientId is in data.transport.requestParams.clientId as an array
+              if (logEvent.data?.transport?.requestParams?.clientId) {
+                const clientIdArray = logEvent.data.transport.requestParams.clientId;
+                foundClientId = Array.isArray(clientIdArray) ? clientIdArray[0] : clientIdArray;
+              }
+              // Also check in data.clientId (for backwards compatibility)
+              else if (logEvent.data?.clientId) {
+                foundClientId = logEvent.data.clientId;
+              }
+              // Check in data.connectionDetails.clientId
+              else if (logEvent.data?.connectionDetails?.clientId) {
+                foundClientId = logEvent.data.connectionDetails.clientId;
+              }
+              
+              if (foundClientId === testClientId) {
+                console.log(`[TEST] Found matching client ID event: ${foundClientId}`);
+                connectionEvents.push({
+                  timestamp: Date.now(),
+                  eventType: logEvent.event || logEvent.eventType || 'connection',
+                  clientId: foundClientId,
+                  connectionId: logEvent.data?.connectionId || logEvent.connectionId || null
+                });
               }
             } catch {
-              // Ignore non-JSON lines
+              // Reset buffer if parsing fails
+              if (jsonBuffer.trim()) {
+                jsonBuffer = '';
+                braceDepth = 0;
+              }
             }
           }
         }
       });
       
-      // Wait for initial connection monitoring to start
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Wait for initial connection monitoring to start and begin receiving events
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
+      console.log(`[TEST] Events received so far: ${eventCount}`);
       
       // Step 2: Start a channel subscriber with specific client ID (this will create a new connection)
-      const channelSubscriber = spawn("node", [cliPath, "channels", "subscribe", testChannelName, "--client-id", testClientId], {
-        env: {
-          ...process.env,
-          ABLY_CLI_TEST_MODE: "false",
-        },
+      const subEnv = { ...process.env };
+      delete subEnv.ABLY_CLI_TEST_MODE;
+      console.log(`[TEST] Starting channel subscriber with client ID: ${testClientId}`);
+      const channelSubscriber = spawn("node", [cliPath, "channels", "subscribe", testChannelName, "--api-key", apiKey, "--client-id", testClientId], {
+        env: subEnv,
       });
       
-      // Wait for the subscriber to establish connection and appear in monitoring
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      // Wait longer for the subscriber to establish connection and appear in monitoring
+      await new Promise(resolve => setTimeout(resolve, 30000));
       
       // Step 3: Close the channel subscriber
       channelSubscriber.kill("SIGTERM");
@@ -367,6 +409,13 @@ describe("Connections E2E Tests", function() {
       } catch (_error: any) {
         // Should exit cleanly with SIGTERM
         expect(_error.signal).to.equal("SIGTERM");
+      }
+      
+      // Debug output
+      console.log(`[TEST] Total events received: ${eventCount}`);
+      console.log(`[TEST] Connection events for ${testClientId}: ${connectionEvents.length}`);
+      if (connectionEvents.length === 0 && process.env.ABLY_CLI_TEST_SHOW_OUTPUT) {
+        console.log("[TEST] Sample of monitor output:", monitorOutput.slice(0, 1000));
       }
       
       // Verify we captured connection lifecycle for our specific client
