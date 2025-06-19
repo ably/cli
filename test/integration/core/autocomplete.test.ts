@@ -1,49 +1,48 @@
-import { test } from '@oclif/test';
 import { expect } from 'chai';
+import { execa } from 'execa';
+import path from 'node:path';
+
+const binPath = path.join(process.cwd(), 'bin/run.js');
 
 describe('autocomplete command', function() {
-  test
-    .stdout()
-    .command(['autocomplete'])
-    .it('should have autocomplete command available and show instructions', (ctx) => {
-      expect(ctx.stdout).to.contain('Setup Instructions');
-      expect(ctx.stdout).to.contain('autocomplete');
-      // Should detect the current shell and show relevant instructions
-      expect(ctx.stdout).to.match(/zsh|bash|powershell/i);
-    });
 
-  test
-    .stdout()
-    .command(['autocomplete', 'bash'])
-    .it('should show bash-specific instructions', (ctx) => {
-      expect(ctx.stdout).to.contain('Setup Instructions');
-      expect(ctx.stdout).to.contain('bash');
-      expect(ctx.stdout).to.contain('.bashrc');
-    });
+  it('should have autocomplete command available and show instructions', async function() {
+    const result = await execa('node', [binPath, 'autocomplete'], { reject: false });
+    
+    expect(result.stdout).to.contain('Setup Instructions');
+    expect(result.stdout).to.contain('autocomplete');
+    // Should detect the current shell and show relevant instructions
+    expect(result.stdout).to.match(/zsh|bash|powershell/i);
+  });
 
-  test
-    .stdout()
-    .command(['autocomplete', 'zsh'])
-    .it('should show zsh-specific instructions', (ctx) => {
-      expect(ctx.stdout).to.contain('Setup Instructions');
-      expect(ctx.stdout).to.contain('zsh');
-      expect(ctx.stdout).to.contain('.zshrc');
-    });
+  it('should show bash-specific instructions', async function() {
+    const result = await execa('node', [binPath, 'autocomplete', 'bash'], { reject: false });
+    
+    expect(result.stdout).to.contain('Setup Instructions');
+    expect(result.stdout).to.contain('bash');
+    expect(result.stdout).to.contain('.bashrc');
+  });
 
-  test
-    .stdout()
-    .command(['autocomplete', 'powershell'])
-    .it('should show powershell-specific instructions', (ctx) => {
-      expect(ctx.stdout).to.contain('Setup Instructions');
-      expect(ctx.stdout).to.contain('powershell');
-    });
+  it('should show zsh-specific instructions', async function() {
+    const result = await execa('node', [binPath, 'autocomplete', 'zsh'], { reject: false });
+    
+    expect(result.stdout).to.contain('Setup Instructions');
+    expect(result.stdout).to.contain('zsh');
+    expect(result.stdout).to.contain('.zshrc');
+  });
 
-  test
-    .stderr()
-    .command(['autocomplete', '--refresh-cache'])
-    .it('should support refresh-cache flag', (ctx) => {
-      // The refresh-cache flag causes the cache to be rebuilt
-      // The stderr output includes "done" when cache building completes
-      expect(ctx.stderr).to.contain('done');
-    });
+  it('should show powershell-specific instructions', async function() {
+    const result = await execa('node', [binPath, 'autocomplete', 'powershell'], { reject: false });
+    
+    expect(result.stdout).to.contain('Setup Instructions');
+    expect(result.stdout).to.contain('powershell');
+  });
+
+  it('should support refresh-cache flag', async function() {
+    const result = await execa('node', [binPath, 'autocomplete', '--refresh-cache'], { reject: false });
+    
+    // The refresh-cache flag causes the cache to be rebuilt
+    // The stderr output includes "done" when cache building completes
+    expect(result.stderr).to.contain('done');
+  });
 });

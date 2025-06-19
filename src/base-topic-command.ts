@@ -1,4 +1,4 @@
-import { Command, Interfaces } from '@oclif/core';
+import { Command } from '@oclif/core';
 import chalk from 'chalk';
 
 export abstract class BaseTopicCommand extends Command {
