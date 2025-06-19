@@ -31,9 +31,10 @@ export default class AccountsSwitch extends ControlBaseCommand {
     const accounts = this.configManager.listAccounts();
 
     if (accounts.length === 0) {
-      const error =
-        'No accounts configured. Use "ably accounts login" to add an account.';
+      // No accounts configured, proxy to login command
       if (this.shouldOutputJson(flags)) {
+        const error =
+          'No accounts configured. Use "ably accounts login" to add an account.';
         this.log(
           this.formatJsonOutput(
             {
@@ -43,10 +44,12 @@ export default class AccountsSwitch extends ControlBaseCommand {
             flags,
           ),
         );
-      } else {
-        this.error(error);
+        return;
       }
-
+      
+      // In interactive mode, proxy to login
+      this.log('No accounts configured. Redirecting to login...');
+      await this.config.runCommand('accounts:login');
       return;
     }
 
