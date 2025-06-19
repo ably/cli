@@ -62,7 +62,7 @@ describe('BaseTopicCommand', () => {
     command.log = logStub;
   });
 
-  afterEach(() => {
+  afterEach(function() {
     sandbox.restore();
   });
 
@@ -111,8 +111,8 @@ describe('BaseTopicCommand', () => {
     let error: Error | undefined;
     try {
       await command.run();
-    } catch (e) {
-      error = e as Error;
+    } catch (error_) {
+      error = error_ as Error;
     }
     expect(error).to.be.undefined;
     

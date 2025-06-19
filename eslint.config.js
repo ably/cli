@@ -30,7 +30,7 @@ export default [
       "packages/react-web-cli/dist/index.js",
       "packages/react-web-cli/dist/index.mjs",
       "bin/", // Added from .eslintrc.cjs
-      "playwright-report/**", // Ignore playwright report files
+      "playwright-report/**", // Ignore Playwright report files
       // New comprehensive test files - ignore to prevent CI blocking
       "test/unit/commands/apps/create.test.ts",
       "test/unit/commands/apps/delete.test.ts",
