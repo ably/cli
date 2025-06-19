@@ -41,6 +41,19 @@ LOGIN (recommended first step)
   $ ably login
 ```
 
+## Auto-completion
+
+The Ably CLI supports shell auto-completion for bash, zsh, and PowerShell. This helps you discover and use commands more efficiently.
+
+To set up auto-completion:
+```sh-session
+$ ably autocomplete
+```
+
+This will display installation instructions specific to your shell. Follow them to enable tab completion for commands, subcommands, and flags.
+
+For more details, see the [Auto-completion documentation](docs/Auto-completion.md).
+
 # MCP Usage
 
 > [!WARNING]
