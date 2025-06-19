@@ -4856,6 +4856,13 @@ The MCP server supports the following environment variables for authentication a
 - `ABLY_HOST` - Overrides the default data plane host
 - `ABLY_ENVIRONMENT` - Overrides the default data plane environment
 
+### Update Notification Environment Variables
+
+The CLI also supports environment variables to control update notifications:
+
+- `ABLY_SKIP_NEW_VERSION_CHECK=1` - Skip automatic version update checks
+- `ABLY_FORCE_VERSION_CACHE_UPDATE=1` - Force an immediate version check
+
 ## Available MCP Commands
 
 The MCP server exposes the following subset of Ably CLI commands:
