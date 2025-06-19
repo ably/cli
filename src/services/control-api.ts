@@ -1,4 +1,5 @@
 import fetch, { type RequestInit } from "node-fetch";
+import { getCliVersion } from "../utils/version.js";
 
 export interface ControlApiOptions {
   accessToken: string;
@@ -515,6 +516,7 @@ export class ControlApi {
         Accept: "application/json",
         Authorization: `Bearer ${this.accessToken}`,
         "Content-Type": "application/json",
+        "Ably-Agent": `ably-cli/${getCliVersion()}`,
       },
       method,
     };

@@ -8,6 +8,7 @@ import { ConfigManager } from "./services/config-manager.js";
 import { ControlApi } from "./services/control-api.js";
 import { InteractiveHelper } from "./services/interactive-helper.js";
 import { BaseFlags, CommandConfig, ErrorDetails } from "./types/cli.js";
+import { getCliVersion } from "./utils/version.js";
 
 // Export BaseFlags for potential use in other modules like MCP
 
@@ -732,6 +733,9 @@ export abstract class AblyBaseCommand extends Command {
 
     // Set logLevel to highest ONLY when using custom handler to capture everything needed by it
     options.logLevel = 4;
+
+    // Add agent header to identify requests from the CLI
+    (options as any).agents = { 'ably-cli': getCliVersion() };
 
     return options;
   }

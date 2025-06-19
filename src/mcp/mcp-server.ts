@@ -14,6 +14,7 @@ import ChannelsPublish from "../commands/channels/publish.js";
 import ChannelsSubscribe from "../commands/channels/subscribe.js";
 import { ConfigManager } from "../services/config-manager.js";
 import Ably, { Connection } from "ably";
+import { getCliVersion } from "../utils/version.js";
 // Comment to explain why we're not using these directly but still need to import
 // We need these types from control-api but using them through a different interface
 import {
@@ -548,9 +549,10 @@ export class AblyMcpServer {
         );
       }
 
-      const clientOptions = {
+      const clientOptions: any = {
         clientId: process.env.ABLY_CLIENT_ID,
         key: apiKey,
+        agents: { 'ably-cli': getCliVersion() },
       };
 
       // Create Ably REST client (not Realtime, to avoid connections)
