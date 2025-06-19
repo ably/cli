@@ -2,6 +2,17 @@
  * Common utilities for version-related functionality
  */
 import colorJson from 'color-json';
+// Import package.json directly - TypeScript will resolve this at compile time
+// eslint-disable-next-line n/no-unpublished-import
+import packageJson from '../../package.json' with { type: 'json' };
+
+/**
+ * Get the CLI version from package.json
+ * @returns The CLI version string
+ */
+export function getCliVersion(): string {
+  return packageJson.version;
+}
 
 /**
  * Get standardized version information object

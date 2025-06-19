@@ -3,6 +3,7 @@ import chalk from "chalk";
 import fetch from "node-fetch";
 import open from "open";
 import ora from "ora";
+import { getCliVersion } from "../../utils/version.js";
 
 interface StatusResponse {
   status: boolean;
@@ -28,7 +29,11 @@ export default class StatusCommand extends Command {
     const spinner = ora("Checking Ably service status...").start();
 
     try {
-      const response = await fetch("https://ably.com/status/up.json");
+      const response = await fetch("https://ably.com/status/up.json", {
+        headers: {
+          "Ably-Agent": `ably-cli/${getCliVersion()}`
+        }
+      });
       const data = (await response.json()) as StatusResponse;
       spinner.stop();
 
