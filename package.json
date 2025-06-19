@@ -56,7 +56,10 @@
     "dirname": "ably",
     "commands": "./dist/src/commands",
     "topicSeparator": " ",
-    "plugins": ["@oclif/plugin-autocomplete"],
+    "plugins": [
+      "@oclif/plugin-autocomplete",
+      "@oclif/plugin-warn-if-update-available"
+    ],
     "hooks": {
       "init": [
         "./dist/src/hooks/init/alias-command",
@@ -67,7 +70,14 @@
     "hidden": [
       "aliases"
     ],
-    "helpClass": "./dist/src/help.js"
+    "helpClass": "./dist/src/help.js",
+    "warn-if-update-available": {
+      "timeoutInDays": 7,
+      "message": "📦 Update available: <%= config.name %> <%= chalk.yellow(config.version) %> → <%= chalk.greenBright(latest) %>\nRun <%= chalk.cyan('npm install -g @ably/cli') %> to update.",
+      "frequency": 1,
+      "frequencyUnit": "days",
+      "registry": "https://registry.npmjs.org"
+    }
   },
   "dependencies": {
     "@ably/chat": "^0.7.0",
@@ -76,6 +86,7 @@
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@oclif/core": "^4.2.10",
     "@oclif/plugin-autocomplete": "^3.2.30",
+    "@oclif/plugin-warn-if-update-available": "^3.1.41",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "ably": "^2.9.0",
