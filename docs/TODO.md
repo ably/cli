@@ -2,9 +2,6 @@
 
 ## Features
 
-- [ ] Support auto-complete for commands
-- [ ] Support auto-update
-- [ ] Send ably-cli agent in data plane and control plane requests to support usage analytics
 - [ ] Web example should tell the user to install the CLI locally if there are connection issues / CLI has not loaded. This should be displayed inline in the terminal of the React component, however the state should be made available as a property of the component, so that the application embedding this component can detect events like connection failed / connecting etc. The user should be given the option to try and reconnect again by, for example, pressing [Enter]. The installation message should be simple such as `pnpm install -g @ably/web-cli`
 - [ ] After installing the CLI via `npm install -g @ably/web-cli` or with `pnpm` or `yard`, the user should be shown a simple instruction on how to get started similar to what we do in the `README.md` file which is simply to run `ably` to see a list of commands. The Ably logo should also be shown.
 - [ ] When the `ably` command is run on its own and the user is not logged into an account (i.e. no account config exists) and the CLI is not running in web terminal mode, then the user should be shown a notice after the output, telling the user that they should login with `ably login` to make using the CLI easier as explicit API keys and access control tokens won't be needed and have the best experience of the CLI.
