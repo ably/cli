@@ -13,15 +13,6 @@ and resizable terminal panes. Details in `docs/workplans/2025-05-terminal-server
 `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
 - [ ] Support new endpoint client options when available in our public APIs -> https://github.com/ably/ably-js/pull/1973
 
-## UI/UX Improvements
-
-- [ ] The CLI should standardise on how commands are shown when running the topic such as `ably accounts` where all sub-commands are shown, and only when `--help` is used examples are shown along with all commands.
-  - [ ] Note the examples are generally spaced out vertically with a blank line between each, we should be consistent in keeping the vertical spacing concise and remove unnecessary white space.
-  - [ ] All CLI commands should be listed in the index.ts files for each topic, and whenever a new command is added, the index.ts file for that topic should be updated.
-  - [ ] The output for each empty topic, such as `ably spaces`, should be consistent in format, with the title "Ably [Topic] commands:", then a list of all the commands available, and then provide a comment beneath stating "Run `ably [Topic] COMMAND --help` for more information on a command."
-  - [ ] Much like we do fox§r the root help in createCustomWelcomeScreen in help.ts, we should autogenerate this to avoid unnecessary maintenance of the help for the root topics.
-  - [ ] Additionally, when the command with --help is run for each command, the auto-generated output should also be colour coded to make it more legible (is this a job for standard oclif themes), and the examples listed should not have vertical space between each one like they currently are.
-
 ## API and Architecture
 
 - [ ] Ensure all Ably channels commands that should use the REST API do, by default
