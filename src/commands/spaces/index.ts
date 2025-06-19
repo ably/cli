@@ -1,43 +1,14 @@
-import { Command } from "@oclif/core";
+import { BaseTopicCommand } from '../../base-topic-command.js';
 
-export default class SpacesIndex extends Command {
-  static override description = "Interact with Ably Spaces";
-
+export default class SpacesIndex extends BaseTopicCommand {
+  protected topicName = 'spaces';
+  protected commandGroup = 'Spaces';
+  
+  static override description = 'Interact with Ably Spaces';
+  
   static override examples = [
-    "$ ably spaces list",
-    "$ ably spaces members subscribe my-space",
-    "$ ably spaces members enter my-space",
-    "$ ably spaces locations set my-space",
-    "$ ably spaces locations subscribe my-space",
-    "$ ably spaces locations get-all my-space",
-    "$ ably spaces cursors set my-space",
-    "$ ably spaces cursors subscribe my-space",
-    "$ ably spaces cursors get-all my-space",
-    "$ ably spaces locks acquire my-space",
-    "$ ably spaces locks subscribe my-space",
-    "$ ably spaces locks get my-space",
-    "$ ably spaces locks get-all my-space",
+    '<%= config.bin %> <%= command.id %> list',
+    '<%= config.bin %> <%= command.id %> members enter my-space',
+    '<%= config.bin %> <%= command.id %> locations set my-space',
   ];
-
-  async run(): Promise<void> {
-    this.log("Ably Spaces commands:");
-    this.log("");
-    this.log("  ably spaces list              - List spaces");
-    this.log(
-      "  ably spaces members           - Commands for managing members in spaces",
-    );
-    this.log(
-      "  ably spaces locations         - Commands for managing locations in spaces",
-    );
-    this.log(
-      "  ably spaces cursors           - Commands for managing cursors in spaces",
-    );
-    this.log(
-      "  ably spaces locks             - Commands for managing locks in spaces",
-    );
-    this.log("");
-    this.log(
-      "Run `ably spaces COMMAND --help` for more information on a command.",
-    );
-  }
 }
