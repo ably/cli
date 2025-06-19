@@ -17,7 +17,7 @@ class TestableChannelsPresenceEnter extends ChannelsPresenceEnter {
     if (!this._parseResult) {
         // Default parse result if not set
         this._parseResult = {
-            flags: { 'profile-data': '{}', 'show-others': true },
+            flags: { data: '{}', 'show-others': true },
             args: { channel: 'default-presence-channel' },
             argv: ['default-presence-channel'],
             raw: [],
@@ -174,20 +174,20 @@ describe("ChannelsPresenceEnter", function() {
     runStub.restore();
   });
 
-  it("should parse profile data correctly", async function() {
+  it("should parse data correctly", async function() {
     command.setParseResult({
-      flags: { 'profile-data': '{"status":"online"}' },
+      flags: { data: '{"status":"online"}' },
       args: { channel: 'test-channel' },
       raw: [],
     });
 
     const parseResult = await command.parse();
-    expect(parseResult.flags['profile-data']).to.equal('{"status":"online"}');
+    expect(parseResult.flags.data).to.equal('{"status":"online"}');
   });
 
-  it("should handle invalid JSON in profile data", function() {
+  it("should handle invalid JSON in data", function() {
     command.setParseResult({
-      flags: { 'profile-data': '{invalid-json}' },
+      flags: { data: '{invalid-json}' },
       args: { channel: 'test-channel' },
       raw: [],
     });

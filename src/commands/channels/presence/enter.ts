@@ -20,7 +20,7 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
 
   static override examples = [
     '$ ably channels presence enter my-channel --client-id "client123"',
-    '$ ably channels presence enter my-channel --client-id "client123" --profile-data \'{"name":"John","status":"online"}\'',
+    '$ ably channels presence enter my-channel --client-id "client123" --data \'{"name":"John","status":"online"}\'',
     '$ ably channels presence enter my-channel --api-key "YOUR_API_KEY"',
     '$ ably channels presence enter my-channel --token "YOUR_ABLY_TOKEN"',
     "$ ably channels presence enter my-channel --json",
@@ -35,7 +35,7 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
       char: "D",
       required: false,
     }),
-    "profile-data": Flags.string({
+    data: Flags.string({
       description: "Optional JSON data to associate with the presence",
     }),
   };
@@ -81,23 +81,23 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
       const client = this.client;
       const { channelName } = args;
 
-      // Parse profile data if provided
-      let profileData: unknown = undefined;
-      if (flags["profile-data"]) {
+      // Parse data if provided
+      let data: unknown = undefined;
+      if (flags.data) {
         try {
-          let trimmed = (flags["profile-data"] as string).trim();
+          let trimmed = (flags.data as string).trim();
           if ((trimmed.startsWith("'") && trimmed.endsWith("'")) || (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
             trimmed = trimmed.slice(1, -1);
           }
-          profileData = JSON.parse(trimmed);
+          data = JSON.parse(trimmed);
         } catch (error) {
-          const errorMsg = `Invalid profile-data or data JSON: ${error instanceof Error ? error.message : String(error)}`;
+          const errorMsg = `Invalid data JSON: ${error instanceof Error ? error.message : String(error)}`;
           this.logCliEvent(
             flags,
             "presence",
             "parseError",
             errorMsg,
-            { profileData: flags["profile-data"], error: errorMsg },
+            { data: flags.data, error: errorMsg },
           );
           if (this.shouldOutputJson(flags)) {
             this.log(
@@ -171,16 +171,16 @@ export default class ChannelsPresenceEnter extends AblyBaseCommand {
         "presence",
         "entering",
         `Entering presence on channel ${channelName}`,
-        { channel: channelName, clientId: client.auth.clientId, data: profileData },
+        { channel: channelName, clientId: client.auth.clientId, data: data },
       );
 
-      await channel.presence.enter(profileData);
+      await channel.presence.enter(data);
 
       const enterEvent = {
         action: "enter",
         channel: channelName,
         clientId: client.auth.clientId,
-        data: profileData,
+        data: data,
         timestamp: new Date().toISOString(),
       };
       this.logCliEvent(

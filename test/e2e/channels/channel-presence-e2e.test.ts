@@ -56,7 +56,7 @@ describe('Channel Presence E2E Tests', function() {
         presenceChannel,
         "--client-id",
         clientId,
-        "--profile-data",
+        "--data",
         JSON.stringify(clientData),
         "--duration",
         "2"
