@@ -55,6 +55,18 @@ class TestCommand extends AblyBaseCommand {
     this.isWebCliMode = value;
   }
 
+  public testIsAnonymousWebMode(): boolean {
+    return this.isAnonymousWebMode();
+  }
+
+  public testRequiresAccessToken(commandId: string): boolean {
+    return this.requiresAccessToken(commandId);
+  }
+
+  public testIsPrivacyRestricted(commandId: string): boolean {
+    return this.isPrivacyRestricted(commandId);
+  }
+
   async run(): Promise<void> {
     // Empty implementation
   }
@@ -206,6 +218,87 @@ describe("AblyBaseCommand", function() {
 
     it("should return null for an empty API key", function() {
       expect(command.testParseApiKey("")).to.be.null;
+    });
+  });
+
+  describe("Anonymous Web Mode", function() {
+    let originalWebCliMode: string | undefined;
+    let originalRestrictedMode: string | undefined;
+
+    beforeEach(function() {
+      originalWebCliMode = process.env.ABLY_WEB_CLI_MODE;
+      originalRestrictedMode = process.env.ABLY_RESTRICTED_MODE;
+    });
+
+    afterEach(function() {
+      if (originalWebCliMode === undefined) {
+        delete process.env.ABLY_WEB_CLI_MODE;
+      } else {
+        process.env.ABLY_WEB_CLI_MODE = originalWebCliMode;
+      }
+      
+      if (originalRestrictedMode === undefined) {
+        delete process.env.ABLY_RESTRICTED_MODE;
+      } else {
+        process.env.ABLY_RESTRICTED_MODE = originalRestrictedMode;
+      }
+    });
+
+    it("should detect anonymous mode when web CLI mode and ABLY_RESTRICTED_MODE is true", function() {
+      process.env.ABLY_WEB_CLI_MODE = "true";
+      process.env.ABLY_RESTRICTED_MODE = "true";
+
+      const cmd = new TestCommand([], {} as Config);
+      cmd.testConfigManager = configManagerStub;
+      expect(cmd.testIsAnonymousWebMode()).to.be.true;
+    });
+
+    it("should not detect anonymous mode when ABLY_RESTRICTED_MODE is not set", function() {
+      process.env.ABLY_WEB_CLI_MODE = "true";
+      delete process.env.ABLY_RESTRICTED_MODE;
+
+      const cmd = new TestCommand([], {} as Config);
+      cmd.testConfigManager = configManagerStub;
+      expect(cmd.testIsAnonymousWebMode()).to.be.false;
+    });
+
+    it("should not detect anonymous mode when ABLY_RESTRICTED_MODE is false", function() {
+      process.env.ABLY_WEB_CLI_MODE = "true";
+      process.env.ABLY_RESTRICTED_MODE = "false";
+
+      const cmd = new TestCommand([], {} as Config);
+      cmd.testConfigManager = configManagerStub;
+      expect(cmd.testIsAnonymousWebMode()).to.be.false;
+    });
+
+    it("should not detect anonymous mode when not in web CLI mode", function() {
+      delete process.env.ABLY_WEB_CLI_MODE;
+      process.env.ABLY_RESTRICTED_MODE = "true";
+
+      const cmd = new TestCommand([], {} as Config);
+      cmd.testConfigManager = configManagerStub;
+      expect(cmd.testIsAnonymousWebMode()).to.be.false;
+    });
+
+    it("should identify control plane commands", function() {
+      const cmd = new TestCommand([], {} as Config);
+      cmd.testConfigManager = configManagerStub;
+      
+      expect(cmd.testRequiresAccessToken("accounts")).to.be.true;
+      expect(cmd.testRequiresAccessToken("accounts:list")).to.be.true;
+      expect(cmd.testRequiresAccessToken("apps:create")).to.be.true;
+      expect(cmd.testRequiresAccessToken("integrations:rules:create")).to.be.true;
+      expect(cmd.testRequiresAccessToken("channels:publish")).to.be.false;
+    });
+
+    it("should identify privacy restricted commands", function() {
+      const cmd = new TestCommand([], {} as Config);
+      cmd.testConfigManager = configManagerStub;
+      
+      expect(cmd.testIsPrivacyRestricted("channels:list")).to.be.true;
+      expect(cmd.testIsPrivacyRestricted("logs:tail")).to.be.true;
+      expect(cmd.testIsPrivacyRestricted("auth:token:revoke")).to.be.true;
+      expect(cmd.testIsPrivacyRestricted("channels:publish")).to.be.false;
     });
   });
 

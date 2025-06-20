@@ -14,6 +14,7 @@ import { getCliVersion } from "./utils/version.js";
 
 // List of commands not allowed in web CLI mode - EXPORTED
 export const WEB_CLI_RESTRICTED_COMMANDS = [
+  // Existing restrictions
   "accounts:login",
   "accounts:list",
   "accounts:logout",
@@ -22,6 +23,29 @@ export const WEB_CLI_RESTRICTED_COMMANDS = [
   "auth:keys:switch",
   "config",
   "mcp",
+  
+  // Control plane commands (require access token)
+  "accounts", // All account commands
+  "apps:create",
+  "apps:delete",
+  "apps:list",
+  "apps:update",
+  "auth:keys:create",
+  "auth:keys:update", 
+  "auth:keys:revoke",
+  "integrations", // All integration commands
+  "queues:create",
+  "queues:delete",
+  
+  // Data plane commands that expose other users' activity
+  "channels:list",
+  "rooms:list",
+  "spaces:list",
+  "logs", // All log commands
+  "apps:logs", // App log commands
+  
+  // Token revocation (not allowed for anonymous users)
+  "auth:token:revoke",
 ];
 
 // List of commands that should not show account/app info
@@ -123,6 +147,48 @@ export abstract class AblyBaseCommand extends Command {
     return process.env.ABLY_CLI_TEST_MODE === "true";
   }
 
+  protected isAnonymousWebMode(): boolean {
+    // In web CLI mode, the server sets ABLY_RESTRICTED_MODE when no access token is available
+    return this.isWebCliMode && process.env.ABLY_RESTRICTED_MODE === 'true';
+  }
+
+  protected requiresAccessToken(commandId: string): boolean {
+    // Commands that require access token (control plane)
+    const controlPlaneCommands = [
+      'accounts',
+      'apps:create',
+      'apps:delete',
+      'apps:list',
+      'apps:update',
+      'auth:keys:create',
+      'auth:keys:update',
+      'auth:keys:revoke',
+      'integrations',
+      'queues:create',
+      'queues:delete',
+    ];
+    
+    return controlPlaneCommands.some(cmd => 
+      commandId === cmd || commandId.startsWith(cmd + ':')
+    );
+  }
+
+  protected isPrivacyRestricted(commandId: string): boolean {
+    // Commands restricted for privacy/security reasons
+    const privacyRestrictedCommands = [
+      'channels:list',
+      'rooms:list',
+      'spaces:list',
+      'logs',
+      'apps:logs',
+      'auth:token:revoke',
+    ];
+    
+    return privacyRestrictedCommands.some(cmd => 
+      commandId === cmd || commandId.startsWith(cmd + ':')
+    );
+  }
+
   /**
    * Check if terminal updates (like carriage returns and line clearing) should be used.
    * Returns true only when:
@@ -180,25 +246,42 @@ export abstract class AblyBaseCommand extends Command {
     if (this.isWebCliMode && !this.isAllowedInWebCliMode()) {
       let errorMessage = `This command is not available in the web CLI.`;
 
-      const commandId = (this.id || "").replaceAll(":", " ");
+      const commandId = this.id || "";
+      const commandIdForDisplay = commandId.replaceAll(":", " ");
 
-      // Add specific messages for certain commands
-      if (commandId.includes("accounts login")) {
-        errorMessage = `You are already logged in via the web CLI. This command is not available in the web CLI.`;
-      } else if (commandId.includes("accounts list")) {
-        errorMessage = `This feature is not available in the web CLI. Please use the web dashboard at https://ably.com/accounts/ instead.`;
-      } else if (commandId.includes("accounts logout")) {
-        errorMessage = `You cannot log out via the web CLI.`;
-      } else if (commandId.includes("accounts switch")) {
-        errorMessage = `You cannot change accounts in the web CLI. Please use the dashboard at https://ably.com/accounts/ to switch accounts.`;
-      } else if (commandId.includes("apps switch")) {
-        errorMessage = `You cannot switch apps from within the web CLI. Please use the web dashboard at https://ably.com/dashboard instead.`;
-      } else if (commandId.includes("auth keys switch")) {
-        errorMessage = `You cannot switch API keys from within the web CLI. Please use the web interface to change keys.`;
-      } else if (commandId === "config") {
-        errorMessage = `Local configuration is not supported in the web CLI version.`;
-      } else if (commandId.includes("mcp")) {
-        errorMessage = `MCP server functionality is not available in the web CLI. Please use the standalone CLI installation instead.`;
+      // Check if we're in anonymous mode
+      if (this.isAnonymousWebMode()) {
+        // Anonymous user messages
+        if (this.requiresAccessToken(commandId)) {
+          errorMessage = `This command requires authentication. Please log in at https://ably.com/login to use this feature.`;
+        } else if (this.isPrivacyRestricted(commandId)) {
+          errorMessage = `This command is not available in anonymous mode. Please log in at https://ably.com/login to access this feature.`;
+        } else if (commandId.includes("accounts login")) {
+          errorMessage = `Please log in at https://ably.com/login to use authenticated features.`;
+        } else if (commandId === "config") {
+          errorMessage = `Local configuration is not supported in the web CLI. Please log in at https://ably.com/login for full access.`;
+        } else if (commandId.includes("mcp")) {
+          errorMessage = `MCP server functionality is not available in the web CLI. Please log in at https://ably.com/login or install the standalone CLI.`;
+        }
+      } else {
+        // Authenticated user messages (existing logic)
+        if (commandIdForDisplay.includes("accounts login")) {
+          errorMessage = `You are already logged in via the web CLI. This command is not available in the web CLI.`;
+        } else if (commandIdForDisplay.includes("accounts list")) {
+          errorMessage = `This feature is not available in the web CLI. Please use the web dashboard at https://ably.com/accounts/ instead.`;
+        } else if (commandIdForDisplay.includes("accounts logout")) {
+          errorMessage = `You cannot log out via the web CLI.`;
+        } else if (commandIdForDisplay.includes("accounts switch")) {
+          errorMessage = `You cannot change accounts in the web CLI. Please use the dashboard at https://ably.com/accounts/ to switch accounts.`;
+        } else if (commandIdForDisplay.includes("apps switch")) {
+          errorMessage = `You cannot switch apps from within the web CLI. Please use the web dashboard at https://ably.com/dashboard instead.`;
+        } else if (commandIdForDisplay.includes("auth keys switch")) {
+          errorMessage = `You cannot switch API keys from within the web CLI. Please use the web interface to change keys.`;
+        } else if (commandId === "config") {
+          errorMessage = `Local configuration is not supported in the web CLI version.`;
+        } else if (commandIdForDisplay.includes("mcp")) {
+          errorMessage = `MCP server functionality is not available in the web CLI. Please use the standalone CLI installation instead.`;
+        }
       }
 
       // Exit with the error message
