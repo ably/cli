@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import TerminalOverlay, {OverlayVariant} from './TerminalOverlay';
-import { drawBox, clearBox, updateLine, colour as boxColour, type TerminalBox } from './terminal-box';
+import { drawBox, clearBox, updateLine, colour as boxColour, colour, type TerminalBox } from './terminal-box';
 import {
   getAttempts as grGetAttempts,
   getMaxAttempts as grGetMaxAttempts,
@@ -20,6 +20,7 @@ import {
 import { useTerminalVisibility } from './use-terminal-visibility.js';
 import { SplitSquareHorizontal, X } from 'lucide-react';
 import { hashCredentials } from './utils/crypto';
+import { getConnectionMessage } from './connection-messages';
 
 /**
  * Simple debounce utility function to prevent rapid successive calls
@@ -118,6 +119,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const [reconnectAttemptMessage, setReconnectAttemptMessage] = useState('');
   const [countdownMessage, setCountdownMessage] = useState('');
   const [overlay, setOverlay] = useState<null|{variant:OverlayVariant,title:string,lines:string[]}>(null);
+  const [connectionStartTime, setConnectionStartTime] = useState<number | null>(null);
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
 
   // -------------------------------------------------------------
   // Split-screen UI state
@@ -474,6 +477,26 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     ptyBuffer.current = '';
   }, []);
   
+  // Connection timeout management
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
+  const installInstructionsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const SHOW_INSTALL_AFTER_MS = 6000; // 6 seconds
+  
+  const clearConnectionTimeout = useCallback(() => {
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearInstallInstructionsTimer = useCallback(() => {
+    if (installInstructionsTimerRef.current) {
+      clearTimeout(installInstructionsTimerRef.current);
+      installInstructionsTimerRef.current = null;
+    }
+  }, []);
+  
   const handlePtyData = useCallback((data: string) => {
     if (!isSessionActive) {
       ptyBuffer.current += data;
@@ -502,12 +525,17 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           grSuccessfulConnectionReset();
           updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
           if (term.current) term.current.focus();
+          
+          // Reset connection tracking
+          setConnectionStartTime(null);
+          setShowInstallInstructions(false);
+          clearInstallInstructionsTimer();
         }
         
         clearPtyBuffer();
       }
     }
-  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay]);
+  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay, clearInstallInstructionsTimer]);
 
   // Secondary terminal instance references
   const secondaryRootRef = useRef<HTMLDivElement>(null);
@@ -583,17 +611,6 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // lastWriteLine.current = ''; // No longer directly managing this for single status line
   }, [clearStatusDisplay]);
   
-  // Connection timeout management
-  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
-  
-  const clearConnectionTimeout = useCallback(() => {
-    if (connectionTimeoutRef.current) {
-      clearTimeout(connectionTimeoutRef.current);
-      connectionTimeoutRef.current = null;
-    }
-  }, []);
-  
   const startConnectingAnimation = useCallback((isRetry: boolean) => {
     if (!term.current) return;
     clearAnimationMessages(); // This already calls clearStatusDisplay
@@ -610,7 +627,17 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Draw the initial box
     if (term.current) {
-      statusBoxRef.current = drawBox(term.current, titleColor, title, initialContent, 60);
+      // Add install instructions if needed
+      const boxContent = [...initialContent];
+      if (showInstallInstructions) {
+        boxContent.push(''); // Empty line between countdown and install instructions
+        boxContent.push('Having trouble? Install the CLI locally:');
+        boxContent.push('  npm install -g @ably/web-cli');
+        boxContent.push('');
+        boxContent.push('Press ⏎ to cancel reconnection');
+      }
+      
+      statusBoxRef.current = drawBox(term.current, titleColor, title, boxContent, 60);
       spinnerPrefixRef.current = statusText; // Store base text for spinner line
 
       spinnerIndexRef.current = 0;
@@ -638,13 +665,12 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           updateLine(statusBoxRef.current, 0, lineContent, titleColor);
         }
 
-        // Update overlay
+        // Update overlay - preserve install instructions if present
         setOverlay(prev => {
           if (!prev) return prev;
           const newLines = [...prev.lines];
-          if (newLines.length === 0) newLines.push(lineContent);
-          else newLines[0] = lineContent;
-          // spinner line updated
+          // Only update the first line (spinner)
+          newLines[0] = lineContent;
           return { ...prev, lines: newLines };
         });
       }, 250);
@@ -656,9 +682,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Ensure the overlay shows the spinner immediately (not only after first interval tick)
     const initialSpinnerChar = spinnerFrames[spinnerIndexRef.current % spinnerFrames.length];
     const initialLines = [`${initialSpinnerChar} ${spinnerPrefixRef.current}`];
+    
+    // Check if we should show install instructions
+    if (showInstallInstructions) {
+      initialLines.push(''); // Placeholder for countdown
+      initialLines.push(' '); // Empty line separator
+      initialLines.push('Having trouble? Install the CLI locally:');
+      initialLines.push('  npm install -g @ably/web-cli');
+      initialLines.push('');
+      initialLines.push('Press ⏎ to cancel reconnection');
+    }
+    
     setOverlay({variant: isRetry ? 'reconnecting' : 'connecting', title, lines: initialLines});
 
-  }, [clearAnimationMessages]);
+  }, [clearAnimationMessages, showInstallInstructions]);
 
   const connectWebSocket = useCallback(() => {
     // console.log('[AblyCLITerminal] connectWebSocket called.');
@@ -685,6 +722,65 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
 
     debugLog('⚠️ DIAGNOSTIC: Creating fresh WebSocket instance to ' + websocketUrl);
+
+    // Track when connection attempts started
+    if (!connectionStartTime) {
+      setConnectionStartTime(Date.now());
+      
+      // Start timer to show install instructions after 6 seconds
+      clearInstallInstructionsTimer();
+      installInstructionsTimerRef.current = setTimeout(() => {
+        setShowInstallInstructions(true);
+        // Update the overlay to include install instructions
+        if (connectionStatusRef.current === 'connecting' || connectionStatusRef.current === 'reconnecting') {
+          setOverlay(prev => {
+            if (prev && (prev.variant === 'connecting' || prev.variant === 'reconnecting')) {
+              // Keep the spinner line but add install instructions
+              const currentLines = prev.lines || [];
+              const spinnerLine = currentLines[0] || '';
+              return {
+                ...prev,
+                lines: [
+                  spinnerLine,
+                  '', // Countdown line
+                  ' ', // Single space for empty line - ensures it renders
+                  'Having trouble? Install the CLI locally:',
+                  '  npm install -g @ably/web-cli',
+                  '',
+                  'Press ⏎ to cancel reconnection'
+                ]
+              };
+            }
+            return prev;
+          });
+          
+          // Also update the terminal box
+          if (term.current && statusBoxRef.current) {
+            const currentAttempts = grGetAttempts();
+            const isRetry = currentAttempts > 0;
+            const titleColor = isRetry ? boxColour.yellow : boxColour.cyan;
+            
+            // Redraw the box with install instructions
+            clearBox(statusBoxRef.current);
+            const statusText = isRetry
+              ? `Attempt ${currentAttempts + 1}/${grGetMaxAttempts()} - Reconnecting to Ably CLI server...`
+              : 'Connecting to Ably CLI server...';
+            
+            const boxContent = [
+              statusText,
+              '', // Countdown line
+              '',
+              'Having trouble? Install the CLI locally:',
+              '  npm install -g @ably/web-cli',
+              '',
+              'Press ⏎ to cancel reconnection'
+            ];
+            
+            statusBoxRef.current = drawBox(term.current, titleColor, isRetry ? "RECONNECTING" : "CONNECTING", boxContent, 60);
+          }
+        }
+      }, SHOW_INSTALL_AFTER_MS);
+    }
 
     updateConnectionStatusAndExpose(grIsCancelledState() || grIsMaxAttemptsReached() ? 'disconnected' : (grGetAttempts() > 0 ? 'reconnecting' : 'connecting'));
     startConnectingAnimation(grGetAttempts() > 0);
@@ -714,6 +810,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         // Manually trigger error handling since the browser might not fire events for a stuck connection
         const timeoutError = new Event('error');
         Object.defineProperty(timeoutError, 'message', { value: 'Connection timeout' });
+        Object.defineProperty(timeoutError, 'isTimeout', { value: true });
         socketRef.current.dispatchEvent(timeoutError);
       }
     }, CONNECTION_TIMEOUT_MS);
@@ -722,7 +819,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     debugLog('⚠️ DIAGNOSTIC: WebSocket connection initiation complete. sessionId:', sessionId, 'showManualReconnectPrompt:', showManualReconnectPromptRef.current);
 
     return;
-  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation, isVisible, sessionId, showManualReconnectPromptRef, clearConnectionTimeout]);
+  }, [websocketUrl, updateConnectionStatusAndExpose, startConnectingAnimation, isVisible, sessionId, showManualReconnectPromptRef, clearConnectionTimeout, connectionStartTime, clearInstallInstructionsTimer, term]);
 
   const socketRef = useRef<WebSocket | null>(null); // Ref to hold the current socket for cleanup
 
@@ -920,21 +1017,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       updateConnectionStatusAndExpose('disconnected');
       
       if (term.current) {
-        let displayTitle = "ERROR: CONNECTION FAILED";
-        let displayMessage = `Connection error occurred.`;
-        const message2 = '';
-        const message3 = `Press ⏎ to try reconnecting manually.`;
-
+        let message: ReturnType<typeof getConnectionMessage>;
+        
         if (grIsMaxAttemptsReached()) {
-          displayTitle = "MAX RECONNECTS";
-          displayMessage = `Failed to reconnect after ${grGetMaxAttempts()} attempts.`;
-        } else { // Cancelled
-          displayTitle = "RECONNECT CANCELLED";
-          displayMessage = `Reconnection attempts cancelled.`;
+          message = getConnectionMessage('maxReconnects');
+        } else if (grIsCancelledState()) {
+          message = getConnectionMessage('reconnectCancelled');
+        } else if ((event as any).isTimeout) {
+          message = getConnectionMessage('connectionTimeout');
+        } else {
+          message = getConnectionMessage('connectionFailed');
         }
         
-        statusBoxRef.current = drawBox(term.current, boxColour.yellow, displayTitle, [displayMessage, message2, message3], 60);
-        setOverlay({variant:'error',title:displayTitle,lines:[displayMessage, message2, message3]});
+        statusBoxRef.current = drawBox(term.current, boxColour.yellow, message.title, message.lines, 60);
+        setOverlay({variant:'error', title: message.title, lines: message.lines});
       }
       
       setShowManualReconnectPrompt(true);
@@ -1002,6 +1098,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       4002, // Session resume rejected
       4000, // Generic server error
       4004, // Unsupported protocol version
+      4009, // Server at capacity
       // Note: 1005 removed - it's used for both graceful exit AND network disconnections
       // We should handle exit commands differently, not by close code
     ]);
@@ -1016,12 +1113,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       grResetState();
       updateConnectionStatusAndExpose('disconnected');
       if (term.current) {
-        const title = "ERROR: SERVER DISCONNECT";
-        const message1 = `Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
-        const message2 = '';
-        const message3 = `Press ⏎ to try reconnecting manually.`;
-        statusBoxRef.current = drawBox(term.current, boxColour.red, title, [message1, message2, message3], 60);
-        setOverlay({variant: 'error', title, lines:[message1, message2, message3]});
+        let message = event.code === 4009 || event.reason?.toLowerCase().includes('capacity') 
+          ? getConnectionMessage('capacityReached')
+          : getConnectionMessage('serverDisconnect');
+        
+        // Prepend the specific error code/reason to the first line
+        const lines = [...message.lines];
+        lines[0] = `Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
+        
+        statusBoxRef.current = drawBox(term.current, boxColour.red, message.title, lines, 60);
+        setOverlay({variant: 'error', title: message.title, lines: lines});
       }
       setShowManualReconnectPrompt(true);
       if (resumeOnReload && typeof window !== 'undefined') {
@@ -1035,20 +1136,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     if (grIsCancelledState() || grIsMaxAttemptsReached()) {
       updateConnectionStatusAndExpose('disconnected');
       if (term.current) {
-        let displayTitle = "ERROR: CONNECTION CLOSED";
-        let displayMessage = `Connection failed (Code: ${event.code}, Reason: ${event.reason || 'N/A'}).`;
-        const message2 = '';
-        const message3 = `Press ⏎ to try reconnecting manually.`;
-
+        let message: ReturnType<typeof getConnectionMessage>;
+        
         if (grIsMaxAttemptsReached()) {
-          displayTitle = "MAX RECONNECTS";
-          displayMessage = `Failed to reconnect after ${grGetMaxAttempts()} attempts.`;
-        } else { // Cancelled
-          displayTitle = "RECONNECT CANCELLED";
-          displayMessage = `Reconnection attempts cancelled.`;
+          message = getConnectionMessage('maxReconnects');
+        } else if (grIsCancelledState()) {
+          message = getConnectionMessage('reconnectCancelled');
+        } else {
+          message = getConnectionMessage('connectionFailed');
+          // Override first line with specific error details
+          const lines = [...message.lines];
+          lines[0] = `Connection failed (Code: ${event.code}, Reason: ${event.reason || 'N/A'}).`;
+          message = { ...message, lines };
         }
-        statusBoxRef.current = drawBox(term.current, boxColour.yellow, displayTitle, [displayMessage, message2, message3], 60);
-        setOverlay({variant:'error',title:displayTitle,lines:[displayMessage, message2, message3]});
+        
+        statusBoxRef.current = drawBox(term.current, boxColour.yellow, message.title, message.lines, 60);
+        setOverlay({variant:'error', title: message.title, lines: message.lines});
       }
       setShowManualReconnectPrompt(true);
       return; 
@@ -1124,6 +1227,12 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               // Reset the attempt counter for manual reconnect
               grSuccessfulConnectionReset();
               clearPtyBuffer();
+              
+              // Reset connection tracking for fresh attempt
+              setConnectionStartTime(null);
+              setShowInstallInstructions(false);
+              clearInstallInstructionsTimer();
+              
               debugLog('[AblyCLITerminal] [setTimeout] Invoking latest connectWebSocket');
               connectWebSocketRef.current?.();
               debugLog('[AblyCLITerminal] [setTimeout] connectWebSocket invoked');
@@ -1142,9 +1251,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             grCancelReconnect();
             grResetState();
             clearAnimationMessages();
+            
+            // Reset connection tracking
+            setConnectionStartTime(null);
+            setShowInstallInstructions(false);
+            clearInstallInstructionsTimer();
+            
             if (term.current) {
-              term.current.writeln(`\r\n\n${colour.yellow}Reconnection attempts cancelled by user.${colour.reset}`);
-              term.current.writeln(`${colour.dim}Press ${colour.bold}⏎${colour.reset}${colour.dim} to try reconnecting manually.${colour.reset}`);
+              const message = getConnectionMessage('reconnectCancelled');
+              const terminal = term.current;
+              terminal.writeln(`\r\n`);
+              // Display the reconnect cancelled message in the terminal
+              message.lines.forEach(line => {
+                if (line) terminal.writeln(line);
+              });
             }
             showManualReconnectPromptRef.current = true;
             setShowManualReconnectPrompt(true);
@@ -1197,11 +1317,18 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           updateLine(statusBoxRef.current, 1, msgPlain, boxColour.magenta);
         }
 
-        // Update overlay second line
+        // Update overlay - check if we have install instructions to preserve the empty line
         setOverlay(prev => {
           if (!prev) return prev;
           const newLines = [...prev.lines];
-          if (newLines.length === 1) newLines.push(msgPlain); else newLines[1] = msgPlain;
+          
+          // Simply update line 1 with the countdown - the structure is already set up correctly
+          if (newLines.length === 1) {
+            newLines.push(msgPlain);
+          } else {
+            newLines[1] = msgPlain;
+          }
+          
           return {...prev, lines: newLines};
         });
       });
@@ -1385,6 +1512,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   }, [isVisible, startInactivityTimer, clearInactivityTimer]);
 
   useEffect(() => () => clearInactivityTimer(), [clearInactivityTimer]);
+  
+  // Cleanup install instructions timer on unmount
+  useEffect(() => () => clearInstallInstructionsTimer(), [clearInstallInstructionsTimer]);
 
   // Initialize session and validate credentials
   useEffect(() => {

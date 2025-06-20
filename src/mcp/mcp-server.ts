@@ -549,7 +549,7 @@ export class AblyMcpServer {
         );
       }
 
-      const clientOptions: any = {
+      const clientOptions: Ably.ClientOptions & { agents: Record<string, string> } = {
         clientId: process.env.ABLY_CLIENT_ID,
         key: apiKey,
         agents: { 'ably-cli': getCliVersion() },

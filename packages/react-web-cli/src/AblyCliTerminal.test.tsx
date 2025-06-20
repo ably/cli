@@ -2,6 +2,7 @@ import React from 'react';
 import { render, act, screen, waitFor, fireEvent, createEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { getAttempts, getMaxAttempts, isMaxAttemptsReached } from './global-reconnect';
 
 // Mock the GlobalReconnect module AT THE TOP LEVEL using a factory function.
 vi.mock('./global-reconnect', () => ({
@@ -334,9 +335,9 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     });
     const drawBoxArgs = mockDrawBox.mock.calls[0];
     expect(drawBoxArgs[1]).toBe(mockBoxColour.red); 
-    expect(drawBoxArgs[2]).toBe('ERROR: SERVER DISCONNECT');
+    expect(drawBoxArgs[2]).toBe('SERVER DISCONNECTED');
     expect(drawBoxArgs[3][0]).toContain('Auth failed');
-    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try reconnecting manually.'))).toBe(true);
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to reconnect'))).toBe(true);
     
     expect(mockClearBox).toHaveBeenCalled(); // Previous box cleared before new error box
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
@@ -363,9 +364,9 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     });
     const drawBoxArgs = mockDrawBox.mock.calls[0];
     expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow); // Header color for max reconnects
-    expect(drawBoxArgs[2]).toBe('MAX RECONNECTS');
-    expect(drawBoxArgs[3][0]).toContain('Failed to reconnect after 3 attempts');
-    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try reconnecting manually.'))).toBe(true);
+    expect(drawBoxArgs[2]).toBe('SERVICE UNAVAILABLE');
+    expect(drawBoxArgs[3][0]).toContain('Web terminal service is temporarily unavailable.');
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try again'))).toBe(true);
 
     expect(mockClearBox).toHaveBeenCalled(); // Previous box cleared before new box
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
@@ -549,9 +550,9 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       mockSocketInstance.triggerEvent('error', new Event('error'));
     });
     
-    // Verify MAX RECONNECTS is displayed
+    // Verify SERVICE UNAVAILABLE is displayed
     await waitFor(() => {
-      const maxReconnectsCall = mockDrawBox.mock.calls.find(call => call[2] === 'MAX RECONNECTS');
+      const maxReconnectsCall = mockDrawBox.mock.calls.find(call => call[2] === 'SERVICE UNAVAILABLE');
       expect(maxReconnectsCall).toBeDefined();
     });
     
@@ -662,7 +663,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(GlobalReconnect.increment).toHaveBeenCalledTimes(1);
   });
 
-  test('displays MAX RECONNECTS message on error event when max attempts reached', async () => {
+  test('displays SERVICE UNAVAILABLE message on error event when max attempts reached', async () => {
     vi.mocked(GlobalReconnect.isMaxAttemptsReached).mockReturnValue(true);
     vi.mocked(GlobalReconnect.getMaxAttempts).mockReturnValue(3);
     vi.mocked(GlobalReconnect.getAttempts).mockReturnValue(3);
@@ -684,9 +685,10 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
     const drawBoxArgs = mockDrawBox.mock.calls[0];
     expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow);
-    expect(drawBoxArgs[2]).toBe('MAX RECONNECTS');
-    expect(drawBoxArgs[3][0]).toContain('Failed to reconnect after 3 attempts');
-    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try reconnecting manually.'))).toBe(true);
+    expect(drawBoxArgs[2]).toBe('SERVICE UNAVAILABLE');
+    expect(drawBoxArgs[3][0]).toContain('Web terminal service is temporarily unavailable');
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('npm install -g @ably/web-cli'))).toBe(true);
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try again'))).toBe(true);
 
     expect(mockClearBox).toHaveBeenCalled();
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
@@ -1295,4 +1297,6 @@ describe('AblyCliTerminal - Credential Validation', () => {
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
   });
-}); 
+});
+
+ 

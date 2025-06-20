@@ -6,6 +6,7 @@ import { Page } from 'playwright/test';
 import { connectWithRateLimit, getRateLimiterStatus } from './rate-limiter';
 import { waitForTerminalReady } from '../wait-helpers';
 import { authenticateWebCli } from '../auth-helper';
+import './global.d.ts';
 
 export interface ConnectionOptions {
   apiKey?: string;
@@ -62,8 +63,8 @@ export async function disconnectAndCleanup(page: Page): Promise<void> {
   try {
     // Force close WebSocket if it exists
     await page.evaluate(() => {
-      if ((window as any).ablyCliSocket) {
-        (window as any).ablyCliSocket.close();
+      if (window.ablyCliSocket) {
+        window.ablyCliSocket.close();
       }
     });
     
@@ -87,7 +88,7 @@ export async function waitForConnectionStable(page: Page, timeout = 5000): Promi
   
   while (Date.now() - startTime < timeout) {
     const status = await page.evaluate(() => {
-      const state = (window as any).getAblyCliTerminalReactState?.();
+      const state = window.getAblyCliTerminalReactState?.();
       return state?.componentConnectionStatus || 'unknown';
     });
     
@@ -123,7 +124,7 @@ export async function executeCommandWithRetry(
     try {
       // Check connection status
       const status = await page.evaluate(() => {
-        const state = (window as any).getAblyCliTerminalReactState?.();
+        const state = window.getAblyCliTerminalReactState?.();
         return state?.componentConnectionStatus || 'unknown';
       });
       
@@ -177,13 +178,13 @@ export async function monitorConnectionHealth(page: Page): Promise<() => void> {
     while (monitoring) {
       try {
         const health = await page.evaluate(() => {
-          const state = (window as any).getAblyCliTerminalReactState?.();
-          const socket = (window as any).ablyCliSocket;
+          const state = window.getAblyCliTerminalReactState?.();
+          const socket = window.ablyCliSocket;
           return {
             componentStatus: state?.componentConnectionStatus,
             isSessionActive: state?.isSessionActive,
             socketReadyState: socket?.readyState,
-            sessionId: (window as any)._sessionId
+            sessionId: window._sessionId
           };
         });
         
