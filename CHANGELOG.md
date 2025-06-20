@@ -5,6 +5,99 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-06-20
+
+### Changed
+
+- Refactored client creation methods to provide type-specific alternatives
+  - Deprecated `createAblyClient()` method in favor of:
+    - `createAblyRestClient()` - Returns `Promise<Ably.Rest | null>`
+    - `createAblyRealtimeClient()` - Returns `Promise<Ably.Realtime | null>`
+  - This eliminates the need for type casting and improves type safety
+  - All 50+ command files updated to use the appropriate method
+  - All test files updated to match new method signatures
+
+### Added
+
+- Web CLI authentication support with credential validation UI
+- Auto-update notifications to inform users about new CLI versions
+- Auto-completion support for improved command discovery
+- Standardized topic command display with `BaseTopicCommand`
+- Restricted mode for Web CLI to handle anonymous users
+- User agent header (`ably-cli`) in all data and control plane requests
+- Reconnection attempt counter that resets on manual reconnect
+- Line break between countdown and install instructions in reconnection display
+
+### Fixed
+
+- Presence CLI regression where commands were not working correctly
+- Meta channel names for connection lifecycle logs (now use `[meta]connection.lifecycle`)
+- Multi-line JSON handling in connection lifecycle tests
+- E2E test failures for web-cli application with proper authentication scenarios
+- Playwright E2E tests for rate limiting and server disconnection scenarios
+- Credentials no longer baked into test builds
+- Various linting errors across the codebase
+- Consistent authentication recommendations when not logged in
+- Help and list commands now have standardized output format
+
+### Removed
+
+- Obsolete TODO comments that have been completed
+- Old test skip logic that was no longer needed
+
+## [0.7.7] - 2025-06-14
+
+### Fixed
+
+- Updated React Web CLI README to reflect server separation
+- Default to public CLI endpoint in development
+
+### Changed
+
+- Updated GitHub Actions to use checkout@v4
+- Added release workflow for automated releases
+- Updated CONTRIBUTING.md with release workflow documentation
+
+## [0.7.6] - 2025-06-14
+
+### Fixed
+
+- Ensured README is properly visible in npm package
+
+## [0.7.5] - 2025-06-14
+
+### Fixed
+
+- Explicitly linked to README in npm package configuration
+
+## [0.7.4] - 2025-06-14
+
+### Fixed
+
+- Resolved npm package publishing issues
+
+### Removed
+
+- Cleaned up old Markdown files
+
+## [0.7.3] - 2025-06-14
+
+### Fixed
+
+- Fixed global installs that were broken by npm link issues
+
+## [0.7.2] - 2025-06-14
+
+### Fixed
+
+- Included README in npm package
+
+## [0.7.1] - 2025-06-13
+
+### Fixed
+
+- Initial patch release after v0.7.0 with minor fixes
+
 ## [0.7.0] - 2025-06-13
 
 ### Security
