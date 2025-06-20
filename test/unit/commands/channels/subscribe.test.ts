@@ -14,7 +14,7 @@ class TestableChannelsSubscribe extends ChannelsSubscribe {
   private _formatJsonOutputFn: ((data: Record<string, unknown>) => string) | null = null;
 
   // Spy on client creation attempt
-  public createAblyClientSpy = sinon.spy(super.createAblyClient);
+  public createAblyClientSpy = sinon.spy(super.createAblyRealtimeClient);
 
   // Override parse to simulate parse output
   public override async parse() {
@@ -39,8 +39,8 @@ class TestableChannelsSubscribe extends ChannelsSubscribe {
   }
 
   // Override client creation to return a controlled mock
-  public override async createAblyClient(flags: any): Promise<Ably.Realtime | null> {
-    this.debug('Overridden createAblyClient called');
+  public override async createAblyRealtimeClient(flags: any): Promise<Ably.Realtime | null> {
+    this.debug('Overridden createAblyRealtimeClient called');
     this.createAblyClientSpy(flags);
 
     // Initialize the mock client with basic structure
@@ -162,9 +162,9 @@ describe("ChannelsSubscribe (Simplified)", function() {
       raw: [],
     });
 
-    // IMPORTANT: Stub createAblyClient directly on the instance IN beforeEach
+    // IMPORTANT: Stub createAblyRealtimeClient directly on the instance IN beforeEach
     // This ensures the command uses OUR mockClient setup here.
-    sandbox.stub(command, 'createAblyClient' as keyof TestableChannelsSubscribe)
+    sandbox.stub(command, 'createAblyRealtimeClient' as keyof TestableChannelsSubscribe)
         .resolves(command.mockClient as unknown as Ably.Realtime);
   });
 
@@ -239,7 +239,7 @@ describe("ChannelsSubscribe (Simplified)", function() {
   }
 
   it("should attempt to create an Ably client", async function() {
-    const createClientStub = command.createAblyClient as sinon.SinonStub;
+    const createClientStub = command.createAblyRealtimeClient as sinon.SinonStub;
     await runCommandAndSimulateLifecycle();
     expect(createClientStub.calledOnce).to.be.true;
   });

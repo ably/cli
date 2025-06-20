@@ -27,7 +27,7 @@ class TestableConnectionsStats extends ConnectionsStats {
   }
 
   // Override client creation to return controlled mocks
-  public override createAblyRestClient(_options: Ably.ClientOptions | any): Ably.Rest {
+  public override async createAblyRestClient(_flags: any, _options?: any): Promise<Ably.Rest | null> {
     this.debug('Using mock REST client');
     return this.mockRestClient as unknown as Ably.Rest;
   }

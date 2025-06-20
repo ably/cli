@@ -50,23 +50,14 @@ export default class ChannelsHistory extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsHistory);
     const channelName = args.channel;
-    let client: Ably.Rest;
-
-    this.showAuthInfoIfNeeded(flags);
+    let client: Ably.Rest | null;
 
     try {
-      // Get API key from flags or config - Keep this check outside for early exit
-      const apiKey = flags["api-key"] || (await this.configManager.getApiKey());
-      if (!apiKey) {
-        // If no key is found via flag or config (which checks env var), ensure app/key setup
-        await this.ensureAppAndKey(flags);
-        // ensureAppAndKey might throw or exit, so we might not reach here.
-        // If it *doesn't* throw (e.g., user interaction), we should exit gracefully.
+      // Create a REST client
+      client = await this.createAblyRestClient(flags);
+      if (!client) {
         return;
       }
-
-      // Create a REST client using our test-enabled method *inside* the try block
-      client = this.createAblyRestClient(flags);
 
       // Setup channel options
       const channelOptions: Ably.ChannelOptions = {};

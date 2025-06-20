@@ -20,7 +20,7 @@ class TestableBenchPublisher extends BenchPublisher {
   }
 
   // Override Realtime client creation to supply our stub
-  public override async createAblyClient(_flags: any) {
+  public override async createAblyRealtimeClient(_flags: any) {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 

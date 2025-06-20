@@ -515,7 +515,7 @@ export default class BenchSubscriber extends AblyBaseCommand {
   private async setupClient(
     flags: Record<string, unknown>,
   ): Promise<Ably.Realtime | null> {
-    const realtime = await this.createAblyClient(flags);
+    const realtime = await this.createAblyRealtimeClient(flags);
     if (!realtime) {
       this.error(
         "Failed to create Ably client. Please check your API key and try again.",

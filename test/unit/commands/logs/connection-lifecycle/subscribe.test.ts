@@ -23,8 +23,8 @@ class TestableLogsConnectionLifecycleSubscribe extends LogsConnectionLifecycleSu
   }
 
   // Override client creation to return a controlled mock
-  public override async createAblyClient(_flags: any): Promise<Ably.Realtime | null> {
-    this.debug('Overridden createAblyClient called');
+  public override async createAblyRealtimeClient(_flags: any): Promise<Ably.Realtime | null> {
+    this.debug('Overridden createAblyRealtimeClient called');
     return this.mockClient as unknown as Ably.Realtime;
   }
 
@@ -116,7 +116,7 @@ describe("LogsConnectionLifecycleSubscribe", function() {
   });
 
   it("should attempt to create an Ably client", async function() {
-    const createClientStub = sandbox.stub(command, 'createAblyClient' as keyof TestableLogsConnectionLifecycleSubscribe)
+    const createClientStub = sandbox.stub(command, 'createAblyRealtimeClient' as keyof TestableLogsConnectionLifecycleSubscribe)
       .resolves(command.mockClient as unknown as Ably.Realtime);
 
     // Mock connection to simulate quick connection
@@ -367,8 +367,8 @@ describe("LogsConnectionLifecycleSubscribe", function() {
   });
 
   it("should handle client creation failure", async function() {
-    // Mock createAblyClient to return null
-    sandbox.stub(command, 'createAblyClient' as keyof TestableLogsConnectionLifecycleSubscribe).resolves(null);
+    // Mock createAblyRealtimeClient to return null
+    sandbox.stub(command, 'createAblyRealtimeClient' as keyof TestableLogsConnectionLifecycleSubscribe).resolves(null);
 
     // Should return early without error when client creation fails
     await command.run();

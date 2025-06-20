@@ -37,12 +37,12 @@ class TestableChannelsPresenceSubscribe extends ChannelsPresenceSubscribe {
   }
 
   // Override client creation to return a controlled mock
-  public override async createAblyClient(_flags: any): Promise<Ably.Realtime | null> {
-    this.debug('Overridden createAblyClient called');
+  public override async createAblyRealtimeClient(_flags: any): Promise<Ably.Realtime | null> {
+    this.debug('Overridden createAblyRealtimeClient called');
 
     // Ensure mockClient is initialized if not already done (e.g., in beforeEach)
     if (!this.mockClient || !this.mockClient.channels) {
-      this.debug('Initializing mockClient inside createAblyClient');
+      this.debug('Initializing mockClient inside createAblyRealtimeClient');
       const mockPresenceInstance = {
         get: sinon.stub().resolves([]),
         subscribe: sinon.stub(),
@@ -177,11 +177,11 @@ describe("ChannelsPresenceSubscribe", function() {
 
 
   it("should create an Ably client when run", async function() {
-    const createClientSpy = sinon.spy(command, 'createAblyClient');
+    const createClientSpy = sinon.spy(command, 'createAblyRealtimeClient');
 
     // Stub the actual functionality to avoid long-running operations
     const runStub = sinon.stub(command, 'run').callsFake(async function(this: TestableChannelsPresenceSubscribe) {
-      await this.createAblyClient({});
+      await this.createAblyRealtimeClient({});
       return;
     });
 
@@ -204,8 +204,8 @@ describe("ChannelsPresenceSubscribe", function() {
     expect(parseResult.args.channel).to.equal('my-presence-channel');
   });
 
-  it("should return mock client from createAblyClient", async function() {
-    const client = await command.createAblyClient({});
+  it("should return mock client from createAblyRealtimeClient", async function() {
+    const client = await command.createAblyRealtimeClient({});
     expect(client).to.equal(command.mockClient);
   });
 

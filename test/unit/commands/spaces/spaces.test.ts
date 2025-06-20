@@ -43,7 +43,7 @@ class TestableSpacesCommand {
     return this.mockSpacesClient;
   }
 
-  public async createAblyClient(_flags: any) {
+  public async createAblyRealtimeClient(_flags: any) {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 
@@ -66,7 +66,7 @@ class TestableSpacesMembersEnter extends SpacesMembersEnter {
   public override async parse() { return this.testableCommand.parse(); }
   protected override async setupSpacesClient(flags: any, spaceName: string) { return this.testableCommand.setupSpacesClient(flags, spaceName); }
   protected override createSpacesClient(realtimeClient: any) { return this.testableCommand.createSpacesClient(realtimeClient); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -85,7 +85,7 @@ class TestableSpacesMembersSubscribe extends SpacesMembersSubscribe {
   public override async parse() { return this.testableCommand.parse(); }
   protected override async setupSpacesClient(flags: any, spaceName: string) { return this.testableCommand.setupSpacesClient(flags, spaceName); }
   protected override createSpacesClient(realtimeClient: any) { return this.testableCommand.createSpacesClient(realtimeClient); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -105,7 +105,7 @@ class TestableSpacesLocationsSet extends SpacesLocationsSet {
   public override async parse() { return this.testableCommand.parse(); }
   protected override async setupSpacesClient(flags: any, spaceName: string) { return this.testableCommand.setupSpacesClient(flags, spaceName); }
   protected override createSpacesClient(realtimeClient: any) { return this.testableCommand.createSpacesClient(realtimeClient); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -125,7 +125,7 @@ class TestableSpacesLocksAcquire extends SpacesLocksAcquire {
   public override async parse() { return this.testableCommand.parse(); }
   protected override async setupSpacesClient(flags: any, spaceName: string) { return this.testableCommand.setupSpacesClient(flags, spaceName); }
   protected override createSpacesClient(realtimeClient: any) { return this.testableCommand.createSpacesClient(realtimeClient); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -145,7 +145,7 @@ class TestableSpacesCursorsSet extends SpacesCursorsSet {
   public override async parse() { return this.testableCommand.parse(); }
   protected override async setupSpacesClient(flags: any, spaceName: string) { return this.testableCommand.setupSpacesClient(flags, spaceName); }
   protected override createSpacesClient(realtimeClient: any) { return this.testableCommand.createSpacesClient(realtimeClient); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 

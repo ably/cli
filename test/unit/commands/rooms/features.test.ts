@@ -33,7 +33,7 @@ class TestableRoomCommand {
     return this.mockChatClient;
   }
 
-  public async createAblyClient(_flags: any) {
+  public async createAblyRealtimeClient(_flags: any) {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 
@@ -55,7 +55,7 @@ class TestableRoomsOccupancyGet extends RoomsOccupancyGet {
   public setParseResult(result: any) { this.testableCommand.setParseResult(result); }
   public override async parse() { return this.testableCommand.parse(); }
   protected override async createChatClient(flags: any) { return this.testableCommand.createChatClient(flags); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -76,7 +76,7 @@ class TestableRoomsOccupancySubscribe extends RoomsOccupancySubscribe {
     (this as any)._chatRealtimeClient = this.testableCommand.mockRealtimeClient;
     return client;
   }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -97,7 +97,7 @@ class TestableRoomsPresenceEnter extends RoomsPresenceEnter {
     (this as any)._chatRealtimeClient = this.testableCommand.mockRealtimeClient;
     return client;
   }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -113,7 +113,7 @@ class TestableRoomsReactionsSend extends RoomsReactionsSend {
   public setParseResult(result: any) { this.testableCommand.setParseResult(result); }
   public override async parse() { return this.testableCommand.parse(); }
   protected override async createChatClient(flags: any) { return this.testableCommand.createChatClient(flags); }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 
@@ -134,7 +134,7 @@ class TestableRoomsTypingKeystroke extends RoomsTypingKeystroke {
     (this as any)._chatRealtimeClient = this.testableCommand.mockRealtimeClient;
     return client;
   }
-  protected override async createAblyClient(flags: any) { return this.testableCommand.createAblyClient(flags); }
+  protected override async createAblyRealtimeClient(flags: any) { return this.testableCommand.createAblyRealtimeClient(flags); }
   protected override async ensureAppAndKey(flags: any) { return this.testableCommand.ensureAppAndKey(flags); }
   protected override interactiveHelper = this.testableCommand.interactiveHelper;
 

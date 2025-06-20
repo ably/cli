@@ -72,7 +72,7 @@ export default class LogsAppSubscribe extends AblyBaseCommand {
     let subscribedEvents: string[] = [];
 
     try {
-      this.client = await this.createAblyClient(flags);
+      this.client = await this.createAblyRealtimeClient(flags);
       if (!this.client) return;
 
       const client = this.client;

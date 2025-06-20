@@ -59,14 +59,11 @@ export default class RevokeTokenCommand extends AblyBaseCommand {
         this.log(`Debug: Using API key: ${apiKey.replace(/:.+/, ":***")}`);
       }
 
-      // Create Ably client the same way as in channels list command
-      const client = await this.createAblyClient(flags);
+      // Create Ably Realtime client
+      const client = await this.createAblyRealtimeClient(flags);
       if (!client) return;
 
       this.ablyClient = client;
-
-      // Create Ably REST client with client options
-      const _rest = this.createAblyRestClient(this.getClientOptions(flags));
 
       const clientId = flags["client-id"] || token;
 

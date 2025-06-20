@@ -211,32 +211,6 @@ export abstract class AblyBaseCommand extends Command {
     return (globalThis as { __TEST_MOCKS__?: { ablyRestMock: Ably.Rest } }).__TEST_MOCKS__?.ablyRestMock;
   }
 
-  /**
-   * Create an Ably REST client
-   * Returns a mocked client if in test mode
-   * @param options Client options or flags
-   */
-  protected createAblyRestClient(options: Ably.ClientOptions | BaseFlags): Ably.Rest {
-    // If in test mode, return mock client
-    if (this.isTestMode()) {
-      this.debug('Running in test mode, using mock Ably Rest client');
-      const mockAblyRest = this.getMockAblyRest();
-
-      if (mockAblyRest) {
-        return mockAblyRest as Ably.Rest;
-      }
-
-      this.error('No mock Ably Rest client available in test mode');
-      throw new Error('Missing mock Ably Rest client in test mode');
-    }
-
-    // Convert flags to client options if needed
-    const clientOptions = 'token' in options || 'key' in options ?
-      options as Ably.ClientOptions :
-      this.getClientOptions(options as BaseFlags);
-
-    return new Ably.Rest(clientOptions);
-  }
 
   /**
    * Check if this is a web CLI version and return a consistent error message
@@ -289,20 +263,75 @@ export abstract class AblyBaseCommand extends Command {
     }
   }
 
+  /**
+   * Create an Ably REST client with automatic auth info display
+   */
+  protected async createAblyRestClient(
+    flags: BaseFlags,
+    options?: {
+      skipAuthInfo?: boolean;
+    }
+  ): Promise<Ably.Rest | null> {
+    const client = await this.createAblyClientInternal(flags, {
+      type: 'rest',
+      skipAuthInfo: options?.skipAuthInfo,
+    });
+    return client as Ably.Rest | null;
+  }
+
+  /**
+   * Create an Ably Realtime client with automatic auth info display
+   */
+  protected async createAblyRealtimeClient(
+    flags: BaseFlags,
+    options?: {
+      skipAuthInfo?: boolean;
+    }
+  ): Promise<Ably.Realtime | null> {
+    const client = await this.createAblyClientInternal(flags, {
+      type: 'realtime',
+      skipAuthInfo: options?.skipAuthInfo,
+    });
+    return client as Ably.Realtime | null;
+  }
+
+  /**
+   * @deprecated Use createAblyRestClient or createAblyRealtimeClient instead
+   */
   protected async createAblyClient(
     flags: BaseFlags,
-  ): Promise<Ably.Realtime | null> {
+    options?: {
+      type?: 'rest' | 'realtime';
+      skipAuthInfo?: boolean;
+    }
+  ): Promise<Ably.Rest | Ably.Realtime | null> {
+    return this.createAblyClientInternal(flags, options);
+  }
+
+  /**
+   * Internal method that creates either REST or Realtime client
+   * Shared functionality for both client types
+   */
+  private async createAblyClientInternal(
+    flags: BaseFlags,
+    options?: {
+      type?: 'rest' | 'realtime';
+      skipAuthInfo?: boolean;
+    }
+  ): Promise<Ably.Rest | Ably.Realtime | null> {
+    const clientType = options?.type || 'realtime';
+    
     // If in test mode, skip connection and use mock
     if (this.isTestMode()) {
-      this.debug('Running in test mode, using mock Ably client');
+      this.debug(`Running in test mode, using mock Ably ${clientType} client`);
       const mockAblyRest = this.getMockAblyRest();
 
       if (mockAblyRest) {
-        // Wrap the mock in a Promise that resolves immediately
-        return mockAblyRest as unknown as Ably.Realtime;
+        // Return mock as appropriate type
+        return mockAblyRest as unknown as Ably.Rest | Ably.Realtime;
       }
 
-      this.error('No mock Ably client available in test mode');
+      this.error(`No mock Ably ${clientType} client available in test mode`);
       return null;
     }
 
@@ -319,17 +348,17 @@ export abstract class AblyBaseCommand extends Command {
       flags["api-key"] = appAndKey.apiKey;
     }
 
-    // Show auth info at the start of the command (but not in Web CLI mode)
-    if (!this.isWebCliMode) {
+    // Show auth info at the start of the command (but not in Web CLI mode and not if skipped)
+    if (!this.isWebCliMode && !options?.skipAuthInfo) {
       this.showAuthInfoIfNeeded(flags);
     }
 
-    const options = this.getClientOptions(flags);
+    const clientOptions = this.getClientOptions(flags);
     // isJsonMode is defined outside the try block for use in error handling
     const isJsonMode = this.shouldOutputJson(flags);
 
     // Make sure we have authentication after potentially modifying options
-    if (!options.key && !options.token) {
+    if (!clientOptions.key && !clientOptions.token) {
       this.error(
         "Authentication required. Please provide either an API key, a token, or log in first.",
       );
@@ -337,8 +366,13 @@ export abstract class AblyBaseCommand extends Command {
     }
 
     try {
-      // Log handler is now set within getClientOptions based on JSON mode
-      const client = new Ably.Realtime(options); // Use the options object modified by getClientOptions
+      // Create REST client
+      if (clientType === 'rest') {
+        return new Ably.Rest(clientOptions);
+      }
+      
+      // Create Realtime client
+      const client = new Ably.Realtime(clientOptions);
 
       // Wait for the connection to be established or fail
       return await new Promise((resolve, reject) => {
@@ -369,7 +403,7 @@ export abstract class AblyBaseCommand extends Command {
           // Handle authentication errors specifically
           if (stateChange.reason && stateChange.reason.code === 40_100) {
             // Unauthorized
-            if (options.key) {
+            if (clientOptions.key) {
               // Check the original options object
               this.handleInvalidKey(flags);
               const errorMsg =

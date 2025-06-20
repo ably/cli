@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import { Config } from "@oclif/core";
+import * as Ably from "ably";
 import ChannelsList from "../../../../src/commands/channels/list.js";
 
 // Create a testable version of ChannelsList to expose protected methods
@@ -24,8 +25,8 @@ class TestableChannelsList extends ChannelsList {
     this._parseResult = result;
   }
 
-  // Override createAblyClient to return our mock
-  public override async createAblyClient() {
+  // Override createAblyRestClient to return our mock
+  public override async createAblyRestClient(_flags: any, _options?: any): Promise<Ably.Rest | null> {
     return this._mockAblyClient as any;
   }
 
@@ -43,7 +44,7 @@ class TestableChannelsList extends ChannelsList {
     const { flags } = await this.parse();
 
     // Create the Ably client - this will handle displaying data plane info
-    const client = await this.createAblyClient();
+    const client = await this.createAblyRestClient(flags);
     if (!client) return;
 
     try {
@@ -158,8 +159,6 @@ class TestableChannelsList extends ChannelsList {
           `Error listing channels: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-    } finally {
-      client.close();
     }
   }
 

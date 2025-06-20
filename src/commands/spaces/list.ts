@@ -49,13 +49,10 @@ export default class SpacesList extends SpacesBaseCommand {
   async run(): Promise<void> {
     const { flags } = await this.parse(SpacesList);
 
-    // Create the Ably client
-    const client = await this.createAblyClient(flags);
-    if (!client) return;
-
     try {
       // REST client for channel enumeration
-      const rest = this.createAblyRestClient(this.getClientOptions(flags));
+      const rest = await this.createAblyRestClient(flags);
+      if (!rest) return;
 
       // Build params for channel listing
       // We request more channels than the limit to account for filtering
@@ -206,8 +203,6 @@ export default class SpacesList extends SpacesBaseCommand {
           `Error listing spaces: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-    } finally {
-      client.close();
     }
   }
 }

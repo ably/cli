@@ -28,7 +28,7 @@ export abstract class SpacesBaseCommand extends AblyBaseCommand {
     space: Space;
   }> {
     // First create an Ably client
-    const realtimeClient = await this.createAblyClient(flags);
+    const realtimeClient = await this.createAblyRealtimeClient(flags);
     if (!realtimeClient) {
       this.error("Failed to create Ably client");
     }

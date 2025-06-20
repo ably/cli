@@ -14,7 +14,7 @@ export abstract class ChatBaseCommand extends AblyBaseCommand {
     flags: BaseFlags,
   ): Promise<ChatClient | null> {
     // Create Ably Realtime client first
-    const realtimeClient = await this.createAblyClient(flags);
+    const realtimeClient = await this.createAblyRealtimeClient(flags);
     
     // Mark auth info as shown after creating the client
     // to prevent duplicate "Using..." output on subsequent calls

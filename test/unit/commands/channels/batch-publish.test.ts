@@ -23,8 +23,8 @@ class TestableBatchPublish extends BatchPublish {
     this._parseResult = result;
   }
 
-  // Override createAblyClient to return our mock
-  public override async createAblyClient() {
+  // Override createAblyRestClient to return our mock
+  public override async createAblyRestClient(_flags: any, _options?: any): Promise<any> {
     return this._mockAblyClient as any;
   }
 
@@ -108,10 +108,6 @@ class TestableBatchPublish extends BatchPublish {
     this.mockFileContent = content;
   }
 
-  // Override createAblyRestClient to return a mock REST client
-  public override createAblyRestClient(_options: any): any {
-    return this._mockAblyClient;
-  }
 
   // Add request property for testing REST API calls
   public request: sinon.SinonStub = sinon.stub();
