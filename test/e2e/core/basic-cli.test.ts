@@ -168,6 +168,23 @@ describe("Basic CLI E2E", function() {
         // In non-interactive mode, it shows a warning that "help" command is not found
         expect(result.stderr).to.include("help is not an ably command");
       });
+
+      it("should display web CLI help when running help web-cli", async function() {
+        const result = await runCommand(["help", "web-cli"], {
+          env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
+          timeoutMs: 5000
+        });
+
+        expect(result.exitCode).to.equal(0);
+        expect(result.stdout).to.include("browser-based CLI");
+        expect(result.stdout).to.include("COMMON COMMANDS");
+        expect(result.stdout).to.include("View Ably commands:");
+        expect(result.stdout).to.include("Publish a message:");
+        // Should NOT include the regular help commands section
+        expect(result.stdout).not.to.include("accounts");
+        expect(result.stdout).not.to.include("apps");
+        expect(result.stdout).not.to.include("Ably help commands:");
+      });
     });
 
     describe("Command not found handling", function() {

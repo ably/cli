@@ -2,6 +2,7 @@
  * Rate-limited test helper that extends the base test with connection throttling
  */
 import { test as base } from './base-test';
+import type { Page } from 'playwright/test';
 import { 
   navigateWithRateLimit, 
   getRateLimiterStatus,
@@ -31,14 +32,14 @@ export const test = base.extend({
   rateLimitedPage: async ({ page }, use, testInfo) => {
     const rateLimitedPage = {
       ...page,
-      goto: async (url: string, _options?: any) => {
+      goto: async (url: string, _options?: Parameters<Page['goto']>[1]) => {
         // Use rate-limited navigation
         await navigateWithRateLimit(page, url, testInfo.title);
         return page;
       }
     };
     
-    await use(rateLimitedPage as any);
+    await use(rateLimitedPage as Page);
   }
 });
 

@@ -735,7 +735,7 @@ export abstract class AblyBaseCommand extends Command {
     options.logLevel = 4;
 
     // Add agent header to identify requests from the CLI
-    (options as any).agents = { 'ably-cli': getCliVersion() };
+    (options as Ably.ClientOptions & { agents: Record<string, string> }).agents = { 'ably-cli': getCliVersion() };
 
     return options;
   }

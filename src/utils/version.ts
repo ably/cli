@@ -3,7 +3,6 @@
  */
 import colorJson from 'color-json';
 // Import package.json directly - TypeScript will resolve this at compile time
-// eslint-disable-next-line n/no-unpublished-import
 import packageJson from '../../package.json' with { type: 'json' };
 
 /**

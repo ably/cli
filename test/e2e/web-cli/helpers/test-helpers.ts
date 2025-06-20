@@ -85,7 +85,7 @@ export async function reloadPageWithRateLimit(page: Page): Promise<void> {
 }
 
 // Quiet console log that only outputs in verbose mode
-export function log(...args: any[]): void {
+export function log(...args: unknown[]): void {
   if (process.env.VERBOSE_TESTS) {
     console.log(...args);
   }
