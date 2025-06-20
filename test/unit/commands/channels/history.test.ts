@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import sinon from "sinon";
 import { Config } from "@oclif/core";
+import * as Ably from "ably";
 import ChannelsHistory from "../../../../src/commands/channels/history.js";
 import { AblyBaseCommand } from "../../../../src/base-command.js";
 
@@ -28,8 +29,8 @@ class TestableChannelsHistory extends ChannelsHistory {
     this._parseResult = result;
   }
 
-  // Override createAblyClient to return our mock
-  public override async createAblyClient() {
+  // Override createAblyRestClient to return our mock
+  public override async createAblyRestClient(_flags: any, _options?: any): Promise<Ably.Rest | null> {
     return this._mockAblyClient as any;
   }
 
@@ -56,6 +57,10 @@ class TestableChannelsHistory extends ChannelsHistory {
         await (this as any).ensureAppAndKey(flags);
         return;
       }
+
+      // Create the Ably client - this will handle displaying data plane info
+      const client = await this.createAblyRestClient(flags);
+      if (!client) return;
 
       // Simulate client creation and getting channel options happens before history call in real command
       // For the test, we mainly care that historyParams are built correctly and mockHistoryFn is called.

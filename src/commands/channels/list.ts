@@ -54,13 +54,12 @@ export default class ChannelsList extends AblyBaseCommand {
   async run(): Promise<void> {
     const { flags } = await this.parse(ChannelsList);
 
-    // Create the Ably client - this will handle displaying data plane info
-    const client = await this.createAblyClient(flags);
-    if (!client) return;
-
     try {
-      // REST client for channel enumeration - use our test-enabled method
-      const rest = this.createAblyRestClient(flags);
+      // REST client for channel enumeration
+      const rest = await this.createAblyRestClient(flags);
+      if (!rest) {
+        return;
+      }
 
       // Build params for channel listing
       const params: ChannelListParams = {
@@ -171,8 +170,6 @@ export default class ChannelsList extends AblyBaseCommand {
           `Error listing channels: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-    } finally {
-      client.close();
     }
   }
 }

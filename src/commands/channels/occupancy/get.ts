@@ -1,5 +1,4 @@
 import { Args } from "@oclif/core";
-import * as Ably from "ably";
 
 import { AblyBaseCommand } from "../../../base-command.js";
 
@@ -36,12 +35,12 @@ export default class ChannelsOccupancyGet extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsOccupancyGet);
 
-    let client: Ably.Rest | null = null;
-
     try {
-      // Create the Ably REST client (not Realtime)
-      const clientOptions = this.getClientOptions(flags);
-      client = this.createAblyRestClient(clientOptions);
+      // Create the Ably REST client
+      const client = await this.createAblyRestClient(flags);
+      if (!client) {
+        return;
+      }
 
       const channelName = args.channel;
 

@@ -70,7 +70,7 @@ export default class ChannelsOccupancySubscribe extends AblyBaseCommand {
     let channel: Ably.RealtimeChannel | null = null;
 
     try {
-      this.client = await this.createAblyClient(flags);
+      this.client = await this.createAblyRealtimeClient(flags);
       if (!this.client) return;
 
       const client = this.client;

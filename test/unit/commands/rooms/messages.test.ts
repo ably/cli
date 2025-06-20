@@ -25,7 +25,7 @@ class TestableRoomsMessagesSend extends RoomsMessagesSend {
     return this.mockChatClient;
   }
 
-  protected override async createAblyClient(_flags: any) {
+  protected override async createAblyRealtimeClient(_flags: any) {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 
@@ -60,7 +60,7 @@ class TestableRoomsMessagesSubscribe extends RoomsMessagesSubscribe {
     return this.mockChatClient;
   }
 
-  protected override async createAblyClient(_flags: any) {
+  protected override async createAblyRealtimeClient(_flags: any) {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 
@@ -93,7 +93,7 @@ class TestableRoomsMessagesGet extends RoomsMessagesGet {
     return this.mockChatClient;
   }
 
-  protected override async createAblyClient(_flags: any) {
+  protected override async createAblyRealtimeClient(_flags: any) {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 

@@ -20,11 +20,11 @@ class TestableBenchPublisher extends BenchPublisher {
     return this._parseResult;
   }
 
-  protected override async createAblyClient(_flags: any) {
+  protected override async createAblyRealtimeClient(_flags: any): Promise<Ably.Realtime | null> {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 
-  protected override createAblyRestClient(_flags: any): Ably.Rest {
+  protected override async createAblyRestClient(_flags: any): Promise<Ably.Rest | null> {
     return this.mockRestClient as unknown as Ably.Rest;
   }
 
@@ -87,7 +87,7 @@ class TestableBenchSubscriber extends BenchSubscriber {
     return this._parseResult;
   }
 
-  protected override async createAblyClient(_flags: any) {
+  protected override async createAblyRealtimeClient(_flags: any): Promise<Ably.Realtime | null> {
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 

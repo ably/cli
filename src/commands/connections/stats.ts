@@ -3,6 +3,7 @@ import * as Ably from "ably";
 import chalk from "chalk";
 
 import { AblyBaseCommand } from "../../base-command.js";
+import { BaseFlags } from "../../types/cli.js";
 import { StatsDisplay } from "../../services/stats-display.js";
 import { StatsDisplayData } from "../../services/stats-display.js";
 
@@ -111,10 +112,11 @@ export default class ConnectionsStats extends AblyBaseCommand {
   async runLiveStats(
     flags: Record<string, unknown>,
   ): Promise<void> {
-    let client: Ably.Rest | null = null;
     try {
-      const options: Ably.ClientOptions = this.getClientOptions(flags);
-      client = this.createAblyRestClient(options);
+      const client = await this.createAblyRestClient(flags as BaseFlags);
+      if (!client) {
+        return;
+      }
 
       this.logCliEvent(
         flags,
@@ -203,7 +205,6 @@ export default class ConnectionsStats extends AblyBaseCommand {
   async runOneTimeStats(
     flags: Record<string, unknown>,
   ): Promise<void> {
-    let client: Ably.Rest | null = null;
     // Calculate time range based on the unit
     const now = new Date();
     let startTime = new Date();
@@ -249,8 +250,10 @@ export default class ConnectionsStats extends AblyBaseCommand {
     );
 
     try {
-      const options: Ably.ClientOptions = this.getClientOptions(flags);
-      client = this.createAblyRestClient(options);
+      const client = await this.createAblyRestClient(flags as BaseFlags);
+      if (!client) {
+        return;
+      }
 
       // Get stats
       const statsPage = await client.stats(params);

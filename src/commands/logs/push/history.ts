@@ -1,5 +1,4 @@
 import { Flags } from "@oclif/core";
-import * as Ably from "ably";
 import chalk from "chalk";
 
 import { AblyBaseCommand } from "../../../base-command.js";
@@ -33,16 +32,11 @@ export default class LogsPushHistory extends AblyBaseCommand {
     const { flags } = await this.parse(LogsPushHistory);
 
     try {
-      // Get API key from flags or config
-      const apiKey = flags["api-key"] || (await this.configManager.getApiKey());
-      if (!apiKey) {
-        await this.ensureAppAndKey(flags);
+      // Create a REST client
+      const client = await this.createAblyRestClient(flags);
+      if (!client) {
         return;
       }
-
-      // Create a REST client
-      const options: Ably.ClientOptions = this.getClientOptions(flags);
-      const client = this.createAblyRestClient(options);
 
       const channelName = "[meta]log:push";
       const channel = client.channels.get(channelName);

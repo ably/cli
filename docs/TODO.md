@@ -8,7 +8,6 @@
 
 ## API and Architecture
 
-- [ ] Ensure all Ably channels commands that should use the REST API do, by default
 - [ ] Standardise on use of createAblyClient for both Rest and Realtime. It's odd that we have to explicitly call showAuthInfoIfNeeded when using Ably.Rest, but not for createAblyClient. CreateAblyClient should simply support Rest and Realtime, and ensure showAuthInfoIfNeeded will only execute once in case both Rest and Realtime are used.
 - [ ] MCP server is not fully implemented, see log below. We should implement it so that it works fully for resources as expected.
   ```text

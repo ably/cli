@@ -125,7 +125,7 @@ export default class BenchPublisher extends AblyBaseCommand {
     const messageRate = Math.min(flags.rate, 20);
     const messageSize = Math.max(flags["message-size"], 10);
 
-    this.realtime = await this.createAblyClient(flags);
+    this.realtime = await this.createAblyRealtimeClient(flags);
 
     if (!this.realtime) {
       this.error(

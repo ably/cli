@@ -46,7 +46,7 @@ export default class LogsPushSubscribe extends AblyBaseCommand {
 
     try {
       // Create the Ably client
-      this.client = await this.createAblyClient(flags);
+      this.client = await this.createAblyRealtimeClient(flags);
       if (!this.client) return;
 
       const { client } = this; // local const

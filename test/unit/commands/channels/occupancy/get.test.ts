@@ -37,7 +37,7 @@ class TestableChannelsOccupancyGet extends ChannelsOccupancyGet {
   }
 
   // Override createAblyRestClient to return mock client
-  public override createAblyRestClient(_options: Ably.ClientOptions): Ably.Rest {
+  public override async createAblyRestClient(_flags: any, _options?: any): Promise<Ably.Rest | null> {
     return this.mockClient as any;
   }
 

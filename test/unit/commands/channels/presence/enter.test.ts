@@ -71,9 +71,9 @@ class TestableChannelsPresenceEnter extends ChannelsPresenceEnter {
     return { apiKey: 'dummy-key-value:secret', appId: 'dummy-app' };
   }
 
-  // Override the createAblyClient method to ensure it returns a value
-  public override async createAblyClient(_flags?: any): Promise<Ably.Realtime | null> {
-    this.debug('Overriding createAblyClient in test mode, returning mockClient.');
+  // Override the createAblyRealtimeClient method to ensure it returns a value
+  public override async createAblyRealtimeClient(_flags?: any): Promise<Ably.Realtime | null> {
+    this.debug('Overriding createAblyRealtimeClient in test mode, returning mockClient.');
     // Return the mock client that was set up for testing
     return this.mockClient as unknown as Ably.Realtime;
   }
@@ -142,7 +142,7 @@ describe("ChannelsPresenceEnter", function() {
       close: sandbox.stub(),
     };
 
-    // Ensure the overridden createAblyClient uses this mock
+    // Ensure the overridden createAblyRealtimeClient uses this mock
     // (Already handled by the class override, no need to stub it again here)
 
     // Set default parse result (can be overridden by specific tests)
@@ -158,11 +158,11 @@ describe("ChannelsPresenceEnter", function() {
   });
 
   it("should create an Ably client when run", async function() {
-    const createClientSpy = sinon.spy(command, 'createAblyClient');
+    const createClientSpy = sinon.spy(command, 'createAblyRealtimeClient');
 
     // Stub the actual functionality to avoid long-running operations
     const runStub = sinon.stub(command, 'run').callsFake(async function(this: TestableChannelsPresenceEnter) {
-      await this.createAblyClient({});
+      await this.createAblyRealtimeClient({});
       return;
     });
 
@@ -197,8 +197,8 @@ describe("ChannelsPresenceEnter", function() {
     expect(() => JSON.parse(invalidJson)).to.throw();
   });
 
-  it("should return mock client from createAblyClient", async function() {
-    const client = await command.createAblyClient({});
+  it("should return mock client from createAblyRealtimeClient", async function() {
+    const client = await command.createAblyRealtimeClient({});
     expect(client).to.equal(command.mockClient);
   });
 

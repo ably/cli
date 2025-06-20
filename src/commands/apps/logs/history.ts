@@ -36,26 +36,11 @@ export default class AppsLogsHistory extends AblyBaseCommand {
     const { flags } = await this.parse(AppsLogsHistory);
 
     try {
-      // Get API key from flags or config
-      const apiKey = flags["api-key"] || (await this.configManager.getApiKey());
-      if (!apiKey) {
-        const appAndKey = await this.ensureAppAndKey(flags);
-        if (!appAndKey) {
-          this.error(
-            'No API key provided. Please specify --api-key or set an app with "ably apps switch"',
-          );
-          return;
-        }
-
-        flags["api-key"] = appAndKey.apiKey;
-      }
-
-      // Show auth info at the start of the command
-      this.showAuthInfoIfNeeded(flags);
-
       // Create a REST client
-      const options: Ably.ClientOptions = this.getClientOptions(flags);
-      const client = this.createAblyRestClient(options);
+      const client = await this.createAblyRestClient(flags);
+      if (!client) {
+        return;
+      }
 
       // Get the channel
       const channel = client.channels.get("[meta]log");

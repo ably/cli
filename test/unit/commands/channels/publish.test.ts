@@ -26,19 +26,12 @@ class TestableChannelsPublish extends ChannelsPublish {
   public mockRealtimeClient: any = null;
 
   // Override client creation methods
-  public override async createAblyClient(flags: any): Promise<Ably.Realtime | null> {
-    // For REST transport, return null to use REST client
-    if (flags.transport !== 'realtime') {
-      this.debug('Simulating REST client usage pathway');
-      return null;
-    }
-
-    // Otherwise return the mock Realtime client
+  public override async createAblyRealtimeClient(_flags: any): Promise<Ably.Realtime | null> {
     this.debug('Using mock Realtime client');
     return this.mockRealtimeClient as unknown as Ably.Realtime;
   }
 
-  public override createAblyRestClient(_options: Ably.ClientOptions | any): Ably.Rest {
+  public override async createAblyRestClient(_flags: any, _options?: any): Promise<Ably.Rest | null> {
     this.debug('Using mock REST client');
     return this.mockRestClient as unknown as Ably.Rest;
   }

@@ -32,7 +32,7 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
 
     try {
       // Create the Ably client
-      client = await this.createAblyClient(flags);
+      client = await this.createAblyRealtimeClient(flags);
       if (!client) return;
 
       const channelName = "[meta]channel.lifecycle";

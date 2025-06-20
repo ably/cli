@@ -55,13 +55,10 @@ export default class RoomsList extends ChatBaseCommand {
   async run(): Promise<void> {
     const { flags } = await this.parse(RoomsList);
 
-    // Create the Ably client
-    const client = await this.createAblyClient(flags);
-    if (!client) return;
-
     try {
       // REST client for channel enumeration
-      const rest = this.createAblyRestClient(this.getClientOptions(flags));
+      const rest = await this.createAblyRestClient(flags);
+      if (!rest) return;
 
       // Build params for channel listing
       // We request more channels than the limit to account for filtering
@@ -178,8 +175,6 @@ export default class RoomsList extends ChatBaseCommand {
       this.error(
         `Error listing rooms: ${error instanceof Error ? error.message : String(error)}`,
       );
-    } finally {
-      client.close();
     }
   }
 }

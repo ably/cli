@@ -3,6 +3,7 @@ import * as Ably from "ably";
 import chalk from "chalk";
 
 import { AblyBaseCommand } from "../../base-command.js";
+import { BaseFlags } from "../../types/cli.js";
 
 export default class ChannelsPublish extends AblyBaseCommand {
   static override args = {
@@ -86,9 +87,6 @@ export default class ChannelsPublish extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsPublish);
 
-    // Show authentication information
-    this.showAuthInfoIfNeeded(flags);
-
     // Use REST by default now - only create Realtime client if explicitly requested
     await (flags.transport === "realtime"
       ? this.publishWithRealtime(args, flags)
@@ -99,25 +97,6 @@ export default class ChannelsPublish extends AblyBaseCommand {
     if (this.progressIntervalId) {
       clearInterval(this.progressIntervalId);
       this.progressIntervalId = null;
-    }
-  }
-
-  private async ensureAuthForRest(
-    flags: Record<string, unknown>,
-  ): Promise<void> {
-    if (!flags.token && !flags["api-key"] && !process.env.ABLY_API_KEY) {
-      const appAndKey = await this.ensureAppAndKey(flags);
-      if (!appAndKey) {
-        this.logErrorAndExit(
-          `${chalk.yellow("No app or API key configured for this command")}.\nPlease log in first with "${chalk.cyan("ably accounts login")}" (recommended approach).\nAlternatively you can provide an API key with the ${chalk.cyan("--api-key")} argument or set the ${chalk.cyan("ABLY_API_KEY")} environment variable.`,
-          flags,
-        );
-        // Throw an error to stop execution after logging
-        throw new Error("Auth configuration missing.");
-      }
-
-      // Assign the key to flags if found via config
-      flags["api-key"] = appAndKey.apiKey;
     }
   }
 
@@ -359,7 +338,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
     flags: Record<string, unknown>,
   ): Promise<void> {
     try {
-      this.realtime = await this.createAblyClient(flags);
+      this.realtime = await this.createAblyRealtimeClient(flags as BaseFlags);
       if (!this.realtime) {
         const errorMsg =
           "Failed to create Ably client. Please check your API key and try again.";
@@ -422,11 +401,11 @@ export default class ChannelsPublish extends AblyBaseCommand {
     flags: Record<string, unknown>,
   ): Promise<void> {
     try {
-      // Ensure auth setup first for consistent display
-      await this.ensureAuthForRest(flags);
-
-      const options = this.getClientOptions(flags);
-      const rest = this.createAblyRestClient(options);
+      // Create REST client
+      const rest = await this.createAblyRestClient(flags as BaseFlags);
+      if (!rest) {
+        return;
+      }
       const channel = rest.channels.get(args.channel as string);
 
       this.logCliEvent(

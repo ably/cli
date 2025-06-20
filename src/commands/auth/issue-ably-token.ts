@@ -58,11 +58,6 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
     const { apiKey } = appAndKey;
 
     try {
-      // Display auth info if not token-only output
-      if (!flags["token-only"]) {
-        this.showAuthInfoIfNeeded(flags);
-      }
-
       // Parse capabilities
       let capabilities;
       try {
@@ -93,7 +88,12 @@ export default class IssueAblyTokenCommand extends AblyBaseCommand {
       }
 
       // Create Ably REST client and request token
-      const rest = this.createAblyRestClient({ key: apiKey });
+      const rest = await this.createAblyRestClient({ ...flags, 'api-key': apiKey }, { 
+        skipAuthInfo: flags["token-only"] 
+      });
+      if (!rest) {
+        return;
+      }
       const tokenRequest = await rest.auth.createTokenRequest(tokenParams);
 
       // Use the token request to get an actual token
