@@ -2,7 +2,6 @@
 
 ## Features
 
-- [ ] Web example should support a restricted mode which will be used for anonymous users of the Ably docs website. This version of the CLI will still be provided with a working API key, however no control API access token will be provided (as only valid registered users have access tokens). When an access token is not provided and the CLI is in web terminal mode, all commands that rely on the control API will not work and the user will be told to sign up / login to use these features. In addition, a few additional commands will be disallowed, including channel enumeration (list commands for channels, spaces or rooms), all log commands (i.e. ably logs * or ably * logs) as these commands could theoretically surface other user activity in the docs demo app for anonymous users. The web CLI will "know" that is in limited docs mode as no access token will be provided to it as an environment variable whilst in web CLI mode. The user will be encouraged to sign up at https://ably.com/signup or login at https://ably.com/login.
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the terminal server
 `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
 - [ ] Support new endpoint client options when available in our public APIs -> https://github.com/ably/ably-js/pull/1973
