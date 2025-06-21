@@ -3,6 +3,12 @@
 
 set -e
 
+# If arguments are provided, pass them to run-tests.sh instead
+if [ $# -gt 0 ]; then
+  # User provided specific test files/patterns, use run-tests.sh
+  exec ./scripts/run-tests.sh "$@"
+fi
+
 echo "🚀 Running all tests with proper isolation..."
 echo ""
 

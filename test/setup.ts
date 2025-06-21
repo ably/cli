@@ -32,19 +32,25 @@ const globalProcessRegistry = new Set<number>();
 // Global process tracking function
 export function trackProcess(pid: number): void {
   globalProcessRegistry.add(pid);
-  console.log(`Tracking process PID: ${pid}`);
+  if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+    console.log(`Tracking process PID: ${pid}`);
+  }
 }
 
 // Global process cleanup function
 export async function cleanupGlobalProcesses(): Promise<void> {
   if (globalProcessRegistry.size > 0) {
-    console.log(`Cleaning up ${globalProcessRegistry.size} tracked processes...`);
+    if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+      console.log(`Cleaning up ${globalProcessRegistry.size} tracked processes...`);
+    }
     
     for (const pid of globalProcessRegistry) {
       try {
         // Check if process exists before trying to kill
         process.kill(pid, 0);
-        console.log(`Killing tracked process PID: ${pid}`);
+        if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+          console.log(`Killing tracked process PID: ${pid}`);
+        }
         
         // Try graceful kill first
         process.kill(pid, 'SIGTERM');
@@ -54,7 +60,9 @@ export async function cleanupGlobalProcesses(): Promise<void> {
         try {
           process.kill(pid, 0);
           process.kill(pid, 'SIGKILL');
-          console.log(`Force killed PID: ${pid}`);
+          if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+            console.log(`Force killed PID: ${pid}`);
+          }
         } catch {
           // Ignore errors
         }
@@ -156,7 +164,7 @@ export function trackAblyClient(client: Ably.Rest | Ably.Realtime): void {
 // Simplified global cleanup function
 async function globalCleanup() {
   const clientCount = activeClients.length;
-  if (clientCount > 0) {
+  if (clientCount > 0 && (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true')) {
     console.log(`Cleaning up ${clientCount} active Ably clients...`);
   }
 
@@ -265,7 +273,9 @@ try {
   // Add cleanup on process exit
   process.on('exit', () => {
     // Note: Can't use async here, so do synchronous cleanup
-    console.log('Process exiting, attempting final cleanup...');
+    if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+      console.log('Process exiting, attempting final cleanup...');
+    }
     try {
       for (const pid of globalProcessRegistry) {
         try {
@@ -296,10 +306,14 @@ try {
     if (result.error) {
       console.warn(`Warning: Error loading .env file: ${result.error.message}`);
     } else if (result.parsed) {
-      console.log(`Loaded environment variables from .env file for tests`);
+      if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+        console.log(`Loaded environment variables from .env file for tests`);
+      }
     }
   } else {
-    console.log('No .env file found. Using environment variables from current environment.');
+    if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
+      console.log('No .env file found. Using environment variables from current environment.');
+    }
   }
 
 } catch (error) {
