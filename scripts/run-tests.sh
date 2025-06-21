@@ -135,7 +135,9 @@ MOCHA_RUNNER_CMD="./node_modules/mocha/bin/mocha --require ./test/setup.ts --for
 # Configure Node.js warnings based on debug mode
 if [[ "$DEBUG_MODE" == "true" ]]; then
   # In debug mode, show all warnings for troubleshooting
-  MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\"$NODE_OPTIONS --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
+  # Also set ABLY_CLI_TEST_SHOW_OUTPUT to prevent console suppression in test setup
+  export ABLY_CLI_TEST_SHOW_OUTPUT=true
+  MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true ABLY_CLI_TEST_SHOW_OUTPUT=true NODE_OPTIONS=\"$NODE_OPTIONS --no-inspect --unhandled-rejections=strict\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
 else
   # In normal mode, suppress known deprecation and experimental warnings to clean up output
   MOCHA_NODE_SETUP="CURSOR_DISABLE_DEBUGGER=true NODE_OPTIONS=\"$NODE_OPTIONS --no-inspect --unhandled-rejections=strict --no-deprecation --no-warnings\" node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"), { project: \"./tsconfig.test.json\" });'"
