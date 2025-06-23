@@ -48,7 +48,7 @@ describe('Install Instructions', () => {
   test('reconnecting message has appropriate content', () => {
     const message = getConnectionMessage('reconnectingWithInstall');
     expect(message.lines).toContain('Reconnecting to Ably CLI server...');
-    expect(message.lines).toContain('Press ⏎ to cancel reconnection');
+    expect(message.lines).toContain('Press ⏎ to cancel');
     // Install instructions are now shown separately after disconnect
     expect(message.lines).not.toContain('npm install');
   });

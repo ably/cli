@@ -124,7 +124,7 @@ describe('Channel Occupancy E2E Tests', function() {
       // Start a background subscriber process to trigger occupancy change
       console.log(`Starting background subscriber for channel ${occupancyChannel}`);
       const subscribeInfo = await runLongRunningBackgroundProcess(
-        `bin/run.js channels subscribe ${occupancyChannel} --duration 10`,
+        `bin/run.js channels subscribe ${occupancyChannel} --duration 20`,
         await createTempOutputFile(),
         { 
           readySignal: "Successfully attached to channel", 

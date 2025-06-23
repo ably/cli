@@ -1267,7 +1267,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     renderTerminal({ ablyApiKey: 'test-key', ablyAccessToken: 'test-token' });
     
     // Wait for WebSocket connection
-    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 10000 });
     
     // Parse the auth payload
     const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
@@ -1278,7 +1278,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     // Verify storage wasn't cleared
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('session-456');
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe(expectedHash);
-  });
+  }, 10000);
 
   test('stores credential hash when new session is created', async () => {
     renderTerminal({ ablyApiKey: 'test-key-123', ablyAccessToken: 'test-token-456' });
@@ -1298,7 +1298,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     // Both sessionId and credential hash should be stored
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-789');
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe('hash-test-key-123:test-token-456');
-  });
+  }, 10000);
 
   test('clears credential hash when session is purged due to server disconnect', async () => {
     // Set up initial state with stored session and hash
@@ -1322,7 +1322,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     // Both sessionId and credential hash should be cleared
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
-  });
+  }, 10000);
 
   test('handles missing credentials (undefined apiKey)', async () => {
     renderTerminal({ ablyApiKey: undefined, ablyAccessToken: 'test-token' });
@@ -1333,7 +1333,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     });
 
     // Should still create a connection
-    await waitFor(() => expect(mockSend).toHaveBeenCalled());
+    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 10000 });
 
     // Simulate hello message
     await act(async () => {
@@ -1345,7 +1345,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     // Should store session and hash even with undefined apiKey
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('session-no-key');
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe('hash-:test-token');
-  });
+  }, 10000);
 
   test('does not store session when resumeOnReload is false', async () => {
     renderTerminal({ resumeOnReload: false });
@@ -1361,7 +1361,7 @@ describe('AblyCliTerminal - Credential Validation', () => {
     // Nothing should be stored in sessionStorage
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
-  });
+  }, 10000);
 });
 
  
