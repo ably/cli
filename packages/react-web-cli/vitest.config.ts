@@ -9,6 +9,7 @@ export default defineConfig({
     environment: 'jsdom', // Set up a JSDOM environment for React components
     setupFiles: ['./src/test-setup.ts'], // Reverted path to the setup file in src
     watch: false, // Disable watch mode so `vitest` exits after running tests
+    testTimeout: 10000, // 10 second timeout for all tests
   },
   resolve: {
     alias: {
