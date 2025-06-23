@@ -347,4 +347,141 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     expect(terminalText).toContain('@ably/cli/');
     expect(terminalText).toContain('COMMON COMMANDS');
   });
+
+  test('should allow cancelling auto-reconnect via Enter key', async ({ page }) => {
+    // Helper to add WebSocket interception
+    await page.addInitScript(() => {
+      const NativeWebSocket = window.WebSocket;
+      const active: WebSocket[] = [];
+
+      (window as any).__wsCtl = {
+        closeAll: () => {
+          active.forEach(ws => {
+            ws.dispatchEvent(new CloseEvent('close', { code: 1006, reason: 'test', wasClean: false }));
+          });
+        },
+        count: () => active.length,
+      };
+
+      class InterceptWS extends NativeWebSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          active.push(this);
+          this.addEventListener('close', () => {
+            const idx = active.indexOf(this);
+            if (idx !== -1) active.splice(idx, 1);
+          });
+        }
+      }
+
+      window.WebSocket = InterceptWS as unknown as typeof WebSocket;
+    });
+
+    await page.goto(getTestUrl());
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
+    }
+    
+    await authenticateWebCli(page, apiKey);
+    
+    const terminalSelector = '.xterm-viewport';
+    const statusSelector = '.status';
+    
+    // Wait for initial connection
+    await expect(page.locator(statusSelector)).toHaveText('connected', { timeout: 15000 });
+    
+    // Simulate connection loss
+    await page.evaluate(() => (window as any).__wsCtl.closeAll());
+    await expect(page.locator(statusSelector)).toHaveText('reconnecting', { timeout: 5000 });
+    
+    // Verify reconnection messages appear inside terminal
+    await expect(page.locator(terminalSelector)).toContainText('Reconnecting (Attempt', { timeout: 5000 });
+    await expect(page.locator(terminalSelector)).toContainText('Next attempt in', { timeout: 5000 });
+    await expect(page.locator(terminalSelector)).toContainText('Press ⏎ to cancel', { timeout: 5000 });
+    
+    // Cancel auto-reconnect via Enter
+    await page.locator(terminalSelector).click();
+    await page.keyboard.press('Enter');
+    
+    // Should show disconnected status and cancellation message
+    await expect(page.locator(statusSelector)).toHaveText('disconnected', { timeout: 5000 });
+    await expect(page.locator(terminalSelector)).toContainText('Reconnection attempts cancelled', { timeout: 3000 });
+    
+    // Should show manual reconnect prompt
+    await expect(page.locator(terminalSelector)).toContainText('Press ⏎ to reconnect', { timeout: 3000 });
+    
+    // Manual reconnect via Enter
+    await page.keyboard.press('Enter');
+    await expect(page.locator(statusSelector)).toHaveText('connecting', { timeout: 5000 });
+    await expect(page.locator(statusSelector)).toHaveText('connected', { timeout: 15000 });
+  });
+
+  test('should show manual reconnect prompt after max attempts', async ({ page }) => {
+    test.setTimeout(90000); // Extended timeout for multiple reconnection attempts
+    
+    // Helper to add WebSocket interception
+    await page.addInitScript(() => {
+      const NativeWebSocket = window.WebSocket;
+      const active: WebSocket[] = [];
+
+      (window as any).__wsCtl = {
+        closeAll: () => {
+          active.forEach(ws => {
+            ws.dispatchEvent(new CloseEvent('close', { code: 1006, reason: 'test', wasClean: false }));
+          });
+        },
+        count: () => active.length,
+      };
+
+      class InterceptWS extends NativeWebSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          active.push(this);
+          this.addEventListener('close', () => {
+            const idx = active.indexOf(this);
+            if (idx !== -1) active.splice(idx, 1);
+          });
+        }
+      }
+
+      window.WebSocket = InterceptWS as unknown as typeof WebSocket;
+    });
+
+    // Use maxReconnectAttempts=3 for faster testing
+    const url = getTestUrl() + '&maxReconnectAttempts=3';
+    await page.goto(url);
+    
+    const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
+    }
+    
+    await authenticateWebCli(page, apiKey);
+    
+    const terminalSelector = '.xterm-viewport';
+    const statusSelector = '.status';
+    
+    // Wait for initial connection
+    await expect(page.locator(statusSelector)).toHaveText('connected', { timeout: 15000 });
+    
+    // Cause repeated disconnects to exceed max attempts
+    for (let i = 0; i < 5; i++) {
+      await page.evaluate(() => (window as any).__wsCtl.closeAll());
+      await page.waitForTimeout(500); // Allow component to process
+    }
+    
+    // Should eventually show disconnected status
+    await expect(page.locator(statusSelector)).toHaveText('disconnected', { timeout: 30000 });
+    
+    // Should show max attempts message and manual reconnect prompt
+    await expect(page.locator(terminalSelector)).toContainText('Failed to reconnect after', { timeout: 10000 });
+    await expect(page.locator(terminalSelector)).toContainText('Press Enter to try reconnecting manually', { timeout: 5000 });
+    
+    // Manual reconnect should work
+    await page.locator(terminalSelector).click();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(statusSelector)).toHaveText('connecting', { timeout: 5000 });
+    await expect(page.locator(statusSelector)).toHaveText('connected', { timeout: 15000 });
+  });
 });

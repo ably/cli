@@ -334,6 +334,44 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     await expect(page.locator('.xterm')).toBeVisible();
     await expect(page.locator('.xterm')).toContainText('test session');
   });
+
+  test('should show SERVER DISCONNECT overlay for invalid credentials', async ({ page }) => {
+    // Clear any stored credentials before navigating
+    await page.addInitScript(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    
+    // Use an obviously invalid JWT-looking token so the server closes with 4001 Invalid token
+    const badToken = 'abc.def.ghi';
+    const url = getTestUrl() + `&accessToken=${badToken}`;
+    
+    await page.goto(url);
+    
+    // Should show auth screen initially
+    await expect(page.getByText('Enter your credentials to start a terminal session')).toBeVisible();
+    
+    // Fill in a valid-looking API key but keep the bad access token
+    await page.fill('input[placeholder="your_app.key_name:key_secret"]', 'test-app.key:secret');
+    await page.fill('input[placeholder="Your JWT access token"]', badToken);
+    
+    // Attempt to connect
+    await page.click('button:has-text("Connect to Terminal")');
+    
+    // Should transition to terminal view initially
+    await expect(page.locator('.xterm')).toBeVisible({ timeout: 5000 });
+    
+    // Wait for the server to reject the token and show the overlay
+    const overlay = page.locator('.ably-overlay');
+    await expect(overlay).toBeVisible({ timeout: 10000 });
+    await expect(overlay).toContainText('SERVER DISCONNECT');
+    
+    // The header status should show disconnected
+    await expect(page.locator('.status')).toHaveText('disconnected');
+    
+    // Verify the overlay has the expected styling (error state)
+    await expect(overlay).toHaveClass(/.*error.*/);
+  });
 });
 
 test.describe('Web CLI Auto-Login E2E Tests', () => {

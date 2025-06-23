@@ -1,5 +1,4 @@
-import { test, expect, getTestUrl, buildTestUrl } from './helpers/base-test';
-import { authenticateWebCli } from './auth-helper';
+import { test, expect, getTestUrl } from './helpers/base-test';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
 
 test.describe('Domain-Scoped Authentication E2E Tests', () => {
@@ -46,7 +45,7 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     expect(storedKeys.some(key => key.includes('.rememberCredentials.') && key.includes('localhost'))).toBe(true);
   });
 
-  test('should not share credentials between different domains', async ({ page, context }) => {
+  test('should not share credentials between different domains', async ({ page }) => {
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -161,8 +160,8 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     // Wait for terminal
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
-    // Store the legitimate credentials
-    const legitimateDomain = await page.evaluate(() => {
+    // Store the legitimate credentials - we don't need to use the domain value
+    await page.evaluate(() => {
       const url = new URL(window.location.href);
       const wsUrl = url.searchParams.get('serverUrl') || 'wss://web-cli.ably.com';
       return new URL(wsUrl).host;
