@@ -366,7 +366,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow); // Header color for max reconnects
     expect(drawBoxArgs[2]).toBe('SERVICE UNAVAILABLE');
     expect(drawBoxArgs[3][0]).toContain('Web terminal service is temporarily unavailable.');
-    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try again'))).toBe(true);
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to reconnect'))).toBe(true);
 
     expect(mockClearBox).toHaveBeenCalled(); // Previous box cleared before new box
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');
@@ -490,6 +490,35 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(onConnectionStatusChangeMock).toHaveBeenCalledWith('disconnected');
   });
 
+  test('shows installation tip after 6 seconds during connection attempts', async () => {
+    vi.useFakeTimers();
+    
+    renderTerminal();
+    
+    // Should initially show connecting overlay without installation tip
+    await waitFor(() => {
+      expect(screen.getByTestId('ably-overlay')).toBeInTheDocument();
+    });
+    
+    let overlayText = screen.getByTestId('ably-overlay').textContent || '';
+    expect(overlayText).toContain('Connecting to Ably CLI server');
+    expect(overlayText).not.toContain('Pro tip:');
+    
+    // Advance time by 6 seconds
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
+    
+    // Should now show installation tip
+    await waitFor(() => {
+      overlayText = screen.getByTestId('ably-overlay').textContent || '';
+      expect(overlayText).toContain('Pro tip: Want full control and speed? Install the CLI locally');
+      expect(overlayText).toContain('$ npm install -g @ably/cli');
+    });
+    
+    vi.useRealTimers();
+  });
+
   test('shows countdown timer during reconnection attempts (smoke)', async () => {
     renderTerminal();
 
@@ -507,6 +536,42 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       const overlay = screen.getByTestId('ably-overlay');
       expect(overlay.textContent).toMatch(/Next attempt in 2s/);
     });
+  });
+
+  test('shows installation tip during reconnection after 6 seconds', async () => {
+    vi.useFakeTimers();
+    
+    renderTerminal();
+    
+    // Trigger a close event to start reconnection
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('close', { code: 1006, wasClean: false });
+    });
+    
+    // Should show reconnecting overlay
+    await waitFor(() => {
+      expect(screen.getByTestId('ably-overlay')).toBeInTheDocument();
+      const overlayText = screen.getByTestId('ably-overlay').textContent || '';
+      expect(overlayText).toContain('RECONNECTING');
+    });
+    
+    let overlayText = screen.getByTestId('ably-overlay').textContent || '';
+    expect(overlayText).not.toContain('Pro tip:');
+    
+    // Advance time by 6 seconds
+    act(() => {
+      vi.advanceTimersByTime(6000);
+    });
+    
+    // Should now show installation tip
+    await waitFor(() => {
+      overlayText = screen.getByTestId('ably-overlay').textContent || '';
+      expect(overlayText).toContain('Pro tip: Want full control and speed? Install the CLI locally');
+      expect(overlayText).toContain('$ npm install -g @ably/cli');
+    });
+    
+    vi.useRealTimers();
   });
 
   test('manual reconnect works after non-recoverable server close (4008)', async () => {
@@ -687,8 +752,8 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow);
     expect(drawBoxArgs[2]).toBe('SERVICE UNAVAILABLE');
     expect(drawBoxArgs[3][0]).toContain('Web terminal service is temporarily unavailable');
-    expect(drawBoxArgs[3].some((ln: string) => ln.includes('npm install -g @ably/web-cli'))).toBe(true);
-    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to try again'))).toBe(true);
+    expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to reconnect'))).toBe(true);
+    // Installation tip is now in the drawer, not in the lines
 
     expect(mockClearBox).toHaveBeenCalled();
     expect(onConnectionStatusChangeMock).toHaveBeenLastCalledWith('disconnected');

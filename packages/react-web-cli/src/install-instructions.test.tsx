@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { getConnectionMessage } from './connection-messages';
 
 describe('Install Instructions', () => {
-  test('all connection messages include npm install instructions', () => {
+  test('connection messages no longer include inline npm install instructions', () => {
     const messageTypes = [
       'connectionFailed',
       'serverDisconnect', 
@@ -21,17 +21,17 @@ describe('Install Instructions', () => {
       expect(message).toHaveProperty('lines');
       expect(Array.isArray(message.lines)).toBe(true);
       
-      // Verify npm install instruction is present
+      // Verify npm install instruction is NOT present (removed for cleaner separation)
       const hasNpmInstall = message.lines.some(line => 
-        line.includes('npm install -g @ably/web-cli')
+        line.includes('npm install')
       );
-      expect(hasNpmInstall).toBe(true);
+      expect(hasNpmInstall).toBe(false);
       
-      // Verify no pnpm or yarn instructions
-      const hasPnpm = message.lines.some(line => line.includes('pnpm'));
-      const hasYarn = message.lines.some(line => line.includes('yarn'));
-      expect(hasPnpm).toBe(false);
-      expect(hasYarn).toBe(false);
+      // Verify reconnect prompt is present
+      const hasReconnectPrompt = message.lines.some(line => 
+        line.includes('Press ⏎')
+      );
+      expect(hasReconnectPrompt).toBe(true);
     });
   });
 
@@ -48,8 +48,8 @@ describe('Install Instructions', () => {
   test('reconnecting message has appropriate content', () => {
     const message = getConnectionMessage('reconnectingWithInstall');
     expect(message.lines).toContain('Reconnecting to Ably CLI server...');
-    expect(message.lines).toContain('Having trouble? Install the CLI locally:');
-    expect(message.lines).toContain('  npm install -g @ably/web-cli');
     expect(message.lines).toContain('Press ⏎ to cancel reconnection');
+    // Install instructions are now shown separately after disconnect
+    expect(message.lines).not.toContain('npm install');
   });
 });

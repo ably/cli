@@ -14,10 +14,7 @@ export const CONNECTION_MESSAGES = {
     lines: [
       "Unable to connect to the web terminal service.",
       "",
-      "For uninterrupted access, install the Ably CLI locally:",
-      "  npm install -g @ably/web-cli",
-      "",
-      "Press ⏎ to retry connection"
+      "Press ⏎ to reconnect"
     ]
   },
   
@@ -25,9 +22,6 @@ export const CONNECTION_MESSAGES = {
     title: "SERVER DISCONNECTED", 
     lines: [
       "The web terminal service is currently unavailable.",
-      "",
-      "Install the CLI locally for reliable access:",
-      "  npm install -g @ably/web-cli",
       "",
       "Press ⏎ to reconnect"
     ]
@@ -38,12 +32,7 @@ export const CONNECTION_MESSAGES = {
     lines: [
       "Web terminal service is temporarily unavailable.",
       "",
-      "For continuous access, install locally:",
-      "  npm install -g @ably/web-cli",
-      "",
-      "Once installed, run 'ably' to get started.",
-      "",
-      "Press ⏎ to try again"
+      "Press ⏎ to reconnect"
     ]
   },
   
@@ -52,12 +41,7 @@ export const CONNECTION_MESSAGES = {
     lines: [
       "Web terminal service is at capacity.",
       "",
-      "Install the CLI locally for immediate access:",
-      "  npm install -g @ably/web-cli",
-      "",
-      "The local CLI doesn't require web sessions.",
-      "",
-      "Press ⏎ to retry"
+      "Press ⏎ to reconnect"
     ]
   },
 
@@ -65,9 +49,6 @@ export const CONNECTION_MESSAGES = {
     title: "CONNECTION TIMEOUT",
     lines: [
       "Connection to web terminal timed out.",
-      "",
-      "For faster access, install locally:",
-      "  npm install -g @ably/web-cli", 
       "",
       "Press ⏎ to reconnect"
     ]
@@ -78,9 +59,6 @@ export const CONNECTION_MESSAGES = {
     lines: [
       "Reconnection attempts cancelled.",
       "",
-      "Install the CLI locally to avoid connection issues:",
-      "  npm install -g @ably/web-cli",
-      "",
       "Press ⏎ to reconnect"
     ]
   },
@@ -90,10 +68,7 @@ export const CONNECTION_MESSAGES = {
     lines: [
       "Reconnecting to Ably CLI server...",
       "",
-      "Having trouble? Install the CLI locally:",
-      "  npm install -g @ably/web-cli",
-      "",
-      "Press ⏎ to cancel reconnection"
+      "Press ⏎ to cancel"
     ]
   }
 };
