@@ -26,14 +26,18 @@ const getWebSocketUrl = () => {
 const getInitialCredentials = () => {
   const urlParams = new URLSearchParams(window.location.search);
   
+  // Get the domain from the WebSocket URL for scoping
+  const wsUrl = getWebSocketUrl();
+  const wsDomain = new URL(wsUrl).host;
+  
   // Check if we should clear credentials (for testing)
   if (urlParams.get('clearCredentials') === 'true') {
-    localStorage.removeItem('ably.web-cli.apiKey');
-    localStorage.removeItem('ably.web-cli.accessToken');
-    localStorage.removeItem('ably.web-cli.rememberCredentials');
+    localStorage.removeItem(`ably.web-cli.apiKey.${wsDomain}`);
+    localStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
+    localStorage.removeItem(`ably.web-cli.rememberCredentials.${wsDomain}`);
     // Also clear from sessionStorage
-    sessionStorage.removeItem('ably.web-cli.apiKey');
-    sessionStorage.removeItem('ably.web-cli.accessToken');
+    sessionStorage.removeItem(`ably.web-cli.apiKey.${wsDomain}`);
+    sessionStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
     // Remove the clearCredentials param from URL
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete('clearCredentials');
@@ -41,10 +45,10 @@ const getInitialCredentials = () => {
   }
   
   // Check localStorage for persisted credentials (if user chose to remember)
-  const rememberCredentials = localStorage.getItem('ably.web-cli.rememberCredentials') === 'true';
+  const rememberCredentials = localStorage.getItem(`ably.web-cli.rememberCredentials.${wsDomain}`) === 'true';
   if (rememberCredentials) {
-    const storedApiKey = localStorage.getItem('ably.web-cli.apiKey');
-    const storedAccessToken = localStorage.getItem('ably.web-cli.accessToken');
+    const storedApiKey = localStorage.getItem(`ably.web-cli.apiKey.${wsDomain}`);
+    const storedAccessToken = localStorage.getItem(`ably.web-cli.accessToken.${wsDomain}`);
     if (storedApiKey) {
       return { 
         apiKey: storedApiKey, 
@@ -55,8 +59,8 @@ const getInitialCredentials = () => {
   }
   
   // Check sessionStorage for session-only credentials
-  const sessionApiKey = sessionStorage.getItem('ably.web-cli.apiKey');
-  const sessionAccessToken = sessionStorage.getItem('ably.web-cli.accessToken');
+  const sessionApiKey = sessionStorage.getItem(`ably.web-cli.apiKey.${wsDomain}`);
+  const sessionAccessToken = sessionStorage.getItem(`ably.web-cli.accessToken.${wsDomain}`);
   if (sessionApiKey) {
     return { 
       apiKey: sessionApiKey, 
@@ -110,7 +114,10 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey && initialCreds.apiKey.trim()));
   const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session' || initialCreds.source === 'localStorage');
   const [authSource, setAuthSource] = useState(initialCreds.source);
-  const [rememberCredentials, setRememberCredentials] = useState(localStorage.getItem('ably.web-cli.rememberCredentials') === 'true');
+  // Get the URL and domain early for use in state initialization
+  const currentWebsocketUrl = getWebSocketUrl();
+  const wsDomain = new URL(currentWebsocketUrl).host;
+  const [rememberCredentials, setRememberCredentials] = useState(localStorage.getItem(`ably.web-cli.rememberCredentials.${wsDomain}`) === 'true');
 
   // Store the latest sessionId globally for E2E tests / debugging
   const handleSessionId = useCallback((id: string) => {
@@ -129,10 +136,10 @@ function App() {
 
   // Handle authentication
   const handleAuthenticate = useCallback((newApiKey: string, newAccessToken: string, remember?: boolean) => {
-    // Clear any existing session data when credentials change
-    sessionStorage.removeItem('ably.cli.sessionId');
-    sessionStorage.removeItem('ably.cli.secondarySessionId');
-    sessionStorage.removeItem('ably.cli.isSplit');
+    // Clear any existing session data when credentials change (domain-scoped)
+    sessionStorage.removeItem(`ably.cli.sessionId.${wsDomain}`);
+    sessionStorage.removeItem(`ably.cli.secondarySessionId.${wsDomain}`);
+    sessionStorage.removeItem(`ably.cli.isSplit.${wsDomain}`);
     
     setApiKey(newApiKey);
     setAccessToken(newAccessToken);
@@ -143,48 +150,48 @@ function App() {
     const shouldRemember = remember !== undefined ? remember : rememberCredentials;
     
     if (shouldRemember) {
-      // Store in localStorage for persistence
-      localStorage.setItem('ably.web-cli.apiKey', newApiKey);
-      localStorage.setItem('ably.web-cli.rememberCredentials', 'true');
+      // Store in localStorage for persistence (domain-scoped)
+      localStorage.setItem(`ably.web-cli.apiKey.${wsDomain}`, newApiKey);
+      localStorage.setItem(`ably.web-cli.rememberCredentials.${wsDomain}`, 'true');
       if (newAccessToken) {
-        localStorage.setItem('ably.web-cli.accessToken', newAccessToken);
+        localStorage.setItem(`ably.web-cli.accessToken.${wsDomain}`, newAccessToken);
       } else {
-        localStorage.removeItem('ably.web-cli.accessToken');
+        localStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
       }
       setAuthSource('localStorage');
     } else {
-      // Store only in sessionStorage
-      sessionStorage.setItem('ably.web-cli.apiKey', newApiKey);
+      // Store only in sessionStorage (domain-scoped)
+      sessionStorage.setItem(`ably.web-cli.apiKey.${wsDomain}`, newApiKey);
       if (newAccessToken) {
-        sessionStorage.setItem('ably.web-cli.accessToken', newAccessToken);
+        sessionStorage.setItem(`ably.web-cli.accessToken.${wsDomain}`, newAccessToken);
       } else {
-        sessionStorage.removeItem('ably.web-cli.accessToken');
+        sessionStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
       }
-      // Clear from localStorage if it was there
-      localStorage.removeItem('ably.web-cli.apiKey');
-      localStorage.removeItem('ably.web-cli.accessToken');
-      localStorage.removeItem('ably.web-cli.rememberCredentials');
+      // Clear from localStorage if it was there (domain-scoped)
+      localStorage.removeItem(`ably.web-cli.apiKey.${wsDomain}`);
+      localStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
+      localStorage.removeItem(`ably.web-cli.rememberCredentials.${wsDomain}`);
       setAuthSource('session');
     }
     
     setRememberCredentials(shouldRemember);
     setIsUsingCustomAuth(true);
-  }, [rememberCredentials]);
+  }, [rememberCredentials, wsDomain]);
 
   // Handle auth settings save
   const handleAuthSettingsSave = useCallback((newApiKey: string, newAccessToken: string, remember: boolean) => {
     if (newApiKey) {
       handleAuthenticate(newApiKey, newAccessToken, remember);
     } else {
-      // Clear all credentials - go back to auth screen
-      sessionStorage.removeItem('ably.cli.sessionId');
-      sessionStorage.removeItem('ably.cli.secondarySessionId');
-      sessionStorage.removeItem('ably.cli.isSplit');
-      sessionStorage.removeItem('ably.web-cli.apiKey');
-      sessionStorage.removeItem('ably.web-cli.accessToken');
-      localStorage.removeItem('ably.web-cli.apiKey');
-      localStorage.removeItem('ably.web-cli.accessToken');
-      localStorage.removeItem('ably.web-cli.rememberCredentials');
+      // Clear all credentials - go back to auth screen (domain-scoped)
+      sessionStorage.removeItem(`ably.cli.sessionId.${wsDomain}`);
+      sessionStorage.removeItem(`ably.cli.secondarySessionId.${wsDomain}`);
+      sessionStorage.removeItem(`ably.cli.isSplit.${wsDomain}`);
+      sessionStorage.removeItem(`ably.web-cli.apiKey.${wsDomain}`);
+      sessionStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
+      localStorage.removeItem(`ably.web-cli.apiKey.${wsDomain}`);
+      localStorage.removeItem(`ably.web-cli.accessToken.${wsDomain}`);
+      localStorage.removeItem(`ably.web-cli.rememberCredentials.${wsDomain}`);
       setApiKey(undefined);
       setAccessToken(undefined);
       setIsAuthenticated(false);
@@ -202,9 +209,6 @@ function App() {
       window.history.replaceState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
     }
   }, [displayMode]);
-
-  // Get the URL *inside* the component body
-  const currentWebsocketUrl = getWebSocketUrl();
 
   // Prepare the terminal component instance to pass it down
   const TerminalInstance = useCallback(() => (
