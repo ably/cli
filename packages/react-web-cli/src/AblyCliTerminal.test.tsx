@@ -1493,6 +1493,34 @@ describe('AblyCliTerminal - Cross-Domain Security', () => {
     expect(window.sessionStorage.getItem('ably.cli.sessionId.staging.ably.com')).toBe('staging-session-456');
     expect(window.sessionStorage.getItem('ably.cli.credentialHash.staging.ably.com')).toBe('hash-test-key:test-token');
   });
+
+  test('localStorage auth settings are not shared between domains', async () => {
+    // Simulate user saving auth settings for one domain
+    window.localStorage.setItem('ably.web-cli.apiKey.trusted.ably.com', 'saved-api-key');
+    window.localStorage.setItem('ably.web-cli.accessToken.trusted.ably.com', 'saved-token');
+    
+    // Render terminal with a different, potentially malicious domain
+    renderTerminal({ 
+      websocketUrl: 'wss://evil-attacker.com',
+      ablyApiKey: 'different-key',
+      ablyAccessToken: 'different-token'
+    });
+    
+    // Wait for WebSocket connection
+    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 5000 });
+    
+    // Verify the saved credentials for trusted domain were NOT sent to attacker
+    const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    expect(sentPayload.apiKey).toBe('different-key');
+    expect(sentPayload.accessToken).toBe('different-token');
+    
+    // The saved credentials should remain safe and untouched
+    expect(window.localStorage.getItem('ably.web-cli.apiKey.trusted.ably.com')).toBe('saved-api-key');
+    expect(window.localStorage.getItem('ably.web-cli.accessToken.trusted.ably.com')).toBe('saved-token');
+    
+    // No credentials should be stored for the attacker domain without explicit user action
+    expect(window.localStorage.getItem('ably.web-cli.apiKey.evil-attacker.com')).toBeNull();
+  });
 });
 
  
