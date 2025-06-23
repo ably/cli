@@ -858,10 +858,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             if (onSessionId) onSessionId(msg.sessionId);
             debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
             
-            // Persist to session storage if enabled
+            // Persist to session storage if enabled (domain-scoped)
             if (resumeOnReload && typeof window !== 'undefined' && credentialHash) {
-              window.sessionStorage.setItem('ably.cli.sessionId', msg.sessionId);
-              window.sessionStorage.setItem('ably.cli.credentialHash', credentialHash);
+              const urlDomain = new URL(websocketUrl).host;
+              window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, msg.sessionId);
+              window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
             }
             
             return;
@@ -916,8 +917,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
               // Persisted session is no longer valid – forget it
               if (resumeOnReload && typeof window !== 'undefined') {
-                window.sessionStorage.removeItem('ably.cli.sessionId');
-                window.sessionStorage.removeItem('ably.cli.credentialHash');
+                const urlDomain = new URL(websocketUrl).host;
+                window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+                window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
                 setSessionId(null);
               }
 
@@ -1103,7 +1105,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
       setShowManualReconnectPrompt(true);
       if (resumeOnReload && typeof window !== 'undefined') {
-        window.sessionStorage.removeItem('ably.cli.sessionId');
+        const urlDomain = new URL(websocketUrl).host;
+        window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+        window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
         setSessionId(null);
       }
       debugLog('[AblyCLITerminal] Purging sessionId due to non-recoverable close. code:', event.code, 'sessionId:', sessionId);
@@ -1196,7 +1200,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
             // Forget previous session completely so no resume is attempted
             if (resumeOnReload && typeof window !== 'undefined') {
-              window.sessionStorage.removeItem('ably.cli.sessionId');
+              const urlDomain = new URL(websocketUrl).host;
+              window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+              window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
             }
             setSessionId(null);
 
@@ -1416,12 +1422,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Don't clear sessionId until credentials have been validated
     if (!sessionIdInitialized) return;
     
+    const urlDomain = new URL(websocketUrl).host;
     if (sessionId) {
-      window.sessionStorage.setItem('ably.cli.sessionId', sessionId);
+      window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, sessionId);
     } else {
-      window.sessionStorage.removeItem('ably.cli.sessionId');
+      window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
     }
-  }, [sessionId, resumeOnReload, sessionIdInitialized]);
+  }, [sessionId, resumeOnReload, sessionIdInitialized, websocketUrl]);
 
   // Debug: log layout metrics when an overlay is rendered
   useEffect(() => {
@@ -1524,27 +1531,31 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         return;
       }
       
-      // Check if we have a stored session
-      const storedSessionId = window.sessionStorage.getItem('ably.cli.sessionId');
-      const storedHash = window.sessionStorage.getItem('ably.cli.credentialHash');
+      // Extract domain from websocketUrl for scoping
+      const urlDomain = new URL(websocketUrl).host;
+      
+      // Check if we have a stored session for this specific domain
+      const storedSessionId = window.sessionStorage.getItem(`ably.cli.sessionId.${urlDomain}`);
+      const storedHash = window.sessionStorage.getItem(`ably.cli.credentialHash.${urlDomain}`);
       
       console.log('[AblyCLITerminal] Credential validation:', { 
+        urlDomain,
         storedSessionId, 
         storedHash, 
         currentHash,
         match: storedHash === currentHash
       });
       
-      // Only restore session if credentials match
+      // Only restore session if credentials match AND it's for the same domain
       if (storedSessionId && storedHash === currentHash) {
         setSessionId(storedSessionId);
-        console.log('[AblyCLITerminal] Restored session with matching credentials');
+        console.log('[AblyCLITerminal] Restored session with matching credentials for domain:', urlDomain);
       } else if ((storedSessionId || storedHash) && storedHash !== currentHash) {
         // Clear invalid session - either if we have a sessionId with mismatched hash
         // or if we have a stored hash that doesn't match current credentials
-        window.sessionStorage.removeItem('ably.cli.sessionId');
-        window.sessionStorage.removeItem('ably.cli.credentialHash');
-        console.log('[AblyCLITerminal] Cleared session due to credential mismatch');
+        window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+        window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
+        console.log('[AblyCLITerminal] Cleared session due to credential mismatch for domain:', urlDomain);
       }
       
       setCredentialsInitialized(true);
@@ -1552,7 +1563,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     };
     
     initializeSession();
-  }, [ablyApiKey, ablyAccessToken, resumeOnReload]);
+  }, [ablyApiKey, ablyAccessToken, resumeOnReload, websocketUrl]);
 
   // Keep latest instance of connectWebSocket for async callbacks
   const connectWebSocketRef = useRef(connectWebSocket);
