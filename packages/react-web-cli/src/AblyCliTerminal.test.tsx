@@ -678,10 +678,10 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   });
 
   test('includes stored sessionId in auth payload when resumeOnReload enabled', async () => {
-    // Pre-populate sessionStorage with a sessionId and matching credential hash
+    // Pre-populate sessionStorage with a sessionId and matching credential hash (domain-scoped)
     const expectedHash = 'hash-test-key:test-token'; // Based on our mock
-    window.sessionStorage.setItem('ably.cli.sessionId', 'resume-123');
-    window.sessionStorage.setItem('ably.cli.credentialHash', expectedHash);
+    window.sessionStorage.setItem('ably.cli.sessionId.web-cli.ably.com', 'resume-123');
+    window.sessionStorage.setItem('ably.cli.credentialHash.web-cli.ably.com', expectedHash);
 
     // Render component with resumeOnReload enabled so it reads the stored sessionId
     renderTerminal({ resumeOnReload: true });
@@ -704,9 +704,9 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
       mockSocketInstance.triggerEvent('message', { data: JSON.stringify({ type: 'hello', sessionId: 'new-session-456' }) });
     });
 
-    // Wait for React state updates and effect to persist the new sessionId
+    // Wait for React state updates and effect to persist the new sessionId (domain-scoped)
     await flushPromises();
-    await waitFor(() => expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-456'));
+    await waitFor(() => expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBe('new-session-456'));
   });
 
   test('includes both apiKey and accessToken in auth payload when both provided', async () => {
@@ -1241,9 +1241,9 @@ describe('AblyCliTerminal - Credential Validation', () => {
   };
 
   test('does not restore session when credentials have changed', async () => {
-    // Pre-populate sessionStorage with a sessionId and credential hash
-    window.sessionStorage.setItem('ably.cli.sessionId', 'old-session-123');
-    window.sessionStorage.setItem('ably.cli.credentialHash', 'old-hash-value');
+    // Pre-populate sessionStorage with a sessionId and credential hash (domain-scoped)
+    window.sessionStorage.setItem('ably.cli.sessionId.web-cli.ably.com', 'old-session-123');
+    window.sessionStorage.setItem('ably.cli.credentialHash.web-cli.ably.com', 'old-hash-value');
 
     // Render with different credentials (which will generate a different hash)
     // The mock will generate 'hash-new-key:new-token' which won't match 'old-hash-value'
@@ -1263,15 +1263,15 @@ describe('AblyCliTerminal - Credential Validation', () => {
     });
     
     // Verify storage was cleared due to credential mismatch
-    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
-    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBeNull();
   });
 
   test('restores session when credentials match', async () => {
     // First setup the stored session with matching hash
     const expectedHash = 'hash-test-key:test-token'; // Based on our mock
-    window.sessionStorage.setItem('ably.cli.sessionId', 'session-456');
-    window.sessionStorage.setItem('ably.cli.credentialHash', expectedHash);
+    window.sessionStorage.setItem('ably.cli.sessionId.web-cli.ably.com', 'session-456');
+    window.sessionStorage.setItem('ably.cli.credentialHash.web-cli.ably.com', expectedHash);
     
     // Render with matching credentials
     renderTerminal({ ablyApiKey: 'test-key', ablyAccessToken: 'test-token' });
@@ -1286,8 +1286,8 @@ describe('AblyCliTerminal - Credential Validation', () => {
     expect(sentPayload.sessionId).toBe('session-456');
     
     // Verify storage wasn't cleared
-    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('session-456');
-    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe(expectedHash);
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBe('session-456');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBe(expectedHash);
   }, 10000);
 
   test('stores credential hash when new session is created', async () => {
@@ -1305,15 +1305,15 @@ describe('AblyCliTerminal - Credential Validation', () => {
       await new Promise(resolve => setTimeout(resolve, 20));
     });
     
-    // Both sessionId and credential hash should be stored
-    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('new-session-789');
-    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe('hash-test-key-123:test-token-456');
+    // Both sessionId and credential hash should be stored (domain-scoped)
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBe('new-session-789');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBe('hash-test-key-123:test-token-456');
   }, 10000);
 
   test('clears credential hash when session is purged due to server disconnect', async () => {
-    // Set up initial state with stored session and hash
-    window.sessionStorage.setItem('ably.cli.sessionId', 'session-to-purge');
-    window.sessionStorage.setItem('ably.cli.credentialHash', 'hash-to-purge');
+    // Set up initial state with stored session and hash (domain-scoped)
+    window.sessionStorage.setItem('ably.cli.sessionId.web-cli.ably.com', 'session-to-purge');
+    window.sessionStorage.setItem('ably.cli.credentialHash.web-cli.ably.com', 'hash-to-purge');
     
     renderTerminal({ ablyApiKey: 'test-key', ablyAccessToken: 'test-token' });
     
@@ -1329,9 +1329,9 @@ describe('AblyCliTerminal - Credential Validation', () => {
     
     await flushPromises();
     
-    // Both sessionId and credential hash should be cleared
-    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
-    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
+    // Both sessionId and credential hash should be cleared (domain-scoped)
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBeNull();
   }, 10000);
 
   test('handles missing credentials (undefined apiKey)', async () => {
@@ -1352,9 +1352,9 @@ describe('AblyCliTerminal - Credential Validation', () => {
       await new Promise(resolve => setTimeout(resolve, 20));
     });
     
-    // Should store session and hash even with undefined apiKey
-    expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBe('session-no-key');
-    expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBe('hash-:test-token');
+    // Should store session and hash even with undefined apiKey (domain-scoped)
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBe('session-no-key');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBe('hash-:test-token');
   }, 10000);
 
   test('does not store session when resumeOnReload is false', async () => {
@@ -1368,10 +1368,131 @@ describe('AblyCliTerminal - Credential Validation', () => {
 
     await flushPromises();
     
-    // Nothing should be stored in sessionStorage
+    // Nothing should be stored in sessionStorage (checking both old and new keys)
     expect(window.sessionStorage.getItem('ably.cli.sessionId')).toBeNull();
     expect(window.sessionStorage.getItem('ably.cli.credentialHash')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBeNull();
   }, 10000);
+});
+
+describe('AblyCliTerminal - Cross-Domain Security', () => {
+  let onConnectionStatusChangeMock: ReturnType<typeof vi.fn>;
+  
+  beforeEach(() => {
+    onConnectionStatusChangeMock = vi.fn();
+    
+    // Clear standard mocks
+    mockWrite.mockClear();
+    mockWriteln.mockClear();
+    mockSend.mockClear();
+    mockClose.mockClear();
+    mockClear.mockClear();
+    vi.mocked(mockOnData).mockClear();
+    
+    // Clear sessionStorage before each test
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.clear();
+    }
+  });
+
+  afterEach(() => {
+    // Ensure timers are restored after each test
+    vi.useRealTimers();
+  });
+
+  const renderTerminal = (props: Partial<React.ComponentProps<typeof AblyCliTerminal>> = {}) => {
+    return render(
+      <AblyCliTerminal
+        websocketUrl="wss://web-cli.ably.com"
+        ablyAccessToken="test-token"
+        ablyApiKey="test-key"
+        onConnectionStatusChange={onConnectionStatusChangeMock}
+        resumeOnReload={true}
+        {...props}
+      />
+    );
+  };
+
+  test('credentials are not shared between different serverUrls', async () => {
+    // First, render with the default server and store credentials
+    const { unmount } = renderTerminal({ 
+      ablyApiKey: 'secure-key-123',
+      ablyAccessToken: 'secure-token-456'
+    });
+    
+    // Wait for initialization
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    
+    // Simulate hello message to store session
+    act(() => {
+      if (!mockSocketInstance) throw new Error('mockSocketInstance not initialized');
+      mockSocketInstance.triggerEvent('message', { 
+        data: JSON.stringify({ type: 'hello', sessionId: 'session-for-ably' }) 
+      });
+    });
+    
+    await flushPromises();
+    
+    // Verify credentials are stored for the ably domain
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.web-cli.ably.com')).toBe('session-for-ably');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.web-cli.ably.com')).toBe('hash-secure-key-123:secure-token-456');
+    
+    // Clean up
+    unmount();
+    mockSend.mockClear();
+    
+    // Now render with a different server URL
+    renderTerminal({ 
+      websocketUrl: 'wss://attacker.example.com',
+      ablyApiKey: 'secure-key-123',
+      ablyAccessToken: 'secure-token-456'
+    });
+    
+    // Wait for WebSocket connection
+    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 5000 });
+    
+    // Parse the auth payload sent to the attacker's server
+    const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    
+    // CRITICAL: The stored sessionId from ably.com should NOT be sent to attacker.example.com
+    expect(sentPayload.sessionId).toBeUndefined();
+    
+    // Verify no credentials from the attacker domain exist
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.attacker.example.com')).toBeNull();
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.attacker.example.com')).toBeNull();
+  });
+
+  test('credentials are properly scoped per domain', async () => {
+    // Set up credentials for multiple domains
+    window.sessionStorage.setItem('ably.cli.sessionId.web-cli.ably.com', 'ably-session-123');
+    window.sessionStorage.setItem('ably.cli.credentialHash.web-cli.ably.com', 'hash-test-key:test-token');
+    
+    window.sessionStorage.setItem('ably.cli.sessionId.staging.ably.com', 'staging-session-456');
+    window.sessionStorage.setItem('ably.cli.credentialHash.staging.ably.com', 'hash-test-key:test-token');
+    
+    // Render terminal connecting to web-cli.ably.com
+    renderTerminal({ 
+      websocketUrl: 'wss://web-cli.ably.com',
+      ablyApiKey: 'test-key',
+      ablyAccessToken: 'test-token'
+    });
+    
+    // Wait for WebSocket connection
+    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 5000 });
+    
+    // Parse the auth payload
+    const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    
+    // Should only include the session for web-cli.ably.com, not staging.ably.com
+    expect(sentPayload.sessionId).toBe('ably-session-123');
+    
+    // Verify credentials for other domains remain untouched
+    expect(window.sessionStorage.getItem('ably.cli.sessionId.staging.ably.com')).toBe('staging-session-456');
+    expect(window.sessionStorage.getItem('ably.cli.credentialHash.staging.ably.com')).toBe('hash-test-key:test-token');
+  });
 });
 
  
