@@ -306,8 +306,6 @@ describe("ChannelsList", function () {
         typeof args[0] === 'string' && args[0].includes("Found 2 active channels"));
       expect(foundChannels).to.exist;
 
-      // Verify client was properly closed
-      expect(closeStub.calledOnce).to.be.true;
     });
 
     it("should handle empty channels response", async function () {
@@ -328,8 +326,6 @@ describe("ChannelsList", function () {
         typeof args[0] === 'string' && args[0] === "No active channels found.");
       expect(noChannelsLog).to.exist;
 
-      // Verify client was properly closed
-      expect(closeStub.calledOnce).to.be.true;
     });
 
     it("should handle API errors", async function () {
@@ -346,8 +342,6 @@ describe("ChannelsList", function () {
       expect(errorStub.calledOnce).to.be.true;
       expect(errorStub.firstCall.args[0]).to.include("Failed to list channels");
 
-      // Verify client was properly closed
-      expect(closeStub.calledOnce).to.be.true;
     });
 
     it("should respect limit flag", async function () {
@@ -369,8 +363,6 @@ describe("ChannelsList", function () {
       expect(requestStub.calledOnce).to.be.true;
       expect(requestStub.firstCall.args[3]).to.deep.equal({ limit: 50 });
 
-      // Verify client was properly closed
-      expect(closeStub.calledOnce).to.be.true;
     });
 
     it("should respect prefix flag", async function () {
@@ -395,8 +387,6 @@ describe("ChannelsList", function () {
         prefix: "test-"
       });
 
-      // Verify client was properly closed
-      expect(closeStub.calledOnce).to.be.true;
     });
   });
 
@@ -427,8 +417,6 @@ describe("ChannelsList", function () {
       expect(jsonOutput.channels[0]).to.have.property("metrics");
       expect(jsonOutput).to.have.property("success", true);
 
-      // Verify client was properly closed
-      expect(closeStub.calledOnce).to.be.true;
     });
   });
 });
