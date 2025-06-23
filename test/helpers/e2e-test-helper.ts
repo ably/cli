@@ -391,15 +391,33 @@ async function attemptProcessStart(
                 }
 
                 // Also check for common error patterns that indicate immediate failure
-                if (output.includes("authentication failed") || 
-                    output.includes("401") || 
-                    output.includes("403") ||
-                    output.includes("Command failed") ||
-                    output.includes("ENOENT") ||
-                    output.includes("Error:") ||
-                    output.includes("error:") ||
-                    output.includes("Cannot find module") ||
-                    output.includes("SyntaxError")) {
+                // Note: We need to be careful about false positives. The channel subscribe command
+                // outputs legitimate error messages like "✗ Failed to attach to channel" during 
+                // normal operation when testing error scenarios.
+                const criticalErrors = [
+                    "authentication failed",
+                    "401",
+                    "403", 
+                    "Command failed",
+                    "ENOENT",
+                    "Cannot find module",
+                    "SyntaxError",
+                    "TypeError:",
+                    "ReferenceError:",
+                    "process.exit" // Indicates the process is exiting
+                ];
+                
+                // Check for critical errors that indicate the process can't continue
+                const hasCriticalError = criticalErrors.some(error => output.includes(error));
+                
+                // For generic "Error:" or "error:", only fail if we haven't seen the ready signal yet
+                // and the output suggests a startup failure (not a runtime channel attachment error)
+                const hasGenericError = (output.includes("Error:") || output.includes("error:")) &&
+                    !output.includes("Successfully attached to channel") &&
+                    !output.includes("Subscribing to channel") &&
+                    !output.includes("Attaching to channel");
+                
+                if (hasCriticalError || (hasGenericError && pollCount < 10)) {
                     clearTimeout(overallTimeout);
                     const errorOutput = await readProcessOutput(outputPath);
                     rejectReady(new Error(`Process ${command} failed with error pattern in output. Full Output:\n${errorOutput}`));

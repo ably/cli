@@ -40,9 +40,10 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
       return keys;
     });
     
-    // Should have domain-scoped keys (the default test server is likely localhost)
-    expect(storedKeys.some(key => key.includes('.apiKey.') && key.includes('localhost'))).toBe(true);
-    expect(storedKeys.some(key => key.includes('.rememberCredentials.') && key.includes('localhost'))).toBe(true);
+    // Should have domain-scoped keys - the app uses web-cli.ably.com as the default WebSocket URL
+    const expectedDomain = 'web-cli.ably.com';
+    expect(storedKeys.some(key => key.includes('.apiKey.') && key.includes(expectedDomain))).toBe(true);
+    expect(storedKeys.some(key => key.includes('.rememberCredentials.') && key.includes(expectedDomain))).toBe(true);
   });
 
   test('should not share credentials between different domains', async ({ page }) => {
@@ -86,13 +87,13 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     const domains = Object.keys(credentialData);
     expect(domains.length).toBeGreaterThanOrEqual(2);
     
-    // Credentials should be different
-    const localhostKey = Object.entries(credentialData).find(([k]) => k.includes('localhost'))?.[1];
+    // Credentials should be different  
+    const webCliAblyKey = Object.entries(credentialData).find(([k]) => k.includes('web-cli.ably.com'))?.[1];
     const exampleKey = Object.entries(credentialData).find(([k]) => k.includes('example.com'))?.[1];
     
-    expect(localhostKey).toBeTruthy();
+    expect(webCliAblyKey).toBeTruthy();
     expect(exampleKey).toBeTruthy();
-    expect(localhostKey).not.toBe(exampleKey);
+    expect(webCliAblyKey).not.toBe(exampleKey);
   });
 
   test('should clear only current domain credentials when clearing', async ({ page }) => {
@@ -105,10 +106,10 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     
     // Store credentials for multiple domains
     await page.evaluate(() => {
-      // Current domain (likely localhost)
-      const currentDomain = new URL(window.location.href).host;
-      localStorage.setItem(`ably.web-cli.apiKey.${currentDomain}`, 'current-key:secret');
-      localStorage.setItem(`ably.web-cli.rememberCredentials.${currentDomain}`, 'true');
+      // Current domain should be web-cli.ably.com (default WebSocket URL)
+      const wsDomain = 'web-cli.ably.com';
+      localStorage.setItem(`ably.web-cli.apiKey.${wsDomain}`, 'current-key:secret');
+      localStorage.setItem(`ably.web-cli.rememberCredentials.${wsDomain}`, 'true');
       
       // Another domain
       localStorage.setItem('ably.web-cli.apiKey.other-domain.com', 'other-key:secret');
@@ -116,7 +117,13 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     });
     
     // Reload with clearCredentials flag
-    await page.goto(getTestUrl() + '&clearCredentials=true');
+    const urlWithClear = getTestUrl().includes('?') 
+      ? getTestUrl() + '&clearCredentials=true'
+      : getTestUrl() + '?clearCredentials=true';
+    await page.goto(urlWithClear);
+    
+    // Wait for page to load completely
+    await page.waitForLoadState('networkidle');
     
     // Check remaining credentials
     const remainingCredentials = await page.evaluate(() => {
@@ -131,7 +138,7 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     });
     
     // Should have cleared current domain but kept other domain
-    const currentDomainKeys = Object.keys(remainingCredentials).filter(k => k.includes('localhost'));
+    const currentDomainKeys = Object.keys(remainingCredentials).filter(k => k.includes('web-cli.ably.com'));
     const otherDomainKeys = Object.keys(remainingCredentials).filter(k => k.includes('other-domain.com'));
     
     expect(currentDomainKeys.length).toBe(0);
@@ -169,7 +176,9 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     
     // Now simulate navigating to a malicious URL (we'll use a non-existent server for safety)
     // The key point is that it won't have access to the credentials from the legitimate domain
-    const maliciousUrl = getTestUrl() + '&serverUrl=wss://malicious.example.com';
+    const maliciousUrl = getTestUrl().includes('?') 
+      ? getTestUrl() + '&serverUrl=wss://malicious.example.com'
+      : getTestUrl() + '?serverUrl=wss://malicious.example.com';
     
     // Clear sessionStorage to simulate a fresh visit
     await page.evaluate(() => sessionStorage.clear());
