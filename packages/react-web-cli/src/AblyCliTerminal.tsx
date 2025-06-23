@@ -47,6 +47,14 @@ const MAX_PTY_BUFFER_LENGTH = 10000; // Max 10k chars in the buffer
 const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Basic prompt
 const TERMINAL_PROMPT_PATTERN = /\$\s$/; // Pattern matching prompt at end of line
 
+// Shared CLI installation tip
+const CLI_INSTALL_TIP = {
+  lines: [
+    'Pro tip: Want full control and speed? Install the CLI locally',
+    '         $ npm install -g @ably/cli'
+  ]
+};
+
 export interface AblyCliTerminalProps {
   websocketUrl: string;
   ablyAccessToken?: string;
@@ -118,7 +126,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const [connectionHelpMessage, setConnectionHelpMessage] = useState('');
   const [reconnectAttemptMessage, setReconnectAttemptMessage] = useState('');
   const [countdownMessage, setCountdownMessage] = useState('');
-  const [overlay, setOverlay] = useState<null|{variant:OverlayVariant,title:string,lines:string[]}>(null);
+  const [overlay, setOverlay] = useState<null|{variant:OverlayVariant,title:string,lines:string[],drawer?:{lines:string[]}}>(null);
   const [connectionStartTime, setConnectionStartTime] = useState<number | null>(null);
   const [showInstallInstructions, setShowInstallInstructions] = useState(false);
 
@@ -627,15 +635,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Draw the initial box
     if (term.current) {
-      // Add install instructions if needed
+      // Keep content as is - no install instructions in the reconnecting box
       const boxContent = [...initialContent];
-      if (showInstallInstructions) {
-        boxContent.push(''); // Empty line between countdown and install instructions
-        boxContent.push('Having trouble? Install the CLI locally:');
-        boxContent.push('  npm install -g @ably/web-cli');
-        boxContent.push('');
-        boxContent.push('Press ⏎ to cancel reconnection');
-      }
       
       statusBoxRef.current = drawBox(term.current, titleColor, title, boxContent, 60);
       spinnerPrefixRef.current = statusText; // Store base text for spinner line
@@ -665,13 +666,19 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           updateLine(statusBoxRef.current, 0, lineContent, titleColor);
         }
 
-        // Update overlay - preserve install instructions if present
+        // Update overlay - preserve drawer or add it if showInstallInstructions is true
         setOverlay(prev => {
           if (!prev) return prev;
           const newLines = [...prev.lines];
           // Only update the first line (spinner)
           newLines[0] = lineContent;
-          return { ...prev, lines: newLines };
+          return {
+            ...prev,
+            lines: newLines,
+            ...(showInstallInstructions ? {
+              drawer: CLI_INSTALL_TIP
+            } : { drawer: prev.drawer })
+          };
         });
       }, 250);
     }
@@ -681,19 +688,19 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Ensure the overlay shows the spinner immediately (not only after first interval tick)
     const initialSpinnerChar = spinnerFrames[spinnerIndexRef.current % spinnerFrames.length];
-    const initialLines = [`${initialSpinnerChar} ${spinnerPrefixRef.current}`];
+    const initialLines = [`${initialSpinnerChar} ${spinnerPrefixRef.current}`, '']; // Include empty line for countdown
     
-    // Check if we should show install instructions
-    if (showInstallInstructions) {
-      initialLines.push(''); // Placeholder for countdown
-      initialLines.push(' '); // Empty line separator
-      initialLines.push('Having trouble? Install the CLI locally:');
-      initialLines.push('  npm install -g @ably/web-cli');
-      initialLines.push('');
-      initialLines.push('Press ⏎ to cancel reconnection');
-    }
+    // Include drawer if install instructions should be shown
+    const overlayConfig = {
+      variant: (isRetry ? 'reconnecting' : 'connecting') as OverlayVariant,
+      title,
+      lines: initialLines,
+      ...(showInstallInstructions ? {
+        drawer: CLI_INSTALL_TIP
+      } : {})
+    };
     
-    setOverlay({variant: isRetry ? 'reconnecting' : 'connecting', title, lines: initialLines});
+    setOverlay(overlayConfig);
 
   }, [clearAnimationMessages, showInstallInstructions]);
 
@@ -723,62 +730,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     debugLog('⚠️ DIAGNOSTIC: Creating fresh WebSocket instance to ' + websocketUrl);
 
-    // Track when connection attempts started
+    // Track when connection attempts started and set timer only once
     if (!connectionStartTime) {
       setConnectionStartTime(Date.now());
       
-      // Start timer to show install instructions after 6 seconds
+      // Only start timer once on the first connection attempt
       clearInstallInstructionsTimer();
       installInstructionsTimerRef.current = setTimeout(() => {
         setShowInstallInstructions(true);
-        // Update the overlay to include install instructions
-        if (connectionStatusRef.current === 'connecting' || connectionStatusRef.current === 'reconnecting') {
-          setOverlay(prev => {
-            if (prev && (prev.variant === 'connecting' || prev.variant === 'reconnecting')) {
-              // Keep the spinner line but add install instructions
-              const currentLines = prev.lines || [];
-              const spinnerLine = currentLines[0] || '';
-              return {
-                ...prev,
-                lines: [
-                  spinnerLine,
-                  '', // Countdown line
-                  ' ', // Single space for empty line - ensures it renders
-                  'Having trouble? Install the CLI locally:',
-                  '  npm install -g @ably/web-cli',
-                  '',
-                  'Press ⏎ to cancel reconnection'
-                ]
-              };
-            }
-            return prev;
-          });
-          
-          // Also update the terminal box
-          if (term.current && statusBoxRef.current) {
-            const currentAttempts = grGetAttempts();
-            const isRetry = currentAttempts > 0;
-            const titleColor = isRetry ? boxColour.yellow : boxColour.cyan;
-            
-            // Redraw the box with install instructions
-            clearBox(statusBoxRef.current);
-            const statusText = isRetry
-              ? `Attempt ${currentAttempts + 1}/${grGetMaxAttempts()} - Reconnecting to Ably CLI server...`
-              : 'Connecting to Ably CLI server...';
-            
-            const boxContent = [
-              statusText,
-              '', // Countdown line
-              '',
-              'Having trouble? Install the CLI locally:',
-              '  npm install -g @ably/web-cli',
-              '',
-              'Press ⏎ to cancel reconnection'
-            ];
-            
-            statusBoxRef.current = drawBox(term.current, titleColor, isRetry ? "RECONNECTING" : "CONNECTING", boxContent, 60);
-          }
-        }
       }, SHOW_INSTALL_AFTER_MS);
     }
 
@@ -963,12 +922,25 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               }
 
               if (term.current && msg.payload === 'disconnected') {
-                const title = "ERROR: SERVER DISCONNECT";
+                const title = "SERVER DISCONNECTED";
                 const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
                 const message2 = '';
-                const message3 = `Press ⏎ to try reconnecting manually.`;
-                statusBoxRef.current = drawBox(term.current, boxColour.red, title, [message1, message2, message3], 60);
-                setOverlay({ variant: 'error', title, lines:[message1, message2, message3]});
+                const message3 = `Press ⏎ to reconnect`;
+                
+                const lines = [message1, message2, message3];
+                
+                statusBoxRef.current = drawBox(term.current, boxColour.red, title, lines, 60);
+                setOverlay({ 
+                  variant: 'error', 
+                  title, 
+                  lines: lines,
+                  drawer: {
+                    lines: [
+                      'Pro tip: Install the CLI locally for a faster experience with all features',
+                      '    npm install -g @ably/cli'
+                    ]
+                  }
+                });
               }
               return;
             }
@@ -1122,7 +1094,12 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         lines[0] = `Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
         
         statusBoxRef.current = drawBox(term.current, boxColour.red, message.title, lines, 60);
-        setOverlay({variant: 'error', title: message.title, lines: lines});
+        setOverlay({
+          variant: 'error', 
+          title: message.title, 
+          lines: lines,
+          drawer: CLI_INSTALL_TIP
+        });
       }
       setShowManualReconnectPrompt(true);
       if (resumeOnReload && typeof window !== 'undefined') {
@@ -1150,8 +1127,17 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           message = { ...message, lines };
         }
         
+        // Clear the terminal to remove any old content
+        if (term.current) {
+          term.current.clear();
+        }
         statusBoxRef.current = drawBox(term.current, boxColour.yellow, message.title, message.lines, 60);
-        setOverlay({variant:'error', title: message.title, lines: message.lines});
+        setOverlay({
+          variant: 'error', 
+          title: message.title, 
+          lines: message.lines,
+          drawer: CLI_INSTALL_TIP
+        });
       }
       setShowManualReconnectPrompt(true);
       return; 
@@ -1310,26 +1296,36 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         // Only show countdown while we are actually waiting to reconnect
         if (connectionStatusRef.current !== 'reconnecting') return;
 
-        const msgPlain = `Next attempt in ${Math.ceil(remainingMs / 1000)}s...`;
+        const seconds = Math.ceil(remainingMs / 1000);
+        const msgPlain = `Next attempt in ${seconds}s...`;
+        const msgWithCancel = `${msgPlain}  (Press ⏎ to cancel)`;
         setCountdownMessage(msgPlain);
 
         if (term.current && statusBoxRef.current && statusBoxRef.current.content.length > 1) {
-          updateLine(statusBoxRef.current, 1, msgPlain, boxColour.magenta);
+          // For terminal box, show colored version
+          updateLine(statusBoxRef.current, 1, msgWithCancel, boxColour.magenta);
         }
 
-        // Update overlay - check if we have install instructions to preserve the empty line
+        // Update overlay - preserve the drawer if present
         setOverlay(prev => {
           if (!prev) return prev;
           const newLines = [...prev.lines];
           
           // Simply update line 1 with the countdown - the structure is already set up correctly
           if (newLines.length === 1) {
-            newLines.push(msgPlain);
+            newLines.push(msgWithCancel);
           } else {
-            newLines[1] = msgPlain;
+            newLines[1] = msgWithCancel;
           }
           
-          return {...prev, lines: newLines};
+          // Preserve drawer or add it if showInstallInstructions is true
+          return {
+            ...prev,
+            lines: newLines,
+            ...(showInstallInstructions ? {
+              drawer: CLI_INSTALL_TIP
+            } : { drawer: prev.drawer })
+          };
         });
       });
     }

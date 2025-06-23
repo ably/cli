@@ -305,10 +305,8 @@ try {
 
     if (result.error) {
       console.warn(`Warning: Error loading .env file: ${result.error.message}`);
-    } else if (result.parsed) {
-      if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
-        console.log(`Loaded environment variables from .env file for tests`);
-      }
+    } else if (result.parsed && (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true')) {
+      console.log(`Loaded environment variables from .env file for tests`);
     }
   } else {
     if (process.env.E2E_DEBUG === 'true' || process.env.TEST_DEBUG === 'true') {
