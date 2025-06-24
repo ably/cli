@@ -55,8 +55,19 @@ This allows testing CLI changes against local server modifications before deploy
 1. Make sure all checks are passing on main
 2. Create a new release branch, in the format `release/<version>` where the version is the SemVer version of the release. In that branch:
     - Update the `package.json` version to the new version.
+    - Run `pnpm version` (or `npm version`) which will:
+      - Run `oclif readme` to regenerate the README with updated command documentation
+      - Automatically stage the updated README.md
     - Update the `CHANGELOG.md` with any user-affecting changes since the last release.
-    - Update `README.md` if it references the old version.
+    - Review the generated README.md changes to ensure they're correct.
+    - Commit all changes with a message like `chore: prepare release <version>`.
 3. Once the release branch is approved, merge it into main.
-4. Create a new tag, which will run the release workflow.
-5. Verify that the new release has been published to NPM.
+4. Create a new tag on the merged commit in main, which will run the release workflow:
+    ```bash
+    git tag -a v<version> -m "Release v<version>"
+    git push origin v<version>
+    ```
+5. Verify that:
+    - The GitHub Actions release workflow completes successfully
+    - A new GitHub release is created
+    - The new release has been published to NPM
