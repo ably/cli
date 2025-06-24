@@ -59,12 +59,12 @@ class TestCommand extends AblyBaseCommand {
     return this.isAnonymousWebMode();
   }
 
-  public testRequiresAccessToken(commandId: string): boolean {
-    return this.requiresAccessToken(commandId);
+  public testMatchesCommandPattern(commandId: string, pattern: string): boolean {
+    return this.matchesCommandPattern(commandId, pattern);
   }
 
-  public testIsPrivacyRestricted(commandId: string): boolean {
-    return this.isPrivacyRestricted(commandId);
+  public testIsRestrictedInAnonymousMode(commandId: string): boolean {
+    return this.isRestrictedInAnonymousMode(commandId);
   }
 
   async run(): Promise<void> {
@@ -132,20 +132,96 @@ describe("AblyBaseCommand", function() {
       expect(() => command.testCheckWebCliRestrictions()).to.not.throw();
     });
 
-    it("should throw error when in web CLI mode and command is restricted", function() {
+    it("should throw error when in authenticated web CLI mode and command is restricted", function() {
       command.testIsWebCliMode = true;
+      process.env.ABLY_RESTRICTED_MODE = "false";
       // Mock command ID to be a restricted command
-      Object.defineProperty(command, "id", { value: "accounts:login" });
+      Object.defineProperty(command, "id", { value: "accounts:login", configurable: true });
 
-      expect(() => command.testCheckWebCliRestrictions()).to.throw();
+      expect(() => command.testCheckWebCliRestrictions()).to.throw(/already logged in/);
     });
 
-    it("should not throw error when in web CLI mode but command is allowed", function() {
+    it("should not throw error when in authenticated web CLI mode but command is allowed", function() {
       command.testIsWebCliMode = true;
+      process.env.ABLY_RESTRICTED_MODE = "false";
       // Mock command ID to be an allowed command
-      Object.defineProperty(command, "id", { value: "help" });
+      Object.defineProperty(command, "id", { value: "channels:publish", configurable: true });
 
       expect(() => command.testCheckWebCliRestrictions()).to.not.throw();
+    });
+
+    it("should throw error for anonymous-restricted commands in anonymous mode", function() {
+      command.testIsWebCliMode = true;
+      process.env.ABLY_RESTRICTED_MODE = "true";
+      
+      // Test various anonymous-restricted commands
+      const testCases = [
+        { id: "accounts:stats", expectedError: /Account management commands are only available when logged in/ },
+        { id: "apps:list", expectedError: /App management commands are only available when logged in/ },
+        { id: "auth:keys:list", expectedError: /API key management requires you to be logged in/ },
+        { id: "auth:revoke-token", expectedError: /Token revocation requires you to be logged in/ },
+        { id: "channels:list", expectedError: /not available in anonymous mode for privacy reasons/ },
+        { id: "bench:channel", expectedError: /Benchmarking commands are only available when logged in/ },
+        { id: "integrations:list", expectedError: /Integration management requires you to be logged in/ },
+        { id: "queues:list", expectedError: /Queue management requires you to be logged in/ },
+        { id: "logs:tail", expectedError: /not available in anonymous mode for privacy reasons/ },
+      ];
+
+      testCases.forEach(({ id, expectedError }) => {
+        Object.defineProperty(command, "id", { value: id, configurable: true });
+        expect(() => command.testCheckWebCliRestrictions()).to.throw(expectedError);
+      });
+    });
+
+    it("should allow non-restricted commands in anonymous mode", function() {
+      command.testIsWebCliMode = true;
+      process.env.ABLY_RESTRICTED_MODE = "true";
+      
+      // Test commands that should be allowed
+      const allowedCommands = ["channels:publish", "rooms:get", "spaces:get", "help"];
+      
+      allowedCommands.forEach(id => {
+        Object.defineProperty(command, "id", { value: id, configurable: true });
+        expect(() => command.testCheckWebCliRestrictions()).to.not.throw();
+      });
+    });
+
+    it("should throw error for base restricted commands in anonymous mode", function() {
+      command.testIsWebCliMode = true;
+      process.env.ABLY_RESTRICTED_MODE = "true";
+      
+      // Test base restricted commands with their specific error messages
+      // Note: accounts:login is caught by the anonymous restrictions first since it starts with "accounts"
+      const testCases = [
+        { id: "accounts:login", expectedError: /Account management commands are only available when logged in/ },
+        { id: "config", expectedError: /Local configuration is not supported in the web CLI\. Please install the CLI locally/ },
+        { id: "config:set", expectedError: /Local configuration is not supported in the web CLI\. Please install the CLI locally/ },
+        { id: "mcp", expectedError: /MCP server functionality is not available in the web CLI\. Please install the CLI locally/ },
+        { id: "mcp:start-server", expectedError: /MCP server functionality is not available in the web CLI\. Please install the CLI locally/ },
+        { id: "accounts:current", expectedError: /Account management commands are only available when logged in/ },
+        { id: "accounts:switch", expectedError: /Account management commands are only available when logged in/ },
+        { id: "apps:switch", expectedError: /App management commands are only available when logged in/ },
+        { id: "apps:delete", expectedError: /App management commands are only available when logged in/ },
+        { id: "auth:keys:switch", expectedError: /API key management requires you to be logged in/ },
+      ];
+
+      testCases.forEach(({ id, expectedError }) => {
+        Object.defineProperty(command, "id", { value: id, configurable: true });
+        expect(() => command.testCheckWebCliRestrictions()).to.throw(expectedError);
+      });
+    });
+
+    it("should allow auth:keys commands when authenticated in web CLI mode", function() {
+      command.testIsWebCliMode = true;
+      process.env.ABLY_RESTRICTED_MODE = "false"; // Authenticated
+      
+      // These should be allowed when authenticated
+      const allowedCommands = ["auth:keys:list", "auth:keys:create", "auth:keys:revoke"];
+      
+      allowedCommands.forEach(id => {
+        Object.defineProperty(command, "id", { value: id, configurable: true });
+        expect(() => command.testCheckWebCliRestrictions()).to.not.throw();
+      });
     });
   });
 
@@ -159,6 +235,9 @@ describe("AblyBaseCommand", function() {
       command.testIsWebCliMode = true;
       expect(command.testIsAllowedInWebCliMode("accounts:login")).to.be.false;
       expect(command.testIsAllowedInWebCliMode("accounts:logout")).to.be.false;
+      expect(command.testIsAllowedInWebCliMode("config")).to.be.false;
+      expect(command.testIsAllowedInWebCliMode("config:set")).to.be.false;
+      expect(command.testIsAllowedInWebCliMode("mcp")).to.be.false;
       expect(command.testIsAllowedInWebCliMode("mcp:start-server")).to.be.false;
     });
 
@@ -280,25 +359,46 @@ describe("AblyBaseCommand", function() {
       expect(cmd.testIsAnonymousWebMode()).to.be.false;
     });
 
-    it("should identify control plane commands", function() {
+    it("should identify commands restricted in anonymous mode", function() {
       const cmd = new TestCommand([], {} as Config);
       cmd.testConfigManager = configManagerStub;
       
-      expect(cmd.testRequiresAccessToken("accounts")).to.be.true;
-      expect(cmd.testRequiresAccessToken("accounts:list")).to.be.true;
-      expect(cmd.testRequiresAccessToken("apps:create")).to.be.true;
-      expect(cmd.testRequiresAccessToken("integrations:rules:create")).to.be.true;
-      expect(cmd.testRequiresAccessToken("channels:publish")).to.be.false;
+      // Commands with wildcards
+      expect(cmd.testIsRestrictedInAnonymousMode("accounts")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("accounts:list")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("apps:create")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("auth:keys:list")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("bench:channel")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("integrations:rules:create")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("queues:publish")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("logs:tail")).to.be.true;
+      
+      // Specific commands
+      expect(cmd.testIsRestrictedInAnonymousMode("channels:list")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("rooms:list")).to.be.true;
+      expect(cmd.testIsRestrictedInAnonymousMode("auth:revoke-token")).to.be.true;
+      
+      // Commands that should be allowed
+      expect(cmd.testIsRestrictedInAnonymousMode("channels:publish")).to.be.false;
+      expect(cmd.testIsRestrictedInAnonymousMode("rooms:get")).to.be.false;
     });
 
-    it("should identify privacy restricted commands", function() {
+    it("should match command patterns correctly", function() {
       const cmd = new TestCommand([], {} as Config);
       cmd.testConfigManager = configManagerStub;
       
-      expect(cmd.testIsPrivacyRestricted("channels:list")).to.be.true;
-      expect(cmd.testIsPrivacyRestricted("logs:tail")).to.be.true;
-      expect(cmd.testIsPrivacyRestricted("auth:token:revoke")).to.be.true;
-      expect(cmd.testIsPrivacyRestricted("channels:publish")).to.be.false;
+      // Wildcard patterns
+      expect(cmd.testMatchesCommandPattern("accounts", "accounts*")).to.be.true;
+      expect(cmd.testMatchesCommandPattern("accounts:list", "accounts*")).to.be.true;
+      expect(cmd.testMatchesCommandPattern("accountsettings", "accounts*")).to.be.true;
+      
+      // Exact matches
+      expect(cmd.testMatchesCommandPattern("channels:list", "channels:list")).to.be.true;
+      expect(cmd.testMatchesCommandPattern("channels:list", "channels:lis")).to.be.false;
+      
+      // Non-matches
+      expect(cmd.testMatchesCommandPattern("channels:publish", "channels:list")).to.be.false;
+      expect(cmd.testMatchesCommandPattern("account", "accounts*")).to.be.false;
     });
   });
 
