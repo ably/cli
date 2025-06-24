@@ -14,38 +14,50 @@ import { getCliVersion } from "./utils/version.js";
 
 // List of commands not allowed in web CLI mode - EXPORTED
 export const WEB_CLI_RESTRICTED_COMMANDS = [
-  // Existing restrictions
-  "accounts:login",
+  // All account login/management commands are not valid in a web env where auth is handled by the website
+  // note accounts:stats is supported
+  "accounts:current",
   "accounts:list",
+  "accounts:login",
   "accounts:logout",
   "accounts:switch",
-  "apps:switch",
-  "auth:keys:switch",
-  "config",
-  "mcp",
-  
-  // Control plane commands (require access token)
-  "accounts", // All account commands
+
+  // You cannot switch/delete/create apps, you can only work with the current app you have selected in the web UI   
   "apps:create",
+  "apps:switch",
   "apps:delete",
-  "apps:list",
-  "apps:update",
-  "auth:keys:create",
-  "auth:keys:update", 
-  "auth:keys:revoke",
-  "integrations", // All integration commands
-  "queues:create",
-  "queues:delete",
+
+  // The key you use for auth is controlled from the web UI
+  "auth:keys:switch",
+
+  // config only applicable to local env
+  "config*",
   
-  // Data plane commands that expose other users' activity
-  "channels:list",
-  "rooms:list",
-  "spaces:list",
-  "logs", // All log commands
-  "apps:logs", // App log commands
+  // MCP functionality is not available in the web CLI
+  "mcp*",
+];
+
+/* Additional restricted commands when running in anonymous web CLI mode */
+export const WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS = [
+  "accounts*", // all account commands cannot be run, don't expose account info
+  "apps*", // all app commands cannot be run, don't expose app info
+
+  "auth:keys*", // disallow all key commands
+  "auth:revoke-token", // token revocation not support when anonymous
   
-  // Token revocation (not allowed for anonymous users)
-  "auth:token:revoke",
+  "bench*", // all bench commands cannot be run in anonymous mode
+  
+  // All enumeration and logging commands are disallowed as this could expose other anonymous user behaviour
+  "channels:list", 
+  "channels:logs", 
+  "connections:logs", 
+  "rooms:list", 
+  "spaces:list", 
+  "logs*",
+
+  // Integrations and queues are not available to anonymous users
+  "integrations*",     
+  "queues*",
 ];
 
 // List of commands that should not show account/app info
@@ -152,40 +164,26 @@ export abstract class AblyBaseCommand extends Command {
     return this.isWebCliMode && process.env.ABLY_RESTRICTED_MODE === 'true';
   }
 
-  protected requiresAccessToken(commandId: string): boolean {
-    // Commands that require access token (control plane)
-    const controlPlaneCommands = [
-      'accounts',
-      'apps:create',
-      'apps:delete',
-      'apps:list',
-      'apps:update',
-      'auth:keys:create',
-      'auth:keys:update',
-      'auth:keys:revoke',
-      'integrations',
-      'queues:create',
-      'queues:delete',
-    ];
+  /**
+   * Check if command matches a pattern (supports wildcards)
+   */
+  protected matchesCommandPattern(commandId: string, pattern: string): boolean {
+    // Handle wildcard patterns
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1);
+      return commandId === prefix || commandId.startsWith(prefix);
+    }
     
-    return controlPlaneCommands.some(cmd => 
-      commandId === cmd || commandId.startsWith(cmd + ':')
-    );
+    // Handle exact matches
+    return commandId === pattern;
   }
 
-  protected isPrivacyRestricted(commandId: string): boolean {
-    // Commands restricted for privacy/security reasons
-    const privacyRestrictedCommands = [
-      'channels:list',
-      'rooms:list',
-      'spaces:list',
-      'logs',
-      'apps:logs',
-      'auth:token:revoke',
-    ];
-    
-    return privacyRestrictedCommands.some(cmd => 
-      commandId === cmd || commandId.startsWith(cmd + ':')
+  /**
+   * Check if command is restricted in anonymous web CLI mode
+   */
+  protected isRestrictedInAnonymousMode(commandId: string): boolean {
+    return WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some(pattern => 
+      this.matchesCommandPattern(commandId, pattern)
     );
   }
 
@@ -217,28 +215,65 @@ export abstract class AblyBaseCommand extends Command {
    * for commands that are not allowed in web CLI mode
    */
   protected checkWebCliRestrictions(): void {
-    if (this.isWebCliMode && !this.isAllowedInWebCliMode()) {
-      let errorMessage = `This command is not available in the web CLI.`;
+    if (!this.isWebCliMode) {
+      return; // Not in web CLI mode, no restrictions
+    }
 
-      const commandId = this.id || "";
-      const commandIdForDisplay = commandId.replaceAll(":", " ");
+    const commandId = this.id || "";
+    const commandIdForDisplay = commandId.replaceAll(":", " ");
 
-      // Check if we're in anonymous mode
-      if (this.isAnonymousWebMode()) {
-        // Anonymous user messages
-        if (this.requiresAccessToken(commandId)) {
-          errorMessage = `This command requires authentication. Please log in at https://ably.com/login to use this feature.`;
-        } else if (this.isPrivacyRestricted(commandId)) {
-          errorMessage = `This command is not available in anonymous mode. Please log in at https://ably.com/login to access this feature.`;
-        } else if (commandId.includes("accounts login")) {
-          errorMessage = `Please log in at https://ably.com/login to use authenticated features.`;
-        } else if (commandId === "config") {
-          errorMessage = `Local configuration is not supported in the web CLI. Please log in at https://ably.com/login for full access.`;
-        } else if (commandId.includes("mcp")) {
-          errorMessage = `MCP server functionality is not available in the web CLI. Please log in at https://ably.com/login or install the standalone CLI.`;
+    // Check if we're in anonymous mode
+    if (this.isAnonymousWebMode()) {
+      // Anonymous web CLI mode - check both base and anonymous restrictions
+      let errorMessage: string | null = null;
+
+      // First check if command is in the anonymous restricted list
+      if (this.isRestrictedInAnonymousMode(commandId)) {
+        // Provide specific messages for different command types
+        if (commandId.startsWith("accounts")) {
+          errorMessage = `Account management commands are only available when logged in. Please log in at https://ably.com/login.`;
+        } else if (commandId.startsWith("apps")) {
+          errorMessage = `App management commands are only available when logged in. Please log in at https://ably.com/login.`;
+        } else if (commandId.startsWith("auth:keys")) {
+          errorMessage = `API key management requires you to be logged in. Please log in at https://ably.com/login.`;
+        } else if (commandId === "auth:revoke-token") {
+          errorMessage = `Token revocation requires you to be logged in. Please log in at https://ably.com/login.`;
+        } else if (commandId.startsWith("bench")) {
+          errorMessage = `Benchmarking commands are only available when logged in. Please log in at https://ably.com/login.`;
+        } else if (commandId === "channels:list" || commandId === "rooms:list" || commandId === "spaces:list" || 
+                   commandId.includes("logs")) {
+          errorMessage = `This command is not available in anonymous mode for privacy reasons. Please log in at https://ably.com/login.`;
+        } else if (commandId.startsWith("integrations")) {
+          errorMessage = `Integration management requires you to be logged in. Please log in at https://ably.com/login.`;
+        } else if (commandId.startsWith("queues")) {
+          errorMessage = `Queue management requires you to be logged in. Please log in at https://ably.com/login.`;
+        } else {
+          errorMessage = `This command is not available in anonymous mode. Please log in at https://ably.com/login.`;
         }
-      } else {
-        // Authenticated user messages (existing logic)
+      }
+      // Then check if command is in the base restricted list
+      else if (!this.isAllowedInWebCliMode()) {
+        // Provide specific messages for always-restricted commands
+        if (commandId.includes("accounts login")) {
+          errorMessage = `Please log in at https://ably.com/login to use authentication features.`;
+        } else if (commandId.startsWith("config")) {
+          errorMessage = `Local configuration is not supported in the web CLI. Please install the CLI locally.`;
+        } else if (commandId.startsWith("mcp")) {
+          errorMessage = `MCP server functionality is not available in the web CLI. Please install the CLI locally.`;
+        } else {
+          errorMessage = `This command is not available in the web CLI. Please install the CLI locally.`;
+        }
+      }
+
+      if (errorMessage) {
+        this.error(chalk.red(errorMessage));
+      }
+    } else {
+      // Authenticated web CLI mode - only base restrictions apply
+      if (!this.isAllowedInWebCliMode()) {
+        let errorMessage = `This command is not available in the web CLI.`;
+
+        // Provide specific messages for authenticated users
         if (commandIdForDisplay.includes("accounts login")) {
           errorMessage = `You are already logged in via the web CLI. This command is not available in the web CLI.`;
         } else if (commandIdForDisplay.includes("accounts list")) {
@@ -251,15 +286,14 @@ export abstract class AblyBaseCommand extends Command {
           errorMessage = `You cannot switch apps from within the web CLI. Please use the web dashboard at https://ably.com/dashboard instead.`;
         } else if (commandIdForDisplay.includes("auth keys switch")) {
           errorMessage = `You cannot switch API keys from within the web CLI. Please use the web interface to change keys.`;
-        } else if (commandId === "config") {
+        } else if (commandId.startsWith("config")) {
           errorMessage = `Local configuration is not supported in the web CLI version.`;
-        } else if (commandIdForDisplay.includes("mcp")) {
+        } else if (commandId.startsWith("mcp")) {
           errorMessage = `MCP server functionality is not available in the web CLI. Please use the standalone CLI installation instead.`;
         }
-      }
 
-      // Exit with the error message
-      this.error(chalk.red(errorMessage));
+        this.error(chalk.red(errorMessage));
+      }
     }
   }
 
@@ -879,37 +913,10 @@ export abstract class AblyBaseCommand extends Command {
     // Use the current command ID if none provided
     const commandId = command || this.id || "";
 
-    // Normalize command ID by replacing spaces with colons for comparison
-    const normalizedCommandId = commandId.replaceAll(" ", ":");
-
-    // Check if the command or any parent command is restricted
-    for (const restrictedCmd of WEB_CLI_RESTRICTED_COMMANDS) {
-      // Check exact match
-      if (normalizedCommandId === restrictedCmd) {
-        return false;
-      }
-
-      // Check if this is a subcommand of a restricted command
-      if (normalizedCommandId.startsWith(restrictedCmd + ":")) {
-        return false;
-      }
-
-      // Check if command ID path includes the restricted command
-      // This covers case when command ID is space-separated
-      const spacedCommandId = commandId.toLowerCase();
-      const spacedRestrictedCmd = restrictedCmd
-        .replaceAll(":", " ")
-        .toLowerCase();
-
-      if (
-        spacedCommandId === spacedRestrictedCmd ||
-        spacedCommandId.startsWith(spacedRestrictedCmd + " ")
-      ) {
-        return false;
-      }
-    }
-
-    return true;
+    // Check if the command matches any restricted pattern
+    return !WEB_CLI_RESTRICTED_COMMANDS.some(pattern => 
+      this.matchesCommandPattern(commandId, pattern)
+    );
   }
 
   protected isPrettyJsonOutput(flags: BaseFlags): boolean {
