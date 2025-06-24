@@ -2087,7 +2087,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             className="Terminal-container bg-black relative overflow-hidden"
             style={{ 
               flex: '1',
-              padding: '12px',
+              padding: '0',
               margin: '0',
               boxSizing: 'border-box',
               minHeight: '0', // Important to allow flex container to shrink
@@ -2205,7 +2205,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               className="Terminal-container bg-black relative overflow-hidden"
               style={{ 
                 flex: '1',
-                padding: '12px',
+                padding: '0',
                 margin: '0',
                 boxSizing: 'border-box',
                 minHeight: '0', // Important to allow flex container to shrink
