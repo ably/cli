@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2025-06-24
+
+### Added
+
+- Enhanced Web CLI mode restrictions with separate handling for authenticated and anonymous users
+  - Authenticated users can now access control plane commands (e.g., `auth:keys:list`, `apps:list`)
+  - Anonymous users are restricted from privacy-sensitive and authentication-required commands
+- Wildcard pattern support for command restrictions (e.g., `config*`, `mcp*`)
+- Clearer error messages that guide users to appropriate actions (login or install locally)
+
+### Fixed
+
+- Domain-scoped credential storage for enhanced security
+- React Web CLI unit test failures
+- CI reliability improvements around rate limits
+- Web CLI mode now properly differentiates between authenticated and anonymous states
+
+### Security
+
+- Credentials are now properly scoped per domain, preventing cross-domain credential access
+- Anonymous Web CLI users cannot access commands that might expose other users' activity
+
 ## [0.8.0] - 2025-06-20
 
 ### Changed
