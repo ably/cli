@@ -645,13 +645,10 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     // Mock the connectWebSocket function to be ready
     vi.mocked(GlobalReconnect.resetState).mockClear();
     
-    // Wait for the setTimeout to execute
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 30));
+    // Wait for the setTimeout to execute using waitFor
+    await waitFor(() => {
+      expect(vi.mocked(GlobalReconnect.successfulConnectionReset)).toHaveBeenCalled();
     });
-    
-    // Verify that successfulConnectionReset was called to reset the counter
-    expect(vi.mocked(GlobalReconnect.successfulConnectionReset)).toHaveBeenCalled();
     
     // Verify resetState was called as part of reconnection
     expect(vi.mocked(GlobalReconnect.resetState)).toHaveBeenCalled();

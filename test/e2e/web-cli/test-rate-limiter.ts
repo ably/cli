@@ -19,7 +19,7 @@ interface RateLimiterState {
 
 // Configuration
 const getConfig = () => {
-  // Allow disabling rate limiting for local development
+  // Allow disabling rate limiting for local development or emergency CI runs
   if (process.env.DISABLE_RATE_LIMIT === 'true') {
     console.log(`[RateLimit Config] Rate limiting DISABLED`);
     return {
@@ -28,18 +28,39 @@ const getConfig = () => {
     };
   }
   
+  // Emergency CI mode with minimal rate limiting (for when CI times out)
+  if (process.env.RATE_LIMIT_CONFIG === 'CI_EMERGENCY') {
+    console.log(`[RateLimit Config] Using CI_EMERGENCY configuration (minimal rate limiting)`);
+    return {
+      connectionsPerBatch: 39,   // All tests in one batch
+      pauseDuration: 0,          // No pause (risky but for emergency use)
+    };
+  }
+  
   // Default to CI configuration
   const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
   
   // Can be overridden by environment variable
-  const configType = process.env.RATE_LIMIT_CONFIG || (isCI ? 'CI' : 'LOCAL');
+  const configType = process.env.RATE_LIMIT_CONFIG || (isCI ? 'CI_FAST' : 'LOCAL');
   console.log(`[RateLimit Config] Using ${configType} configuration`);
   
   switch (configType) {
     case 'CI': {
       return {
-        connectionsPerBatch: 6,    // Conservative for CI (10 per minute limit)
-        pauseDuration: 65000,      // 65 seconds to ensure rate limit window reset
+        connectionsPerBatch: 8,    // More efficient for CI (10 per minute limit with 2 buffer)
+        pauseDuration: 62000,      // 62 seconds to ensure rate limit window reset
+      };
+    }
+    case 'CI_FAST': {
+      return {
+        connectionsPerBatch: 9,    // Aggressive for CI (10 per minute limit with 1 buffer)
+        pauseDuration: 61000,      // 61 seconds to ensure rate limit window reset
+      };
+    }
+    case 'CI_EMERGENCY': {
+      return {
+        connectionsPerBatch: 39,   // All tests in one batch (emergency use only)
+        pauseDuration: 0,          // No pause (risky)
       };
     }
     case 'LOCAL': {
@@ -97,6 +118,13 @@ if (!initialState.initialized) {
   console.log(`[TestRateLimiter] Initialized at ${new Date().toISOString()}`);
   console.log(`[TestRateLimiter] Will pause after every ${config.connectionsPerBatch} connections to respect server rate limits`);
   console.log(`[TestRateLimiter] Each pause will be ${Math.round(config.pauseDuration/1000)} seconds to ensure rate limit window reset`);
+  
+  // Estimate total time for typical test suite (39 tests)
+  const estimatedBatches = Math.ceil(39 / config.connectionsPerBatch);
+  const estimatedPauses = Math.max(0, estimatedBatches - 1);
+  const estimatedWaitTime = estimatedPauses * config.pauseDuration / 1000;
+  console.log(`[TestRateLimiter] Estimated wait time for 39 tests: ${Math.round(estimatedWaitTime)}s (${estimatedPauses} pauses)`);
+  
   writeState({ ...initialState, initialized: true });
 }
 
@@ -133,10 +161,16 @@ export async function waitForRateLimitIfNeeded(): Promise<void> {
     console.log(`[TestRateLimiter] Waiting ${delay}ms (${Math.round(delay/1000)}s) to reset rate limit window...`);
     console.log(`[TestRateLimiter] This ensures we stay under 10 connections/minute`);
     console.log(`[TestRateLimiter] Pause started at ${new Date().toISOString()}`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-    resetRateLimitWindow();
-    console.log(`[TestRateLimiter] Pause ended at ${new Date().toISOString()}`);
-    console.log(`[TestRateLimiter] === RESUMING TESTS ===`);
+    
+    try {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      resetRateLimitWindow();
+      console.log(`[TestRateLimiter] Pause ended at ${new Date().toISOString()}`);
+      console.log(`[TestRateLimiter] === RESUMING TESTS ===`);
+    } catch (error) {
+      console.error(`[TestRateLimiter] Error during rate limit pause:`, error);
+      throw error;
+    }
   }
 }
 
