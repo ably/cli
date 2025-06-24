@@ -81,7 +81,9 @@ export default class CustomHelp extends Help {
     const args = process.argv || [];
     const isWebCliHelp = args.includes("web-cli") || args.includes("webcli");
 
-    if (this.webCliMode || isWebCliHelp) {
+    // In web CLI mode, show the full command list (filtered) when --help is used
+    // Only show the simplified version for the initial prompt
+    if (this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp) {
       output = this.formatWebCliRoot();
     } else {
       output = this.formatStandardRoot();
@@ -102,8 +104,12 @@ export default class CustomHelp extends Help {
     lines.push(...logoLines);
 
     // 2. Title & Usage
+    const titleText = this.webCliMode 
+      ? "ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API"
+      : "ably.com CLI for Pub/Sub, Chat, Spaces and the Control API";
+    
     const headerLines = [
-      chalk.bold("ably.com CLI for Pub/Sub, Chat, Spaces and the Control API"),
+      chalk.bold(titleText),
       "",
       `${chalk.bold("USAGE")}`,
       `  $ ${config.bin} [COMMAND]`,
@@ -129,18 +135,19 @@ export default class CustomHelp extends Help {
       });
 
     // Then add topics if they don't already exist as commands
-    config.topics
+    const filteredTopics = config.topics
       .filter((t) => !t.hidden && !t.name.includes(":")) // Filter hidden and top-level only
-      .filter((t) => this.shouldDisplay({ id: t.name } as Command.Loadable)) // Apply web mode filtering
-      .forEach((t) => {
-        if (!uniqueEntries.has(t.name)) {
-          uniqueEntries.set(t.name, {
-            id: t.name,
-            description: t.description,
-            isCommand: false,
-          });
-        }
-      });
+      .filter((t) => this.shouldDisplay({ id: t.name } as Command.Loadable)); // Apply web mode filtering
+    
+    filteredTopics.forEach((t) => {
+      if (!uniqueEntries.has(t.name)) {
+        uniqueEntries.set(t.name, {
+          id: t.name,
+          description: t.description,
+          isCommand: false,
+        });
+      }
+    });
 
     // Convert to array and sort
     const combined = [...uniqueEntries.values()].sort((a, b) => {
@@ -196,11 +203,23 @@ export default class CustomHelp extends Help {
 
     // 3. Show the web CLI specific instructions
     const webCliCommands = [
-      `${chalk.bold("COMMON COMMANDS")}`,
-      `  ${chalk.cyan("View Ably commands:")} ably --help`,
+      `${chalk.bold("QUICK START")}`,
+      `  ${chalk.cyan("View all available commands:")} ably --help`,
       `  ${chalk.cyan("Publish a message:")} ably channels publish [channel] [message]`,
-      `  ${chalk.cyan("View live channel lifecycle events:")} ably channels logs`,
+      `  ${chalk.cyan("Subscribe to a channel:")} ably channels subscribe [channel]`,
     ];
+    
+    // Only show channels:logs for authenticated users
+    const isAnonymousMode = process.env.ABLY_RESTRICTED_MODE === "true";
+    if (!isAnonymousMode) {
+      webCliCommands.push(`  ${chalk.cyan("View live channel events:")} ably channels logs`);
+    }
+    
+    webCliCommands.push(
+      `  ${chalk.cyan("Enter a collaborative space:")} ably spaces enter [space]`,
+      `  ${chalk.cyan("Join a chat room:")} ably rooms get [room]`,
+    );
+    
     lines.push(...webCliCommands);
 
     // 4. Check if login recommendation is needed
@@ -235,19 +254,24 @@ export default class CustomHelp extends Help {
       output = super.formatCommand(command);
 
       // Modify based on web CLI mode using the imported list
-      if (
-        this.webCliMode &&
-        WEB_CLI_RESTRICTED_COMMANDS.some(
-          (restricted) =>
-            command.id === restricted ||
-            command.id.startsWith(restricted + ":"),
-        )
-      ) {
-        output = [
-          `${chalk.bold("This command is not available in the web CLI mode.")}`,
-          "",
-          "Please use the standalone CLI installation instead.",
-        ].join("\n");
+      if (this.webCliMode) {
+        const isRestricted = WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
+          // Handle wildcard patterns (e.g., "config*", "mcp*")
+          if (restricted.endsWith("*")) {
+            const prefix = restricted.slice(0, -1); // Remove the asterisk
+            return command.id === prefix || command.id.startsWith(prefix + ":") || command.id.startsWith(prefix);
+          }
+          // Exact match or command starts with restricted:
+          return command.id === restricted || command.id.startsWith(restricted + ":");
+        });
+        
+        if (isRestricted) {
+          output = [
+            `${chalk.bold("This command is not available in the web CLI mode.")}`,
+            "",
+            "Please use the standalone CLI installation instead.",
+          ].join("\n");
+        }
       }
     }
     return output; // Let the overridden render handle stripping
@@ -260,11 +284,16 @@ export default class CustomHelp extends Help {
     }
 
     // In web mode, check if the command should be hidden using the imported list
-    // Check if the commandId starts with any restricted command base
-    return !WEB_CLI_RESTRICTED_COMMANDS.some(
-      (restricted) =>
-        command.id === restricted || command.id.startsWith(restricted + ":"),
-    );
+    // Check if the commandId matches any restricted command pattern
+    return !WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
+      // Handle wildcard patterns (e.g., "config*", "mcp*")
+      if (restricted.endsWith("*")) {
+        const prefix = restricted.slice(0, -1); // Remove the asterisk
+        return command.id === prefix || command.id.startsWith(prefix + ":") || command.id.startsWith(prefix);
+      }
+      // Exact match or command starts with restricted:
+      return command.id === restricted || command.id.startsWith(restricted + ":");
+    });
   }
 
   formatCommands(commands: Command.Loadable[]): string {
@@ -302,13 +331,7 @@ export default class CustomHelp extends Help {
 
     // Filter topics based on webCliMode using shouldDisplay logic
     const visibleTopics = topics.filter((t) => {
-      if (!this.webCliMode) return true;
-      // Check if the topic name itself is restricted or if any restricted command starts with the topic name
-      return !WEB_CLI_RESTRICTED_COMMANDS.some(
-        (restricted) =>
-          t.name === restricted ||
-          (restricted.startsWith(t.name + ":") && t.name !== "help"), // Check if command starts with topic: avoids hiding 'help'
-      );
+      return this.shouldDisplay({ id: t.name } as Command.Loadable);
     });
 
     if (visibleTopics.length === 0) return "";
