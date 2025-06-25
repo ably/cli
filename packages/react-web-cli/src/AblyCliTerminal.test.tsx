@@ -693,6 +693,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     
     // Clear mocks before manual reconnect
     vi.mocked(GlobalReconnect.successfulConnectionReset).mockClear();
+    vi.mocked(GlobalReconnect.resetState).mockClear();
     vi.mocked((global as any).WebSocket).mockClear();
     mockDrawBox.mockClear();
     
@@ -702,22 +703,25 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     // Press Enter to initiate manual reconnect
     act(() => { onDataHandler('\r'); });
     
-    // Mock the connectWebSocket function to be ready
-    vi.mocked(GlobalReconnect.resetState).mockClear();
-    
-    // Wait for the setTimeout to execute using waitFor
-    await waitFor(() => {
-      expect(vi.mocked(GlobalReconnect.successfulConnectionReset)).toHaveBeenCalled();
+    // Wait for the setTimeout in the Enter handler to execute
+    // The component uses setTimeout(..., 20) to ensure socket is closed before reconnect
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 30));
     });
+    
+    // Now check that successfulConnectionReset was called
+    expect(vi.mocked(GlobalReconnect.successfulConnectionReset)).toHaveBeenCalled();
     
     // Verify resetState was called as part of reconnection
     expect(vi.mocked(GlobalReconnect.resetState)).toHaveBeenCalled();
     
     // Verify connecting animation started fresh (not retry)
-    const connectingCall = mockDrawBox.mock.calls.find(call => call[2] === 'CONNECTING');
-    expect(connectingCall).toBeDefined();
-    expect(connectingCall[1]).toBe(mockBoxColour.cyan);
-    expect(connectingCall[3][0]).toContain('Connecting to Ably CLI server...');
+    await waitFor(() => {
+      const connectingCall = mockDrawBox.mock.calls.find(call => call[2] === 'CONNECTING');
+      expect(connectingCall).toBeDefined();
+      expect(connectingCall[1]).toBe(mockBoxColour.cyan);
+      expect(connectingCall[3][0]).toContain('Connecting to Ably CLI server...');
+    });
   });
 
   test('invokes onSessionId when hello message received', async () => {
