@@ -81,9 +81,10 @@ export default class CustomHelp extends Help {
     const args = process.argv || [];
     const isWebCliHelp = args.includes("web-cli") || args.includes("webcli");
 
-    // In web CLI mode, show the full command list (filtered) when --help is used
-    // Only show the simplified version for the initial prompt
-    if (this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp) {
+    // Show web CLI help if:
+    // 1. We're in web CLI mode and not showing full help
+    // 2. OR explicitly requesting web-cli help
+    if ((this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp) || isWebCliHelp) {
       output = this.formatWebCliRoot();
     } else {
       output = this.formatStandardRoot();
@@ -203,8 +204,8 @@ export default class CustomHelp extends Help {
 
     // 3. Show the web CLI specific instructions
     const webCliCommands = [
-      `${chalk.bold("QUICK START")}`,
-      `  ${chalk.cyan("View all available commands:")} ably --help`,
+      `${chalk.bold("COMMON COMMANDS")}`,
+      `  ${chalk.cyan("View Ably commands:")} ably --help`,
       `  ${chalk.cyan("Publish a message:")} ably channels publish [channel] [message]`,
       `  ${chalk.cyan("Subscribe to a channel:")} ably channels subscribe [channel]`,
     ];

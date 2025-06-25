@@ -85,17 +85,18 @@ describe("CLI Help", function() {
         expect(consoleLogStub.calledOnce).to.be.true;
         const output = stripAnsi(consoleLogStub.firstCall.args[0]);
 
-        // Should show QUICK START section
-        expect(output).to.include("QUICK START");
-        expect(output).to.include("View all available commands: ably --help");
+        // Should show COMMON COMMANDS section
+        expect(output).to.include("COMMON COMMANDS");
+        expect(output).to.include("View Ably commands: ably --help");
         expect(output).to.include("Publish a message: ably channels publish [channel] [message]");
         expect(output).to.include("Subscribe to a channel: ably channels subscribe [channel]");
 
         // Should show channels:logs command for authenticated users
         expect(output).to.include("View live channel events: ably channels logs");
 
-        // Should NOT show COMMANDS section
-        expect(output).to.not.include("COMMANDS\n");
+        // Should NOT show the full COMMANDS list section (with topic lists)
+        expect(output).to.not.include("accounts");
+        expect(output).to.not.include("apps");
       });
 
       it("should show full command list when --help flag is provided", async function() {
@@ -140,8 +141,8 @@ describe("CLI Help", function() {
         // Should NOT show config (wildcard restriction)
         expect(output).to.not.include("config");
 
-        // Should NOT show QUICK START section
-        expect(output).to.not.include("QUICK START");
+        // Should NOT show COMMON COMMANDS section
+        expect(output).to.not.include("COMMON COMMANDS");
       });
 
       it("should show full command list when -h flag is provided", async function() {
@@ -218,8 +219,8 @@ describe("CLI Help", function() {
         expect(consoleLogStub.calledOnce).to.be.true;
         const output = stripAnsi(consoleLogStub.firstCall.args[0]);
 
-        // Should show QUICK START section
-        expect(output).to.include("QUICK START");
+        // Should show COMMON COMMANDS section
+        expect(output).to.include("COMMON COMMANDS");
         expect(output).to.include("Publish a message: ably channels publish [channel] [message]");
         expect(output).to.include("Subscribe to a channel: ably channels subscribe [channel]");
 
