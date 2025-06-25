@@ -187,12 +187,13 @@ const mockClose = vi.fn();
       return mockSocketInstance.onmessageCallback || (() => {}); // Return no-op function if undefined
     }
   };
-  setTimeout(() => {
+  // Use Promise.resolve().then() instead of setTimeout to avoid act() warnings
+  Promise.resolve().then(() => {
     if (mockSocketInstance) { // Check if instance exists
         mockSocketInstance.readyStateValue = WebSocket.OPEN;
         mockSocketInstance.triggerEvent('open', {});
     }
-  }, 10);
+  });
   return mockSocketInstance as WebSocket;
 });
 
@@ -211,6 +212,9 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     mockClose.mockClear();
     mockClear.mockClear();
     vi.mocked(mockOnData).mockClear(); // Clear the onData mock
+    
+    // Reset mockSocketInstance to ensure clean state
+    mockSocketInstance = null;
     if (mockSocketInstance) {
         mockSocketInstance.listeners = { open: [], message: [], close: [], error: [] };
         mockSocketInstance.onmessageCallback = undefined;
@@ -710,7 +714,9 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     renderTerminal({ ablyApiKey: 'key123', ablyAccessToken: 'tokenXYZ' });
 
     // Wait until the WebSocket mock fires the automatic 'open' event and the component sends auth payload
-    await flushPromises();
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
     await waitFor(() => expect(mockSend).toHaveBeenCalled());
 
     const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
@@ -758,7 +764,7 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     const drawBoxArgs = mockDrawBox.mock.calls[0];
     expect(drawBoxArgs[1]).toBe(mockBoxColour.yellow);
     expect(drawBoxArgs[2]).toBe('SERVICE UNAVAILABLE');
-    expect(drawBoxArgs[3][0]).toContain('Web terminal service is temporarily unavailable');
+    expect(drawBoxArgs[3][0]).toContain('Web terminal service is temporarily unavailable.');
     expect(drawBoxArgs[3].some((ln: string) => ln.includes('Press ⏎ to reconnect'))).toBe(true);
     // Installation tip is now in the drawer, not in the lines
 
@@ -1191,8 +1197,10 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   });
 }); 
 
-function flushPromises() {
-  return new Promise(resolve => setTimeout(resolve, 20));
+async function flushPromises() {
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 20));
+  });
 } 
 
 // after imports
@@ -1273,11 +1281,18 @@ describe('AblyCliTerminal - Credential Validation', () => {
     // Render with matching credentials
     renderTerminal({ ablyApiKey: 'test-key', ablyAccessToken: 'test-token' });
     
-    // Wait for WebSocket connection
-    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 10000 });
+    // Wait for initialization and WebSocket connection
+    // Give time for the component to initialize and WebSocket to open
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+    
+    // Now check if mockSend was called
+    expect(mockSend).toHaveBeenCalled();
     
     // Parse the auth payload
     const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
+    // Debug logs removed after fixing the issue
     
     // Should include the stored sessionId since credentials match
     expect(sentPayload.sessionId).toBe('session-456');
@@ -1448,7 +1463,10 @@ describe('AblyCliTerminal - Cross-Domain Security', () => {
       ablyAccessToken: 'secure-token-456'
     });
     
-    // Wait for WebSocket connection
+    // Wait for WebSocket connection and the open event to be triggered
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
     await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 5000 });
     
     // Parse the auth payload sent to the attacker's server
@@ -1474,11 +1492,17 @@ describe('AblyCliTerminal - Cross-Domain Security', () => {
     renderTerminal({ 
       websocketUrl: 'wss://web-cli.ably.com',
       ablyApiKey: 'test-key',
-      ablyAccessToken: 'test-token'
+      ablyAccessToken: 'test-token',
+      resumeOnReload: true
     });
     
-    // Wait for WebSocket connection
-    await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 5000 });
+    // Wait for initialization and WebSocket connection
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    });
+    
+    // Now check if mockSend was called
+    expect(mockSend).toHaveBeenCalled();
     
     // Parse the auth payload
     const sentPayload = JSON.parse(mockSend.mock.calls[0][0]);
@@ -1503,7 +1527,10 @@ describe('AblyCliTerminal - Cross-Domain Security', () => {
       ablyAccessToken: 'different-token'
     });
     
-    // Wait for WebSocket connection
+    // Wait for WebSocket connection and the open event to be triggered
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
     await waitFor(() => expect(mockSend).toHaveBeenCalled(), { timeout: 5000 });
     
     // Verify the saved credentials for trusted domain were NOT sent to attacker
