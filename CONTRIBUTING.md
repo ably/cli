@@ -55,11 +55,10 @@ This allows testing CLI changes against local server modifications before deploy
 1. Make sure all checks are passing on main
 2. Create a new release branch, in the format `release/<version>` where the version is the SemVer version of the release. In that branch:
     - Update the `package.json` version to the new version.
-    - Run `pnpm version` (or `npm version`) which will:
-      - Run `oclif readme` to regenerate the README with updated command documentation
-      - Automatically stage the updated README.md
+    - Run `npx oclif readme` to regenerate the README with updated command documentation.
     - Update the `CHANGELOG.md` with any user-affecting changes since the last release.
     - Review the generated README.md changes to ensure they're correct.
+    - Stage all changes: `git add package.json README.md CHANGELOG.md`
     - Commit all changes with a message like `chore: prepare release <version>`.
 3. Once the release branch is approved, merge it into main.
 4. Create a new tag on the merged commit in main, which will run the release workflow:
