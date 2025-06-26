@@ -160,8 +160,8 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   protected isAnonymousWebMode(): boolean {
-    // In web CLI mode, the server sets ABLY_RESTRICTED_MODE when no access token is available
-    return this.isWebCliMode && process.env.ABLY_RESTRICTED_MODE === 'true';
+    // In web CLI mode, the server sets ABLY_ANONYMOUS_USER_MODE when no access token is available
+    return this.isWebCliMode && process.env.ABLY_ANONYMOUS_USER_MODE === 'true';
   }
 
   /**
