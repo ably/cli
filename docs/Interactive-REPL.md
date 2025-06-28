@@ -1,12 +1,12 @@
 # Interactive ([Immersive](https://github.com/dthree/vorpal)) CLI
 
-The Ably CLI is desigend to be run as a traditional command line tool, where commands are run individually from a bash-like shell. Between each invocation of commands, the entire CLI environment is loaded and executed. This model works very well for a locally installed CLI.
+The Ably CLI is designed to be run as a traditional command line tool, where commands are run individually from a bash-like shell. Between each invocation of commands, the entire CLI environment is loaded and executed. This model works very well for a locally installed CLI.
 
 However, the Ably CLI is also available as a Web Terminal CLI as a convenience for Ably customers who are logged in or browsing the docs, with a CLI drawer available to slide up and execute commands. This is made possible with a local restricted shell within a secure container being spawned for each session, with STDIN/STDOUT streamed over a WebSocket connection.
 
 This model is operational today and works largely as expected, however it has some unexpected tradeoffs:
 
-- There is some lag loading the Ably CLI within a restricted container for each request, typically a few hundred millseconds. This coupled with the roundtrip latency becomes noticeable, although definitely still workable.
+- There is some lag loading the Ably CLI within a restricted container for each request, typically a few hundred milliseconds. This coupled with the roundtrip latency becomes noticeable, although definitely still workable.
 - Auto-complete does not work because of the security restrictions in place in the container and restricted shell. Working around this is proving very difficult, hacky or compromises on the security posture we were aiming for.
 
 I would like to explore an alternative route where the Ably CLI supports an interactive ([immersive](https://github.com/dthree/vorpal)) CLI mode which would:
@@ -15,7 +15,7 @@ I would like to explore an alternative route where the Ably CLI supports an inte
 - Offer all the same commands with the same Ably CLI syntax (commands and arguments) within the interactive mode. This consistency is important so that users dropping into the local CLI will get the same experience.
 - Provide rich autocomplete functionality to ensure we deliver a great developer experience, similar to what `zsh` offers
 - Provide history (Cmd+R / up)
-- Catch Ctrl-C and prevent mistaken exit from the interactive shell
+- Handle Ctrl-C naturally - interrupt running commands, show helpful message at prompt
 - Interactive REPL should feel like a standard shell, with the $ prompt for example
 - Support for rich TUI terminal functionality such as progress indicators and inline table updates
 
@@ -35,57 +35,65 @@ If there are any existing libraries that we can depend on to enable this functio
 
 ### Overview
 
-This execution plan implements an interactive REPL mode using a fork-on-demand approach with pre-warming. The design prioritizes minimal latency, clean process isolation for Ctrl+C handling, and efficient resource usage.
+This execution plan implements an interactive REPL mode using a bash wrapper approach with inline command execution. The design prioritizes simplicity, natural Ctrl+C handling, and seamless user experience.
 
-### Architecture: Fork-on-Demand with Pre-warming
+### Architecture: Bash Wrapper with Inline Execution
 
-The chosen approach uses Node.js's `child_process.fork()` to create an isolated process for command execution. Key features:
+The chosen approach runs commands inline (no spawning/forking) with a bash wrapper script that automatically restarts the CLI after Ctrl+C interruptions. Key features:
 
-- **Pre-warming on keypress**: Fork process starts when user begins typing, not when they press Enter
-- **30-second idle timeout**: Fork is terminated after inactivity to free resources
-- **Single fork model**: Only one fork exists at a time (sufficient for sequential command execution)
-- **Clean isolation**: Commands run in separate process, enabling reliable Ctrl+C termination
+- **Inline execution**: Commands run in the same process, eliminating spawn overhead
+- **Natural Ctrl+C**: Interrupting commands exits the process, wrapper restarts seamlessly
+- **Persistent history**: Command history saved to `~/.ably/history` across restarts
+- **Special exit handling**: Typing 'exit' uses exit code 42 to signal wrapper to terminate
 
 **Expected Performance**:
-- First keypress to fork ready: ~35-70ms (hidden from user)
-- Command execution: 0ms additional overhead (fork already warm)
-- Memory usage: 0MB when idle, ~30MB when fork active
+- Command execution: 0ms spawn overhead (runs inline)
+- Ctrl+C to new prompt: ~200-300ms (CLI restart time)
+- Memory usage: Shared with main process
 
 ### Implementation Phases
 
-#### Phase 1: Basic REPL Loop with Fork Worker (3-4 days)
+#### Phase 1: Basic REPL with Bash Wrapper (2-3 days)
 
-**Goal**: Create functioning interactive shell with fork-based command execution.
+**Goal**: Create functioning interactive shell with inline execution and bash wrapper.
 
 **Tasks**:
 1. Create `src/commands/interactive.ts` command (hidden initially)
-2. Implement `src/workers/command-worker.ts` for forked execution
+2. Implement inline command execution using oclif's `execute()` API
 3. Basic readline loop with `$ ` prompt
-4. Fork management with pre-warming logic
+4. Create bash wrapper script for auto-restart
+5. Implement special exit code handling
 
 **Key Files**:
 
 ```typescript
 // src/commands/interactive.ts
-import { Command } from '@oclif/core';
+import { Command, execute } from '@oclif/core';
 import * as readline from 'readline';
-import { fork, ChildProcess } from 'child_process';
-import * as path from 'path';
+import { HistoryManager } from '../services/history-manager.js';
 
 export default class Interactive extends Command {
   static description = 'Launch interactive Ably shell';
   static hidden = true;
+  static EXIT_CODE_USER_EXIT = 42; // Special code for 'exit' command
 
   private rl!: readline.Interface;
-  private worker?: ChildProcess;
-  private workerReady = false;
-  private idleTimer?: NodeJS.Timeout;
-  private commandRunning = false;
-  private readonly IDLE_TIMEOUT = 30000; // 30 seconds
+  private historyManager!: HistoryManager;
+  private isWrapperMode = process.env.ABLY_WRAPPER_MODE === '1';
 
   async run() {
+    // Show welcome message only on first run
+    if (!process.env.ABLY_SUPPRESS_WELCOME) {
+      console.log('Welcome to Ably interactive shell. Type "exit" to quit.');
+      if (this.isWrapperMode) {
+        console.log('Press Ctrl+C to interrupt running commands.');
+      }
+      console.log();
+    }
+
+    this.historyManager = new HistoryManager();
     this.setupReadline();
-    console.log('Welcome to Ably interactive shell. Type "exit" to quit.');
+    await this.historyManager.loadHistory(this.rl);
     this.rl.prompt();
   }
 
@@ -93,14 +101,8 @@ export default class Interactive extends Command {
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: '$ '
-    });
-
-    // Pre-warm on any keypress
-    this.rl.on('keypress', () => {
-      if (!this.commandRunning) {
-        this.ensureWorker();
-      }
+      prompt: '$ ',
+      terminal: true
     });
 
     this.rl.on('line', async (input) => {
@@ -108,60 +110,17 @@ export default class Interactive extends Command {
     });
 
     this.rl.on('SIGINT', () => {
-      this.handleSigInt();
+      // Show yellow warning message
+      console.log('\n\x1b[33mSignal received. To exit this shell, type \'exit\' and press Enter.\x1b[0m');
+      this.rl.prompt();
     });
 
     this.rl.on('close', () => {
       this.cleanup();
-      process.exit(0);
+      // Use special exit code when in wrapper mode
+      const exitCode = this.isWrapperMode ? Interactive.EXIT_CODE_USER_EXIT : 0;
+      process.exit(exitCode);
     });
-  }
-
-  private async ensureWorker(): Promise<ChildProcess> {
-    if (this.worker && this.workerReady) {
-      this.resetIdleTimer();
-      return this.worker;
-    }
-
-    if (!this.worker) {
-      this.worker = fork(
-        path.join(__dirname, '../workers/command-worker.js'),
-        [],
-        {
-          silent: false,
-          env: process.env,
-          cwd: process.cwd()
-        }
-      );
-
-      // Wait for worker ready signal
-      await new Promise<void>((resolve) => {
-        this.worker!.once('message', (msg) => {
-          if (msg.type === 'ready') {
-            this.workerReady = true;
-            resolve();
-          }
-        });
-      });
-
-      this.resetIdleTimer();
-    }
-
-    return this.worker;
-  }
-
-  private resetIdleTimer() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-    }
-
-    this.idleTimer = setTimeout(() => {
-      if (this.worker && !this.commandRunning) {
-        this.worker.kill();
-        this.worker = undefined;
-        this.workerReady = false;
-      }
-    }, this.IDLE_TIMEOUT);
   }
 
   private async handleCommand(input: string) {
@@ -175,116 +134,173 @@ export default class Interactive extends Command {
       return;
     }
 
-    this.commandRunning = true;
-    this.rl.pause();
+    // Save to history
+    await this.historyManager.saveCommand(input);
 
     try {
       const args = this.parseCommand(input);
-      const worker = await this.ensureWorker();
-
-      const result = await new Promise<any>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Command timeout'));
-        }, 300000); // 5 minute timeout
-
-        worker.once('message', (msg) => {
-          clearTimeout(timeout);
-          if (msg.type === 'result') {
-            resolve(msg.data);
-          } else if (msg.type === 'error') {
-            reject(new Error(msg.error));
-          }
-        });
-
-        worker.send({ type: 'execute', args });
+      
+      // Execute command inline (no spawning)
+      await execute({
+        args,
+        dir: import.meta.url
       });
-
-      if (result.exitCode !== 0) {
-        console.error(`Command failed with exit code ${result.exitCode}`);
+      
+    } catch (error: any) {
+      if (error.code === 'EEXIT') {
+        // Normal oclif exit - don't treat as error
+        return;
       }
-    } catch (error) {
       console.error('Error:', error.message);
     } finally {
-      this.commandRunning = false;
-      this.rl.resume();
       this.rl.prompt();
     }
   }
 
   private parseCommand(input: string): string[] {
-    // Basic parsing - will be enhanced in Phase 3
-    return input.split(/\s+/);
-  }
-
-  private handleSigInt() {
-    if (this.commandRunning && this.worker) {
-      // Send interrupt to worker
-      this.worker.send({ type: 'interrupt' });
-      console.log('^C');
-    } else {
-      // Clear current line and re-prompt
-      this.rl.write('\n');
-      this.rl.prompt();
+    // Handle quoted strings properly
+    const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
+    const args: string[] = [];
+    let match;
+    
+    while ((match = regex.exec(input))) {
+      args.push(match[1] || match[2] || match[0]);
     }
+    
+    return args;
   }
 
   private cleanup() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-    }
-    if (this.worker) {
-      this.worker.kill();
-    }
     console.log('\nGoodbye!');
   }
 }
 ```
 
-```typescript
-// src/workers/command-worker.ts
-import { Config } from '@oclif/core';
+```bash
+#!/bin/bash
+# bin/ably-interactive
 
-let config: Config;
+# Configuration
+ABLY_BIN="$(dirname "$0")/run.js"
+ABLY_CONFIG_DIR="$HOME/.ably"
+HISTORY_FILE="$ABLY_CONFIG_DIR/history"
+EXIT_CODE_USER_EXIT=42
+WELCOME_SHOWN=0
 
-async function initialize() {
-  // Load oclif config once
-  config = await Config.load({ root: process.cwd() });
-  process.send!({ type: 'ready' });
-}
+# Create config directory if it doesn't exist
+mkdir -p "$ABLY_CONFIG_DIR" 2>/dev/null || true
 
-process.on('message', async (msg: any) => {
-  if (msg.type === 'execute') {
-    try {
-      await config.runCommand(msg.args[0], msg.args.slice(1));
-      process.send!({ type: 'result', data: { exitCode: 0 } });
-    } catch (error) {
-      process.send!({ 
-        type: 'result', 
-        data: { exitCode: 1, error: error.message } 
-      });
-    }
-  } else if (msg.type === 'interrupt') {
-    // Handle interrupt - exit the process
-    process.exit(130); // Standard exit code for SIGINT
-  }
-});
+# Initialize history file
+touch "$HISTORY_FILE" 2>/dev/null || true
 
-// Handle process termination
-process.on('SIGINT', () => {
-  process.exit(130);
-});
+# Main loop
+while true; do
+    # Run the CLI
+    env ABLY_HISTORY_FILE="$HISTORY_FILE" \
+        ABLY_WRAPPER_MODE=1 \
+        ${ABLY_SUPPRESS_WELCOME:+ABLY_SUPPRESS_WELCOME=1} \
+        node "$ABLY_BIN" interactive
+    
+    EXIT_CODE=$?
+    
+    # Mark welcome as shown after first run
+    WELCOME_SHOWN=1
+    export ABLY_SUPPRESS_WELCOME=1
+    
+    # Check exit code
+    case $EXIT_CODE in
+        $EXIT_CODE_USER_EXIT)
+            # User typed 'exit'
+            break
+            ;;
+        130)
+            # SIGINT (Ctrl+C) - continue loop
+            ;;
+        0)
+            # Should not happen in interactive mode
+            break
+            ;;
+        *)
+            # Other error
+            echo -e "\033[31m\nProcess exited unexpectedly (code: $EXIT_CODE)\033[0m"
+            sleep 0.5
+            ;;
+    esac
+done
 
-// Initialize worker
-initialize().catch(console.error);
+echo "Goodbye!"
 ```
 
 **Testing**:
-- Verify pre-warming works (fork starts on first keypress)
-- Test command execution through fork
-- Verify idle timeout and cleanup
-- Test Ctrl+C handling
+- Verify inline command execution works
+- Test Ctrl+C during long-running commands
+- Verify wrapper restarts seamlessly
+- Test exit command with special exit code
+- Verify history persistence across restarts
 
-#### Phase 2: Autocomplete Implementation (3-4 days)
+#### Phase 2: History Persistence (1-2 days)
+
+**Goal**: Implement persistent command history that survives restarts.
+
+**Tasks**:
+1. Create `HistoryManager` service
+2. Load history on startup
+3. Save commands before execution
+4. Implement history file trimming
+5. Test history across restarts
+
+**Implementation**:
+```typescript
+// src/services/history-manager.ts
+import * as fs from 'fs';
+import * as readline from 'readline';
+
+export class HistoryManager {
+  private historyFile: string;
+  private maxHistorySize = 1000;
+  
+  constructor(historyFile?: string) {
+    this.historyFile = historyFile || process.env.ABLY_HISTORY_FILE || 
+                       `${process.env.HOME}/.ably/history`;
+  }
+  
+  async loadHistory(rl: readline.Interface): Promise<void> {
+    try {
+      if (!fs.existsSync(this.historyFile)) return;
+      
+      const history = fs.readFileSync(this.historyFile, 'utf-8')
+        .split('\n')
+        .filter(line => line.trim())
+        .slice(-this.maxHistorySize);
+      
+      // Access internal history
+      const internalRl = rl as any;
+      internalRl.history = history.reverse();
+    } catch (error) {
+      // Silently ignore history load errors
+    }
+  }
+  
+  async saveCommand(command: string): Promise<void> {
+    if (!command.trim()) return;
+    
+    try {
+      fs.appendFileSync(this.historyFile, command + '\n');
+      
+      // Trim history file if too large
+      const lines = fs.readFileSync(this.historyFile, 'utf-8').split('\n');
+      if (lines.length > this.maxHistorySize * 2) {
+        const trimmed = lines.slice(-this.maxHistorySize).join('\n');
+        fs.writeFileSync(this.historyFile, trimmed);
+      }
+    } catch (error) {
+      // Silently ignore history save errors
+    }
+  }
+}
+```
+
+#### Phase 3: Autocomplete Implementation (3-4 days)
 
 **Goal**: Add tab completion for commands, subcommands, and flags.
 
@@ -333,28 +349,6 @@ private getAvailableCommands(): string[] {
 }
 ```
 
-#### Phase 3: Command History (2 days)
-
-**Goal**: Implement session-based command history with arrow key navigation.
-
-**Tasks**:
-1. Enable readline history
-2. Implement history persistence (optional for web)
-3. Test arrow key navigation
-
-**Implementation**:
-```typescript
-// History is largely automatic with readline
-// Just ensure proper configuration in setupReadline():
-this.rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  prompt: '$ ',
-  completer: this.completer.bind(this),
-  historySize: 100  // Limit history
-});
-```
-
 #### Phase 4: Enhanced Parsing & Error Handling (2 days)
 
 **Goal**: Improve command parsing and error handling.
@@ -378,31 +372,40 @@ this.rl = readline.createInterface({
 ### Performance Metrics
 
 **Target Performance**:
-- Fork pre-warming: < 100ms (invisible to user)
-- Command execution: 0ms additional overhead
+- Command execution: 0ms spawn overhead (inline execution)
+- Ctrl+C to new prompt: < 300ms (CLI restart time)
 - Autocomplete response: < 50ms
-- Memory footprint: < 50MB total
+- History load time: < 50ms
 
 ### Risk Mitigation
 
-1. **Fork fails to start**: Fallback to direct execution with warning
-2. **Worker crashes**: Auto-restart with backoff
-3. **Memory leaks**: Periodic worker recycling after N commands
-4. **Platform issues**: Test on all target platforms early
+1. **Oclif inline execution issues**: Test execute() API thoroughly
+2. **Memory growth**: Monitor memory usage over time
+3. **Platform compatibility**: Create PowerShell wrapper for Windows
+4. **Rapid restart loops**: Add restart counter and backoff
 
 ### Success Criteria
 
-1. **Latency**: < 100ms from Enter to command start
-2. **Reliability**: Clean Ctrl+C handling for all commands
-3. **Features**: Full autocomplete and history support
+1. **Latency**: 0ms spawn overhead for command execution
+2. **Reliability**: Natural Ctrl+C handling with seamless restart
+3. **Features**: Full autocomplete and persistent history
 4. **Compatibility**: All existing commands work unchanged
-5. **Resource usage**: Minimal memory footprint when idle
+5. **User Experience**: Invisible restart after Ctrl+C
 
 ### Deployment Strategy
 
-1. **Week 1-2**: Core implementation (Phases 1-3)
-2. **Week 3**: Enhancement and testing (Phases 4-5)
-3. **Week 4**: Beta testing with web terminal
-4. **Week 5**: Production rollout
+1. **Week 1**: Core implementation (Phases 1-2)
+2. **Week 2**: Autocomplete and enhancements (Phases 3-4)
+3. **Week 3**: Testing and polish (Phase 5)
+4. **Week 4**: Beta testing with web terminal
+5. **Week 5**: Production rollout
 
-This plan delivers a responsive interactive shell with minimal overhead while maintaining clean process isolation for reliable command termination.
+### Advantages of Bash Wrapper Approach
+
+1. **Simplicity**: No complex process management or signal forwarding
+2. **Natural Ctrl+C**: Works exactly as users expect
+3. **Performance**: Zero spawn overhead for commands
+4. **Maintainability**: Much less code to maintain
+5. **Reliability**: Leverages OS-level process management
+
+This plan delivers a responsive interactive shell with natural Ctrl+C handling and seamless user experience through the bash wrapper approach.
