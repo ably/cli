@@ -60,3 +60,10 @@ while true; do
             ;;
     esac
 done
+
+# Exit with the appropriate code
+if [ $EXIT_CODE -eq $EXIT_CODE_USER_EXIT ]; then
+    exit 0
+else
+    exit $EXIT_CODE
+fi

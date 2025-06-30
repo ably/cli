@@ -1,7 +1,7 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import * as readline from 'readline';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import * as readline from 'node:readline';
 
 export class HistoryManager {
   private historyFile: string;
@@ -24,7 +24,7 @@ export class HistoryManager {
         return;
       }
       
-      const history = fs.readFileSync(this.historyFile, 'utf-8')
+      const history = fs.readFileSync(this.historyFile, 'utf8')
         .split('\n')
         .filter(line => line.trim())
         .slice(-this.maxHistorySize);
@@ -34,7 +34,7 @@ export class HistoryManager {
       // to populate history in Node.js readline
       const internalRl = rl as any;
       internalRl.history = history.reverse();
-    } catch (error) {
+    } catch {
       // Silently ignore history load errors
       // History is a nice-to-have feature, shouldn't break the shell
     }
@@ -53,7 +53,7 @@ export class HistoryManager {
       fs.appendFileSync(this.historyFile, command + '\n');
       
       // Trim history file if too large
-      const lines = fs.readFileSync(this.historyFile, 'utf-8').split('\n');
+      const lines = fs.readFileSync(this.historyFile, 'utf8').split('\n');
       if (lines.length > this.maxHistorySize * 2) {
         const trimmed = lines
           .filter(line => line.trim())
@@ -61,7 +61,7 @@ export class HistoryManager {
           .join('\n') + '\n';
         fs.writeFileSync(this.historyFile, trimmed);
       }
-    } catch (error) {
+    } catch {
       // Silently ignore history save errors
       // History is a nice-to-have feature, shouldn't break the shell
     }

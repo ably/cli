@@ -2,33 +2,33 @@ import { expect } from 'chai';
 import Interactive from '../../../src/commands/interactive.js';
 import { Config } from '@oclif/core';
 
-describe('Interactive Command', () => {
-  describe('static properties', () => {
-    it('should have correct description', () => {
+describe('Interactive Command', function() {
+  describe('static properties', function() {
+    it('should have correct description', function() {
       expect(Interactive.description).to.equal('Launch interactive Ably shell (experimental)');
     });
     
-    it('should be hidden', () => {
+    it('should be hidden', function() {
       expect(Interactive.hidden).to.be.true;
     });
     
-    it('should have special exit code', () => {
+    it('should have special exit code', function() {
       expect(Interactive.EXIT_CODE_USER_EXIT).to.equal(42);
     });
   });
   
-  describe('interactive mode environment', () => {
-    afterEach(() => {
+  describe('interactive mode environment', function() {
+    afterEach(function() {
       delete process.env.ABLY_INTERACTIVE_MODE;
     });
     
-    it('should set ABLY_INTERACTIVE_MODE environment variable', async () => {
+    it('should set ABLY_INTERACTIVE_MODE environment variable', async function() {
       const cmd = new Interactive([], {} as Config);
       
       // The run method sets the env var
       try {
         await cmd.run();
-      } catch (e) {
+      } catch {
         // Ignore errors from missing config, we just need to check env var
       }
       
@@ -36,8 +36,8 @@ describe('Interactive Command', () => {
     });
   });
   
-  describe('parseCommand', () => {
-    it('should parse commands correctly', () => {
+  describe('parseCommand', function() {
+    it('should parse commands correctly', function() {
       const cmd = new Interactive([], {} as Config);
       
       // Access private method through any type
@@ -67,15 +67,15 @@ describe('Interactive Command', () => {
     });
   });
   
-  describe('environment variables', () => {
-    it('should detect wrapper mode', () => {
+  describe('environment variables', function() {
+    it('should detect wrapper mode', function() {
       process.env.ABLY_WRAPPER_MODE = '1';
       const cmd = new Interactive([], {} as Config);
       expect((cmd as any).isWrapperMode).to.be.true;
       delete process.env.ABLY_WRAPPER_MODE;
     });
     
-    it('should not be in wrapper mode by default', () => {
+    it('should not be in wrapper mode by default', function() {
       const cmd = new Interactive([], {} as Config);
       expect((cmd as any).isWrapperMode).to.be.false;
     });

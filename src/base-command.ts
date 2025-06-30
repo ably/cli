@@ -1,4 +1,5 @@
-import { Command, Flags } from "@oclif/core";
+import { Flags } from "@oclif/core";
+import { InteractiveBaseCommand } from "./interactive-base-command.js";
 import * as Ably from "ably";
 import chalk from "chalk";
 import colorJson from "color-json";
@@ -74,7 +75,7 @@ const SKIP_AUTH_INFO_COMMANDS = [
   "help:status",
 ];
 
-export abstract class AblyBaseCommand extends Command {
+export abstract class AblyBaseCommand extends InteractiveBaseCommand {
   protected _authInfoShown = false;
   
   // Add static flags that will be available to all commands

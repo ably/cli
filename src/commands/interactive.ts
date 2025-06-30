@@ -1,10 +1,10 @@
-import { Command, Config, execute } from '@oclif/core';
-import * as readline from 'readline';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { Command } from '@oclif/core';
+import * as readline from 'node:readline';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import chalk from 'chalk';
 import { HistoryManager } from '../services/history-manager.js';
 import { displayLogo } from '../utils/logo.js';
-import CustomHelp from '../help.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,19 +17,33 @@ export default class Interactive extends Command {
   private rl!: readline.Interface;
   private historyManager!: HistoryManager;
   private isWrapperMode = process.env.ABLY_WRAPPER_MODE === '1';
-  private oclifConfig!: Config;
 
   async run() {
-    // Set environment variable to indicate we're in interactive mode
-    process.env.ABLY_INTERACTIVE_MODE = 'true';
-    
-    // Store readline instance globally for hooks to access
-    (global as any).__ablyInteractiveReadline = null;
-    
-    // Initialize oclif config for command execution
-    this.oclifConfig = await Config.load({
-      root: path.join(__dirname, '..', '..', '..')
-    });
+    try {
+      // Set environment variable to indicate we're in interactive mode
+      process.env.ABLY_INTERACTIVE_MODE = 'true';
+      
+      // Disable stack traces in interactive mode unless explicitly debugging
+      if (!process.env.DEBUG) {
+        process.env.NODE_ENV = 'production';
+      }
+      
+      // Silence oclif's error output
+      const originalConsoleError = console.error;
+      let suppressNextError = false;
+      console.error = ((...args: any[]) => {
+        // Skip oclif error stack traces in interactive mode
+        if (suppressNextError || (args[0] && typeof args[0] === 'string' && 
+            (args[0].includes('at async Config.runCommand') || 
+             args[0].includes('at Object.hook')))) {
+          suppressNextError = false;
+          return;
+        }
+        originalConsoleError.apply(console, args);
+      }) as any;
+      
+      // Store readline instance globally for hooks to access
+      (globalThis as any).__ablyInteractiveReadline = null;
 
     // Show welcome message only on first run
     if (!process.env.ABLY_SUPPRESS_WELCOME) {
@@ -53,10 +67,15 @@ export default class Interactive extends Command {
       console.log();
     }
 
-    this.historyManager = new HistoryManager();
-    this.setupReadline();
-    await this.historyManager.loadHistory(this.rl);
-    this.rl.prompt();
+      this.historyManager = new HistoryManager();
+      this.setupReadline();
+      await this.historyManager.loadHistory(this.rl);
+      this.rl.prompt();
+    } catch (error) {
+      // If there's an error starting up, exit gracefully
+      console.error('Failed to start interactive mode:', error);
+      process.exit(1);
+    }
   }
 
   private setupReadline() {
@@ -68,7 +87,9 @@ export default class Interactive extends Command {
     });
     
     // Store readline instance globally for hooks to access
-    (global as any).__ablyInteractiveReadline = this.rl;
+    (globalThis as any).__ablyInteractiveReadline = this.rl;
+    
+    // No process.exit override - we'll handle errors properly instead
 
     this.rl.on('line', async (input) => {
       await this.handleCommand(input.trim());
@@ -76,7 +97,7 @@ export default class Interactive extends Command {
 
     this.rl.on('SIGINT', () => {
       // Show yellow warning message
-      console.log('\n\x1b[33mSignal received. To exit this shell, type \'exit\' and press Enter.\x1b[0m');
+      console.log('\n\u001B[33mSignal received. To exit this shell, type \'exit\' and press Enter.\u001B[0m');
       this.rl.prompt();
     });
 
@@ -101,24 +122,124 @@ export default class Interactive extends Command {
 
     // Save to history
     await this.historyManager.saveCommand(input);
+    
 
+    // Pause readline to prevent it from interfering with command output
+    this.rl.pause();
+    
     try {
       const args = this.parseCommand(input);
       
-      // Execute command inline (no spawning)
-      await execute({
-        args,
-        dir: this.oclifConfig.root
-      });
+      // Separate flags from command parts
+      const flags: string[] = [];
+      const commandParts: string[] = [];
       
-    } catch (error: any) {
-      if (error.code === 'EEXIT') {
-        // Normal oclif exit - don't treat as error
+      for (const arg of args) {
+        if (arg.startsWith('-')) {
+          // This is a flag - keep it for later
+          flags.push(arg);
+        } else if (commandParts.length > 0 || flags.length === 0) {
+          // This is a command part (or we haven't seen flags yet)
+          commandParts.push(arg);
+        } else {
+          // This is an argument after flags started
+          flags.push(arg);
+        }
+      }
+      
+      // Handle special case of only flags (like --version)
+      if (commandParts.length === 0 && flags.length > 0) {
+        // Check for version flag
+        if (flags.includes('--version') || flags.includes('-v')) {
+          const { getVersionInfo } = await import('../utils/version.js');
+          const versionInfo = getVersionInfo(this.config);
+          this.log(`Version: ${versionInfo.version}`);
+          return;
+        }
+        // For other global flags, show help
+        await this.config.runCommand('help', []);
         return;
       }
-      console.error('Error:', error.message);
+      
+      // Find the command by trying different combinations
+      // Commands in oclif use colons, e.g., "help:ask" for "help ask"
+      let commandId: string | undefined;
+      let commandArgs: string[] = [];
+      
+      // Try to find a matching command
+      for (let i = commandParts.length; i > 0; i--) {
+        const possibleId = commandParts.slice(0, i).join(':');
+        const cmd = this.config.findCommand(possibleId);
+        if (cmd) {
+          commandId = possibleId;
+          // Include remaining command parts and all flags as arguments
+          commandArgs = [...commandParts.slice(i), ...flags];
+          break;
+        }
+      }
+      
+      if (!commandId) {
+        // No command found - this will trigger command_not_found hook
+        commandId = commandParts.join(':');
+        commandArgs = flags;
+      }
+      
+      // Use runCommand to avoid process.exit
+      
+      // Special handling for help flags
+      if (commandArgs.includes('--help') || commandArgs.includes('-h')) {
+        // If the command has help flags, we need to handle it specially
+        // because oclif's runCommand doesn't properly handle help for subcommands
+        const { default: CustomHelp } = await import('../help.js');
+        const help = new CustomHelp(this.config);
+        
+        // Find the actual command
+        const cmd = this.config.findCommand(commandId);
+        if (cmd) {
+          await help.showCommandHelp(cmd);
+          return;
+        }
+      }
+      
+      await this.config.runCommand(commandId, commandArgs);
+      
+    } catch (error: any) {
+      // Special handling for intentional exits
+      if (error.code === 'EEXIT' && error.exitCode === 0) {
+        // Normal exit (like from help command) - don't display anything
+        return;
+      }
+      
+      
+      // Always show errors in red
+      let errorMessage = error.message || 'Unknown error';
+      
+      // Clean up the error message if it has ANSI codes or extra formatting
+      // eslint-disable-next-line no-control-regex
+      errorMessage = errorMessage.replaceAll(/\u001B\[[0-9;]*m/g, ''); // Remove ANSI codes
+      
+      // Check for specific error types
+      if (error.isCommandNotFound) {
+        // Command not found - already has appropriate message
+        console.error(chalk.red(errorMessage));
+      } else if (error.oclif?.exit !== undefined || error.exitCode !== undefined || error.code === 'EEXIT') {
+        // This is an oclif error or exit that would normally exit the process
+        // Show in red without the "Error:" prefix as it's already formatted
+        console.error(chalk.red(errorMessage));
+      } else if (error.stack && process.env.DEBUG) {
+        // Show stack trace in debug mode
+        console.error(chalk.red('Error:'), errorMessage);
+        console.error(error.stack);
+      } else {
+        // All other errors - show with Error prefix
+        console.error(chalk.red('Error:'), errorMessage);
+      }
     } finally {
-      this.rl.prompt();
+      // Small delay to ensure error messages are visible
+      setTimeout(() => {
+        this.rl.resume();
+        this.rl.prompt();
+      }, 50);
     }
   }
 
@@ -134,10 +255,10 @@ export default class Interactive extends Command {
       // match[0] is the full match (including quotes or unquoted text)
       if (match[1] !== undefined) {
         args.push(match[1]);
-      } else if (match[2] !== undefined) {
-        args.push(match[2]);
-      } else {
+      } else if (match[2] === undefined) {
         args.push(match[0]);
+      } else {
+        args.push(match[2]);
       }
     }
     

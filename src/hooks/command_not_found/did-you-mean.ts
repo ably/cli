@@ -88,7 +88,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
     // Warn about command not found and suggest alternative with colored command names
     const warningMessage = `${chalk.cyan(displayOriginal.replaceAll(':', ' '))} is not an ably command.`;
     if (isInteractiveMode) {
-      console.error(chalk.yellow(`Warning: ${warningMessage}`));
+      console.log(chalk.yellow(`Warning: ${warningMessage}`));
     } else {
       this.warn(warningMessage);
     }
@@ -105,7 +105,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       confirmed = true;
     } else {
       // In interactive mode, we need to handle readline carefully
-      const interactiveReadline = isInteractiveMode ? (global as any).__ablyInteractiveReadline : null;
+      const interactiveReadline = isInteractiveMode ? (globalThis as any).__ablyInteractiveReadline : null;
       
       if (interactiveReadline) {
         // Pause readline and remove all line listeners temporarily
@@ -207,9 +207,11 @@ const hook: Hook<'command_not_found'> = async function (opts) {
 
                 // Show the styled error message
                 if (isInteractiveMode) {
-                  // In interactive mode, don't exit - just show the error
-                  console.error(chalk.red(`Error: ${customError}`));
-                  throw new Error(customError);
+                  // In interactive mode, don't exit - just throw the error
+                  // The interactive command will display it
+                  const error = new Error(customError);
+                  (error as any).oclif = { exit: exitCode };
+                  throw error;
                 } else {
                   this.error(customError, { exit: exitCode });
                 }
@@ -227,21 +229,25 @@ const hook: Hook<'command_not_found'> = async function (opts) {
           const lines = err.message.split('\n');
           const filteredLines = lines.map((line: string) => {
             if (line.includes('See more help with --help')) {
-              return `See more help with: ${config.bin} ${displaySuggestion} --help`;
+              return isInteractiveMode 
+                ? `See more help with: ${displaySuggestion} --help`
+                : `See more help with: ${config.bin} ${displaySuggestion} --help`;
             }
             return line;
           });
           if (isInteractiveMode) {
-            console.error(chalk.red(`Error: ${filteredLines.join('\n')}`));
-            throw new Error(filteredLines.join('\n'));
+            const error = new Error(filteredLines.join('\n'));
+            (error as any).oclif = { exit: exitCode };
+            throw error;
           } else {
             this.error(filteredLines.join('\n'), { exit: exitCode });
           }
         } else {
           // Original error message
           if (isInteractiveMode) {
-            console.error(chalk.red(`Error: ${err.message || 'Unknown error'}`));
-            throw new Error(err.message || 'Unknown error');
+            const error = new Error(err.message || 'Unknown error');
+            (error as any).oclif = { exit: exitCode };
+            throw error;
           } else {
             this.error(err.message || 'Unknown error', { exit: exitCode });
           }
@@ -249,6 +255,26 @@ const hook: Hook<'command_not_found'> = async function (opts) {
 
         // This won't be reached due to this.error/this.exit, but TypeScript needs it
         return;
+      }
+    }
+    
+    // User declined the suggestion - check if we should show topic commands
+    if (suggestion) {
+      // Extract the topic from the suggestion (e.g., "accounts:current" -> "accounts")
+      const topicParts = suggestion.split(':');
+      if (topicParts.length > 1) {
+        const topicCommand = topicParts[0];
+        const topicCmd = config.findCommand(topicCommand);
+        
+        if (topicCmd) {
+          // This is a topic command - run it to show available subcommands
+          try {
+            await config.runCommand(topicCommand, []);
+            return;
+          } catch {
+            // If running the topic command fails, fall through to show generic error
+          }
+        }
       }
     }
   } else {
@@ -259,8 +285,11 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       : `Command ${displayCommand} not found.\nRun ${config.bin} --help for a list of available commands.`;
     
     if (isInteractiveMode) {
-      console.error(chalk.red(`Error: ${errorMessage}`));
-      throw new Error(errorMessage);
+      // In interactive mode, just throw the error without logging
+      // The interactive command will handle displaying it
+      const error = new Error(errorMessage);
+      (error as any).isCommandNotFound = true;
+      throw error;
     } else {
       this.error(errorMessage, { exit: 127 });
     }
