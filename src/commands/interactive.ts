@@ -23,6 +23,9 @@ export default class Interactive extends Command {
     // Set environment variable to indicate we're in interactive mode
     process.env.ABLY_INTERACTIVE_MODE = 'true';
     
+    // Store readline instance globally for hooks to access
+    (global as any).__ablyInteractiveReadline = null;
+    
     // Initialize oclif config for command execution
     this.oclifConfig = await Config.load({
       root: path.join(__dirname, '..', '..', '..')
@@ -63,6 +66,9 @@ export default class Interactive extends Command {
       prompt: '$ ',
       terminal: true
     });
+    
+    // Store readline instance globally for hooks to access
+    (global as any).__ablyInteractiveReadline = this.rl;
 
     this.rl.on('line', async (input) => {
       await this.handleCommand(input.trim());
