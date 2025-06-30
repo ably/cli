@@ -1,13 +1,24 @@
 import { Command } from '@oclif/core';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
 import { HistoryManager } from '../services/history-manager.js';
 import { displayLogo } from '../utils/logo.js';
+import { WEB_CLI_RESTRICTED_COMMANDS, WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS, INTERACTIVE_UNSUITABLE_COMMANDS } from '../base-command.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+interface HistorySearchState {
+  active: boolean;
+  searchTerm: string;
+  matches: string[];
+  currentIndex: number;
+  originalLine: string;
+  originalCursorPos: number;
+}
 
 export default class Interactive extends Command {
   static description = 'Launch interactive Ably shell (experimental)';
@@ -17,6 +28,16 @@ export default class Interactive extends Command {
   private rl!: readline.Interface;
   private historyManager!: HistoryManager;
   private isWrapperMode = process.env.ABLY_WRAPPER_MODE === '1';
+  private _flagsCache?: Record<string, string[]>;
+  private _manifestCache?: any;
+  private historySearch: HistorySearchState = {
+    active: false,
+    searchTerm: '',
+    matches: [],
+    currentIndex: 0,
+    originalLine: '',
+    originalCursorPos: 0,
+  };
 
   async run() {
     try {
@@ -90,15 +111,35 @@ export default class Interactive extends Command {
     // Store readline instance globally for hooks to access
     (globalThis as any).__ablyInteractiveReadline = this.rl;
     
+    // Setup keypress handler for Ctrl+R and other special keys
+    this.setupKeypressHandler();
+    
     // No process.exit override - we'll handle errors properly instead
 
     this.rl.on('line', async (input) => {
+      // Exit history search mode when a command is executed
+      if (this.historySearch.active) {
+        this.exitHistorySearch();
+      }
       await this.handleCommand(input.trim());
     });
 
     this.rl.on('SIGINT', () => {
-      // Show yellow warning message
-      console.log('\n\u001B[33mSignal received. To exit this shell, type \'exit\' and press Enter.\u001B[0m');
+      // If in history search mode, exit it
+      if (this.historySearch.active) {
+        this.exitHistorySearch();
+        return;
+      }
+      
+      // Clear the current line similar to how zsh behaves
+      const currentLine = (this.rl as any).line || '';
+      if (currentLine.length > 0) {
+        // Clear the entire line content
+        (this.rl as any)._deleteLineLeft();
+        (this.rl as any)._deleteLineRight();
+      }
+      // Show ^C and new prompt
+      process.stdout.write('^C\n');
       this.rl.prompt();
     });
 
@@ -270,7 +311,31 @@ export default class Interactive extends Command {
     console.log('\nGoodbye!');
   }
 
-  private completer(line: string): [string[], string] {
+  private completer(line: string, callback?: (err: any, result: [string[], string]) => void): any {
+    // Don't provide completions during history search
+    if (this.historySearch.active) {
+      const emptyResult: [string[], string] = [[], line];
+      if (callback) {
+        callback(null, emptyResult);
+      } else {
+        return emptyResult;
+      }
+      return;
+    }
+    
+    // Support both sync and async patterns
+    const result = this.getCompletions(line);
+    
+    if (callback) {
+      // Async mode - used by readline for custom display
+      callback(null, result);
+    } else {
+      // Sync mode - fallback
+      return result;
+    }
+  }
+  
+  private getCompletions(line: string): [string[], string] {
     const words = line.trim().split(/\s+/);
     const lastWord = words[words.length - 1] || '';
     
@@ -285,27 +350,39 @@ export default class Interactive extends Command {
       // Complete top-level commands
       const commands = this.getTopLevelCommands();
       const matches = commands.filter(cmd => cmd.startsWith(currentWord));
-      return [matches.length > 0 ? matches : commands, currentWord];
+      
+      // Custom display for multiple matches
+      if (matches.length > 1) {
+        this.displayCompletions(matches, 'command');
+        return [[], line]; // Don't auto-complete, just show options
+      }
+      
+      return [matches, currentWord];
     }
     
     // Check if we're completing flags
     if (currentWord.startsWith('-')) {
-      // For now, return basic flags synchronously
-      const flags = this.getBasicFlagsForCommand(commandPath);
+      const flags = this.getFlagsForCommandSync(commandPath);
       const matches = flags.filter(flag => flag.startsWith(currentWord));
-      return [matches.length > 0 ? matches : flags, currentWord];
+      
+      if (matches.length > 1) {
+        this.displayCompletions(matches, 'flag');
+        return [[], line];
+      }
+      
+      return [matches, currentWord];
     }
     
     // Try to find subcommands
     const subcommands = this.getSubcommandsForPath(commandPath);
     const matches = subcommands.filter(cmd => cmd.startsWith(currentWord));
     
-    // If no subcommands, might be completing arguments - show no suggestions
-    if (subcommands.length === 0) {
-      return [[], currentWord];
+    if (matches.length > 1) {
+      this.displayCompletions(matches, 'subcommand', commandPath);
+      return [[], line];
     }
     
-    return [matches.length > 0 ? matches : subcommands, currentWord];
+    return [matches.length > 0 ? matches : [], currentWord];
   }
 
   private getTopLevelCommands(): string[] {
@@ -315,12 +392,16 @@ export default class Interactive extends Command {
       
       for (const command of this.config.commands) {
         if (!command.hidden && !command.id.includes(':')) {
-          this._commandCache.push(command.id);
+          // Filter out restricted commands
+          if (!this.isCommandRestricted(command.id)) {
+            this._commandCache.push(command.id);
+          }
         }
       }
       
-      // Add special commands
-      this._commandCache.push('exit', 'help', 'version');
+      // Add special commands that aren't filtered
+      // Only add 'exit' since help, version, config, and autocomplete are filtered out
+      this._commandCache.push('exit');
       this._commandCache.sort();
     }
     
@@ -334,14 +415,17 @@ export default class Interactive extends Command {
     
     for (const command of this.config.commands) {
       if (!command.hidden && command.id.startsWith(parentCommand + ':')) {
-        // Get the next part of the command
-        const remaining = command.id.slice(parentCommand.length + 1);
-        const parts = remaining.split(':');
-        const nextPart = parts[0];
-        
-        // Only add direct children (one level deep)
-        if (nextPart && parts.length === 1) {
-          subcommands.push(nextPart);
+        // Filter out restricted commands
+        if (!this.isCommandRestricted(command.id)) {
+          // Get the next part of the command
+          const remaining = command.id.slice(parentCommand.length + 1);
+          const parts = remaining.split(':');
+          const nextPart = parts[0];
+          
+          // Only add direct children (one level deep)
+          if (nextPart && parts.length === 1) {
+            subcommands.push(nextPart);
+          }
         }
       }
     }
@@ -349,20 +433,387 @@ export default class Interactive extends Command {
     return [...new Set(subcommands)].sort();
   }
 
-  private getBasicFlagsForCommand(commandPath: string[]): string[] {
-    // Return common flags that are available for most commands
-    const flags = ['--help', '-h'];
+  private getFlagsForCommandSync(commandPath: string[]): string[] {
+    // Get cached flags if available
+    const commandId = commandPath.filter(p => p).join(':');
     
-    // Add global flags
+    if (this._flagsCache && this._flagsCache[commandId]) {
+      return this._flagsCache[commandId];
+    }
+    
+    // Basic flags available for all commands
+    const flags: string[] = ['--help', '-h'];
+    
+    // Try to get flags from manifest first
+    try {
+      // Load manifest if not already loaded
+      if (!this._manifestCache) {
+        const manifestPath = path.join(this.config.root, 'oclif.manifest.json');
+        if (fs.existsSync(manifestPath)) {
+          this._manifestCache = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        }
+      }
+      
+      // Get flags from manifest
+      if (this._manifestCache && this._manifestCache.commands) {
+        const manifestCommand = this._manifestCache.commands[commandId];
+        if (manifestCommand && manifestCommand.flags) {
+          for (const [name, flag] of Object.entries(manifestCommand.flags)) {
+            const flagDef = flag as any;
+            // Skip hidden flags unless in dev mode
+            if (flagDef.hidden && process.env.ABLY_SHOW_DEV_FLAGS !== 'true') {
+              continue;
+            }
+            flags.push(`--${name}`);
+            if (flagDef.char) {
+              flags.push(`-${flagDef.char}`);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Fall back to trying to get from loaded command
+      try {
+        const command = this.config.findCommand(commandId);
+        if (command && command.flags) {
+          // Add flags from command definition (these are already loaded)
+          for (const [name, flag] of Object.entries(command.flags)) {
+            flags.push(`--${name}`);
+            if (flag.char) {
+              flags.push(`-${flag.char}`);
+            }
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+    
+    // Add global flags for top-level
     if (commandPath.length === 0 || commandPath[0] === '') {
       flags.push('--version', '-v');
     }
     
-    // Could be enhanced to cache command-specific flags
-    // For now, return basic flags only
+    const uniqueFlags = [...new Set(flags)].sort();
     
-    return [...new Set(flags)].sort();
+    // Cache for next time
+    if (!this._flagsCache) {
+      this._flagsCache = {};
+    }
+    this._flagsCache[commandId] = uniqueFlags;
+    
+    return uniqueFlags;
+  }
+  
+  private displayCompletions(matches: string[], type: string, commandPath?: string[]): void {
+    console.log(); // New line for better display
+    
+    // Get descriptions for each match
+    const items: Array<{ name: string; description: string }> = [];
+    
+    for (const match of matches) {
+      let description = '';
+      
+      if (type === 'command' || type === 'subcommand') {
+        const fullId = commandPath ? [...commandPath, match].join(':') : match;
+        const cmd = this.config.findCommand(fullId);
+        if (cmd && cmd.description) {
+          description = cmd.description;
+        }
+      } else if (type === 'flag') {
+        // Extract flag description from manifest first, then fall back to command
+        if (commandPath) {
+          const commandId = commandPath.filter(p => p).join(':');
+          const flagName = match.replace(/^--?/, '');
+          
+          // Try manifest first
+          if (this._manifestCache && this._manifestCache.commands) {
+            const manifestCommand = this._manifestCache.commands[commandId];
+            if (manifestCommand && manifestCommand.flags) {
+              // Find flag by name or char
+              for (const [name, flag] of Object.entries(manifestCommand.flags)) {
+                const flagDef = flag as any;
+                if (name === flagName || (flagDef.char && flagDef.char === flagName)) {
+                  description = flagDef.description || '';
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Fall back to loaded command if no description found
+          if (!description) {
+            try {
+              const command = this.config.findCommand(commandId);
+              if (command && command.flags) {
+                const flag = Object.entries(command.flags).find(([name, f]) => 
+                  name === flagName || (f.char && f.char === flagName)
+                );
+                if (flag && flag[1].description) {
+                  description = flag[1].description;
+                }
+              }
+            } catch {
+              // Ignore errors
+            }
+          }
+        }
+      }
+      
+      items.push({ name: match, description });
+    }
+    
+    // Calculate max width for alignment
+    const maxNameWidth = Math.max(...items.map(item => item.name.length));
+    
+    // Display in zsh-like format
+    for (const item of items) {
+      const paddedName = item.name.padEnd(maxNameWidth + 2);
+      if (item.description) {
+        console.log(`  ${chalk.cyan(paddedName)} -- ${chalk.gray(item.description)}`);
+      } else {
+        console.log(`  ${chalk.cyan(paddedName)}`);
+      }
+    }
+    
+    // Redraw the prompt with current input
+    if (this.rl) {
+      this.rl.prompt(true);
+    }
   }
 
   private _commandCache?: string[];
+  
+  /**
+   * Check if we're running in web CLI mode
+   */
+  private isWebCliMode(): boolean {
+    return process.env.ABLY_WEB_CLI_MODE === 'true';
+  }
+  
+  /**
+   * Check if we're running in anonymous web CLI mode
+   */
+  private isAnonymousWebMode(): boolean {
+    return this.isWebCliMode() && process.env.ABLY_RESTRICTED_MODE === 'true';
+  }
+  
+  /**
+   * Check if command matches a pattern (supports wildcards)
+   */
+  private matchesCommandPattern(commandId: string, pattern: string): boolean {
+    // Handle wildcard patterns
+    if (pattern.endsWith('*')) {
+      const prefix = pattern.slice(0, -1);
+      return commandId === prefix || commandId.startsWith(prefix);
+    }
+    
+    // Handle exact matches
+    return commandId === pattern;
+  }
+  
+  /**
+   * Check if a command should be filtered out based on restrictions
+   */
+  private isCommandRestricted(commandId: string): boolean {
+    // Commands not suitable for interactive mode (exit is handled separately)
+    if (INTERACTIVE_UNSUITABLE_COMMANDS.includes(commandId)) {
+      return true;
+    }
+    
+    // Check web CLI restrictions
+    if (this.isWebCliMode()) {
+      // Check base web CLI restrictions
+      if (WEB_CLI_RESTRICTED_COMMANDS.some(pattern => 
+        this.matchesCommandPattern(commandId, pattern)
+      )) {
+        return true;
+      }
+      
+      // Check anonymous mode restrictions
+      if (this.isAnonymousWebMode()) {
+        if (WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some(pattern => 
+          this.matchesCommandPattern(commandId, pattern)
+        )) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
+  private setupKeypressHandler() {
+    // Enable keypress events on stdin
+    readline.emitKeypressEvents(process.stdin);
+    
+    // Enable raw mode for keypress handling
+    if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+      // Note: We don't call setRawMode(true) here because readline manages it
+      // The keypress event handler will still work
+      process.stdin.on('keypress', (str, key) => {
+        if (!key) return;
+        
+        // Ctrl+R: Start or cycle through history search
+        if (key.ctrl && key.name === 'r') {
+          if (!this.historySearch.active) {
+            this.startHistorySearch();
+          } else {
+            this.cycleHistorySearch();
+          }
+          return;
+        }
+        
+        // Handle keys during history search
+        if (this.historySearch.active) {
+          // Escape: Exit history search
+          if (key.name === 'escape') {
+            this.exitHistorySearch();
+            return;
+          }
+          
+          // Enter: Accept current match
+          if (key.name === 'return') {
+            this.acceptHistoryMatch();
+            return;
+          }
+          
+          // Backspace: Remove character from search
+          if (key.name === 'backspace') {
+            if (this.historySearch.searchTerm.length > 0) {
+              this.historySearch.searchTerm = this.historySearch.searchTerm.slice(0, -1);
+              this.updateHistorySearch();
+            } else {
+              // Exit search if no search term
+              this.exitHistorySearch();
+            }
+            return;
+          }
+          
+          // Regular character: Add to search term
+          if (str && str.length === 1 && !key.ctrl && !key.meta) {
+            this.historySearch.searchTerm += str;
+            this.updateHistorySearch();
+            return;
+          }
+        }
+      });
+    }
+  }
+  
+  private startHistorySearch() {
+    // Save current line state
+    this.historySearch.originalLine = (this.rl as any).line || '';
+    this.historySearch.originalCursorPos = (this.rl as any).cursor || 0;
+    
+    // Initialize search state
+    this.historySearch.active = true;
+    this.historySearch.searchTerm = '';
+    this.historySearch.matches = [];
+    this.historySearch.currentIndex = 0;
+    
+    // Update display
+    this.updateHistorySearchDisplay();
+  }
+  
+  private updateHistorySearch() {
+    // Get history from readline
+    const history = (this.rl as any).history || [];
+    
+    // Find matches (search from most recent to oldest)
+    // Note: readline stores history in reverse order (most recent first)
+    this.historySearch.matches = [];
+    for (let i = 0; i < history.length; i++) {
+      const command = history[i];
+      if (command.toLowerCase().includes(this.historySearch.searchTerm.toLowerCase())) {
+        this.historySearch.matches.push(command);
+      }
+    }
+    
+    // Reset index to show most recent match
+    this.historySearch.currentIndex = 0;
+    
+    // Update display
+    this.updateHistorySearchDisplay();
+  }
+  
+  private cycleHistorySearch() {
+    if (this.historySearch.matches.length === 0) return;
+    
+    // Cycle to next match
+    this.historySearch.currentIndex = (this.historySearch.currentIndex + 1) % this.historySearch.matches.length;
+    
+    // Update display
+    this.updateHistorySearchDisplay();
+  }
+  
+  private updateHistorySearchDisplay() {
+    // Clear current line
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    
+    if (this.historySearch.matches.length > 0) {
+      // Show current match
+      const currentMatch = this.historySearch.matches[this.historySearch.currentIndex];
+      const searchPrompt = `(reverse-i-search\`${this.historySearch.searchTerm}'): `;
+      
+      // Write the search prompt and matched command
+      process.stdout.write(chalk.dim(searchPrompt) + currentMatch);
+      
+      // Update readline's internal state
+      (this.rl as any).line = currentMatch;
+      (this.rl as any).cursor = currentMatch.length;
+    } else {
+      // No matches found
+      const searchPrompt = `(failed reverse-i-search\`${this.historySearch.searchTerm}'): `;
+      process.stdout.write(chalk.dim(searchPrompt));
+      
+      // Clear readline's line
+      (this.rl as any).line = '';
+      (this.rl as any).cursor = 0;
+    }
+  }
+  
+  private acceptHistoryMatch() {
+    if (this.historySearch.matches.length === 0) {
+      this.exitHistorySearch();
+      return;
+    }
+    
+    // Get current match
+    const currentMatch = this.historySearch.matches[this.historySearch.currentIndex];
+    
+    // Exit search mode
+    this.historySearch.active = false;
+    
+    // Clear and redraw with normal prompt
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    
+    // Set the line and display it
+    (this.rl as any).line = currentMatch;
+    (this.rl as any).cursor = currentMatch.length;
+    this.rl.prompt(true);
+    
+    // Write the command after the prompt
+    process.stdout.write(currentMatch);
+  }
+  
+  private exitHistorySearch() {
+    // Exit search mode
+    this.historySearch.active = false;
+    
+    // Clear current line
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    
+    // Restore original line
+    (this.rl as any).line = this.historySearch.originalLine;
+    (this.rl as any).cursor = this.historySearch.originalCursorPos;
+    
+    // Redraw prompt with original content
+    this.rl.prompt(true);
+    process.stdout.write(this.historySearch.originalLine);
+    readline.cursorTo(process.stdout, (this.rl as any)._prompt.length + this.historySearch.originalCursorPos);
+  }
 }

@@ -120,9 +120,8 @@ describe('Did You Mean Hook - Interactive Mode', function() {
       expect(inquirerStub.called).to.be.true;
       expect(inquirerStub.firstCall.args[0][0].message).to.include('Did you mean channels publish?');
       
-      // Should pause and resume readline
+      // Should pause readline (resume happens asynchronously)
       expect(mockReadline.pause.called).to.be.true;
-      expect(mockReadline.resume.called).to.be.true;
       
       // Clean up
       delete (globalThis as any).__ablyInteractiveReadline;
@@ -254,6 +253,75 @@ describe('Did You Mean Hook - Interactive Mode', function() {
       expect(thrownError?.message).to.include("Command unknown command not found. Run 'help' for a list of available commands.");
       expect(thrownError?.message).to.not.include('ably --help');
       expect(errorStub.called).to.be.false;
+    });
+  });
+  
+  describe('readline restoration', function() {
+    it('should properly restore readline state after inquirer prompt', async function() {
+      const context = {
+        config,
+        warn: warnStub,
+        error: errorStub,
+        log: logStub,
+        exit: sandbox.stub(),
+        debug: sandbox.stub()
+      };
+      
+      // Mock the global readline instance with more detailed state tracking
+      const lineListeners = [sandbox.stub(), sandbox.stub()];
+      const mockReadline = {
+        pause: sandbox.stub(),
+        resume: sandbox.stub(),
+        prompt: sandbox.stub(),
+        listeners: sandbox.stub().returns(lineListeners),
+        removeAllListeners: sandbox.stub(),
+        on: sandbox.stub(),
+        _refreshLine: sandbox.stub()
+      };
+      (globalThis as any).__ablyInteractiveReadline = mockReadline;
+      
+      // Mock process.stdin for terminal state
+      const originalIsRaw = process.stdin.isRaw;
+      const originalIsTTY = process.stdin.isTTY;
+      const originalSetRawMode = process.stdin.setRawMode;
+      
+      process.stdin.isRaw = false;
+      process.stdin.isTTY = true;
+      process.stdin.setRawMode = sandbox.stub().returns(process.stdin);
+      
+      try {
+        await hook.call(context, {
+          id: 'channels:pubish',
+          argv: [],
+          config,
+          context
+        });
+        
+        // Wait for async restoration
+        await new Promise(resolve => setTimeout(resolve, 30));
+        
+        // Verify readline was paused during prompt
+        expect(mockReadline.pause.called).to.be.true;
+        
+        // Verify line listeners were temporarily removed and restored
+        expect(mockReadline.removeAllListeners.calledWith('line')).to.be.true;
+        expect(mockReadline.on.callCount).to.equal(lineListeners.length);
+        lineListeners.forEach((listener, index) => {
+          expect(mockReadline.on.getCall(index).args).to.deep.equal(['line', listener]);
+        });
+        
+        // Verify readline was resumed
+        expect(mockReadline.resume.called).to.be.true;
+        
+        // Verify terminal state was restored
+        expect((process.stdin.setRawMode as sinon.SinonStub).calledWith(false)).to.be.true;
+      } finally {
+        // Clean up
+        delete (globalThis as any).__ablyInteractiveReadline;
+        process.stdin.isRaw = originalIsRaw;
+        process.stdin.isTTY = originalIsTTY;
+        process.stdin.setRawMode = originalSetRawMode;
+      }
     });
   });
   

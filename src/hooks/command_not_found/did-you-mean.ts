@@ -2,6 +2,7 @@ import { Hook } from '@oclif/core';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import pkg from "fast-levenshtein";
+import { runInquirerWithReadlineRestore } from '../../utils/readline-helper.js';
 const { get: levenshteinDistance } = pkg;
 
 /**
@@ -107,38 +108,16 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       // In interactive mode, we need to handle readline carefully
       const interactiveReadline = isInteractiveMode ? (globalThis as any).__ablyInteractiveReadline : null;
       
-      if (interactiveReadline) {
-        // Pause readline and remove all line listeners temporarily
-        interactiveReadline.pause();
-        const lineListeners = interactiveReadline.listeners('line');
-        interactiveReadline.removeAllListeners('line');
-        
-        try {
-          // Prompt user for confirmation
-          const result = await inquirer.prompt([{
-            name: 'confirmed',
-            type: 'confirm',
-            message: `Did you mean ${chalk.green(displaySuggestion)}?`,
-            default: true
-          }]);
-          confirmed = result.confirmed;
-        } finally {
-          // Restore line listeners and resume
-          lineListeners.forEach((listener: any) => {
-            interactiveReadline.on('line', listener);
-          });
-          interactiveReadline.resume();
-        }
-      } else {
-        // Normal mode - just prompt
-        const result = await inquirer.prompt([{
+      const result = await runInquirerWithReadlineRestore(
+        async () => inquirer.prompt([{
           name: 'confirmed',
           type: 'confirm',
           message: `Did you mean ${chalk.green(displaySuggestion)}?`,
           default: true
-        }]);
-        confirmed = result.confirmed;
-      }
+        }]),
+        interactiveReadline
+      );
+      confirmed = result.confirmed;
     }
 
     if (confirmed) {
