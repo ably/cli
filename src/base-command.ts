@@ -61,6 +61,15 @@ export const WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS = [
   "queues*",
 ];
 
+/* Commands not suitable for interactive mode */
+export const INTERACTIVE_UNSUITABLE_COMMANDS = [
+  "autocomplete", // Autocomplete setup is not needed in interactive mode
+  "help", // Help is handled specially in interactive mode to avoid duplicates
+  "config", // Config editing is not suitable for interactive mode
+  "version", // Version is shown at startup and available via --version
+  "mcp", // MCP server functionality is not suitable for interactive mode
+];
+
 // List of commands that should not show account/app info
 const SKIP_AUTH_INFO_COMMANDS = [
   "accounts:list",
