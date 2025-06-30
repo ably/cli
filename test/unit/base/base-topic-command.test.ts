@@ -64,6 +64,7 @@ describe('BaseTopicCommand', () => {
 
   afterEach(function() {
     sandbox.restore();
+    delete process.env.ABLY_INTERACTIVE_MODE;
   });
 
   it('should list all non-hidden sub-commands', async () => {
@@ -232,5 +233,58 @@ describe('BaseTopicCommand', () => {
     await command.run();
 
     expect(logStub.calledWithMatch(/Should be hidden/)).to.be.false;
+  });
+
+  describe('interactive mode', () => {
+    beforeEach(() => {
+      process.env.ABLY_INTERACTIVE_MODE = 'true';
+    });
+
+    it('should strip ably prefix from command listings in interactive mode', async () => {
+      await command.run();
+
+      // Check that commands don't have "ably" prefix
+      const calls = logStub.getCalls();
+      const commandCalls = calls.filter(call => 
+        call.args[0].includes('test command1') || 
+        call.args[0].includes('test command2')
+      );
+
+      commandCalls.forEach(call => {
+        expect(call.args[0]).to.not.include('ably test command');
+        expect(call.args[0]).to.match(/^\s+.*test command/);
+      });
+    });
+
+    it('should strip ably prefix from help instructions in interactive mode', async () => {
+      await command.run();
+
+      // Check footer help text
+      const lastCall = logStub.getCall(logStub.callCount - 1);
+      expect(lastCall.args[0]).to.contain('Run `');
+      expect(lastCall.args[0]).to.contain('test COMMAND --help');
+      expect(lastCall.args[0]).to.not.contain('ably test COMMAND --help');
+    });
+
+    it('should show ably prefix in normal mode', async () => {
+      delete process.env.ABLY_INTERACTIVE_MODE;
+      
+      await command.run();
+
+      // Check that commands have "ably" prefix
+      const calls = logStub.getCalls();
+      const commandCalls = calls.filter(call => 
+        call.args[0].includes('test command1') || 
+        call.args[0].includes('test command2')
+      );
+
+      commandCalls.forEach(call => {
+        expect(call.args[0]).to.include('ably test command');
+      });
+
+      // Check footer
+      const lastCall = logStub.getCall(logStub.callCount - 1);
+      expect(lastCall.args[0]).to.contain('ably test COMMAND --help');
+    });
   });
 });

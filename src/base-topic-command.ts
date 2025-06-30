@@ -7,20 +7,26 @@ export abstract class BaseTopicCommand extends Command {
   
   async run(): Promise<void> {
     const commands = await this.getTopicCommands();
+    const isInteractiveMode = process.env.ABLY_INTERACTIVE_MODE === 'true';
     
     this.log(`Ably ${this.commandGroup} commands:`);
     this.log('');
     
     const maxLength = Math.max(...commands.map(cmd => cmd.id.length));
+    const prefix = isInteractiveMode ? '' : 'ably ';
+    const prefixLength = prefix.length;
     
     for (const cmd of commands) {
-      const paddedId = `ably ${cmd.id}`.padEnd(maxLength + 7); // +7 for "ably " prefix
+      const paddedId = `${prefix}${cmd.id}`.padEnd(maxLength + prefixLength + 2); // +2 for spacing
       const description = cmd.description || '';
       this.log(`  ${chalk.cyan(paddedId)} - ${description}`);
     }
     
     this.log('');
-    this.log(`Run \`${chalk.cyan(`ably ${this.topicName.replaceAll(':', ' ')} COMMAND --help`)}\` for more information on a command.`);
+    const helpCommand = isInteractiveMode 
+      ? `${this.topicName.replaceAll(':', ' ')} COMMAND --help`
+      : `ably ${this.topicName.replaceAll(':', ' ')} COMMAND --help`;
+    this.log(`Run \`${chalk.cyan(helpCommand)}\` for more information on a command.`);
   }
   
   protected async getTopicCommands(): Promise<Array<{id: string; description: string}>> {
