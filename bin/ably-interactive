@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Ably Interactive Shell Wrapper
+# This script provides seamless Ctrl+C handling by automatically
+# restarting the CLI when it exits due to SIGINT
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ABLY_BIN="$SCRIPT_DIR/run.js"
+ABLY_CONFIG_DIR="$HOME/.ably"
+HISTORY_FILE="$ABLY_CONFIG_DIR/history"
+EXIT_CODE_USER_EXIT=42
+WELCOME_SHOWN=0
+
+# Ensure we have a valid Node.js binary
+if ! command -v node &> /dev/null; then
+    echo "Error: Node.js is required but not found in PATH" >&2
+    exit 1
+fi
+
+# Create config directory if it doesn't exist
+mkdir -p "$ABLY_CONFIG_DIR" 2>/dev/null || true
+
+# Initialize history file
+touch "$HISTORY_FILE" 2>/dev/null || true
+
+# Main loop
+while true; do
+    # Run the CLI
+    env ABLY_HISTORY_FILE="$HISTORY_FILE" \
+        ABLY_WRAPPER_MODE=1 \
+        ${ABLY_SUPPRESS_WELCOME:+ABLY_SUPPRESS_WELCOME=1} \
+        node "$ABLY_BIN" interactive
+    
+    EXIT_CODE=$?
+    
+    # Mark welcome as shown after first run
+    WELCOME_SHOWN=1
+    export ABLY_SUPPRESS_WELCOME=1
+    
+    # Check exit code
+    case $EXIT_CODE in
+        $EXIT_CODE_USER_EXIT)
+            # User typed 'exit' - break the loop
+            break
+            ;;
+        130)
+            # SIGINT (Ctrl+C) - continue loop silently
+            # The new prompt will appear automatically
+            ;;
+        0)
+            # Normal exit (shouldn't happen in interactive mode)
+            # But if it does, exit gracefully
+            break
+            ;;
+        *)
+            # Other error - show message and restart
+            echo -e "\033[31m\nProcess exited unexpectedly (code: $EXIT_CODE)\033[0m"
+            sleep 0.5
+            ;;
+    esac
+done

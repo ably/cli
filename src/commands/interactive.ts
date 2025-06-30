@@ -1,41 +1,58 @@
-import { Command } from '@oclif/core';
+import { Command, Config, execute } from '@oclif/core';
 import * as readline from 'readline';
-import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { HistoryManager } from '../services/history-manager.js';
+import { displayLogo } from '../utils/logo.js';
+import CustomHelp from '../help.js';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 export default class Interactive extends Command {
   static description = 'Launch interactive Ably shell (experimental)';
   static hidden = true; // Hide from help until stable
+  static EXIT_CODE_USER_EXIT = 42; // Special code for 'exit' command
 
   private rl!: readline.Interface;
-  private currentProcess?: ChildProcess;
-  private commandRunning = false;
-  
-  // Commands known to be long-running that benefit from Ctrl+C
-  private longRunningCommands = [
-    'channels subscribe',
-    'channels publish',
-    'apps stats',
-    'apps status',
-  ];
-  
-  // Commands known to need interactive prompts
-  private interactiveCommands = [
-    'apps create',
-    'apps delete',
-    'keys create',
-    'configure',
-  ];
+  private historyManager!: HistoryManager;
+  private isWrapperMode = process.env.ABLY_WRAPPER_MODE === '1';
+  private oclifConfig!: Config;
 
   async run() {
+    // Set environment variable to indicate we're in interactive mode
+    process.env.ABLY_INTERACTIVE_MODE = 'true';
+    
+    // Initialize oclif config for command execution
+    this.oclifConfig = await Config.load({
+      root: path.join(__dirname, '..', '..', '..')
+    });
+
+    // Show welcome message only on first run
+    if (!process.env.ABLY_SUPPRESS_WELCOME) {
+      // Display logo
+      displayLogo(console.log);
+      console.log(`   Version: ${this.config.version}\n`);
+      console.log('Welcome to the Ably CLI interactive shell!');
+      console.log('Type "help" to see available commands or "exit" to quit.');
+      if (this.isWrapperMode) {
+        console.log('Press Ctrl+C to interrupt running commands.');
+      }
+      console.log();
+      
+      // Show basic commands info
+      console.log('COMMON COMMANDS');
+      console.log('  help                          Show help for any command');
+      console.log('  channels publish <channel>    Publish a message to a channel');
+      console.log('  channels subscribe <channel>  Subscribe to channel messages');
+      console.log('  apps list                     List your Ably apps');
+      console.log('  exit                          Exit the interactive shell');
+      console.log();
+    }
+
+    this.historyManager = new HistoryManager();
     this.setupReadline();
-    console.log('Welcome to Ably interactive shell. Type "exit" to quit.');
-    console.log('Ctrl+C handling: Enabled for long-running commands, delayed for interactive prompts.\n');
+    await this.historyManager.loadHistory(this.rl);
     this.rl.prompt();
   }
 
@@ -51,17 +68,17 @@ export default class Interactive extends Command {
       await this.handleCommand(input.trim());
     });
 
-    // Handle SIGINT when readline is active (at prompt)
     this.rl.on('SIGINT', () => {
-      if (!this.commandRunning) {
-        console.log('^C');
-        this.rl.prompt();
-      }
+      // Show yellow warning message
+      console.log('\n\x1b[33mSignal received. To exit this shell, type \'exit\' and press Enter.\x1b[0m');
+      this.rl.prompt();
     });
 
     this.rl.on('close', () => {
       this.cleanup();
-      process.exit(0);
+      // Use special exit code when in wrapper mode
+      const exitCode = this.isWrapperMode ? Interactive.EXIT_CODE_USER_EXIT : 0;
+      process.exit(exitCode);
     });
   }
 
@@ -76,116 +93,27 @@ export default class Interactive extends Command {
       return;
     }
 
-    const args = this.parseCommand(input);
-    const commandType = this.detectCommandType(args);
-    
-    this.commandRunning = true;
-    this.rl.pause();
+    // Save to history
+    await this.historyManager.saveCommand(input);
 
     try {
-      if (commandType === 'long-running') {
-        await this.executeLongRunningCommand(args);
-      } else {
-        await this.executeStandardCommand(args);
-      }
+      const args = this.parseCommand(input);
+      
+      // Execute command inline (no spawning)
+      await execute({
+        args,
+        dir: this.oclifConfig.root
+      });
+      
     } catch (error: any) {
+      if (error.code === 'EEXIT') {
+        // Normal oclif exit - don't treat as error
+        return;
+      }
       console.error('Error:', error.message);
     } finally {
-      this.commandRunning = false;
-      this.rl.resume();
       this.rl.prompt();
     }
-  }
-
-  private detectCommandType(args: string[]): 'long-running' | 'interactive' | 'standard' {
-    const commandStr = args.slice(0, 2).join(' ').toLowerCase();
-    
-    if (this.longRunningCommands.some(cmd => commandStr.startsWith(cmd))) {
-      return 'long-running';
-    }
-    
-    if (this.interactiveCommands.some(cmd => commandStr.startsWith(cmd))) {
-      return 'interactive';
-    }
-    
-    // Check for flags that indicate long-running behavior
-    if (args.includes('--duration') || args.includes('--follow') || args.includes('--watch')) {
-      return 'long-running';
-    }
-    
-    return 'standard';
-  }
-  
-  private async executeLongRunningCommand(args: string[]) {
-    // Set up raw mode handler for Ctrl+C detection
-    let dataHandler: ((chunk: Buffer) => void) | undefined;
-    const wasRaw = process.stdin.isRaw;
-    
-    if (process.stdin.isTTY) {
-      // Enable raw mode to catch Ctrl+C
-      process.stdin.setRawMode(true);
-      
-      dataHandler = (chunk: Buffer) => {
-        // Check for Ctrl+C (ASCII 3)
-        for (let i = 0; i < chunk.length; i++) {
-          if (chunk[i] === 3) {
-            console.log('\n^C');
-            if (this.currentProcess) {
-              this.currentProcess.kill('SIGINT');
-            }
-            return;
-          }
-        }
-        // For long-running commands, we don't forward other input
-        // as they typically don't need interactive input
-      };
-      
-      process.stdin.on('data', dataHandler);
-    }
-    
-    try {
-      await this.spawnCommand(args);
-    } finally {
-      // Restore terminal state
-      if (dataHandler) {
-        process.stdin.removeListener('data', dataHandler);
-      }
-      if (process.stdin.isTTY) {
-        process.stdin.setRawMode(wasRaw);
-      }
-    }
-  }
-  
-  private async executeStandardCommand(args: string[]) {
-    // For interactive commands, we accept the limitation that Ctrl+C won't work immediately
-    // This ensures that prompts work correctly
-    await this.spawnCommand(args);
-  }
-  
-  private async spawnCommand(args: string[]): Promise<void> {
-    const binPath = path.join(__dirname, '..', '..', '..', 'bin', 'run.js');
-    
-    this.currentProcess = spawn(process.execPath, [binPath, ...args], {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        ABLY_INTERACTIVE_MODE: 'true'
-      },
-      cwd: process.cwd()
-    });
-    
-    return new Promise<void>((resolve) => {
-      this.currentProcess!.on('exit', (code, signal) => {
-        this.currentProcess = undefined;
-        resolve();
-      });
-      
-      this.currentProcess!.on('error', (err) => {
-        console.error('Error:', err.message);
-        this.currentProcess = undefined;
-        resolve();
-      });
-    });
   }
 
   private parseCommand(input: string): string[] {
@@ -195,16 +123,22 @@ export default class Interactive extends Command {
     let match;
     
     while ((match = regex.exec(input))) {
-      args.push(match[1] || match[2] || match[0]);
+      // match[1] is content of double quotes (can be empty string)
+      // match[2] is content of single quotes (can be empty string)
+      // match[0] is the full match (including quotes or unquoted text)
+      if (match[1] !== undefined) {
+        args.push(match[1]);
+      } else if (match[2] !== undefined) {
+        args.push(match[2]);
+      } else {
+        args.push(match[0]);
+      }
     }
     
     return args;
   }
 
   private cleanup() {
-    if (this.currentProcess) {
-      this.currentProcess.kill('SIGTERM');
-    }
     console.log('\nGoodbye!');
   }
 }

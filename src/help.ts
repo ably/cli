@@ -12,12 +12,14 @@ export default class CustomHelp extends Help {
 
   protected webCliMode: boolean;
   protected configManager: ConfigManager;
+  protected interactiveMode: boolean;
   // Flag to track if we're already showing root help to prevent duplication
   protected isShowingRootHelp: boolean = false;
 
   constructor(config: Config, opts?: Record<string, unknown>) {
     super(config, opts);
     this.webCliMode = process.env.ABLY_WEB_CLI_MODE === "true";
+    this.interactiveMode = process.env.ABLY_INTERACTIVE_MODE === "true";
     this.configManager = new ConfigManager();
   }
 
@@ -25,9 +27,31 @@ export default class CustomHelp extends Help {
   formatHelpOutput(output: string): string {
     // Check if we're generating readme (passed as an option from oclif)
     if (this.opts?.stripAnsi || process.env.GENERATING_README === "true") {
-      return stripAnsi(output);
+      output = stripAnsi(output);
     }
+    
+    // Strip "ably" prefix when in interactive mode
+    if (this.interactiveMode) {
+      output = this.stripAblyPrefix(output);
+    }
+    
     return output;
+  }
+  
+  // Helper to strip "ably" prefix from command examples in interactive mode
+  private stripAblyPrefix(text: string): string {
+    if (!this.interactiveMode) return text;
+    
+    // Replace "$ ably " with "$ " in examples
+    text = text.replace(/\$ ably /g, '$ ');
+    
+    // Replace "ably " at the beginning of lines (for usage examples)
+    text = text.replace(/^ably /gm, '');
+    
+    // Replace "  ably " with "  " (for indented examples)
+    text = text.replace(/^(\s+)ably /gm, '$1');
+    
+    return text;
   }
 
   // Helper to ensure no trailing whitespace
@@ -113,7 +137,7 @@ export default class CustomHelp extends Help {
       chalk.bold(titleText),
       "",
       `${chalk.bold("USAGE")}`,
-      `  $ ${config.bin} [COMMAND]`,
+      `  $ ${this.interactiveMode ? '' : config.bin + ' '}[COMMAND]`,
       "",
       chalk.bold("COMMANDS"), // Use the desired single heading
     ];
@@ -176,12 +200,13 @@ export default class CustomHelp extends Help {
         process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken();
       const apiKey = process.env.ABLY_API_KEY;
       if (!accessToken && !apiKey) {
+        const cmdPrefix = this.interactiveMode ? '' : 'ably ';
         lines.push(
           "",
           chalk.yellow(
             "You are not logged in. Run the following command to log in:",
           ),
-          chalk.cyan("  $ ably accounts login"),
+          chalk.cyan(`  $ ${cmdPrefix}accounts login`),
         );
       }
     }
@@ -203,22 +228,23 @@ export default class CustomHelp extends Help {
     );
 
     // 3. Show the web CLI specific instructions
+    const cmdPrefix = this.interactiveMode ? '' : 'ably ';
     const webCliCommands = [
       `${chalk.bold("COMMON COMMANDS")}`,
-      `  ${chalk.cyan("View Ably commands:")} ably --help`,
-      `  ${chalk.cyan("Publish a message:")} ably channels publish [channel] [message]`,
-      `  ${chalk.cyan("Subscribe to a channel:")} ably channels subscribe [channel]`,
+      `  ${chalk.cyan("View Ably commands:")} ${cmdPrefix}--help`,
+      `  ${chalk.cyan("Publish a message:")} ${cmdPrefix}channels publish [channel] [message]`,
+      `  ${chalk.cyan("Subscribe to a channel:")} ${cmdPrefix}channels subscribe [channel]`,
     ];
     
     // Only show channels:logs for authenticated users
     const isAnonymousMode = process.env.ABLY_RESTRICTED_MODE === "true";
     if (!isAnonymousMode) {
-      webCliCommands.push(`  ${chalk.cyan("View live channel events:")} ably channels logs`);
+      webCliCommands.push(`  ${chalk.cyan("View live channel events:")} ${cmdPrefix}channels logs`);
     }
     
     webCliCommands.push(
-      `  ${chalk.cyan("Enter a collaborative space:")} ably spaces enter [space]`,
-      `  ${chalk.cyan("Join a chat room:")} ably rooms get [room]`,
+      `  ${chalk.cyan("Enter a collaborative space:")} ${cmdPrefix}spaces enter [space]`,
+      `  ${chalk.cyan("Join a chat room:")} ${cmdPrefix}rooms get [room]`,
     );
     
     lines.push(...webCliCommands);
@@ -234,7 +260,7 @@ export default class CustomHelp extends Help {
         chalk.yellow(
           "You are not logged in. Run the following command to log in:",
         ),
-        chalk.cyan("  $ ably login"),
+        chalk.cyan(`  $ ${cmdPrefix}login`),
       );
     }
 
