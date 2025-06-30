@@ -24,7 +24,17 @@ const hook: Hook<'init'> = async function (opts) {
     if (hasJsonFlag || hasPrettyJsonFlag) {
       const jsonOutput = formatVersionJson(versionInfo, hasPrettyJsonFlag);
       console.log(jsonOutput);
-      process.exit(0);
+      
+      // In interactive mode, don't exit
+      if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
+        // Throw a special error that the interactive command knows to ignore
+        const error = new Error('Version displayed');
+        (error as any).code = 'EEXIT';
+        (error as any).exitCode = 0;
+        throw error;
+      } else {
+        process.exit(0);
+      }
     }
     // Otherwise, let oclif handle default format
   }

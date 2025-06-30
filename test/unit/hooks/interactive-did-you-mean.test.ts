@@ -5,7 +5,7 @@ import hook from '../../../src/hooks/command_not_found/did-you-mean.js';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 
-describe('Did You Mean Hook - Interactive Mode', () => {
+describe('Did You Mean Hook - Interactive Mode', function() {
   let sandbox: sinon.SinonSandbox;
   let config: any;
   let warnStub: sinon.SinonStub;
@@ -17,7 +17,7 @@ describe('Did You Mean Hook - Interactive Mode', () => {
   let runCommandStub: sinon.SinonStub;
   let originalEnv: NodeJS.ProcessEnv;
   
-  beforeEach(() => {
+  beforeEach(function() {
     sandbox = sinon.createSandbox();
     originalEnv = { ...process.env };
     
@@ -54,13 +54,13 @@ describe('Did You Mean Hook - Interactive Mode', () => {
     inquirerStub = sandbox.stub(inquirer, 'prompt').resolves({ confirmed: true });
   });
   
-  afterEach(() => {
+  afterEach(function() {
     sandbox.restore();
     process.env = originalEnv;
   });
   
-  describe('command not found handling', () => {
-    it('should use console.error instead of this.warn in interactive mode', async () => {
+  describe('command not found handling', function() {
+    it('should use console.log instead of this.warn in interactive mode', async function() {
       const context = {
         config,
         warn: warnStub,
@@ -77,13 +77,18 @@ describe('Did You Mean Hook - Interactive Mode', () => {
         context
       });
       
-      // Should use console.error, not this.warn
+      // Should use console.log, not this.warn
       expect(warnStub.called).to.be.false;
-      expect(consoleErrorStub.called).to.be.true;
-      expect(consoleErrorStub.firstCall.args[0]).to.include('channels pubish is not an ably command');
+      expect(consoleLogStub.called).to.be.true;
+      
+      // Find the warning message in console.log calls
+      const warningCall = consoleLogStub.getCalls().find(call => 
+        call.args[0].includes('channels pubish is not an ably command')
+      );
+      expect(warningCall).to.exist;
     });
     
-    it('should not skip confirmation prompt in interactive mode', async () => {
+    it('should not skip confirmation prompt in interactive mode', async function() {
       const context = {
         config,
         warn: warnStub,
@@ -102,7 +107,7 @@ describe('Did You Mean Hook - Interactive Mode', () => {
         removeAllListeners: sandbox.stub(),
         on: sandbox.stub()
       };
-      (global as any).__ablyInteractiveReadline = mockReadline;
+      (globalThis as any).__ablyInteractiveReadline = mockReadline;
       
       await hook.call(context, {
         id: 'channels:pubish',
@@ -120,10 +125,10 @@ describe('Did You Mean Hook - Interactive Mode', () => {
       expect(mockReadline.resume.called).to.be.true;
       
       // Clean up
-      delete (global as any).__ablyInteractiveReadline;
+      delete (globalThis as any).__ablyInteractiveReadline;
     });
     
-    it('should throw error instead of calling this.error when command fails', async () => {
+    it('should throw error instead of calling this.error when command fails', async function() {
       const context = {
         config,
         warn: warnStub,
@@ -142,7 +147,7 @@ describe('Did You Mean Hook - Interactive Mode', () => {
         removeAllListeners: sandbox.stub(),
         on: sandbox.stub()
       };
-      (global as any).__ablyInteractiveReadline = mockReadline;
+      (globalThis as any).__ablyInteractiveReadline = mockReadline;
       
       // Make runCommand fail
       runCommandStub.throws(new Error('Missing required arg: channel'));
@@ -159,16 +164,17 @@ describe('Did You Mean Hook - Interactive Mode', () => {
         thrownError = error as Error;
       }
       
-      // Should throw error, not call this.error
+      // Should throw error with oclif exit code
       expect(thrownError).to.exist;
       expect(thrownError?.message).to.include('Missing required arg: channel');
+      expect((thrownError as any)?.oclif?.exit).to.exist;
       expect(errorStub.called).to.be.false;
       
       // Clean up
-      delete (global as any).__ablyInteractiveReadline;
+      delete (globalThis as any).__ablyInteractiveReadline;
     });
     
-    it('should use console.log for help output in interactive mode', async () => {
+    it('should use console.log for help output in interactive mode', async function() {
       const context = {
         config,
         warn: warnStub,
@@ -187,7 +193,7 @@ describe('Did You Mean Hook - Interactive Mode', () => {
         removeAllListeners: sandbox.stub(),
         on: sandbox.stub()
       };
-      (global as any).__ablyInteractiveReadline = mockReadline;
+      (globalThis as any).__ablyInteractiveReadline = mockReadline;
       
       // Make runCommand fail with missing args
       const error = new Error('Missing required arg: channel\nSee more help with --help');
@@ -218,10 +224,10 @@ describe('Did You Mean Hook - Interactive Mode', () => {
       expect(helpOutput).to.not.include('ably channels publish --help');
       
       // Clean up
-      delete (global as any).__ablyInteractiveReadline;
+      delete (globalThis as any).__ablyInteractiveReadline;
     });
     
-    it('should provide interactive-friendly error for unknown commands', async () => {
+    it('should provide interactive-friendly error for unknown commands', async function() {
       const context = {
         config,
         warn: warnStub,
@@ -251,8 +257,8 @@ describe('Did You Mean Hook - Interactive Mode', () => {
     });
   });
   
-  describe('normal mode comparison', () => {
-    it('should use normal error handling when not in interactive mode', async () => {
+  describe('normal mode comparison', function() {
+    it('should use normal error handling when not in interactive mode', async function() {
       // Disable interactive mode
       delete process.env.ABLY_INTERACTIVE_MODE;
       

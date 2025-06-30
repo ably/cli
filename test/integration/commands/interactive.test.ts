@@ -1,33 +1,33 @@
 import { expect } from 'chai';
-import { spawn } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
-import { fileURLToPath } from 'url';
+import { spawn } from 'node:child_process';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-describe('Interactive Command Integration', () => {
+describe('Interactive Command Integration', function() {
   const binPath = path.join(__dirname, '..', '..', '..', 'bin', 'run.js');
   const testHistoryDir = path.join(os.tmpdir(), 'ably-test-' + Date.now());
   const testHistoryFile = path.join(testHistoryDir, 'history');
   
-  beforeEach(() => {
+  beforeEach(function() {
     // Create test history directory
     fs.mkdirSync(testHistoryDir, { recursive: true });
   });
   
-  afterEach(() => {
+  afterEach(function() {
     // Clean up test history directory
     try {
       fs.rmSync(testHistoryDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // Ignore cleanup errors
     }
   });
   
-  it('should start interactive mode and respond to commands', async () => {
+  it('should start interactive mode and respond to commands', async function() {
     const proc = spawn('node', [binPath, 'interactive'], {
       env: {
         ...process.env,
@@ -63,7 +63,7 @@ describe('Interactive Command Integration', () => {
     expect(output).to.include('Goodbye!');
   });
   
-  it('should handle exit command with special exit code in wrapper mode', async () => {
+  it('should handle exit command with special exit code in wrapper mode', async function() {
     const proc = spawn('node', [binPath, 'interactive'], {
       env: {
         ...process.env,
@@ -86,7 +86,7 @@ describe('Interactive Command Integration', () => {
     expect(exitCode).to.equal(42); // Special exit code
   });
   
-  it('should save command history', async () => {
+  it('should save command history', async function() {
     const proc = spawn('node', [binPath, 'interactive'], {
       env: {
         ...process.env,
@@ -114,12 +114,12 @@ describe('Interactive Command Integration', () => {
     
     // Check history file
     expect(fs.existsSync(testHistoryFile)).to.be.true;
-    const history = fs.readFileSync(testHistoryFile, 'utf-8');
+    const history = fs.readFileSync(testHistoryFile, 'utf8');
     expect(history).to.include('help\n');
     expect(history).to.include('version\n');
   });
   
-  it('should handle SIGINT without exiting', async () => {
+  it('should handle SIGINT without exiting', async function() {
     const proc = spawn('node', [binPath, 'interactive'], {
       env: {
         ...process.env,

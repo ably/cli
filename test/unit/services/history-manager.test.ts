@@ -1,23 +1,23 @@
 import { expect } from 'chai';
 import { HistoryManager } from '../../../src/services/history-manager.js';
-import * as os from 'os';
-import * as path from 'path';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
-describe('HistoryManager', () => {
-  describe('constructor', () => {
-    it('should use default history file path', () => {
+describe('HistoryManager', function() {
+  describe('constructor', function() {
+    it('should use default history file path', function() {
       const manager = new HistoryManager();
       const expectedPath = path.join(os.homedir(), '.ably', 'history');
       expect(manager.getHistoryFile()).to.equal(expectedPath);
     });
     
-    it('should use custom history file path', () => {
+    it('should use custom history file path', function() {
       const customPath = '/custom/path/history';
       const manager = new HistoryManager(customPath);
       expect(manager.getHistoryFile()).to.equal(customPath);
     });
     
-    it('should use ABLY_HISTORY_FILE environment variable', () => {
+    it('should use ABLY_HISTORY_FILE environment variable', function() {
       const originalEnv = process.env.ABLY_HISTORY_FILE;
       process.env.ABLY_HISTORY_FILE = '/env/path/history';
       
@@ -33,8 +33,8 @@ describe('HistoryManager', () => {
     });
   });
   
-  describe('error handling', () => {
-    it('should not throw on loadHistory errors', async () => {
+  describe('error handling', function() {
+    it('should not throw on loadHistory errors', async function() {
       // Create manager with non-existent path that might cause errors
       const manager = new HistoryManager('/definitely/does/not/exist/history');
       const mockRl = { history: [] } as any;
@@ -43,7 +43,7 @@ describe('HistoryManager', () => {
       await manager.loadHistory(mockRl);
     });
     
-    it('should not throw on saveCommand errors', async () => {
+    it('should not throw on saveCommand errors', async function() {
       // Create manager with path that can't be written
       const manager = new HistoryManager('/definitely/does/not/exist/history');
       
@@ -51,7 +51,7 @@ describe('HistoryManager', () => {
       await manager.saveCommand('test command');
     });
     
-    it('should not save empty commands', async () => {
+    it('should not save empty commands', async function() {
       const manager = new HistoryManager();
       
       // These should all be no-ops

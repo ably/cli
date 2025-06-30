@@ -2,11 +2,11 @@ import { expect } from 'chai';
 import { Config } from '@oclif/core';
 import CustomHelp from '../../../src/help.js';
 
-describe('Interactive Mode Help Formatting', () => {
+describe('Interactive Mode Help Formatting', function() {
   let help: CustomHelp;
   let config: Config;
   
-  beforeEach(async () => {
+  beforeEach(async function() {
     // Create a minimal config
     config = {
       bin: 'ably',
@@ -15,36 +15,36 @@ describe('Interactive Mode Help Formatting', () => {
     } as any;
   });
   
-  afterEach(() => {
+  afterEach(function() {
     // Clean up environment variables
     delete process.env.ABLY_INTERACTIVE_MODE;
   });
   
-  describe('stripAblyPrefix', () => {
-    beforeEach(() => {
+  describe('stripAblyPrefix', function() {
+    beforeEach(function() {
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       help = new CustomHelp(config);
     });
     
-    it('should strip "$ ably " prefix from examples', () => {
+    it('should strip "$ ably " prefix from examples', function() {
       const input = '$ ably channels publish my-channel "Hello"';
       const result = help.formatHelpOutput(input);
       expect(result).to.equal('$ channels publish my-channel "Hello"');
     });
     
-    it('should strip "ably " at the beginning of lines', () => {
+    it('should strip "ably " at the beginning of lines', function() {
       const input = 'ably channels subscribe test';
       const result = help.formatHelpOutput(input);
       expect(result).to.equal('channels subscribe test');
     });
     
-    it('should strip indented "ably " commands', () => {
+    it('should strip indented "ably " commands', function() {
       const input = '  ably apps list';
       const result = help.formatHelpOutput(input);
       expect(result).to.equal('  apps list');
     });
     
-    it('should handle multiple occurrences', () => {
+    it('should handle multiple occurrences', function() {
       const input = `Examples:
 $ ably channels publish test "msg1"
 $ ably channels publish test "msg2"
@@ -57,7 +57,7 @@ $ channels publish test "msg2"
       expect(result).to.equal(expected);
     });
     
-    it('should not strip when not in interactive mode', () => {
+    it('should not strip when not in interactive mode', function() {
       delete process.env.ABLY_INTERACTIVE_MODE;
       help = new CustomHelp(config);
       
@@ -67,8 +67,8 @@ $ channels publish test "msg2"
     });
   });
   
-  describe('USAGE section', () => {
-    it('should show "$ [COMMAND]" in interactive mode', () => {
+  describe('USAGE section', function() {
+    it('should show "$ [COMMAND]" in interactive mode', function() {
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       help = new CustomHelp(config);
       
@@ -77,7 +77,7 @@ $ channels publish test "msg2"
       expect(output).to.not.include('$ ably [COMMAND]');
     });
     
-    it('should show "$ ably [COMMAND]" in normal mode', () => {
+    it('should show "$ ably [COMMAND]" in normal mode', function() {
       help = new CustomHelp(config);
       
       const output = help.formatStandardRoot();
@@ -85,8 +85,8 @@ $ channels publish test "msg2"
     });
   });
   
-  describe('Command examples', () => {
-    it('should strip ably prefix from web CLI commands', () => {
+  describe('Command examples', function() {
+    it('should strip ably prefix from web CLI commands', function() {
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       process.env.ABLY_WEB_CLI_MODE = 'true';
       help = new CustomHelp(config);
@@ -98,7 +98,7 @@ $ channels publish test "msg2"
       expect(output).to.not.include('ably --help');
     });
     
-    it('should show ably prefix in normal web CLI mode', () => {
+    it('should show ably prefix in normal web CLI mode', function() {
       process.env.ABLY_WEB_CLI_MODE = 'true';
       help = new CustomHelp(config);
       
@@ -108,8 +108,8 @@ $ channels publish test "msg2"
     });
   });
   
-  describe('Login prompt', () => {
-    it('should strip ably from login command in interactive mode', () => {
+  describe('Login prompt', function() {
+    it('should strip ably from login command in interactive mode', function() {
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       help = new CustomHelp(config);
       
@@ -120,7 +120,7 @@ $ channels publish test "msg2"
       }
     });
     
-    it('should show full command in normal mode', () => {
+    it('should show full command in normal mode', function() {
       help = new CustomHelp(config);
       
       const output = help.formatStandardRoot();

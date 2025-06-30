@@ -43,13 +43,13 @@ export default class CustomHelp extends Help {
     if (!this.interactiveMode) return text;
     
     // Replace "$ ably " with "$ " in examples
-    text = text.replace(/\$ ably /g, '$ ');
+    text = text.replaceAll('$ ably ', '$ ');
     
     // Replace "ably " at the beginning of lines (for usage examples)
-    text = text.replace(/^ably /gm, '');
+    text = text.replaceAll(/^ably /gm, '');
     
     // Replace "  ably " with "  " (for indented examples)
-    text = text.replace(/^(\s+)ably /gm, '$1');
+    text = text.replaceAll(/^(\s+)ably /gm, '$1');
     
     return text;
   }
@@ -59,8 +59,96 @@ export default class CustomHelp extends Help {
     // Remove all trailing newlines completely
     return text.replace(/\n+$/, "");
   }
+  
+  // Helper to format COMMANDS section with spaces instead of colons
+  private formatCommandsSection(text: string): string {
+    // Find the COMMANDS section
+    const commandsSectionRegex = /^COMMANDS\s*$/m;
+    const commandsMatch = text.match(commandsSectionRegex);
+    
+    if (!commandsMatch || commandsMatch.index === undefined) {
+      return text;
+    }
+    
+    // Find where the COMMANDS section starts and ends
+    const commandsStart = commandsMatch.index + commandsMatch[0].length;
+    const nextSectionMatch = text.slice(commandsStart).match(/^[A-Z]+\s*$/m);
+    const commandsEnd = nextSectionMatch ? commandsStart + nextSectionMatch.index! : text.length;
+    
+    // Extract the commands section
+    const beforeCommands = text.slice(0, commandsStart);
+    const commandsSection = text.slice(commandsStart, commandsEnd);
+    const afterCommands = text.slice(commandsEnd);
+    
+    // Process each command line in the section
+    const processedCommands = commandsSection.split('\n').map(line => {
+      // Match lines that look like "  command:subcommand  Description"
+      const match = line.match(/^(\s+)([a-z-]+(?::[a-z-]+)+)(\s+.*)$/);
+      if (match) {
+        const [, indent, commandId, rest] = match;
+        // Replace colons with spaces in the command ID
+        const formattedId = commandId.replaceAll(':', ' ');
+        return indent + formattedId + rest;
+      }
+      return line;
+    }).join('\n');
+    
+    return beforeCommands + processedCommands + afterCommands;
+  }
 
   // Override the display method to clean up trailing whitespace and exit cleanly
+  async showCommandHelp(command: Command.Loadable): Promise<void> {
+    // For topic commands, we need to add the COMMANDS section manually
+    const output = this.formatCommand(command);
+    const cleanedOutput = this.removeTrailingWhitespace(output);
+    console.log(this.formatHelpOutput(cleanedOutput));
+    
+    // Check if this is a topic command by looking for subcommands
+    const topicPrefix = `${command.id}:`;
+    const subcommands = this.config.commands.filter(cmd => 
+      cmd.id.startsWith(topicPrefix) && 
+      !cmd.hidden &&
+      !cmd.id.slice(topicPrefix.length).includes(':')
+    );
+    
+    if (subcommands.length > 0 && !output.includes('COMMANDS')) {
+      // This is a topic command without a COMMANDS section, add it
+      console.log('\nCOMMANDS');
+      
+      const commandsList = await Promise.all(
+        subcommands.map(async cmd => {
+          try {
+            const loaded = await cmd.load();
+            const formattedId = cmd.id.replaceAll(':', ' ');
+            const binPrefix = this.interactiveMode ? '' : `${this.config.bin} `;
+            return {
+              name: `${binPrefix}${formattedId}`,
+              description: loaded.description || ''
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+      
+      const validCommands = commandsList.filter(cmd => cmd !== null) as Array<{name: string; description: string}>;
+      
+      if (validCommands.length > 0) {
+        const maxLength = Math.max(...validCommands.map(cmd => cmd.name.length));
+        
+        validCommands.forEach(cmd => {
+          const paddedName = cmd.name.padEnd(maxLength + 2);
+          console.log(`  ${paddedName}${cmd.description}`);
+        });
+      }
+    }
+    
+    // Only exit if not in interactive mode
+    if (process.env.ABLY_INTERACTIVE_MODE !== 'true') {
+      process.exit(0);
+    }
+  }
+  
   async showHelp(argv: string[]): Promise<void> {
     // Get the help subject which is the last argument that is not a flag
     if (argv.length === 0) {
@@ -84,7 +172,11 @@ export default class CustomHelp extends Help {
     const cleanedOutput = this.removeTrailingWhitespace(output);
     // Apply stripAnsi when needed
     console.log(this.formatHelpOutput(cleanedOutput));
-    process.exit(0);
+    
+    // Only exit if not in interactive mode
+    if (process.env.ABLY_INTERACTIVE_MODE !== 'true') {
+      process.exit(0);
+    }
   }
 
   // Override for root help as well
@@ -94,7 +186,11 @@ export default class CustomHelp extends Help {
     const cleanedOutput = this.removeTrailingWhitespace(output);
     // Apply stripAnsi when needed
     console.log(this.formatHelpOutput(cleanedOutput));
-    process.exit(0);
+    
+    // Only exit if not in interactive mode
+    if (process.env.ABLY_INTERACTIVE_MODE !== 'true') {
+      process.exit(0);
+    }
   }
 
   formatRoot(): string {
@@ -279,6 +375,37 @@ export default class CustomHelp extends Help {
       this.isShowingRootHelp = false;
       // Use super's formatCommand
       output = super.formatCommand(command);
+      
+      // In interactive mode, remove the 'ably' prefix from usage examples
+      if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
+        // Replace '$ ably ' with '$ ' in usage and examples
+        output = output.replaceAll('$ ably ', '$ ');
+      }
+      
+      // Fix COMMANDS section formatting - replace colons with spaces
+      output = this.formatCommandsSection(output);
+      
+      // For topic commands, add COMMANDS section if it's missing
+      const topicPrefix = `${command.id}:`;
+      const subcommands = this.config.commands.filter(cmd => 
+        cmd.id.startsWith(topicPrefix) && 
+        !cmd.hidden &&
+        !cmd.id.slice(topicPrefix.length).includes(':')
+      );
+      
+      if (subcommands.length > 0 && !output.includes('COMMANDS')) {
+        // Add COMMANDS section for topic commands
+        const commandsLines: string[] = ['\n\nCOMMANDS'];
+        
+        subcommands.forEach(cmd => {
+          const formattedId = cmd.id.replaceAll(':', ' ');
+          const binPrefix = this.interactiveMode ? '' : `${this.config.bin} `;
+          const paddedId = `${binPrefix}${formattedId}`.padEnd(30);
+          commandsLines.push(`  ${paddedId}${cmd.description || ''}`);
+        });
+        
+        output += commandsLines.join('\n');
+      }
 
       // Modify based on web CLI mode using the imported list
       if (this.webCliMode) {
