@@ -83,7 +83,8 @@ export default class Interactive extends Command {
       input: process.stdin,
       output: process.stdout,
       prompt: '$ ',
-      terminal: true
+      terminal: true,
+      completer: this.completer.bind(this)
     });
     
     // Store readline instance globally for hooks to access
@@ -268,4 +269,100 @@ export default class Interactive extends Command {
   private cleanup() {
     console.log('\nGoodbye!');
   }
+
+  private completer(line: string): [string[], string] {
+    const words = line.trim().split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    
+    // If line ends with a space, we're starting a new word
+    const isNewWord = line.endsWith(' ');
+    const currentWord = isNewWord ? '' : lastWord;
+    
+    // Get the command path (excluding the last word if not new)
+    const commandPath = isNewWord ? words : words.slice(0, -1);
+    
+    if (commandPath.length === 0 || (!isNewWord && words.length === 1)) {
+      // Complete top-level commands
+      const commands = this.getTopLevelCommands();
+      const matches = commands.filter(cmd => cmd.startsWith(currentWord));
+      return [matches.length > 0 ? matches : commands, currentWord];
+    }
+    
+    // Check if we're completing flags
+    if (currentWord.startsWith('-')) {
+      // For now, return basic flags synchronously
+      const flags = this.getBasicFlagsForCommand(commandPath);
+      const matches = flags.filter(flag => flag.startsWith(currentWord));
+      return [matches.length > 0 ? matches : flags, currentWord];
+    }
+    
+    // Try to find subcommands
+    const subcommands = this.getSubcommandsForPath(commandPath);
+    const matches = subcommands.filter(cmd => cmd.startsWith(currentWord));
+    
+    // If no subcommands, might be completing arguments - show no suggestions
+    if (subcommands.length === 0) {
+      return [[], currentWord];
+    }
+    
+    return [matches.length > 0 ? matches : subcommands, currentWord];
+  }
+
+  private getTopLevelCommands(): string[] {
+    // Cache this on first use
+    if (!this._commandCache) {
+      this._commandCache = [];
+      
+      for (const command of this.config.commands) {
+        if (!command.hidden && !command.id.includes(':')) {
+          this._commandCache.push(command.id);
+        }
+      }
+      
+      // Add special commands
+      this._commandCache.push('exit', 'help', 'version');
+      this._commandCache.sort();
+    }
+    
+    return this._commandCache;
+  }
+
+  private getSubcommandsForPath(commandPath: string[]): string[] {
+    // Convert space-separated path to colon-separated for oclif
+    const parentCommand = commandPath.filter(p => p).join(':');
+    const subcommands: string[] = [];
+    
+    for (const command of this.config.commands) {
+      if (!command.hidden && command.id.startsWith(parentCommand + ':')) {
+        // Get the next part of the command
+        const remaining = command.id.slice(parentCommand.length + 1);
+        const parts = remaining.split(':');
+        const nextPart = parts[0];
+        
+        // Only add direct children (one level deep)
+        if (nextPart && parts.length === 1) {
+          subcommands.push(nextPart);
+        }
+      }
+    }
+    
+    return [...new Set(subcommands)].sort();
+  }
+
+  private getBasicFlagsForCommand(commandPath: string[]): string[] {
+    // Return common flags that are available for most commands
+    const flags = ['--help', '-h'];
+    
+    // Add global flags
+    if (commandPath.length === 0 || commandPath[0] === '') {
+      flags.push('--version', '-v');
+    }
+    
+    // Could be enhanced to cache command-specific flags
+    // For now, return basic flags only
+    
+    return [...new Set(flags)].sort();
+  }
+
+  private _commandCache?: string[];
 }
