@@ -226,8 +226,8 @@ export default class CustomHelp extends Help {
 
     // 2. Title & Usage
     const titleText = this.webCliMode 
-      ? "ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API"
-      : "ably.com CLI for Pub/Sub, Chat, Spaces and the Control API";
+      ? "ably.com browser-based CLI for Pub/Sub, Chat and Spaces"
+      : "ably.com CLI for Pub/Sub, Chat and Spaces";
     
     const headerLines = [
       chalk.bold(titleText),
@@ -318,7 +318,7 @@ export default class CustomHelp extends Help {
     }
     lines.push(
       chalk.bold(
-        "ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API",
+        "ably.com browser-based CLI for Pub/Sub, Chat and Spaces",
       ),
       "",
     );
@@ -332,7 +332,6 @@ export default class CustomHelp extends Help {
     
     // Basic commands always available
     commands.push(
-      [this.interactiveMode ? 'help' : `${cmdPrefix}--help`, 'View Ably commands'],
       [`${cmdPrefix}channels publish [channel] [message]`, 'Publish a message'],
       [`${cmdPrefix}channels subscribe [channel]`, 'Subscribe to a channel']
     );
@@ -344,7 +343,7 @@ export default class CustomHelp extends Help {
     
     commands.push(
       [`${cmdPrefix}spaces enter [space]`, 'Enter a collaborative space'],
-      [`${cmdPrefix}rooms get [room]`, 'Join a chat room']
+      [`${cmdPrefix}rooms messages send [room] [message]`, 'Send a message to a chat room']
     );
     
     // Calculate padding for alignment
@@ -356,27 +355,11 @@ export default class CustomHelp extends Help {
       lines.push(`  ${chalk.cyan(paddedCmd)}${desc}`);
     });
     
-    if (this.interactiveMode) {
-      lines.push(
-        '',
-        `Type ${chalk.cyan('help')} to see the complete list of commands.`
-      );
-    }
-
-    // 4. Check if login recommendation is needed
-    const accessToken =
-      process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken();
-    const apiKey = process.env.ABLY_API_KEY;
-
-    if (!accessToken && !apiKey) {
-      lines.push(
-        "",
-        chalk.yellow(
-          "You are not logged in. Run the following command to log in:",
-        ),
-        chalk.cyan(`  $ ${cmdPrefix}login`),
-      );
-    }
+    // Always show help instruction
+    lines.push(
+      '',
+      `Type ${this.interactiveMode ? chalk.cyan('help') : chalk.cyan(`${cmdPrefix}help`)} to see the complete list of commands.`
+    );
 
     // Join lines and return
     return lines.join("\n");

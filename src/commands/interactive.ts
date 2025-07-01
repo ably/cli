@@ -127,14 +127,19 @@ export default class Interactive extends Command {
     if (!process.env.ABLY_SUPPRESS_WELCOME) {
       // Display logo
       displayLogo(console.log);
-      console.log(`   Version: ${this.config.version}\n`);
+      
+      // Only show version for alpha/beta releases
+      const version = this.config.version;
+      if (version.includes('alpha') || version.includes('beta')) {
+        console.log(`   Version: ${version}\n`);
+      }
       
       // Show appropriate tagline based on mode
       let tagline = 'ably.com ';
       if (this.isWebCliMode()) {
         tagline += 'browser-based ';
       }
-      tagline += 'interactive CLI for Pub/Sub, Chat, Spaces and the Control API';
+      tagline += 'interactive CLI for Pub/Sub, Chat and Spaces';
       console.log(chalk.bold(tagline));
       console.log();
       
@@ -155,13 +160,13 @@ export default class Interactive extends Command {
       if (!isAnonymousMode) {
         commands.push(
           ['channels logs', 'View live channel events'],
-          ['apps list', 'List your Ably apps']
+          ['channels list', 'List active channels']
         );
       }
       
       commands.push(
         ['spaces enter [space]', 'Enter a collaborative space'],
-        ['rooms get [room]', 'Join a chat room'],
+        ['rooms messages send [room] [message]', 'Send a message to a chat room'],
         ['exit', 'Exit the interactive shell']
       );
       
