@@ -3,6 +3,7 @@ import CustomHelp from '../../help.js';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import pkg from "fast-levenshtein";
+import * as readline from 'node:readline';
 const { get: levenshteinDistance } = pkg;
 
 export default class HelpCommand extends BaseTopicCommand {
@@ -82,7 +83,7 @@ export default class HelpCommand extends BaseTopicCommand {
             confirmed = true;
           } else {
             // In interactive mode, handle readline
-            const interactiveReadline = isInteractiveMode ? (globalThis as any).__ablyInteractiveReadline : null;
+            const interactiveReadline = isInteractiveMode ? (globalThis as Record<string, unknown>).__ablyInteractiveReadline as readline.Interface : null;
             
             if (interactiveReadline) {
               // Pause readline and remove listeners
@@ -100,7 +101,7 @@ export default class HelpCommand extends BaseTopicCommand {
                 confirmed = result.confirmed;
               } finally {
                 // Restore listeners and resume
-                lineListeners.forEach((listener: any) => {
+                lineListeners.forEach((listener) => {
                   interactiveReadline.on('line', listener);
                 });
                 interactiveReadline.resume();
@@ -121,7 +122,7 @@ export default class HelpCommand extends BaseTopicCommand {
             // Run the suggested command
             try {
               return await this.config.runCommand(closestCommand, rawArgv.slice(1));
-            } catch (error: any) {
+            } catch (error) {
               // Handle errors in interactive mode
               if (isInteractiveMode) {
                 throw error;
@@ -143,7 +144,7 @@ export default class HelpCommand extends BaseTopicCommand {
         
         if (isInteractiveMode) {
           const error = new Error(errorMessage);
-          (error as any).isCommandNotFound = true;
+          (error as Error & {isCommandNotFound?: boolean}).isCommandNotFound = true;
           throw error;
         } else {
           this.error(errorMessage, { exit: 127 });
@@ -161,9 +162,9 @@ export default class HelpCommand extends BaseTopicCommand {
         // This will show an error for non-existent commands
         return super.run();
       }
-    } catch (error: any) {
+    } catch (error) {
       // If parsing fails (e.g., unexpected arguments), handle it gracefully
-      if (error.message?.includes('Unexpected argument')) {
+      if ((error as Error).message?.includes('Unexpected argument')) {
         // Already handled above - just return
         return;
       }

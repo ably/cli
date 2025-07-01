@@ -32,7 +32,7 @@ export class HistoryManager {
       // Access internal history
       // Note: This is accessing private property, but it's the only way
       // to populate history in Node.js readline
-      const internalRl = rl as any;
+      const internalRl = rl as readline.Interface & {history?: string[]};
       internalRl.history = history.reverse();
     } catch {
       // Silently ignore history load errors

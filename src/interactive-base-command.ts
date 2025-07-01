@@ -13,7 +13,7 @@ export abstract class InteractiveBaseCommand extends Command {
     const error = typeof input === 'string' ? new Error(input) : input;
     
     // Add oclif error metadata
-    (error as any).oclif = {
+    (error as Error & {oclif?: {exit?: number; code?: string}}).oclif = {
       exit: options?.exit ?? 1,
       code: options?.code
     };
@@ -38,8 +38,8 @@ export abstract class InteractiveBaseCommand extends Command {
   exit(code = 0): never {
     if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
       const error = new Error(`Command exited with code ${code}`);
-      (error as any).exitCode = code;
-      (error as any).code = 'EEXIT';
+      (error as Error & {exitCode?: number; code?: string}).exitCode = code;
+      (error as Error & {exitCode?: number; code?: string}).code = 'EEXIT';
       throw error;
     }
     
@@ -51,7 +51,7 @@ export abstract class InteractiveBaseCommand extends Command {
   /**
    * Override log to ensure proper output in interactive mode
    */
-  log(message?: string, ...args: any[]): void {
+  log(message?: string, ...args: unknown[]): void {
     // Ensure logs are displayed properly in interactive mode
     if (message === undefined) {
       console.log();

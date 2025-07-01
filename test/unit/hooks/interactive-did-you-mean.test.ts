@@ -1,9 +1,9 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { Config } from '@oclif/core';
+// import { Config } from '@oclif/core'; // Unused
 import hook from '../../../src/hooks/command_not_found/did-you-mean.js';
 import inquirer from 'inquirer';
-import chalk from 'chalk';
+// import chalk from 'chalk'; // Unused
 
 describe('Did You Mean Hook - Interactive Mode', function() {
   let sandbox: sinon.SinonSandbox;

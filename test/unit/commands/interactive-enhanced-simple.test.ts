@@ -4,7 +4,7 @@ import sinon from 'sinon';
 import Interactive from '../../../src/commands/interactive.js';
 import { Config } from '@oclif/core';
 import chalk from 'chalk';
-import * as readline from 'node:readline';
+// import * as readline from 'node:readline'; // Unused
 
 describe('Interactive Command - Enhanced Features (Simplified)', () => {
   let sandbox: sinon.SinonSandbox;

@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import pkg from "fast-levenshtein";
 import { runInquirerWithReadlineRestore } from '../../utils/readline-helper.js';
+import * as readline from 'node:readline';
 const { get: levenshteinDistance } = pkg;
 
 /**
@@ -106,7 +107,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       confirmed = true;
     } else {
       // In interactive mode, we need to handle readline carefully
-      const interactiveReadline = isInteractiveMode ? (globalThis as any).__ablyInteractiveReadline : null;
+      const interactiveReadline = isInteractiveMode ? (globalThis as Record<string, unknown>).__ablyInteractiveReadline : null;
       
       const result = await runInquirerWithReadlineRestore(
         async () => inquirer.prompt([{
@@ -115,7 +116,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
           message: `Did you mean ${chalk.green(displaySuggestion)}?`,
           default: true
         }]),
-        interactiveReadline
+        interactiveReadline as readline.Interface | null
       );
       confirmed = result.confirmed;
     }
@@ -189,7 +190,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
                   // In interactive mode, don't exit - just throw the error
                   // The interactive command will display it
                   const error = new Error(customError);
-                  (error as any).oclif = { exit: exitCode };
+                  (error as Error & {oclif?: {exit: number}}).oclif = { exit: exitCode };
                   throw error;
                 } else {
                   this.error(customError, { exit: exitCode });
@@ -216,7 +217,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
           });
           if (isInteractiveMode) {
             const error = new Error(filteredLines.join('\n'));
-            (error as any).oclif = { exit: exitCode };
+            (error as Error & {oclif?: {exit: number}}).oclif = { exit: exitCode };
             throw error;
           } else {
             this.error(filteredLines.join('\n'), { exit: exitCode });
@@ -225,7 +226,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
           // Original error message
           if (isInteractiveMode) {
             const error = new Error(err.message || 'Unknown error');
-            (error as any).oclif = { exit: exitCode };
+            (error as Error & {oclif?: {exit: number}}).oclif = { exit: exitCode };
             throw error;
           } else {
             this.error(err.message || 'Unknown error', { exit: exitCode });
@@ -267,7 +268,7 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       // In interactive mode, just throw the error without logging
       // The interactive command will handle displaying it
       const error = new Error(errorMessage);
-      (error as any).isCommandNotFound = true;
+      (error as Error & {isCommandNotFound?: boolean}).isCommandNotFound = true;
       throw error;
     } else {
       this.error(errorMessage, { exit: 127 });

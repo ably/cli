@@ -1,5 +1,5 @@
 import * as readline from 'node:readline';
-import inquirer from 'inquirer';
+// import inquirer from 'inquirer'; // Unused - kept for documentation
 
 /**
  * Helper function to safely run inquirer prompts in interactive mode
@@ -41,8 +41,8 @@ export async function runInquirerWithReadlineRestore<T>(
     }
     
     // Restore line listeners
-    lineListeners.forEach((listener: any) => {
-      interactiveReadline.on('line', listener);
+    lineListeners.forEach((listener) => {
+      interactiveReadline.on('line', listener as (...args: any[]) => void);
     });
     
     // Resume readline with a small delay to ensure terminal is ready
@@ -51,7 +51,10 @@ export async function runInquirerWithReadlineRestore<T>(
       
       // Force readline to redraw its prompt to ensure proper state
       if ('_refreshLine' in interactiveReadline) {
-        (interactiveReadline as any)._refreshLine();
+        const rlWithRefresh = interactiveReadline as readline.Interface & {_refreshLine?: () => void};
+        if (rlWithRefresh._refreshLine) {
+          rlWithRefresh._refreshLine();
+        }
       }
     }, 20);
   }

@@ -8,10 +8,11 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const binPath = path.join(__dirname, '..', '..', '..', 'bin', 'run.js');
+const testHistoryDir = path.join(os.tmpdir(), 'ably-test-' + Date.now());
+const testHistoryFile = path.join(testHistoryDir, 'history');
+
 describe('Interactive Command Integration', function() {
-  const binPath = path.join(__dirname, '..', '..', '..', 'bin', 'run.js');
-  const testHistoryDir = path.join(os.tmpdir(), 'ably-test-' + Date.now());
-  const testHistoryFile = path.join(testHistoryDir, 'history');
   
   beforeEach(function() {
     // Create test history directory

@@ -7,9 +7,32 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const timeout = 15000;
+const binPath = path.join(__dirname, '../../../bin/development.js');
+
+// Helper to send key sequences
+const sendKeys = (child: any, keys: string) => {
+  child.stdin.write(keys);
+};
+
+// Helper to send special keys
+const sendSpecialKey = (child: any, key: string) => {
+  const keyMap: Record<string, string> = {
+    'tab': '\t',
+    'up': '\u001B[A',
+    'down': '\u001B[B',
+    'left': '\u001B[D',
+    'right': '\u001B[C',
+    'ctrl-r': '\u0012',
+    'ctrl-c': '\u0003',
+    'escape': '\u001B',
+    'enter': '\n',
+    'backspace': '\u007F'
+  };
+  child.stdin.write(keyMap[key] || key);
+};
+
 describe('Interactive Mode - Terminal Integration Tests', () => {
-  const timeout = 15000;
-  const binPath = path.join(__dirname, '../../../bin/development.js');
 
   describe('Integration Tests', function() {
     // Skip integration tests in CI or non-TTY environments
@@ -19,27 +42,6 @@ describe('Interactive Mode - Terminal Integration Tests', () => {
       }
     });
 
-    // Helper to send key sequences
-    const sendKeys = (child: any, keys: string) => {
-      child.stdin.write(keys);
-    };
-
-    // Helper to send special keys
-    const sendSpecialKey = (child: any, key: string) => {
-      const keyMap: Record<string, string> = {
-        'tab': '\t',
-        'up': '\x1b[A',
-        'down': '\x1b[B',
-        'left': '\x1b[D',
-        'right': '\x1b[C',
-        'ctrl-r': '\x12',
-        'ctrl-c': '\x03',
-        'escape': '\x1b',
-        'enter': '\n',
-        'backspace': '\x7f'
-      };
-      child.stdin.write(keyMap[key] || key);
-    };
 
     it('should handle autocomplete with history navigation', function(done) {
       this.timeout(timeout);
@@ -103,7 +105,7 @@ describe('Interactive Mode - Terminal Integration Tests', () => {
       
       sequence();
       
-      child.on('exit', (code) => {
+      child.on('exit', (_code) => {
         // Log output for debugging
         if (!foundAutocomplete || !foundHistory) {
           console.log('Test output:', output);
@@ -125,7 +127,7 @@ describe('Interactive Mode - Terminal Integration Tests', () => {
       
       let output = '';
       let foundSearchPrompt = false;
-      let foundMatch = false;
+      let _foundMatch = false;
       
       child.stdout.on('data', (data) => {
         output += data.toString();
@@ -135,7 +137,7 @@ describe('Interactive Mode - Terminal Integration Tests', () => {
         }
         
         if (data.toString().includes('channels publish')) {
-          foundMatch = true;
+          _foundMatch = true;
         }
       });
       
@@ -180,11 +182,11 @@ describe('Interactive Mode - Terminal Integration Tests', () => {
         env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1' }
       });
       
-      let output = '';
+      let _output = '';
       let promptCount = 0;
       
       child.stdout.on('data', (data) => {
-        output += data.toString();
+        _output += data.toString();
         
         // Count prompts to verify terminal state
         if (data.toString().includes('ably>')) {

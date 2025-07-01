@@ -3,6 +3,7 @@ import inquirer from 'inquirer';
 import pkg from "fast-levenshtein";
 import { InteractiveBaseCommand } from './interactive-base-command.js';
 import { runInquirerWithReadlineRestore } from './utils/readline-helper.js';
+import * as readline from 'node:readline';
 
 const { get: levenshteinDistance } = pkg;
 
@@ -94,7 +95,7 @@ export abstract class BaseTopicCommand extends InteractiveBaseCommand {
             confirmed = true;
           } else {
             // In interactive mode, we need to handle readline carefully
-            const interactiveReadline = isInteractiveMode ? (globalThis as any).__ablyInteractiveReadline : null;
+            const interactiveReadline = isInteractiveMode ? (globalThis as Record<string, unknown>).__ablyInteractiveReadline : null;
             
             const result = await runInquirerWithReadlineRestore(
               async () => inquirer.prompt([{
@@ -103,7 +104,7 @@ export abstract class BaseTopicCommand extends InteractiveBaseCommand {
                 message: `Did you mean ${chalk.green(displaySuggestion)}?`,
                 default: true
               }]),
-              interactiveReadline
+              interactiveReadline as readline.Interface | null
             );
             confirmed = result.confirmed;
           }
@@ -113,12 +114,12 @@ export abstract class BaseTopicCommand extends InteractiveBaseCommand {
             const remainingArgs = [...rawArgv.slice(1), ...this.argv.filter(arg => arg.startsWith('-'))];
             try {
               return await this.config.runCommand(closestCommand, remainingArgs);
-            } catch (error: any) {
+            } catch (error) {
               // Handle errors in interactive mode
               if (isInteractiveMode) {
                 throw error;
               } else {
-                this.error(error.message || 'Unknown error', { exit: error.oclif?.exit || 1 });
+                this.error((error as Error).message || 'Unknown error', { exit: (error as any).oclif?.exit || 1 });
               }
             }
           }
