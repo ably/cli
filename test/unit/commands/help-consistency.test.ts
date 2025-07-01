@@ -13,7 +13,7 @@ describe('Help Output Consistency', () => {
   const timeout = 10000;
   let binPath: string;
   
-  before(() => {
+  before(function() {
     binPath = path.join(__dirname, '../../../bin/development.js');
   });
 

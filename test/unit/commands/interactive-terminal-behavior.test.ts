@@ -9,13 +9,13 @@ describe('Interactive Mode - Terminal Behavior Unit Tests', () => {
   let sandbox: sinon.SinonSandbox;
   let mockInput: Readable;
   let mockOutput: Writable;
-  let outputData: string;
+  let _outputData: string;
   let originalStdin: any;
   let originalStdout: any;
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
-    outputData = '';
+    _outputData = '';
     
     // Create mock streams
     mockInput = new Readable({
@@ -31,7 +31,7 @@ describe('Interactive Mode - Terminal Behavior Unit Tests', () => {
     
     mockOutput = new Writable({
       write(chunk: any, encoding: any, callback: any) {
-        outputData += chunk.toString();
+        _outputData += chunk.toString();
         if (callback) callback();
         return true;
       }
@@ -102,7 +102,7 @@ describe('Interactive Mode - Terminal Behavior Unit Tests', () => {
     
     await cmd.run();
     
-    const rl = (cmd as any).rl;
+    const _rl = (cmd as any).rl;
     
     // Enter history search mode
     simulateKeypress(null, { ctrl: true, name: 'r' });

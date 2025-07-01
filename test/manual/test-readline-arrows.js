@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 
 /**
  * Manual test script to verify arrow keys work after "did you mean" prompts
@@ -11,13 +10,13 @@
  * 5. The previous command should appear (not ^[[A)
  */
 
-const readline = require('readline');
-const inquirer = require('inquirer');
+import * as readline from 'node:readline';
+import inquirer from 'inquirer';
 
 // Helper function that mimics our fix
-async function runInquirerWithReadlineRestore(promptFn, rl) {
+async function runInquirerWithReadlineRestore(promptFunction, rl) {
   if (!rl) {
-    return await promptFn();
+    return await promptFunction();
   }
 
   // Pause readline and save its state
@@ -31,7 +30,7 @@ async function runInquirerWithReadlineRestore(promptFn, rl) {
   
   try {
     // Run the inquirer prompt
-    const result = await promptFn();
+    const result = await promptFunction();
     
     // Give inquirer time to clean up its terminal state
     await new Promise(resolve => setTimeout(resolve, 10));

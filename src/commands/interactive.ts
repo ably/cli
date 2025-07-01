@@ -29,7 +29,17 @@ export default class Interactive extends Command {
   private historyManager!: HistoryManager;
   private isWrapperMode = process.env.ABLY_WRAPPER_MODE === '1';
   private _flagsCache?: Record<string, string[]>;
-  private _manifestCache?: any;
+  private _manifestCache?: {
+    commands: Record<string, {
+      flags: Record<string, {
+        name: string;
+        char?: string;
+        description?: string;
+        type?: string;
+        hidden?: boolean;
+      }>;
+    }>;
+  };
   private runningCommand = false;
   private historySearch: HistorySearchState = {
     active: false,
@@ -99,7 +109,7 @@ export default class Interactive extends Command {
       // Silence oclif's error output
       const originalConsoleError = console.error;
       let suppressNextError = false;
-      console.error = ((...args: any[]) => {
+      console.error = ((...args: unknown[]) => {
         // Skip oclif error stack traces in interactive mode
         if (suppressNextError || (args[0] && typeof args[0] === 'string' && 
             (args[0].includes('at async Config.runCommand') || 
@@ -108,10 +118,10 @@ export default class Interactive extends Command {
           return;
         }
         originalConsoleError.apply(console, args);
-      }) as any;
+      }) as typeof console.error;
       
       // Store readline instance globally for hooks to access
-      (globalThis as any).__ablyInteractiveReadline = null;
+      (globalThis as Record<string, unknown>).__ablyInteractiveReadline = null;
 
     // Show welcome message only on first run
     if (!process.env.ABLY_SUPPRESS_WELCOME) {
@@ -156,7 +166,7 @@ export default class Interactive extends Command {
     });
     
     // Store readline instance globally for hooks to access
-    (globalThis as any).__ablyInteractiveReadline = this.rl;
+    (globalThis as Record<string, unknown>).__ablyInteractiveReadline = this.rl;
     
     // Setup keypress handler for Ctrl+R and other special keys
     this.setupKeypressHandler();
@@ -187,11 +197,11 @@ export default class Interactive extends Command {
       }
       
       // Clear the current line similar to how zsh behaves
-      const currentLine = (this.rl as any).line || '';
+      const currentLine = (this.rl as readline.Interface & {line?: string}).line || '';
       if (currentLine.length > 0) {
         // Clear the entire line content
-        (this.rl as any)._deleteLineLeft();
-        (this.rl as any)._deleteLineRight();
+        (this.rl as readline.Interface & {_deleteLineLeft: () => void})._deleteLineLeft();
+        (this.rl as readline.Interface & {_deleteLineRight: () => void})._deleteLineRight();
       }
       // Show ^C and new prompt
       process.stdout.write('^C\n');
@@ -230,8 +240,8 @@ export default class Interactive extends Command {
     
     // CRITICAL FIX: Set stdin to cooked mode to allow Ctrl+C to generate SIGINT
     // Readline keeps stdin in raw mode even when paused, which prevents signal generation
-    if (process.stdin.isTTY && typeof (process.stdin as any).setRawMode === 'function') {
-      (process.stdin as any).setRawMode(false);
+    if (process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & {setRawMode?: (mode: boolean) => void}).setRawMode === 'function') {
+      (process.stdin as NodeJS.ReadStream & {setRawMode: (mode: boolean) => void}).setRawMode(false);
     }
     
     try {
@@ -307,32 +317,41 @@ export default class Interactive extends Command {
       // Run command without any timeout
       await this.config.runCommand(commandId, commandArgs);
       
-    } catch (error: any) {
+    } catch (error) {
+      const err = error as {
+        code?: string;
+        exitCode?: number;
+        message?: string;
+        isCommandNotFound?: boolean;
+        oclif?: { exit?: number };
+        stack?: string;
+      };
+      
       // Special handling for intentional exits
-      if (error.code === 'EEXIT' && error.exitCode === 0) {
+      if (err.code === 'EEXIT' && err.exitCode === 0) {
         // Normal exit (like from help command) - don't display anything
         return;
       }
       
       // Always show errors in red
-      let errorMessage = error.message || 'Unknown error';
+      let errorMessage = err.message || 'Unknown error';
       
       // Clean up the error message if it has ANSI codes or extra formatting
       // eslint-disable-next-line no-control-regex
       errorMessage = errorMessage.replaceAll(/\u001B\[[0-9;]*m/g, ''); // Remove ANSI codes
       
       // Check for specific error types
-      if (error.isCommandNotFound) {
+      if (err.isCommandNotFound) {
         // Command not found - already has appropriate message
         console.error(chalk.red(errorMessage));
-      } else if (error.oclif?.exit !== undefined || error.exitCode !== undefined || error.code === 'EEXIT') {
+      } else if (err.oclif?.exit !== undefined || err.exitCode !== undefined || err.code === 'EEXIT') {
         // This is an oclif error or exit that would normally exit the process
         // Show in red without the "Error:" prefix as it's already formatted
         console.error(chalk.red(errorMessage));
-      } else if (error.stack && process.env.DEBUG) {
+      } else if (err.stack && process.env.DEBUG) {
         // Show stack trace in debug mode
         console.error(chalk.red('Error:'), errorMessage);
-        console.error(error.stack);
+        console.error(err.stack);
       } else {
         // All other errors - show with Error prefix
         console.error(chalk.red('Error:'), errorMessage);
@@ -342,8 +361,8 @@ export default class Interactive extends Command {
       this.runningCommand = false;
       
       // Restore raw mode for readline
-      if (process.stdin.isTTY && typeof (process.stdin as any).setRawMode === 'function') {
-        (process.stdin as any).setRawMode(true);
+      if (process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & {setRawMode?: (mode: boolean) => void}).setRawMode === 'function') {
+        (process.stdin as NodeJS.ReadStream & {setRawMode: (mode: boolean) => void}).setRawMode(true);
       }
       
       // Resume readline
@@ -441,7 +460,7 @@ export default class Interactive extends Command {
     console.log('\nGoodbye!');
   }
 
-  private completer(line: string, callback?: (err: any, result: [string[], string]) => void): any {
+  private completer(line: string, callback?: (err: Error | null, result: [string[], string]) => void): [string[], string] | void {
     // Don't provide completions during history search
     if (this.historySearch.active) {
       const emptyResult: [string[], string] = [[], line];
@@ -467,7 +486,7 @@ export default class Interactive extends Command {
   
   private getCompletions(line: string): [string[], string] {
     const words = line.trim().split(/\s+/);
-    const lastWord = words[words.length - 1] || '';
+    const lastWord = words.at(-1) || '';
     
     // If line ends with a space, we're starting a new word
     const isNewWord = line.endsWith(' ');
@@ -521,12 +540,10 @@ export default class Interactive extends Command {
       this._commandCache = [];
       
       for (const command of this.config.commands) {
-        if (!command.hidden && !command.id.includes(':')) {
-          // Filter out restricted commands
-          if (!this.isCommandRestricted(command.id)) {
+        if (!command.hidden && !command.id.includes(':') && // Filter out restricted commands
+          !this.isCommandRestricted(command.id)) {
             this._commandCache.push(command.id);
           }
-        }
       }
       
       // Add special commands that aren't filtered
@@ -540,13 +557,12 @@ export default class Interactive extends Command {
 
   private getSubcommandsForPath(commandPath: string[]): string[] {
     // Convert space-separated path to colon-separated for oclif
-    const parentCommand = commandPath.filter(p => p).join(':');
+    const parentCommand = commandPath.filter(Boolean).join(':');
     const subcommands: string[] = [];
     
     for (const command of this.config.commands) {
-      if (!command.hidden && command.id.startsWith(parentCommand + ':')) {
-        // Filter out restricted commands
-        if (!this.isCommandRestricted(command.id)) {
+      if (!command.hidden && command.id.startsWith(parentCommand + ':') && // Filter out restricted commands
+        !this.isCommandRestricted(command.id)) {
           // Get the next part of the command
           const remaining = command.id.slice(parentCommand.length + 1);
           const parts = remaining.split(':');
@@ -557,7 +573,6 @@ export default class Interactive extends Command {
             subcommands.push(nextPart);
           }
         }
-      }
     }
     
     return [...new Set(subcommands)].sort();
@@ -565,7 +580,7 @@ export default class Interactive extends Command {
 
   private getFlagsForCommandSync(commandPath: string[]): string[] {
     // Get cached flags if available
-    const commandId = commandPath.filter(p => p).join(':');
+    const commandId = commandPath.filter(Boolean).join(':');
     
     if (this._flagsCache && this._flagsCache[commandId]) {
       return this._flagsCache[commandId];
@@ -580,7 +595,7 @@ export default class Interactive extends Command {
       if (!this._manifestCache) {
         const manifestPath = path.join(this.config.root, 'oclif.manifest.json');
         if (fs.existsSync(manifestPath)) {
-          this._manifestCache = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+          this._manifestCache = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
         }
       }
       
@@ -589,7 +604,13 @@ export default class Interactive extends Command {
         const manifestCommand = this._manifestCache.commands[commandId];
         if (manifestCommand && manifestCommand.flags) {
           for (const [name, flag] of Object.entries(manifestCommand.flags)) {
-            const flagDef = flag as any;
+            const flagDef = flag as {
+              name: string;
+              char?: string;
+              description?: string;
+              type?: string;
+              hidden?: boolean;
+            };
             // Skip hidden flags unless in dev mode
             if (flagDef.hidden && process.env.ABLY_SHOW_DEV_FLAGS !== 'true') {
               continue;
@@ -601,7 +622,7 @@ export default class Interactive extends Command {
           }
         }
       }
-    } catch (error) {
+    } catch {
       // Fall back to trying to get from loaded command
       try {
         const command = this.config.findCommand(commandId);
@@ -650,10 +671,9 @@ export default class Interactive extends Command {
         if (cmd && cmd.description) {
           description = cmd.description;
         }
-      } else if (type === 'flag') {
-        // Extract flag description from manifest first, then fall back to command
-        if (commandPath) {
-          const commandId = commandPath.filter(p => p).join(':');
+      } else if (type === 'flag' && // Extract flag description from manifest first, then fall back to command
+        commandPath) {
+          const commandId = commandPath.filter(Boolean).join(':');
           const flagName = match.replace(/^--?/, '');
           
           // Try manifest first
@@ -662,7 +682,13 @@ export default class Interactive extends Command {
             if (manifestCommand && manifestCommand.flags) {
               // Find flag by name or char
               for (const [name, flag] of Object.entries(manifestCommand.flags)) {
-                const flagDef = flag as any;
+                const flagDef = flag as {
+              name: string;
+              char?: string;
+              description?: string;
+              type?: string;
+              hidden?: boolean;
+            };
                 if (name === flagName || (flagDef.char && flagDef.char === flagName)) {
                   description = flagDef.description || '';
                   break;
@@ -688,7 +714,6 @@ export default class Interactive extends Command {
             }
           }
         }
-      }
       
       items.push({ name: match, description });
     }
@@ -761,13 +786,11 @@ export default class Interactive extends Command {
       }
       
       // Check anonymous mode restrictions
-      if (this.isAnonymousWebMode()) {
-        if (WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some(pattern => 
+      if (this.isAnonymousWebMode() && WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some(pattern => 
           this.matchesCommandPattern(commandId, pattern)
         )) {
           return true;
         }
-      }
     }
     
     return false;
@@ -786,10 +809,10 @@ export default class Interactive extends Command {
         
         // Ctrl+R: Start or cycle through history search
         if (key.ctrl && key.name === 'r') {
-          if (!this.historySearch.active) {
-            this.startHistorySearch();
-          } else {
+          if (this.historySearch.active) {
             this.cycleHistorySearch();
+          } else {
+            this.startHistorySearch();
           }
           return;
         }
@@ -833,8 +856,8 @@ export default class Interactive extends Command {
   
   private startHistorySearch() {
     // Save current line state
-    this.historySearch.originalLine = (this.rl as any).line || '';
-    this.historySearch.originalCursorPos = (this.rl as any).cursor || 0;
+    this.historySearch.originalLine = (this.rl as readline.Interface & {line?: string}).line || '';
+    this.historySearch.originalCursorPos = (this.rl as readline.Interface & {cursor?: number}).cursor || 0;
     
     // Initialize search state
     this.historySearch.active = true;
@@ -848,7 +871,7 @@ export default class Interactive extends Command {
   
   private updateHistorySearch() {
     // Get history from readline
-    const history = (this.rl as any).history || [];
+    const history = (this.rl as readline.Interface & {history?: string[]}).history || [];
     
     // Find matches (search from most recent to oldest)
     // Note: readline stores history in reverse order (most recent first)
@@ -891,16 +914,16 @@ export default class Interactive extends Command {
       process.stdout.write(chalk.dim(searchPrompt) + currentMatch);
       
       // Update readline's internal state
-      (this.rl as any).line = currentMatch;
-      (this.rl as any).cursor = currentMatch.length;
+      (this.rl as readline.Interface & {line?: string}).line = currentMatch;
+      (this.rl as readline.Interface & {cursor?: number}).cursor = currentMatch.length;
     } else {
       // No matches found
       const searchPrompt = `(failed reverse-i-search\`${this.historySearch.searchTerm}'): `;
       process.stdout.write(chalk.dim(searchPrompt));
       
       // Clear readline's line
-      (this.rl as any).line = '';
-      (this.rl as any).cursor = 0;
+      (this.rl as readline.Interface & {line?: string}).line = '';
+      (this.rl as readline.Interface & {cursor?: number}).cursor = 0;
     }
   }
   
@@ -921,8 +944,8 @@ export default class Interactive extends Command {
     readline.cursorTo(process.stdout, 0);
     
     // Set the line and display it
-    (this.rl as any).line = currentMatch;
-    (this.rl as any).cursor = currentMatch.length;
+    (this.rl as readline.Interface & {line?: string}).line = currentMatch;
+    (this.rl as readline.Interface & {cursor?: number}).cursor = currentMatch.length;
     this.rl.prompt(true);
     
     // Write the command after the prompt
@@ -938,13 +961,13 @@ export default class Interactive extends Command {
     readline.cursorTo(process.stdout, 0);
     
     // Restore original line
-    (this.rl as any).line = this.historySearch.originalLine;
-    (this.rl as any).cursor = this.historySearch.originalCursorPos;
+    (this.rl as readline.Interface & {line?: string}).line = this.historySearch.originalLine;
+    (this.rl as readline.Interface & {cursor?: number}).cursor = this.historySearch.originalCursorPos;
     
     // Redraw prompt with original content
     this.rl.prompt(true);
     process.stdout.write(this.historySearch.originalLine);
-    readline.cursorTo(process.stdout, (this.rl as any)._prompt.length + this.historySearch.originalCursorPos);
+    readline.cursorTo(process.stdout, (this.rl as readline.Interface & {_prompt: {length: number}})._prompt.length + this.historySearch.originalCursorPos);
   }
 
 }

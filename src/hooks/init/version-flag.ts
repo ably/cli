@@ -29,8 +29,8 @@ const hook: Hook<'init'> = async function (opts) {
       if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
         // Throw a special error that the interactive command knows to ignore
         const error = new Error('Version displayed');
-        (error as any).code = 'EEXIT';
-        (error as any).exitCode = 0;
+        (error as Error & {code?: string; exitCode?: number}).code = 'EEXIT';
+        (error as Error & {code?: string; exitCode?: number}).exitCode = 0;
         throw error;
       } else {
         process.exit(0);

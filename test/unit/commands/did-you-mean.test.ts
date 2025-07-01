@@ -13,7 +13,7 @@ describe('Did You Mean Functionality', () => {
   const timeout = 15000;
   let binPath: string;
   
-  before(() => {
+  before(function() {
     binPath = path.join(__dirname, '../../../bin/development.js');
   });
 
@@ -144,12 +144,12 @@ describe('Did You Mean Functionality', () => {
           env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1' }
         });
         
-        let output = '';
+        let _output = '';
         let foundPrompt = false;
         let executedCommand = false;
         
         child.stdout.on('data', (data) => {
-          output += data.toString();
+          _output += data.toString();
           
           if (data.toString().includes('Did you mean accounts current?') || data.toString().includes('(Y/n)')) {
             foundPrompt = true;

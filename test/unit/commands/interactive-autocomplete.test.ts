@@ -5,22 +5,22 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import InteractiveCommand from '../../../src/commands/interactive.js';
 import { Config } from '@oclif/core';
-import { test } from '@oclif/test';
 import * as fs from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const timeout = 10000;
+const binPath = path.join(__dirname, '../../../bin/development.js');
+
+// Helper to send tab completion request
+const sendTab = (child: any) => {
+  // Send TAB character (ASCII 9)
+  child.stdin.write('\t');
+};
+
 describe('Interactive Mode - Autocomplete & Command Filtering', () => {
   describe('Autocomplete', () => {
-  const timeout = 10000;
-  const binPath = path.join(__dirname, '../../../bin/development.js');
-
-  // Helper to send tab completion request
-  const sendTab = (child: any) => {
-    // Send TAB character (ASCII 9)
-    child.stdin.write('\t');
-  };
 
   it('should autocomplete top-level commands', function(done) {
     this.timeout(timeout);
@@ -152,7 +152,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     
     let output = '';
     let foundAccounts = false;
-    let foundApps = false;
+    let _foundApps = false;
     
     child.stdout.on('data', (data) => {
       output += data.toString();
@@ -163,7 +163,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         foundAccounts = true;
       }
       if (dataStr.includes('apps')) {
-        foundApps = true;
+        _foundApps = true;
       }
     });
     
@@ -192,7 +192,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     let interactiveCommand: InteractiveCommand;
     let originalEnv: NodeJS.ProcessEnv;
 
-    beforeEach(() => {
+    beforeEach(function() {
       originalEnv = { ...process.env };
 
       // Mock config with various commands
@@ -254,12 +254,12 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
       interactiveCommand = new InteractiveCommand([], mockConfig);
     });
 
-    afterEach(() => {
+    afterEach(function() {
       process.env = originalEnv;
     });
 
     describe('Normal mode (not web CLI)', () => {
-      beforeEach(() => {
+      beforeEach(function() {
         delete process.env.ABLY_WEB_CLI_MODE;
         delete process.env.ABLY_RESTRICTED_MODE;
         // Clear command cache to ensure fresh filtering
@@ -295,7 +295,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     });
 
     describe('Web CLI mode (authenticated)', () => {
-      beforeEach(() => {
+      beforeEach(function() {
         process.env.ABLY_WEB_CLI_MODE = 'true';
         delete process.env.ABLY_RESTRICTED_MODE;
         // Clear command cache to ensure fresh filtering
@@ -337,7 +337,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     });
 
     describe('Web CLI mode (anonymous)', () => {
-      beforeEach(() => {
+      beforeEach(function() {
         process.env.ABLY_WEB_CLI_MODE = 'true';
         process.env.ABLY_RESTRICTED_MODE = 'true';
         // Clear command cache to ensure fresh filtering
@@ -440,7 +440,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     let interactive: any;
     let mockManifest: any;
 
-    beforeEach(() => {
+    beforeEach(function() {
       // Create a mock manifest with flag data
       mockManifest = {
         commands: {
@@ -500,9 +500,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
       };
     });
 
-    test
-      .stdout()
-      .do(async () => {
+    it('should return all flags for channels:batch-publish command', async function() {
         // Create a test instance
         const config = {
           root: process.cwd(),
@@ -516,27 +514,22 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         // Test getting flags for channels:batch-publish
         const flags = interactive.getFlagsForCommandSync(['channels', 'batch-publish']);
         
-        console.log('Flags returned:', flags);
-      })
-      .it('should return all flags for channels:batch-publish command', ctx => {
-        const output = ctx.stdout;
-        expect(output).to.contain('--channels');
-        expect(output).to.contain('--channels-json');
-        expect(output).to.contain('--encoding');
-        expect(output).to.contain('-e');
-        expect(output).to.contain('--name');
-        expect(output).to.contain('-n');
-        expect(output).to.contain('--spec');
-        expect(output).to.contain('--json');
-        expect(output).to.contain('--pretty-json');
-        expect(output).to.contain('--api-key');
-        expect(output).to.contain('--help');
-        expect(output).to.contain('-h');
-      });
+        // Check that flags array contains expected values
+        expect(flags).to.include('--channels');
+        expect(flags).to.include('--channels-json');
+        expect(flags).to.include('--encoding');
+        expect(flags).to.include('-e');
+        expect(flags).to.include('--name');
+        expect(flags).to.include('-n');
+        expect(flags).to.include('--spec');
+        expect(flags).to.include('--json');
+        expect(flags).to.include('--pretty-json');
+        expect(flags).to.include('--api-key');
+        expect(flags).to.include('--help');
+        expect(flags).to.include('-h');
+    });
 
-    test
-      .stdout()
-      .do(async () => {
+    it('should display flag completions with descriptions', async function() {
         // Create a test instance
         const config = {
           root: process.cwd(),
@@ -547,23 +540,30 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         interactive = new InteractiveCommand([], config);
         interactive._manifestCache = mockManifest;
         
-        // Test completion display
-        const matches = ['--channels', '--channels-json', '--encoding', '-e'];
-        interactive.displayCompletions(matches, 'flag', ['channels', 'batch-publish']);
-      })
-      .it('should display flag completions with descriptions', ctx => {
-        const output = ctx.stdout;
-        expect(output).to.contain('--channels');
-        expect(output).to.contain('Comma-separated list of channel names to publish to');
-        expect(output).to.contain('--channels-json');
-        expect(output).to.contain('JSON array of channel names to publish to');
-        expect(output).to.contain('--encoding');
-        expect(output).to.contain('The encoding for the message');
-      });
+        // Capture console output
+        const originalLog = console.log;
+        let output = '';
+        console.log = (...args: any[]) => {
+          output += args.join(' ') + '\n';
+        };
+        
+        try {
+          // Test completion display
+          const matches = ['--channels', '--channels-json', '--encoding', '-e'];
+          interactive.displayCompletions(matches, 'flag', ['channels', 'batch-publish']);
+          
+          expect(output).to.contain('--channels');
+          expect(output).to.contain('Comma-separated list of channel names to publish to');
+          expect(output).to.contain('--channels-json');
+          expect(output).to.contain('JSON array of channel names to publish to');
+          expect(output).to.contain('--encoding');
+          expect(output).to.contain('The encoding for the message');
+        } finally {
+          console.log = originalLog;
+        }
+    });
 
-    test
-      .stdout()
-      .do(async () => {
+    it('should filter hidden flags based on ABLY_SHOW_DEV_FLAGS', async function() {
         // Test that hidden flags are filtered out unless ABLY_SHOW_DEV_FLAGS is set
         const hiddenFlagManifest = {
           commands: {
@@ -596,33 +596,26 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         
         // Test without dev flags
         const flags = interactive.getFlagsForCommandSync(['test', 'command']);
-        console.log('Flags without dev mode:', flags);
+        expect(flags).to.include('--visible');
+        expect(flags).to.not.include('--hidden');
         
         // Test with dev flags
         process.env.ABLY_SHOW_DEV_FLAGS = 'true';
         interactive._flagsCache = {}; // Clear cache
         const devFlags = interactive.getFlagsForCommandSync(['test', 'command']);
-        console.log('Flags with dev mode:', devFlags);
+        expect(devFlags).to.include('--visible');
+        expect(devFlags).to.include('--hidden');
         delete process.env.ABLY_SHOW_DEV_FLAGS;
-      })
-      .it('should filter hidden flags based on ABLY_SHOW_DEV_FLAGS', ctx => {
-        const output = ctx.stdout;
-        expect(output).to.contain('--visible');
-        expect(output).to.match(/Flags without dev mode:.*--visible/);
-        expect(output).to.not.match(/Flags without dev mode:.*--hidden/);
-        expect(output).to.match(/Flags with dev mode:.*--hidden/);
-      });
+    });
   });
 
   describe('Flag Manifest', () => {
-    test
-      .stdout()
-      .do(async () => {
+    it('manifest should contain all flags for channels:batch-publish', async function() {
         // Verify the manifest contains all expected flags
         const manifestPath = path.join(process.cwd(), 'oclif.manifest.json');
         expect(fs.existsSync(manifestPath)).to.be.true;
         
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
         const batchPublish = manifest.commands['channels:batch-publish'];
         
         expect(batchPublish).to.exist;
@@ -646,17 +639,12 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         expect(batchPublish.flags.encoding).to.have.property('char', 'e');
         expect(batchPublish.flags.name).to.have.property('char', 'n');
         expect(batchPublish.flags.verbose).to.have.property('char', 'v');
-        
-        console.log('✓ Manifest contains all expected flags for channels:batch-publish');
-      })
-      .it('manifest should contain all flags for channels:batch-publish');
+    });
 
-    test
-      .stdout()
-      .do(async () => {
+    it('manifest should be properly populated for all commands', async function() {
         // Check a few other commands to ensure manifest is complete
         const manifestPath = path.join(process.cwd(), 'oclif.manifest.json');
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
         
         // Check channels:publish
         const channelsPublish = manifest.commands['channels:publish'];
@@ -671,9 +659,6 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         expect(appsList).to.exist;
         expect(appsList.flags).to.have.property('json');
         expect(appsList.flags).to.have.property('pretty-json');
-        
-        console.log('✓ Manifest is properly populated for multiple commands');
-      })
-      .it('manifest should be properly populated for all commands');
+    });
   });
 });
