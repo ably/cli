@@ -356,8 +356,10 @@ export default class Interactive extends Command {
         
         if (this.isAnonymousWebMode()) {
           errorMessage = `The '${displayCommand}' command is not available in anonymous mode.\nPlease provide an access token to use this command.`;
-        } else {
+        } else if (this.isWebCliMode()) {
           errorMessage = `The '${displayCommand}' command is not available in the web CLI.`;
+        } else {
+          errorMessage = `The '${displayCommand}' command is not available in interactive mode.`;
         }
         
         console.error(chalk.red('Error:'), errorMessage);
