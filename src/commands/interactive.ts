@@ -97,6 +97,15 @@ export default class Interactive extends Command {
         }
       }
       
+      // Install signal handlers to ensure cleanup
+      const signalHandler = () => {
+        this.cleanup();
+        process.exit(130); // Standard SIGINT exit code
+      };
+      
+      process.on('SIGINT', signalHandler);
+      process.on('SIGTERM', signalHandler);
+      
       // Set environment variable to indicate we're in interactive mode
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       
@@ -142,6 +151,12 @@ export default class Interactive extends Command {
       tagline += 'interactive CLI for Pub/Sub, Chat and Spaces';
       console.log(chalk.bold(tagline));
       console.log();
+      
+      // Warn if running without wrapper
+      if (!this.isWrapperMode && !this.isWebCliMode()) {
+        console.log(chalk.yellow('⚠️  Running without the wrapper script. Ctrl+C handling may not work properly.'));
+        console.log(chalk.yellow('   For best experience, use: ably interactive\n'));
+      }
       
       // Show formatted common commands
       console.log(chalk.bold('COMMON COMMANDS'));
@@ -427,9 +442,19 @@ export default class Interactive extends Command {
       // Reset command running state
       this.runningCommand = false;
       
-      // Restore raw mode for readline
+      // Restore raw mode for readline with error handling
       if (process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & {setRawMode?: (mode: boolean) => void}).setRawMode === 'function') {
-        (process.stdin as NodeJS.ReadStream & {setRawMode: (mode: boolean) => void}).setRawMode(true);
+        try {
+          (process.stdin as NodeJS.ReadStream & {setRawMode: (mode: boolean) => void}).setRawMode(true);
+        } catch (error) {
+          // Terminal might be in a bad state after SIGINT
+          // Try to recover by recreating the readline interface
+          if ((error as NodeJS.ErrnoException).code === 'EIO') {
+            console.error(chalk.yellow('\nTerminal state corrupted. Please restart the interactive shell.'));
+            this.cleanup();
+            process.exit(1);
+          }
+        }
       }
       
       // Resume readline
@@ -524,6 +549,14 @@ export default class Interactive extends Command {
   }
 
   private cleanup() {
+    // Ensure terminal is restored to normal mode
+    if (process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & {setRawMode?: (mode: boolean) => void}).setRawMode === 'function') {
+      try {
+        (process.stdin as NodeJS.ReadStream & {setRawMode: (mode: boolean) => void}).setRawMode(false);
+      } catch {
+        // Ignore errors during cleanup
+      }
+    }
     console.log('\nGoodbye!');
   }
 

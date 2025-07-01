@@ -225,9 +225,14 @@ export default class CustomHelp extends Help {
     lines.push(...logoLines);
 
     // 2. Title & Usage
-    const titleText = this.webCliMode 
-      ? "ably.com browser-based CLI for Pub/Sub, Chat and Spaces"
-      : "ably.com CLI for Pub/Sub, Chat and Spaces";
+    let titleText = "ably.com ";
+    if (this.webCliMode) {
+      titleText += "browser-based ";
+    }
+    if (this.interactiveMode) {
+      titleText += "interactive ";
+    }
+    titleText += "CLI for Pub/Sub, Chat and Spaces";
     
     const headerLines = [
       chalk.bold(titleText),

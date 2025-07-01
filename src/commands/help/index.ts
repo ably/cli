@@ -187,7 +187,9 @@ export default class HelpCommand extends BaseTopicCommand {
         '',
         ...helpCommands.map(cmd => `  ${cmd.id.padEnd(20)} - ${cmd.description}`),
         '',
-        'Run `ably help COMMAND --help` for more information on a command.'
+        process.env.ABLY_INTERACTIVE_MODE === 'true' 
+          ? 'Run `help COMMAND --help` for more information on a command.'
+          : 'Run `ably help COMMAND --help` for more information on a command.'
       ].join('\n');
       
       console.log(rootHelp + helpSection);
