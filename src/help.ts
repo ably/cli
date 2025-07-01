@@ -325,25 +325,43 @@ export default class CustomHelp extends Help {
 
     // 3. Show the web CLI specific instructions
     const cmdPrefix = this.interactiveMode ? '' : 'ably ';
-    const webCliCommands = [
-      `${chalk.bold("COMMON COMMANDS")}`,
-      `  ${chalk.cyan("View Ably commands:")} ${this.interactiveMode ? 'help' : `${cmdPrefix}--help`}`,
-      `  ${chalk.cyan("Publish a message:")} ${cmdPrefix}channels publish [channel] [message]`,
-      `  ${chalk.cyan("Subscribe to a channel:")} ${cmdPrefix}channels subscribe [channel]`,
-    ];
+    lines.push(`${chalk.bold("COMMON COMMANDS")}`);
     
-    // Only show channels:logs for authenticated users
     const isAnonymousMode = process.env.ABLY_ANONYMOUS_USER_MODE === "true";
-    if (!isAnonymousMode) {
-      webCliCommands.push(`  ${chalk.cyan("View live channel events:")} ${cmdPrefix}channels logs`);
-    }
+    const commands = [];
     
-    webCliCommands.push(
-      `  ${chalk.cyan("Enter a collaborative space:")} ${cmdPrefix}spaces enter [space]`,
-      `  ${chalk.cyan("Join a chat room:")} ${cmdPrefix}rooms get [room]`,
+    // Basic commands always available
+    commands.push(
+      [this.interactiveMode ? 'help' : `${cmdPrefix}--help`, 'View Ably commands'],
+      [`${cmdPrefix}channels publish [channel] [message]`, 'Publish a message'],
+      [`${cmdPrefix}channels subscribe [channel]`, 'Subscribe to a channel']
     );
     
-    lines.push(...webCliCommands);
+    // Commands available only for authenticated users
+    if (!isAnonymousMode) {
+      commands.push([`${cmdPrefix}channels logs`, 'View live channel events']);
+    }
+    
+    commands.push(
+      [`${cmdPrefix}spaces enter [space]`, 'Enter a collaborative space'],
+      [`${cmdPrefix}rooms get [room]`, 'Join a chat room']
+    );
+    
+    // Calculate padding for alignment
+    const maxCmdLength = Math.max(...commands.map(([cmd]) => cmd.length));
+    
+    // Display commands with proper alignment
+    commands.forEach(([cmd, desc]) => {
+      const paddedCmd = cmd.padEnd(maxCmdLength + 2);
+      lines.push(`  ${chalk.cyan(paddedCmd)}${desc}`);
+    });
+    
+    if (this.interactiveMode) {
+      lines.push(
+        '',
+        `Type ${chalk.cyan('help')} to see the complete list of commands.`
+      );
+    }
 
     // 4. Check if login recommendation is needed
     const accessToken =

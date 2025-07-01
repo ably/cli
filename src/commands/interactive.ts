@@ -128,20 +128,54 @@ export default class Interactive extends Command {
       // Display logo
       displayLogo(console.log);
       console.log(`   Version: ${this.config.version}\n`);
-      console.log('Welcome to the Ably CLI interactive shell! (ALPHA VERSION)');
-      console.log('Type "help" to see available commands or "exit" to quit.');
-      if (this.isWrapperMode) {
-        console.log('Press Ctrl+C to interrupt running commands.');
+      
+      // Show appropriate tagline based on mode
+      let tagline = 'ably.com ';
+      if (this.isWebCliMode()) {
+        tagline += 'browser-based ';
       }
+      tagline += 'interactive CLI for Pub/Sub, Chat, Spaces and the Control API';
+      console.log(chalk.bold(tagline));
       console.log();
       
-      // Show basic commands info
-      console.log('COMMON COMMANDS');
-      console.log('  help                          Show help for any command');
-      console.log('  channels publish <channel>    Publish a message to a channel');
-      console.log('  channels subscribe <channel>  Subscribe to channel messages');
-      console.log('  apps list                     List your Ably apps');
-      console.log('  exit                          Exit the interactive shell');
+      // Show formatted common commands
+      console.log(chalk.bold('COMMON COMMANDS'));
+      
+      const isAnonymousMode = this.isAnonymousWebMode();
+      const commands = [];
+      
+      // Basic commands always available
+      commands.push(
+        ['help', 'Show help for any command'],
+        ['channels publish [channel] [message]', 'Publish a message to a channel'],
+        ['channels subscribe [channel]', 'Subscribe to a channel']
+      );
+      
+      // Commands available only for authenticated users
+      if (!isAnonymousMode) {
+        commands.push(
+          ['channels logs', 'View live channel events'],
+          ['apps list', 'List your Ably apps']
+        );
+      }
+      
+      commands.push(
+        ['spaces enter [space]', 'Enter a collaborative space'],
+        ['rooms get [room]', 'Join a chat room'],
+        ['exit', 'Exit the interactive shell']
+      );
+      
+      // Calculate padding for alignment
+      const maxCmdLength = Math.max(...commands.map(([cmd]) => cmd.length));
+      
+      // Display commands with proper alignment
+      commands.forEach(([cmd, desc]) => {
+        const paddedCmd = cmd.padEnd(maxCmdLength + 2);
+        console.log(`  ${chalk.cyan(paddedCmd)}${desc}`);
+      });
+      
+      console.log();
+      console.log('Type ' + chalk.cyan('help') + ' to see the complete list of commands.');
       console.log();
     }
 
