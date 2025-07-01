@@ -202,9 +202,9 @@ export default class CustomHelp extends Help {
     const isWebCliHelp = args.includes("web-cli") || args.includes("webcli");
 
     // Show web CLI help if:
-    // 1. We're in web CLI mode and not showing full help
+    // 1. We're in web CLI mode and not showing full help AND not in interactive mode
     // 2. OR explicitly requesting web-cli help
-    if ((this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp) || isWebCliHelp) {
+    if ((this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp && !this.interactiveMode) || isWebCliHelp) {
       output = this.formatWebCliRoot();
     } else {
       output = this.formatStandardRoot();
@@ -327,7 +327,7 @@ export default class CustomHelp extends Help {
     const cmdPrefix = this.interactiveMode ? '' : 'ably ';
     const webCliCommands = [
       `${chalk.bold("COMMON COMMANDS")}`,
-      `  ${chalk.cyan("View Ably commands:")} ${cmdPrefix}--help`,
+      `  ${chalk.cyan("View Ably commands:")} ${this.interactiveMode ? 'help' : `${cmdPrefix}--help`}`,
       `  ${chalk.cyan("Publish a message:")} ${cmdPrefix}channels publish [channel] [message]`,
       `  ${chalk.cyan("Subscribe to a channel:")} ${cmdPrefix}channels subscribe [channel]`,
     ];
