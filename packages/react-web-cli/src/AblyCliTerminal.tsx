@@ -1184,7 +1184,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       // Attach custom key handler for special keys
       debugLog('⚠️ DIAGNOSTIC: Setting up custom key handler for special keys');
-      term.current.attachCustomKeyEventHandler((event: KeyboardEvent): boolean => {
+      if (typeof term.current.attachCustomKeyEventHandler === 'function') {
+        term.current.attachCustomKeyEventHandler((event: KeyboardEvent): boolean => {
         // Only handle special keys when connected and session is active
         if (!isSessionActive || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
           return true; // Let xterm handle it normally
@@ -1252,6 +1253,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         
         return true; // Let other keys pass through normally
       });
+      }
       
       debugLog('⚠️ DIAGNOSTIC: Setting up onData handler');
       term.current.onData((data: string) => {

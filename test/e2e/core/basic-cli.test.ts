@@ -165,8 +165,8 @@ describe("Basic CLI E2E", function() {
         });
 
         expect(result.exitCode).not.to.equal(0);
-        // In non-interactive mode, it shows a warning that "help" command is not found
-        expect(result.stderr).to.include("help is not an ably command");
+        // Should show command not found error
+        expect(result.stderr).to.include("Command help doesnotexist not found");
       });
 
       it("should display web CLI help when running help web-cli", async function() {

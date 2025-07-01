@@ -310,6 +310,21 @@ export default class Interactive extends Command {
         commandArgs = remainingArgs;
       }
       
+      // Check if the command is restricted
+      if (this.isCommandRestricted(commandId)) {
+        const displayCommand = commandId.replaceAll(':', ' ');
+        let errorMessage: string;
+        
+        if (this.isAnonymousWebMode()) {
+          errorMessage = `The '${displayCommand}' command is not available in anonymous mode.\nPlease provide an access token to use this command.`;
+        } else {
+          errorMessage = `The '${displayCommand}' command is not available in the web CLI.`;
+        }
+        
+        console.error(chalk.red('Error:'), errorMessage);
+        return;
+      }
+      
       // Special handling for help flags
       if (commandArgs.includes('--help') || commandArgs.includes('-h')) {
         // If the command has help flags, we need to handle it specially
@@ -771,7 +786,7 @@ export default class Interactive extends Command {
    * Check if we're running in anonymous web CLI mode
    */
   private isAnonymousWebMode(): boolean {
-    return this.isWebCliMode() && process.env.ABLY_RESTRICTED_MODE === 'true';
+    return this.isWebCliMode() && process.env.ABLY_ANONYMOUS_USER_MODE === 'true';
   }
   
   /**
@@ -833,8 +848,8 @@ export default class Interactive extends Command {
             ctrl: key.ctrl,
             meta: key.meta,
             shift: key.shift,
-            sequence: key.sequence ? Array.from(key.sequence).map(c => 
-              `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`
+            sequence: key.sequence ? [...key.sequence].map(c => 
+              `\\x${(c as string).codePointAt(0)?.toString(16).padStart(2, '0') ?? '00'}`
             ).join('') : undefined
           } : null;
           console.error(`[DEBUG] Keypress event - str: "${str}", key:`, JSON.stringify(keyInfo));

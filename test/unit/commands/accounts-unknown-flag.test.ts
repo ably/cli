@@ -29,15 +29,16 @@ describe('Accounts Command - Unknown Flag Handling', () => {
       errorOutput += data.toString();
     });
     
-    // Send accounts with unknown flag
+    // Wait for interactive prompt
     setTimeout(() => {
+      // Send accounts with unknown flag
       child.stdin.write('accounts --non-existing-flag\n');
-    }, 500);
-    
-    // Exit
-    setTimeout(() => {
-      child.stdin.write('exit\n');
-    }, 1500);
+      
+      // Give time for command to execute
+      setTimeout(() => {
+        child.stdin.write('exit\n');
+      }, 1000);
+    }, 1000);
     
     child.on('exit', () => {
       const fullOutput = output + errorOutput;
@@ -98,13 +99,15 @@ describe('Accounts Command - Unknown Flag Handling', () => {
         interactiveOutput += data.toString();
       });
       
+      // Wait for interactive prompt
       setTimeout(() => {
         interactive.stdin.write('accounts --non-existing-flag\n');
-      }, 500);
-      
-      setTimeout(() => {
-        interactive.stdin.write('exit\n');
-      }, 1500);
+        
+        // Give time for command to execute
+        setTimeout(() => {
+          interactive.stdin.write('exit\n');
+        }, 1000);
+      }, 1000);
       
       interactive.on('exit', () => {
         // Both should show the accounts management commands

@@ -102,7 +102,7 @@ export default class HelpCommand extends BaseTopicCommand {
               } finally {
                 // Restore listeners and resume
                 lineListeners.forEach((listener) => {
-                  interactiveReadline.on('line', listener);
+                  interactiveReadline.on('line', listener as (...args: any[]) => void);
                 });
                 interactiveReadline.resume();
               }
@@ -127,7 +127,8 @@ export default class HelpCommand extends BaseTopicCommand {
               if (isInteractiveMode) {
                 throw error;
               } else {
-                this.error(error.message || 'Unknown error', { exit: error.oclif?.exit || 1 });
+                const err = error as { message?: string; oclif?: { exit?: number } };
+                this.error(err.message || 'Unknown error', { exit: err.oclif?.exit || 1 });
               }
             }
           }
