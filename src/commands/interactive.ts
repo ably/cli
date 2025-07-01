@@ -30,6 +30,7 @@ export default class Interactive extends Command {
   private isWrapperMode = process.env.ABLY_WRAPPER_MODE === '1';
   private _flagsCache?: Record<string, string[]>;
   private _manifestCache?: any;
+  private runningCommand = false;
   private historySearch: HistorySearchState = {
     active: false,
     searchTerm: '',
@@ -41,6 +42,51 @@ export default class Interactive extends Command {
 
   async run() {
     try {
+      // Check if we're running without the wrapper
+      if (!this.isWrapperMode) {
+        let wrapperPath: string;
+        let spawnCommand: string;
+        let spawnArgs: string[] = [];
+        
+        if (process.platform === 'win32') {
+          // Windows - use PowerShell wrapper
+          wrapperPath = path.join(this.config.root, 'bin', 'ably-interactive.ps1');
+          spawnCommand = 'powershell.exe';
+          spawnArgs = ['-ExecutionPolicy', 'Bypass', '-File', wrapperPath];
+        } else {
+          // Unix-like systems - use bash wrapper
+          wrapperPath = path.join(this.config.root, 'bin', 'ably-interactive');
+          spawnCommand = wrapperPath;
+        }
+        
+        if (fs.existsSync(wrapperPath)) {
+          // For Unix systems, make sure it's executable
+          if (process.platform !== 'win32') {
+            try {
+              fs.accessSync(wrapperPath, fs.constants.X_OK);
+            } catch {
+              // Try to make it executable
+              fs.chmodSync(wrapperPath, 0o755);
+            }
+          }
+          
+          // Execute the wrapper script instead
+          const { spawn } = await import('node:child_process');
+          const child = spawn(spawnCommand, spawnArgs, {
+            stdio: 'inherit',
+            env: process.env,
+            shell: false
+          });
+          
+          child.on('exit', (code) => {
+            process.exit(code || 0);
+          });
+          
+          // Prevent the rest of this function from running
+          return;
+        }
+      }
+      
       // Set environment variable to indicate we're in interactive mode
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       
@@ -48,6 +94,7 @@ export default class Interactive extends Command {
       if (!process.env.DEBUG) {
         process.env.NODE_ENV = 'production';
       }
+      
       
       // Silence oclif's error output
       const originalConsoleError = console.error;
@@ -114,7 +161,7 @@ export default class Interactive extends Command {
     // Setup keypress handler for Ctrl+R and other special keys
     this.setupKeypressHandler();
     
-    // No process.exit override - we'll handle errors properly instead
+    // Don't install any SIGINT handler initially
 
     this.rl.on('line', async (input) => {
       // Exit history search mode when a command is executed
@@ -124,7 +171,15 @@ export default class Interactive extends Command {
       await this.handleCommand(input.trim());
     });
 
+    // Handle SIGINT events on readline
     this.rl.on('SIGINT', () => {
+      if (this.runningCommand) {
+        // If a command is running, send SIGINT to the process
+        // This allows the command to handle Ctrl+C properly
+        process.kill(process.pid, 'SIGINT');
+        return;
+      }
+      
       // If in history search mode, exit it
       if (this.historySearch.active) {
         this.exitHistorySearch();
@@ -144,10 +199,12 @@ export default class Interactive extends Command {
     });
 
     this.rl.on('close', () => {
-      this.cleanup();
-      // Use special exit code when in wrapper mode
-      const exitCode = this.isWrapperMode ? Interactive.EXIT_CODE_USER_EXIT : 0;
-      process.exit(exitCode);
+      if (!this.runningCommand) {
+        this.cleanup();
+        // Use special exit code when in wrapper mode
+        const exitCode = this.isWrapperMode ? Interactive.EXIT_CODE_USER_EXIT : 0;
+        process.exit(exitCode);
+      }
     });
   }
 
@@ -164,35 +221,41 @@ export default class Interactive extends Command {
 
     // Save to history
     await this.historyManager.saveCommand(input);
-    
 
-    // Pause readline to prevent it from interfering with command output
+    // Set command running state
+    this.runningCommand = true;
+    
+    // Pause readline
     this.rl.pause();
+    
+    // CRITICAL FIX: Set stdin to cooked mode to allow Ctrl+C to generate SIGINT
+    // Readline keeps stdin in raw mode even when paused, which prevents signal generation
+    if (process.stdin.isTTY && typeof (process.stdin as any).setRawMode === 'function') {
+      (process.stdin as any).setRawMode(false);
+    }
     
     try {
       const args = this.parseCommand(input);
       
-      // Separate flags from command parts
-      const flags: string[] = [];
+      // Separate command parts from args (everything before first flag)
       const commandParts: string[] = [];
+      let firstFlagIndex = args.findIndex(arg => arg.startsWith('-'));
       
-      for (const arg of args) {
-        if (arg.startsWith('-')) {
-          // This is a flag - keep it for later
-          flags.push(arg);
-        } else if (commandParts.length > 0 || flags.length === 0) {
-          // This is a command part (or we haven't seen flags yet)
-          commandParts.push(arg);
-        } else {
-          // This is an argument after flags started
-          flags.push(arg);
-        }
+      if (firstFlagIndex === -1) {
+        // No flags, all args are command parts
+        commandParts.push(...args);
+      } else {
+        // Everything before first flag is command parts
+        commandParts.push(...args.slice(0, firstFlagIndex));
       }
       
+      // Everything from first flag onwards stays together for oclif to parse
+      const remainingArgs = firstFlagIndex === -1 ? [] : args.slice(firstFlagIndex);
+      
       // Handle special case of only flags (like --version)
-      if (commandParts.length === 0 && flags.length > 0) {
+      if (commandParts.length === 0 && remainingArgs.length > 0) {
         // Check for version flag
-        if (flags.includes('--version') || flags.includes('-v')) {
+        if (remainingArgs.includes('--version') || remainingArgs.includes('-v')) {
           const { getVersionInfo } = await import('../utils/version.js');
           const versionInfo = getVersionInfo(this.config);
           this.log(`Version: ${versionInfo.version}`);
@@ -214,8 +277,8 @@ export default class Interactive extends Command {
         const cmd = this.config.findCommand(possibleId);
         if (cmd) {
           commandId = possibleId;
-          // Include remaining command parts and all flags as arguments
-          commandArgs = [...commandParts.slice(i), ...flags];
+          // Include remaining command parts and all remaining args
+          commandArgs = [...commandParts.slice(i), ...remainingArgs];
           break;
         }
       }
@@ -223,10 +286,8 @@ export default class Interactive extends Command {
       if (!commandId) {
         // No command found - this will trigger command_not_found hook
         commandId = commandParts.join(':');
-        commandArgs = flags;
+        commandArgs = remainingArgs;
       }
-      
-      // Use runCommand to avoid process.exit
       
       // Special handling for help flags
       if (commandArgs.includes('--help') || commandArgs.includes('-h')) {
@@ -243,6 +304,7 @@ export default class Interactive extends Command {
         }
       }
       
+      // Run command without any timeout
       await this.config.runCommand(commandId, commandArgs);
       
     } catch (error: any) {
@@ -251,7 +313,6 @@ export default class Interactive extends Command {
         // Normal exit (like from help command) - don't display anything
         return;
       }
-      
       
       // Always show errors in red
       let errorMessage = error.message || 'Unknown error';
@@ -277,31 +338,100 @@ export default class Interactive extends Command {
         console.error(chalk.red('Error:'), errorMessage);
       }
     } finally {
+      // Reset command running state
+      this.runningCommand = false;
+      
+      // Restore raw mode for readline
+      if (process.stdin.isTTY && typeof (process.stdin as any).setRawMode === 'function') {
+        (process.stdin as any).setRawMode(true);
+      }
+      
+      // Resume readline
+      this.rl.resume();
+      
       // Small delay to ensure error messages are visible
       setTimeout(() => {
-        this.rl.resume();
         this.rl.prompt();
       }, 50);
     }
   }
 
   private parseCommand(input: string): string[] {
-    // Handle quoted strings properly
-    const regex = /[^\s"']+|"([^"]*)"|'([^']*)'/g;
     const args: string[] = [];
-    let match;
+    let current = '';
+    let inDoubleQuote = false;
+    let inSingleQuote = false;
+    let escaped = false;
     
-    while ((match = regex.exec(input))) {
-      // match[1] is content of double quotes (can be empty string)
-      // match[2] is content of single quotes (can be empty string)
-      // match[0] is the full match (including quotes or unquoted text)
-      if (match[1] !== undefined) {
-        args.push(match[1]);
-      } else if (match[2] === undefined) {
-        args.push(match[0]);
-      } else {
-        args.push(match[2]);
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i];
+      const nextChar = input[i + 1];
+      
+      if (escaped) {
+        // Add the escaped character literally
+        current += char;
+        escaped = false;
+        continue;
       }
+      
+      if (char === '\\' && (inDoubleQuote || inSingleQuote)) {
+        // Check if this is an escape sequence
+        if (inDoubleQuote && (nextChar === '"' || nextChar === '\\' || nextChar === '$' || nextChar === '`')) {
+          escaped = true;
+          continue;
+        } else if (inSingleQuote && nextChar === "'") {
+          escaped = true;
+          continue;
+        }
+        // Otherwise, backslash is literal
+        current += char;
+        continue;
+      }
+      
+      if (char === '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        // If we're closing a quote and have content, that's an argument
+        if (!inDoubleQuote && current === '') {
+          // Empty string argument
+          args.push('');
+          current = '';
+        }
+        continue;
+      }
+      
+      if (char === "'" && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        // If we're closing a quote and have content, that's an argument
+        if (!inSingleQuote && current === '') {
+          // Empty string argument
+          args.push('');
+          current = '';
+        }
+        continue;
+      }
+      
+      if (char === ' ' && !inDoubleQuote && !inSingleQuote) {
+        // Space outside quotes - end current argument
+        if (current.length > 0) {
+          args.push(current);
+          current = '';
+        }
+        continue;
+      }
+      
+      // Regular character - add to current argument
+      current += char;
+    }
+    
+    // Handle any remaining content
+    if (current.length > 0 || inDoubleQuote || inSingleQuote) {
+      args.push(current);
+    }
+    
+    // Warn about unclosed quotes
+    if (inDoubleQuote || inSingleQuote) {
+      const quoteType = inDoubleQuote ? 'double' : 'single';
+      console.error(chalk.yellow(`Warning: Unclosed ${quoteType} quote in command`));
     }
     
     return args;
@@ -816,4 +946,5 @@ export default class Interactive extends Command {
     process.stdout.write(this.historySearch.originalLine);
     readline.cursorTo(process.stdout, (this.rl as any)._prompt.length + this.historySearch.originalCursorPos);
   }
+
 }

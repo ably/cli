@@ -27,7 +27,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     
     const child = spawn('node', [binPath, 'interactive'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1' }
+      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1', ABLY_WRAPPER_MODE: '1' }
     });
     
     let output = '';
@@ -69,7 +69,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     
     const child = spawn('node', [binPath, 'interactive'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1' }
+      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1', ABLY_WRAPPER_MODE: '1' }
     });
     
     let output = '';
@@ -108,7 +108,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     
     const child = spawn('node', [binPath, 'interactive'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1' }
+      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1', ABLY_WRAPPER_MODE: '1' }
     });
     
     let output = '';
@@ -147,7 +147,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     
     const child = spawn('node', [binPath, 'interactive'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1' }
+      env: { ...process.env, ABLY_INTERACTIVE_MODE: 'true', ABLY_SUPPRESS_WELCOME: '1', ABLY_WRAPPER_MODE: '1' }
     });
     
     let output = '';
