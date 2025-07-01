@@ -333,7 +333,7 @@ export default class CustomHelp extends Help {
     ];
     
     // Only show channels:logs for authenticated users
-    const isAnonymousMode = process.env.ABLY_RESTRICTED_MODE === "true";
+    const isAnonymousMode = process.env.ABLY_ANONYMOUS_USER_MODE === "true";
     if (!isAnonymousMode) {
       webCliCommands.push(`  ${chalk.cyan("View live channel events:")} ${cmdPrefix}channels logs`);
     }

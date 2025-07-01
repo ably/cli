@@ -92,6 +92,7 @@ vi.mock('@xterm/xterm', () => ({
     textarea: null,
     onWriteParsed: vi.fn(),
     scrollToBottom: vi.fn(),
+    attachCustomKeyEventHandler: vi.fn(),
   })),
 }));
 

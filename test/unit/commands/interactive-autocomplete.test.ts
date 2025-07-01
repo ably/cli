@@ -261,7 +261,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     describe('Normal mode (not web CLI)', () => {
       beforeEach(function() {
         delete process.env.ABLY_WEB_CLI_MODE;
-        delete process.env.ABLY_RESTRICTED_MODE;
+        delete process.env.ABLY_ANONYMOUS_USER_MODE;
         // Clear command cache to ensure fresh filtering
         (interactiveCommand as any)._commandCache = undefined;
       });
@@ -297,7 +297,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     describe('Web CLI mode (authenticated)', () => {
       beforeEach(function() {
         process.env.ABLY_WEB_CLI_MODE = 'true';
-        delete process.env.ABLY_RESTRICTED_MODE;
+        delete process.env.ABLY_ANONYMOUS_USER_MODE;
         // Clear command cache to ensure fresh filtering
         (interactiveCommand as any)._commandCache = undefined;
       });
@@ -339,7 +339,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
     describe('Web CLI mode (anonymous)', () => {
       beforeEach(function() {
         process.env.ABLY_WEB_CLI_MODE = 'true';
-        process.env.ABLY_RESTRICTED_MODE = 'true';
+        process.env.ABLY_ANONYMOUS_USER_MODE = 'true';
         // Clear command cache to ensure fresh filtering
         (interactiveCommand as any)._commandCache = undefined;
       });
