@@ -1178,11 +1178,105 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       fitAddon.current = new FitAddon();
       term.current.loadAddon(fitAddon.current);
       
+      // Track current input line for autocomplete
+      let currentInputLine = '';
+      let cursorPosition = 0;
+      
+      // Attach custom key handler for special keys
+      debugLog('⚠️ DIAGNOSTIC: Setting up custom key handler for special keys');
+      term.current.attachCustomKeyEventHandler((event: KeyboardEvent): boolean => {
+        // Only handle special keys when connected and session is active
+        if (!isSessionActive || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+          return true; // Let xterm handle it normally
+        }
+        
+        debugLog(`⚠️ DIAGNOSTIC: KeyboardEvent - key: "${event.key}", code: "${event.code}", ctrl: ${event.ctrlKey}, shift: ${event.shiftKey}`);
+        
+        // Handle TAB for autocomplete
+        if (event.key === 'Tab' && !event.ctrlKey && !event.altKey) {
+          event.preventDefault();
+          debugLog(`⚠️ DIAGNOSTIC: TAB intercepted, sending special message for autocomplete`);
+          
+          // Send special message for autocomplete
+          socketRef.current.send(JSON.stringify({
+            type: 'readline-control',
+            action: 'complete',
+            line: currentInputLine,
+            cursor: cursorPosition
+          }));
+          
+          return false; // Prevent default handling
+        }
+        
+        // Handle UP arrow for history
+        if (event.key === 'ArrowUp' && !event.ctrlKey && !event.altKey) {
+          event.preventDefault();
+          debugLog(`⚠️ DIAGNOSTIC: UP arrow intercepted, sending special message for history`);
+          
+          // Send special message for history navigation
+          socketRef.current.send(JSON.stringify({
+            type: 'readline-control',
+            action: 'history-up'
+          }));
+          
+          return false; // Prevent default handling
+        }
+        
+        // Handle DOWN arrow for history
+        if (event.key === 'ArrowDown' && !event.ctrlKey && !event.altKey) {
+          event.preventDefault();
+          debugLog(`⚠️ DIAGNOSTIC: DOWN arrow intercepted, sending special message for history`);
+          
+          // Send special message for history navigation
+          socketRef.current.send(JSON.stringify({
+            type: 'readline-control',
+            action: 'history-down'
+          }));
+          
+          return false; // Prevent default handling
+        }
+        
+        // Handle Ctrl+R for history search
+        if (event.key === 'r' && event.ctrlKey && !event.altKey && !event.shiftKey) {
+          event.preventDefault();
+          debugLog(`⚠️ DIAGNOSTIC: Ctrl+R intercepted, sending special message for history search`);
+          
+          // Send special message for history search
+          socketRef.current.send(JSON.stringify({
+            type: 'readline-control',
+            action: 'history-search'
+          }));
+          
+          return false; // Prevent default handling
+        }
+        
+        return true; // Let other keys pass through normally
+      });
+      
       debugLog('⚠️ DIAGNOSTIC: Setting up onData handler');
       term.current.onData((data: string) => {
-        // Log every character sent to help debug
-        const sanitizedData = data.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
-        debugLog(`⚠️ DIAGNOSTIC: Terminal onData event: "${sanitizedData}"`);
+        // Enhanced logging for special keys
+        const bytes = Array.from(data).map(char => {
+          const code = char.charCodeAt(0);
+          if (code < 32 || code > 126) {
+            return `\\x${code.toString(16).padStart(2, '0')}`;
+          }
+          return char;
+        }).join('');
+        
+        // Identify common special keys
+        let keyName = 'unknown';
+        if (data === '\t' || data === '\x09') keyName = 'TAB';
+        else if (data === '\x1b[A') keyName = 'UP_ARROW';
+        else if (data === '\x1b[B') keyName = 'DOWN_ARROW';
+        else if (data === '\x1b[C') keyName = 'RIGHT_ARROW';
+        else if (data === '\x1b[D') keyName = 'LEFT_ARROW';
+        else if (data === '\r') keyName = 'ENTER';
+        else if (data === '\x7f') keyName = 'BACKSPACE';
+        else if (data === '\x12') keyName = 'CTRL+R';
+        else if (data.startsWith('\x1b')) keyName = 'ESC_SEQUENCE';
+        
+        debugLog(`⚠️ DIAGNOSTIC: Terminal onData - Key: ${keyName}, Bytes: "${bytes}", Length: ${data.length}`);
         
         // Special handling for Enter key
         if (data === '\r') {
@@ -1265,9 +1359,24 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           }
         }
 
+        // Track input line for autocomplete (simple tracking - reset on Enter)
+        if (data === '\r') {
+          currentInputLine = '';
+          cursorPosition = 0;
+        } else if (data === '\x7f') { // Backspace
+          if (cursorPosition > 0) {
+            currentInputLine = currentInputLine.slice(0, cursorPosition - 1) + currentInputLine.slice(cursorPosition);
+            cursorPosition--;
+          }
+        } else if (data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) <= 126) {
+          // Regular printable character
+          currentInputLine = currentInputLine.slice(0, cursorPosition) + data + currentInputLine.slice(cursorPosition);
+          cursorPosition++;
+        }
+        
         // Default: forward data to server if socket open
         if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-          debugLog(`⚠️ DIAGNOSTIC: Sending data to server: "${sanitizedData}"`);
+          debugLog(`⚠️ DIAGNOSTIC: Sending to WebSocket - Key: ${keyName}, Bytes: "${bytes}"`);
           socketRef.current.send(data);
         } else if (data === '\r') {
           debugLog(`⚠️ DIAGNOSTIC: Socket not open, not sending carriage return`);
@@ -1908,6 +2017,77 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     secondaryFitAddon.current = new FitAddon();
     secondaryTerm.current.loadAddon(secondaryFitAddon.current);
     
+    // Track current input line for autocomplete (secondary)
+    let secondaryCurrentInputLine = '';
+    let secondaryCursorPosition = 0;
+    
+    // Attach custom key handler for special keys (secondary)
+    debugLog('[AblyCLITerminal] Setting up custom key handler for secondary terminal');
+    secondaryTerm.current.attachCustomKeyEventHandler((event: KeyboardEvent): boolean => {
+      // Only handle special keys when connected and session is active
+      if (!isSecondarySessionActive || !secondarySocketRef.current || secondarySocketRef.current.readyState !== WebSocket.OPEN) {
+        return true; // Let xterm handle it normally
+      }
+      
+      debugLog(`[AblyCLITerminal] [Secondary] KeyboardEvent - key: "${event.key}", code: "${event.code}", ctrl: ${event.ctrlKey}`);
+      
+      // Handle TAB for autocomplete
+      if (event.key === 'Tab' && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        debugLog(`[AblyCLITerminal] [Secondary] TAB intercepted, sending special message for autocomplete`);
+        
+        secondarySocketRef.current.send(JSON.stringify({
+          type: 'readline-control',
+          action: 'complete',
+          line: secondaryCurrentInputLine,
+          cursor: secondaryCursorPosition
+        }));
+        
+        return false; // Prevent default handling
+      }
+      
+      // Handle UP arrow for history
+      if (event.key === 'ArrowUp' && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        debugLog(`[AblyCLITerminal] [Secondary] UP arrow intercepted, sending special message for history`);
+        
+        secondarySocketRef.current.send(JSON.stringify({
+          type: 'readline-control',
+          action: 'history-up'
+        }));
+        
+        return false; // Prevent default handling
+      }
+      
+      // Handle DOWN arrow for history
+      if (event.key === 'ArrowDown' && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        debugLog(`[AblyCLITerminal] [Secondary] DOWN arrow intercepted, sending special message for history`);
+        
+        secondarySocketRef.current.send(JSON.stringify({
+          type: 'readline-control',
+          action: 'history-down'
+        }));
+        
+        return false; // Prevent default handling
+      }
+      
+      // Handle Ctrl+R for history search
+      if (event.key === 'r' && event.ctrlKey && !event.altKey && !event.shiftKey) {
+        event.preventDefault();
+        debugLog(`[AblyCLITerminal] [Secondary] Ctrl+R intercepted, sending special message for history search`);
+        
+        secondarySocketRef.current.send(JSON.stringify({
+          type: 'readline-control',
+          action: 'history-search'
+        }));
+        
+        return false; // Prevent default handling
+      }
+      
+      return true; // Let other keys pass through normally
+    });
+    
     // Handle data input in secondary terminal
     secondaryTerm.current.onData((data: string) => {
       // Special handling for Enter key
@@ -1945,6 +2125,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         }
 
         // Handle other special cases like primary terminal if needed
+      }
+      
+      // Track input line for autocomplete (simple tracking - reset on Enter)
+      if (data === '\r') {
+        secondaryCurrentInputLine = '';
+        secondaryCursorPosition = 0;
+      } else if (data === '\x7f') { // Backspace
+        if (secondaryCursorPosition > 0) {
+          secondaryCurrentInputLine = secondaryCurrentInputLine.slice(0, secondaryCursorPosition - 1) + secondaryCurrentInputLine.slice(secondaryCursorPosition);
+          secondaryCursorPosition--;
+        }
+      } else if (data.length === 1 && data.charCodeAt(0) >= 32 && data.charCodeAt(0) <= 126) {
+        // Regular printable character
+        secondaryCurrentInputLine = secondaryCurrentInputLine.slice(0, secondaryCursorPosition) + data + secondaryCurrentInputLine.slice(secondaryCursorPosition);
+        secondaryCursorPosition++;
       }
 
       // Default: forward data to server if socket open

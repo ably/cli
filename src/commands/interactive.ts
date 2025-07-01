@@ -157,6 +157,17 @@ export default class Interactive extends Command {
   }
 
   private setupReadline() {
+    // Debug terminal capabilities
+    if (process.env.ABLY_DEBUG_KEYS === 'true') {
+      console.error('[DEBUG] Terminal capabilities:');
+      console.error(`  - process.stdin.isTTY: ${process.stdin.isTTY}`);
+      console.error(`  - process.stdout.isTTY: ${process.stdout.isTTY}`);
+      console.error(`  - TERM env: ${process.env.TERM}`);
+      console.error(`  - COLORTERM env: ${process.env.COLORTERM}`);
+      console.error(`  - terminal mode: ${process.stdin.isTTY ? 'TTY' : 'pipe'}`);
+      console.error(`  - setRawMode available: ${typeof (process.stdin as any).setRawMode === 'function'}`);
+    }
+    
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -461,6 +472,11 @@ export default class Interactive extends Command {
   }
 
   private completer(line: string, callback?: (err: Error | null, result: [string[], string]) => void): [string[], string] | void {
+    // Debug logging
+    if (process.env.ABLY_DEBUG_KEYS === 'true') {
+      console.error(`[DEBUG] Completer called with line: "${line}"`);
+    }
+    
     // Don't provide completions during history search
     if (this.historySearch.active) {
       const emptyResult: [string[], string] = [[], line];
@@ -474,6 +490,11 @@ export default class Interactive extends Command {
     
     // Support both sync and async patterns
     const result = this.getCompletions(line);
+    
+    // Debug logging
+    if (process.env.ABLY_DEBUG_KEYS === 'true') {
+      console.error(`[DEBUG] Completer returning:`, result);
+    }
     
     if (callback) {
       // Async mode - used by readline for custom display
@@ -805,6 +826,20 @@ export default class Interactive extends Command {
       // Note: We don't call setRawMode(true) here because readline manages it
       // The keypress event handler will still work
       process.stdin.on('keypress', (str, key) => {
+        // Debug logging for all keypresses
+        if (process.env.ABLY_DEBUG_KEYS === 'true') {
+          const keyInfo = key ? {
+            name: key.name,
+            ctrl: key.ctrl,
+            meta: key.meta,
+            shift: key.shift,
+            sequence: key.sequence ? Array.from(key.sequence).map(c => 
+              `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`
+            ).join('') : undefined
+          } : null;
+          console.error(`[DEBUG] Keypress event - str: "${str}", key:`, JSON.stringify(keyInfo));
+        }
+        
         if (!key) return;
         
         // Ctrl+R: Start or cycle through history search
