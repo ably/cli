@@ -209,7 +209,7 @@ describe("CLI Help", function() {
         (help as any).configManager = configManagerStub;
 
         // Enable anonymous/restricted mode
-        process.env.ABLY_RESTRICTED_MODE = "true";
+        process.env.ABLY_ANONYMOUS_USER_MODE = "true";
 
         // Simulate no --help flag in argv
         process.argv = ["node", "ably"];
@@ -228,7 +228,7 @@ describe("CLI Help", function() {
         expect(output).to.not.include("View live channel events: ably channels logs");
 
         // Clean up
-        delete process.env.ABLY_RESTRICTED_MODE;
+        delete process.env.ABLY_ANONYMOUS_USER_MODE;
       });
 
       it("should show login prompt in simplified view when not authenticated", async function() {

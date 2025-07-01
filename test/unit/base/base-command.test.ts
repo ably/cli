@@ -134,7 +134,7 @@ describe("AblyBaseCommand", function() {
 
     it("should throw error when in authenticated web CLI mode and command is restricted", function() {
       command.testIsWebCliMode = true;
-      process.env.ABLY_RESTRICTED_MODE = "false";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "false";
       // Mock command ID to be a restricted command
       Object.defineProperty(command, "id", { value: "accounts:login", configurable: true });
 
@@ -143,7 +143,7 @@ describe("AblyBaseCommand", function() {
 
     it("should not throw error when in authenticated web CLI mode but command is allowed", function() {
       command.testIsWebCliMode = true;
-      process.env.ABLY_RESTRICTED_MODE = "false";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "false";
       // Mock command ID to be an allowed command
       Object.defineProperty(command, "id", { value: "channels:publish", configurable: true });
 
@@ -152,7 +152,7 @@ describe("AblyBaseCommand", function() {
 
     it("should throw error for anonymous-restricted commands in anonymous mode", function() {
       command.testIsWebCliMode = true;
-      process.env.ABLY_RESTRICTED_MODE = "true";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "true";
       
       // Test various anonymous-restricted commands
       const testCases = [
@@ -175,7 +175,7 @@ describe("AblyBaseCommand", function() {
 
     it("should allow non-restricted commands in anonymous mode", function() {
       command.testIsWebCliMode = true;
-      process.env.ABLY_RESTRICTED_MODE = "true";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "true";
       
       // Test commands that should be allowed
       const allowedCommands = ["channels:publish", "rooms:get", "spaces:get", "help"];
@@ -188,7 +188,7 @@ describe("AblyBaseCommand", function() {
 
     it("should throw error for base restricted commands in anonymous mode", function() {
       command.testIsWebCliMode = true;
-      process.env.ABLY_RESTRICTED_MODE = "true";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "true";
       
       // Test base restricted commands with their specific error messages
       // Note: accounts:login is caught by the anonymous restrictions first since it starts with "accounts"
@@ -213,7 +213,7 @@ describe("AblyBaseCommand", function() {
 
     it("should allow auth:keys commands when authenticated in web CLI mode", function() {
       command.testIsWebCliMode = true;
-      process.env.ABLY_RESTRICTED_MODE = "false"; // Authenticated
+      process.env.ABLY_ANONYMOUS_USER_MODE = "false"; // Authenticated
       
       // These should be allowed when authenticated
       const allowedCommands = ["auth:keys:list", "auth:keys:create", "auth:keys:revoke"];
@@ -306,7 +306,7 @@ describe("AblyBaseCommand", function() {
 
     beforeEach(function() {
       originalWebCliMode = process.env.ABLY_WEB_CLI_MODE;
-      originalRestrictedMode = process.env.ABLY_RESTRICTED_MODE;
+      originalRestrictedMode = process.env.ABLY_ANONYMOUS_USER_MODE;
     });
 
     afterEach(function() {
@@ -317,33 +317,33 @@ describe("AblyBaseCommand", function() {
       }
       
       if (originalRestrictedMode === undefined) {
-        delete process.env.ABLY_RESTRICTED_MODE;
+        delete process.env.ABLY_ANONYMOUS_USER_MODE;
       } else {
-        process.env.ABLY_RESTRICTED_MODE = originalRestrictedMode;
+        process.env.ABLY_ANONYMOUS_USER_MODE = originalRestrictedMode;
       }
     });
 
-    it("should detect anonymous mode when web CLI mode and ABLY_RESTRICTED_MODE is true", function() {
+    it("should detect anonymous mode when web CLI mode and ABLY_ANONYMOUS_USER_MODE is true", function() {
       process.env.ABLY_WEB_CLI_MODE = "true";
-      process.env.ABLY_RESTRICTED_MODE = "true";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "true";
 
       const cmd = new TestCommand([], {} as Config);
       cmd.testConfigManager = configManagerStub;
       expect(cmd.testIsAnonymousWebMode()).to.be.true;
     });
 
-    it("should not detect anonymous mode when ABLY_RESTRICTED_MODE is not set", function() {
+    it("should not detect anonymous mode when ABLY_ANONYMOUS_USER_MODE is not set", function() {
       process.env.ABLY_WEB_CLI_MODE = "true";
-      delete process.env.ABLY_RESTRICTED_MODE;
+      delete process.env.ABLY_ANONYMOUS_USER_MODE;
 
       const cmd = new TestCommand([], {} as Config);
       cmd.testConfigManager = configManagerStub;
       expect(cmd.testIsAnonymousWebMode()).to.be.false;
     });
 
-    it("should not detect anonymous mode when ABLY_RESTRICTED_MODE is false", function() {
+    it("should not detect anonymous mode when ABLY_ANONYMOUS_USER_MODE is false", function() {
       process.env.ABLY_WEB_CLI_MODE = "true";
-      process.env.ABLY_RESTRICTED_MODE = "false";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "false";
 
       const cmd = new TestCommand([], {} as Config);
       cmd.testConfigManager = configManagerStub;
@@ -352,7 +352,7 @@ describe("AblyBaseCommand", function() {
 
     it("should not detect anonymous mode when not in web CLI mode", function() {
       delete process.env.ABLY_WEB_CLI_MODE;
-      process.env.ABLY_RESTRICTED_MODE = "true";
+      process.env.ABLY_ANONYMOUS_USER_MODE = "true";
 
       const cmd = new TestCommand([], {} as Config);
       cmd.testConfigManager = configManagerStub;

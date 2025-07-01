@@ -2,6 +2,8 @@ import { Hook } from '@oclif/core';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import pkg from "fast-levenshtein";
+import { runInquirerWithReadlineRestore } from '../../utils/readline-helper.js';
+import * as readline from 'node:readline';
 const { get: levenshteinDistance } = pkg;
 
 /**
@@ -41,6 +43,7 @@ const findClosestCommand = (target: string, possibilities: string[]): string => 
  */
 const hook: Hook<'command_not_found'> = async function (opts) {
   const { id, argv, config } = opts;
+  const isInteractiveMode = process.env.ABLY_INTERACTIVE_MODE === 'true';
 
   // Get all command IDs to compare against
   const commandIDs = config.commandIDs;
@@ -85,7 +88,12 @@ const hook: Hook<'command_not_found'> = async function (opts) {
     const allArgs = (argv || []).length > 0 ? (argv || []) : argumentsFromId;
 
     // Warn about command not found and suggest alternative with colored command names
-    this.warn(`${chalk.cyan(displayOriginal.replaceAll(':', ' '))} is not an ably command.`);
+    const warningMessage = `${chalk.cyan(displayOriginal.replaceAll(':', ' '))} is not an ably command.`;
+    if (isInteractiveMode) {
+      console.log(chalk.yellow(`Warning: ${warningMessage}`));
+    } else {
+      this.warn(warningMessage);
+    }
 
     // Skip confirmation in tests or non-interactive mode
     const skipConfirmation = process.env.SKIP_CONFIRMATION === 'true' || process.env.ABLY_CLI_NON_INTERACTIVE === 'true';
@@ -98,13 +106,18 @@ const hook: Hook<'command_not_found'> = async function (opts) {
       // Important: We still proceed to *try* running the command, but tests assert it *fails* correctly
       confirmed = true;
     } else {
-      // Prompt user for confirmation in normal usage
-      const result = await inquirer.prompt([{
-        name: 'confirmed',
-        type: 'confirm',
-        message: `Did you mean ${chalk.green(displaySuggestion)}?`,
-        default: true
-      }]);
+      // In interactive mode, we need to handle readline carefully
+      const interactiveReadline = isInteractiveMode ? (globalThis as Record<string, unknown>).__ablyInteractiveReadline : null;
+      
+      const result = await runInquirerWithReadlineRestore(
+        async () => inquirer.prompt([{
+          name: 'confirmed',
+          type: 'confirm',
+          message: `Did you mean ${chalk.green(displaySuggestion)}?`,
+          default: true
+        }]),
+        interactiveReadline as readline.Interface | null
+      );
       confirmed = result.confirmed;
     }
 
@@ -139,25 +152,30 @@ const hook: Hook<'command_not_found'> = async function (opts) {
                 const errorMsg = err.message || '';
 
                 // Show command help/usage info without duplicating error
-                this.log('\nUSAGE');
-                this.log(`  $ ${config.bin} ${formattedUsage}`);
+                const logFn = isInteractiveMode ? console.log : this.log.bind(this);
+                const binPrefix = isInteractiveMode ? '' : `${config.bin} `;
+                
+                logFn('\nUSAGE');
+                logFn(`  $ ${binPrefix}${formattedUsage}`);
 
                 if (commandHelp.args && Object.keys(commandHelp.args).length > 0) {
-                  this.log('\nARGUMENTS');
+                  logFn('\nARGUMENTS');
                   for (const [name, arg] of Object.entries(commandHelp.args)) {
-                    this.log(`  ${name}  ${arg.description || ''}`);
+                    logFn(`  ${name}  ${arg.description || ''}`);
                   }
                 }
 
                 // Add a line of vertical space
-                this.log('');
+                logFn('');
 
                 // Show the full help command with color
-                const fullHelpCommand = `${config.bin} ${displaySuggestion} --help`;
-                this.log(`${chalk.dim('See more help with:')} ${chalk.cyan(fullHelpCommand)}`);
+                const fullHelpCommand = isInteractiveMode 
+                  ? `${displaySuggestion} --help`
+                  : `${config.bin} ${displaySuggestion} --help`;
+                logFn(`${chalk.dim('See more help with:')} ${chalk.cyan(fullHelpCommand)}`);
 
                 // Add a line of vertical space
-                this.log('');
+                logFn('');
 
                 // Show the error message at the end, without the "See more help" line
                 const errorLines = errorMsg.split('\n');
@@ -168,7 +186,15 @@ const hook: Hook<'command_not_found'> = async function (opts) {
                 const customError = filteredErrorLines.join('\n');
 
                 // Show the styled error message
-                this.error(customError, { exit: exitCode });
+                if (isInteractiveMode) {
+                  // In interactive mode, don't exit - just throw the error
+                  // The interactive command will display it
+                  const error = new Error(customError);
+                  (error as Error & {oclif?: {exit: number}}).oclif = { exit: exitCode };
+                  throw error;
+                } else {
+                  this.error(customError, { exit: exitCode });
+                }
               }
             }
           } catch {
@@ -183,24 +209,70 @@ const hook: Hook<'command_not_found'> = async function (opts) {
           const lines = err.message.split('\n');
           const filteredLines = lines.map((line: string) => {
             if (line.includes('See more help with --help')) {
-              return `See more help with: ${config.bin} ${displaySuggestion} --help`;
+              return isInteractiveMode 
+                ? `See more help with: ${displaySuggestion} --help`
+                : `See more help with: ${config.bin} ${displaySuggestion} --help`;
             }
             return line;
           });
-          this.error(filteredLines.join('\n'), { exit: exitCode });
+          if (isInteractiveMode) {
+            const error = new Error(filteredLines.join('\n'));
+            (error as Error & {oclif?: {exit: number}}).oclif = { exit: exitCode };
+            throw error;
+          } else {
+            this.error(filteredLines.join('\n'), { exit: exitCode });
+          }
         } else {
           // Original error message
-          this.error(err.message || 'Unknown error', { exit: exitCode });
+          if (isInteractiveMode) {
+            const error = new Error(err.message || 'Unknown error');
+            (error as Error & {oclif?: {exit: number}}).oclif = { exit: exitCode };
+            throw error;
+          } else {
+            this.error(err.message || 'Unknown error', { exit: exitCode });
+          }
         }
 
         // This won't be reached due to this.error/this.exit, but TypeScript needs it
         return;
       }
     }
+    
+    // User declined the suggestion - check if we should show topic commands
+    if (suggestion) {
+      // Extract the topic from the suggestion (e.g., "accounts:current" -> "accounts")
+      const topicParts = suggestion.split(':');
+      if (topicParts.length > 1) {
+        const topicCommand = topicParts[0];
+        const topicCmd = config.findCommand(topicCommand);
+        
+        if (topicCmd) {
+          // This is a topic command - run it to show available subcommands
+          try {
+            await config.runCommand(topicCommand, []);
+            return;
+          } catch {
+            // If running the topic command fails, fall through to show generic error
+          }
+        }
+      }
+    }
   } else {
     // No suggestion found
     const displayCommand = id.replaceAll(':', ' ');
-    this.error(`Command ${displayCommand} not found.\nRun ${config.bin} --help for a list of available commands.`, { exit: 127 });
+    const errorMessage = isInteractiveMode 
+      ? `Command ${displayCommand} not found. Run 'help' for a list of available commands.`
+      : `Command ${displayCommand} not found.\nRun ${config.bin} --help for a list of available commands.`;
+    
+    if (isInteractiveMode) {
+      // In interactive mode, just throw the error without logging
+      // The interactive command will handle displaying it
+      const error = new Error(errorMessage);
+      (error as Error & {isCommandNotFound?: boolean}).isCommandNotFound = true;
+      throw error;
+    } else {
+      this.error(errorMessage, { exit: 127 });
+    }
   }
 };
 

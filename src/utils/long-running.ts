@@ -19,10 +19,12 @@ export async function waitUntilInterruptedOrTimeout(
       process.setMaxListeners(50);
     }
   }
-
+  
   return new Promise<ExitReason>((resolve) => {
     const handleExit = (reason: ExitReason): void => {
       if (timeoutId) clearTimeout(timeoutId);
+      
+      // Remove signal handlers
       process.removeListener("SIGINT", sigintHandler);
       process.removeListener("SIGTERM", sigtermHandler);
       
@@ -56,6 +58,7 @@ export async function waitUntilInterruptedOrTimeout(
       }, effectiveDuration * 1000);
     }
 
+    // Install signal handlers
     const sigintHandler = (): void => handleExit("signal");
     const sigtermHandler = (): void => handleExit("signal");
 

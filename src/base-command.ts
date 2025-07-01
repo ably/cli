@@ -1,4 +1,5 @@
-import { Command, Flags } from "@oclif/core";
+import { Flags } from "@oclif/core";
+import { InteractiveBaseCommand } from "./interactive-base-command.js";
 import * as Ably from "ably";
 import chalk from "chalk";
 import colorJson from "color-json";
@@ -60,6 +61,15 @@ export const WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS = [
   "queues*",
 ];
 
+/* Commands not suitable for interactive mode */
+export const INTERACTIVE_UNSUITABLE_COMMANDS = [
+  "autocomplete", // Autocomplete setup is not needed in interactive mode
+  "help", // Help is handled specially in interactive mode to avoid duplicates
+  "config", // Config editing is not suitable for interactive mode
+  "version", // Version is shown at startup and available via --version
+  "mcp", // MCP server functionality is not suitable for interactive mode
+];
+
 // List of commands that should not show account/app info
 const SKIP_AUTH_INFO_COMMANDS = [
   "accounts:list",
@@ -74,7 +84,7 @@ const SKIP_AUTH_INFO_COMMANDS = [
   "help:status",
 ];
 
-export abstract class AblyBaseCommand extends Command {
+export abstract class AblyBaseCommand extends InteractiveBaseCommand {
   protected _authInfoShown = false;
   
   // Add static flags that will be available to all commands
@@ -160,8 +170,8 @@ export abstract class AblyBaseCommand extends Command {
   }
 
   protected isAnonymousWebMode(): boolean {
-    // In web CLI mode, the server sets ABLY_RESTRICTED_MODE when no access token is available
-    return this.isWebCliMode && process.env.ABLY_RESTRICTED_MODE === 'true';
+    // In web CLI mode, the server sets ABLY_ANONYMOUS_USER_MODE when no access token is available
+    return this.isWebCliMode && process.env.ABLY_ANONYMOUS_USER_MODE === 'true';
   }
 
   /**

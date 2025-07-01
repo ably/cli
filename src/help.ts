@@ -12,12 +12,14 @@ export default class CustomHelp extends Help {
 
   protected webCliMode: boolean;
   protected configManager: ConfigManager;
+  protected interactiveMode: boolean;
   // Flag to track if we're already showing root help to prevent duplication
   protected isShowingRootHelp: boolean = false;
 
   constructor(config: Config, opts?: Record<string, unknown>) {
     super(config, opts);
     this.webCliMode = process.env.ABLY_WEB_CLI_MODE === "true";
+    this.interactiveMode = process.env.ABLY_INTERACTIVE_MODE === "true";
     this.configManager = new ConfigManager();
   }
 
@@ -25,9 +27,31 @@ export default class CustomHelp extends Help {
   formatHelpOutput(output: string): string {
     // Check if we're generating readme (passed as an option from oclif)
     if (this.opts?.stripAnsi || process.env.GENERATING_README === "true") {
-      return stripAnsi(output);
+      output = stripAnsi(output);
     }
+    
+    // Strip "ably" prefix when in interactive mode
+    if (this.interactiveMode) {
+      output = this.stripAblyPrefix(output);
+    }
+    
     return output;
+  }
+  
+  // Helper to strip "ably" prefix from command examples in interactive mode
+  private stripAblyPrefix(text: string): string {
+    if (!this.interactiveMode) return text;
+    
+    // Replace "$ ably " with "$ " in examples
+    text = text.replaceAll('$ ably ', '$ ');
+    
+    // Replace "ably " at the beginning of lines (for usage examples)
+    text = text.replaceAll(/^ably /gm, '');
+    
+    // Replace "  ably " with "  " (for indented examples)
+    text = text.replaceAll(/^(\s+)ably /gm, '$1');
+    
+    return text;
   }
 
   // Helper to ensure no trailing whitespace
@@ -35,8 +59,96 @@ export default class CustomHelp extends Help {
     // Remove all trailing newlines completely
     return text.replace(/\n+$/, "");
   }
+  
+  // Helper to format COMMANDS section with spaces instead of colons
+  private formatCommandsSection(text: string): string {
+    // Find the COMMANDS section
+    const commandsSectionRegex = /^COMMANDS\s*$/m;
+    const commandsMatch = text.match(commandsSectionRegex);
+    
+    if (!commandsMatch || commandsMatch.index === undefined) {
+      return text;
+    }
+    
+    // Find where the COMMANDS section starts and ends
+    const commandsStart = commandsMatch.index + commandsMatch[0].length;
+    const nextSectionMatch = text.slice(commandsStart).match(/^[A-Z]+\s*$/m);
+    const commandsEnd = nextSectionMatch ? commandsStart + nextSectionMatch.index! : text.length;
+    
+    // Extract the commands section
+    const beforeCommands = text.slice(0, commandsStart);
+    const commandsSection = text.slice(commandsStart, commandsEnd);
+    const afterCommands = text.slice(commandsEnd);
+    
+    // Process each command line in the section
+    const processedCommands = commandsSection.split('\n').map(line => {
+      // Match lines that look like "  command:subcommand  Description"
+      const match = line.match(/^(\s+)([a-z-]+(?::[a-z-]+)+)(\s+.*)$/);
+      if (match) {
+        const [, indent, commandId, rest] = match;
+        // Replace colons with spaces in the command ID
+        const formattedId = commandId.replaceAll(':', ' ');
+        return indent + formattedId + rest;
+      }
+      return line;
+    }).join('\n');
+    
+    return beforeCommands + processedCommands + afterCommands;
+  }
 
   // Override the display method to clean up trailing whitespace and exit cleanly
+  async showCommandHelp(command: Command.Loadable): Promise<void> {
+    // For topic commands, we need to add the COMMANDS section manually
+    const output = this.formatCommand(command);
+    const cleanedOutput = this.removeTrailingWhitespace(output);
+    console.log(this.formatHelpOutput(cleanedOutput));
+    
+    // Check if this is a topic command by looking for subcommands
+    const topicPrefix = `${command.id}:`;
+    const subcommands = this.config.commands.filter(cmd => 
+      cmd.id.startsWith(topicPrefix) && 
+      !cmd.hidden &&
+      !cmd.id.slice(topicPrefix.length).includes(':')
+    );
+    
+    if (subcommands.length > 0 && !output.includes('COMMANDS')) {
+      // This is a topic command without a COMMANDS section, add it
+      console.log('\nCOMMANDS');
+      
+      const commandsList = await Promise.all(
+        subcommands.map(async cmd => {
+          try {
+            const loaded = await cmd.load();
+            const formattedId = cmd.id.replaceAll(':', ' ');
+            const binPrefix = this.interactiveMode ? '' : `${this.config.bin} `;
+            return {
+              name: `${binPrefix}${formattedId}`,
+              description: loaded.description || ''
+            };
+          } catch {
+            return null;
+          }
+        })
+      );
+      
+      const validCommands = commandsList.filter(cmd => cmd !== null) as Array<{name: string; description: string}>;
+      
+      if (validCommands.length > 0) {
+        const maxLength = Math.max(...validCommands.map(cmd => cmd.name.length));
+        
+        validCommands.forEach(cmd => {
+          const paddedName = cmd.name.padEnd(maxLength + 2);
+          console.log(`  ${paddedName}${cmd.description}`);
+        });
+      }
+    }
+    
+    // Only exit if not in interactive mode
+    if (process.env.ABLY_INTERACTIVE_MODE !== 'true') {
+      process.exit(0);
+    }
+  }
+  
   async showHelp(argv: string[]): Promise<void> {
     // Get the help subject which is the last argument that is not a flag
     if (argv.length === 0) {
@@ -60,7 +172,11 @@ export default class CustomHelp extends Help {
     const cleanedOutput = this.removeTrailingWhitespace(output);
     // Apply stripAnsi when needed
     console.log(this.formatHelpOutput(cleanedOutput));
-    process.exit(0);
+    
+    // Only exit if not in interactive mode
+    if (process.env.ABLY_INTERACTIVE_MODE !== 'true') {
+      process.exit(0);
+    }
   }
 
   // Override for root help as well
@@ -70,7 +186,11 @@ export default class CustomHelp extends Help {
     const cleanedOutput = this.removeTrailingWhitespace(output);
     // Apply stripAnsi when needed
     console.log(this.formatHelpOutput(cleanedOutput));
-    process.exit(0);
+    
+    // Only exit if not in interactive mode
+    if (process.env.ABLY_INTERACTIVE_MODE !== 'true') {
+      process.exit(0);
+    }
   }
 
   formatRoot(): string {
@@ -82,9 +202,9 @@ export default class CustomHelp extends Help {
     const isWebCliHelp = args.includes("web-cli") || args.includes("webcli");
 
     // Show web CLI help if:
-    // 1. We're in web CLI mode and not showing full help
+    // 1. We're in web CLI mode and not showing full help AND not in interactive mode
     // 2. OR explicitly requesting web-cli help
-    if ((this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp) || isWebCliHelp) {
+    if ((this.webCliMode && !args.includes("--help") && !args.includes("-h") && !isWebCliHelp && !this.interactiveMode) || isWebCliHelp) {
       output = this.formatWebCliRoot();
     } else {
       output = this.formatStandardRoot();
@@ -106,14 +226,14 @@ export default class CustomHelp extends Help {
 
     // 2. Title & Usage
     const titleText = this.webCliMode 
-      ? "ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API"
-      : "ably.com CLI for Pub/Sub, Chat, Spaces and the Control API";
+      ? "ably.com browser-based CLI for Pub/Sub, Chat and Spaces"
+      : "ably.com CLI for Pub/Sub, Chat and Spaces";
     
     const headerLines = [
       chalk.bold(titleText),
       "",
       `${chalk.bold("USAGE")}`,
-      `  $ ${config.bin} [COMMAND]`,
+      `  $ ${this.interactiveMode ? '' : config.bin + ' '}[COMMAND]`,
       "",
       chalk.bold("COMMANDS"), // Use the desired single heading
     ];
@@ -176,12 +296,13 @@ export default class CustomHelp extends Help {
         process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken();
       const apiKey = process.env.ABLY_API_KEY;
       if (!accessToken && !apiKey) {
+        const cmdPrefix = this.interactiveMode ? '' : 'ably ';
         lines.push(
           "",
           chalk.yellow(
             "You are not logged in. Run the following command to log in:",
           ),
-          chalk.cyan("  $ ably accounts login"),
+          chalk.cyan(`  $ ${cmdPrefix}accounts login`),
         );
       }
     }
@@ -197,46 +318,48 @@ export default class CustomHelp extends Help {
     }
     lines.push(
       chalk.bold(
-        "ably.com browser-based CLI for Pub/Sub, Chat, Spaces and the Control API",
+        "ably.com browser-based CLI for Pub/Sub, Chat and Spaces",
       ),
       "",
     );
 
     // 3. Show the web CLI specific instructions
-    const webCliCommands = [
-      `${chalk.bold("COMMON COMMANDS")}`,
-      `  ${chalk.cyan("View Ably commands:")} ably --help`,
-      `  ${chalk.cyan("Publish a message:")} ably channels publish [channel] [message]`,
-      `  ${chalk.cyan("Subscribe to a channel:")} ably channels subscribe [channel]`,
-    ];
+    const cmdPrefix = this.interactiveMode ? '' : 'ably ';
+    lines.push(`${chalk.bold("COMMON COMMANDS")}`);
     
-    // Only show channels:logs for authenticated users
-    const isAnonymousMode = process.env.ABLY_RESTRICTED_MODE === "true";
-    if (!isAnonymousMode) {
-      webCliCommands.push(`  ${chalk.cyan("View live channel events:")} ably channels logs`);
-    }
+    const isAnonymousMode = process.env.ABLY_ANONYMOUS_USER_MODE === "true";
+    const commands = [];
     
-    webCliCommands.push(
-      `  ${chalk.cyan("Enter a collaborative space:")} ably spaces enter [space]`,
-      `  ${chalk.cyan("Join a chat room:")} ably rooms get [room]`,
+    // Basic commands always available
+    commands.push(
+      [`${cmdPrefix}channels publish [channel] [message]`, 'Publish a message'],
+      [`${cmdPrefix}channels subscribe [channel]`, 'Subscribe to a channel']
     );
     
-    lines.push(...webCliCommands);
-
-    // 4. Check if login recommendation is needed
-    const accessToken =
-      process.env.ABLY_ACCESS_TOKEN || this.configManager.getAccessToken();
-    const apiKey = process.env.ABLY_API_KEY;
-
-    if (!accessToken && !apiKey) {
-      lines.push(
-        "",
-        chalk.yellow(
-          "You are not logged in. Run the following command to log in:",
-        ),
-        chalk.cyan("  $ ably login"),
-      );
+    // Commands available only for authenticated users
+    if (!isAnonymousMode) {
+      commands.push([`${cmdPrefix}channels logs`, 'View live channel events']);
     }
+    
+    commands.push(
+      [`${cmdPrefix}spaces enter [space]`, 'Enter a collaborative space'],
+      [`${cmdPrefix}rooms messages send [room] [message]`, 'Send a message to a chat room']
+    );
+    
+    // Calculate padding for alignment
+    const maxCmdLength = Math.max(...commands.map(([cmd]) => cmd.length));
+    
+    // Display commands with proper alignment
+    commands.forEach(([cmd, desc]) => {
+      const paddedCmd = cmd.padEnd(maxCmdLength + 2);
+      lines.push(`  ${chalk.cyan(paddedCmd)}${desc}`);
+    });
+    
+    // Always show help instruction
+    lines.push(
+      '',
+      `Type ${this.interactiveMode ? chalk.cyan('help') : chalk.cyan(`${cmdPrefix}help`)} to see the complete list of commands.`
+    );
 
     // Join lines and return
     return lines.join("\n");
@@ -253,6 +376,37 @@ export default class CustomHelp extends Help {
       this.isShowingRootHelp = false;
       // Use super's formatCommand
       output = super.formatCommand(command);
+      
+      // In interactive mode, remove the 'ably' prefix from usage examples
+      if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
+        // Replace '$ ably ' with '$ ' in usage and examples
+        output = output.replaceAll('$ ably ', '$ ');
+      }
+      
+      // Fix COMMANDS section formatting - replace colons with spaces
+      output = this.formatCommandsSection(output);
+      
+      // For topic commands, add COMMANDS section if it's missing
+      const topicPrefix = `${command.id}:`;
+      const subcommands = this.config.commands.filter(cmd => 
+        cmd.id.startsWith(topicPrefix) && 
+        !cmd.hidden &&
+        !cmd.id.slice(topicPrefix.length).includes(':')
+      );
+      
+      if (subcommands.length > 0 && !output.includes('COMMANDS')) {
+        // Add COMMANDS section for topic commands
+        const commandsLines: string[] = ['\n\nCOMMANDS'];
+        
+        subcommands.forEach(cmd => {
+          const formattedId = cmd.id.replaceAll(':', ' ');
+          const binPrefix = this.interactiveMode ? '' : `${this.config.bin} `;
+          const paddedId = `${binPrefix}${formattedId}`.padEnd(30);
+          commandsLines.push(`  ${paddedId}${cmd.description || ''}`);
+        });
+        
+        output += commandsLines.join('\n');
+      }
 
       // Modify based on web CLI mode using the imported list
       if (this.webCliMode) {

@@ -36,6 +36,7 @@ vi.mock('@xterm/xterm', () => ({
     focus: vi.fn(),
     write: vi.fn(),
     writeln: vi.fn(),
+    attachCustomKeyEventHandler: vi.fn(),
   })),
 }));
 
