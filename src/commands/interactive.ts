@@ -98,13 +98,21 @@ export default class Interactive extends Command {
       }
       
       // Install signal handlers to ensure cleanup
-      const signalHandler = () => {
-        this.cleanup();
-        process.exit(130); // Standard SIGINT exit code
+      const signalHandler = (signal: string) => {
+        if (this.runningCommand) {
+          // If a command is running, cleanup without showing goodbye
+          // The wrapper will restart and show a fresh prompt
+          this.cleanup(false);
+          process.exit(signal === 'SIGINT' ? 130 : 143);
+        } else {
+          // Only show goodbye if not running a command
+          this.cleanup(true);
+          process.exit(signal === 'SIGINT' ? 130 : 143);
+        }
       };
       
-      process.on('SIGINT', signalHandler);
-      process.on('SIGTERM', signalHandler);
+      process.on('SIGINT', () => signalHandler('SIGINT'));
+      process.on('SIGTERM', () => signalHandler('SIGTERM'));
       
       // Set environment variable to indicate we're in interactive mode
       process.env.ABLY_INTERACTIVE_MODE = 'true';
@@ -249,9 +257,8 @@ export default class Interactive extends Command {
     // Handle SIGINT events on readline
     this.rl.on('SIGINT', () => {
       if (this.runningCommand) {
-        // If a command is running, send SIGINT to the process
-        // This allows the command to handle Ctrl+C properly
-        process.kill(process.pid, 'SIGINT');
+        // If a command is running, don't handle it here
+        // The process-level SIGINT handler will take care of it
         return;
       }
       
@@ -451,7 +458,7 @@ export default class Interactive extends Command {
           // Try to recover by recreating the readline interface
           if ((error as NodeJS.ErrnoException).code === 'EIO') {
             console.error(chalk.yellow('\nTerminal state corrupted. Please restart the interactive shell.'));
-            this.cleanup();
+            this.cleanup(false);
             process.exit(1);
           }
         }
@@ -548,7 +555,7 @@ export default class Interactive extends Command {
     return args;
   }
 
-  private cleanup() {
+  private cleanup(showGoodbye = true) {
     // Ensure terminal is restored to normal mode
     if (process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & {setRawMode?: (mode: boolean) => void}).setRawMode === 'function') {
       try {
@@ -557,7 +564,9 @@ export default class Interactive extends Command {
         // Ignore errors during cleanup
       }
     }
-    console.log('\nGoodbye!');
+    if (showGoodbye) {
+      console.log('\nGoodbye!');
+    }
   }
 
   private completer(line: string, callback?: (err: Error | null, result: [string[], string]) => void): [string[], string] | void {
