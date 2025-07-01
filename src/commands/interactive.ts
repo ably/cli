@@ -21,7 +21,7 @@ interface HistorySearchState {
 }
 
 export default class Interactive extends Command {
-  static description = 'Launch interactive Ably shell (experimental)';
+  static description = 'Launch interactive Ably shell (ALPHA - experimental feature)';
   static hidden = true; // Hide from help until stable
   static EXIT_CODE_USER_EXIT = 42; // Special code for 'exit' command
 
@@ -118,7 +118,7 @@ export default class Interactive extends Command {
       // Display logo
       displayLogo(console.log);
       console.log(`   Version: ${this.config.version}\n`);
-      console.log('Welcome to the Ably CLI interactive shell!');
+      console.log('Welcome to the Ably CLI interactive shell! (ALPHA VERSION)');
       console.log('Type "help" to see available commands or "exit" to quit.');
       if (this.isWrapperMode) {
         console.log('Press Ctrl+C to interrupt running commands.');
