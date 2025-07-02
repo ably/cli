@@ -21,12 +21,21 @@ export async function waitUntilInterruptedOrTimeout(
   }
   
   return new Promise<ExitReason>((resolve) => {
+    let sigintHandler: (() => void) | undefined;
+    let sigtermHandler: (() => void) | undefined;
+    let resolved = false;
+    
     const handleExit = (reason: ExitReason): void => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      
       if (timeoutId) clearTimeout(timeoutId);
       
-      // Remove signal handlers
-      process.removeListener("SIGINT", sigintHandler);
-      process.removeListener("SIGTERM", sigtermHandler);
+      // Remove signal handlers if they were installed
+      if (sigintHandler) process.removeListener("SIGINT", sigintHandler);
+      if (sigtermHandler) process.removeListener("SIGTERM", sigtermHandler);
       
       // For timeout cases in CLI commands, exit immediately to prevent hanging
       // This is especially important for E2E tests and automated scenarios
@@ -59,8 +68,8 @@ export async function waitUntilInterruptedOrTimeout(
     }
 
     // Install signal handlers
-    const sigintHandler = (): void => handleExit("signal");
-    const sigtermHandler = (): void => handleExit("signal");
+    sigintHandler = (): void => handleExit("signal");
+    sigtermHandler = (): void => handleExit("signal");
 
     process.once("SIGINT", sigintHandler);
     process.once("SIGTERM", sigtermHandler);
