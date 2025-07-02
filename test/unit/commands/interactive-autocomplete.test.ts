@@ -271,7 +271,6 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         
         // Should NOT include these commands
         expect(commands).to.not.include('autocomplete');
-        expect(commands).to.not.include('help');
         expect(commands).to.not.include('config');
         expect(commands).to.not.include('version');
         expect(commands).to.not.include('mcp'); // MCP is not suitable for interactive mode
@@ -282,6 +281,7 @@ describe('Interactive Mode - Autocomplete & Command Filtering', () => {
         expect(commands).to.include('accounts');
         expect(commands).to.include('auth');
         expect(commands).to.include('exit'); // Special command
+        expect(commands).to.include('help'); // Help is now allowed in interactive mode
       });
 
       it('should not filter subcommands in normal mode', () => {

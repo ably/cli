@@ -247,7 +247,65 @@ const hook: Hook<'command_not_found'> = async function (opts) {
         const topicCmd = config.findCommand(topicCommand);
         
         if (topicCmd) {
-          // This is a topic command - run it to show available subcommands
+          // In interactive mode, directly output the topic commands
+          if (isInteractiveMode) {
+            try {
+              // Get all commands for this topic
+              const topicPrefix = `${topicCommand}:`;
+              const subcommands: Array<{id: string; description: string}> = [];
+              
+              for (const cmd of config.commands) {
+                if (cmd.id.startsWith(topicPrefix) && !cmd.hidden) {
+                  // Check if this is a direct child (no additional colons after the topic prefix)
+                  const remainingId = cmd.id.slice(topicPrefix.length);
+                  const isDirectChild = !remainingId.includes(':');
+                  
+                  if (isDirectChild) {
+                    try {
+                      const loadedCmd = await cmd.load();
+                      if (!loadedCmd.hidden) {
+                        subcommands.push({
+                          id: cmd.id.replaceAll(':', ' '),
+                          description: loadedCmd.description || ''
+                        });
+                      }
+                    } catch {
+                      // Skip commands that can't be loaded
+                    }
+                  }
+                }
+              }
+              
+              if (subcommands.length > 0) {
+                // Sort commands alphabetically
+                subcommands.sort((a, b) => a.id.localeCompare(b.id));
+                
+                // Display the topic commands
+                const logFn = console.log;
+                logFn(`Ably ${topicCommand} management commands:`);
+                logFn('');
+                
+                const maxLength = Math.max(...subcommands.map(cmd => cmd.id.length));
+                const prefix = '';
+                const prefixLength = prefix.length;
+                
+                for (const cmd of subcommands) {
+                  const paddedId = `${prefix}${cmd.id}`.padEnd(maxLength + prefixLength + 2);
+                  const description = cmd.description || '';
+                  logFn(`  ${chalk.cyan(paddedId)} - ${description}`);
+                }
+                
+                logFn('');
+                const helpCommand = `${topicCommand.replaceAll(':', ' ')} COMMAND --help`;
+                logFn(`Run \`${chalk.cyan(helpCommand)}\` for more information on a command.`);
+                return;
+              }
+            } catch {
+              // Fall through to running the command if direct output fails
+            }
+          }
+          
+          // For non-interactive mode, run the topic command
           try {
             await config.runCommand(topicCommand, []);
             return;

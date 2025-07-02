@@ -178,8 +178,9 @@ describe("Basic CLI E2E", function() {
         expect(result.exitCode).to.equal(0);
         expect(result.stdout).to.include("browser-based CLI");
         expect(result.stdout).to.include("COMMON COMMANDS");
-        expect(result.stdout).to.include("View Ably commands:");
-        expect(result.stdout).to.include("Publish a message:");
+        expect(result.stdout).to.include("Type ably help to see the complete list of commands");
+        expect(result.stdout).to.include("Publish a message");
+        expect(result.stdout).to.include("Subscribe to a channel");
         // Should NOT include the regular help commands section
         expect(result.stdout).not.to.include("accounts");
         expect(result.stdout).not.to.include("apps");

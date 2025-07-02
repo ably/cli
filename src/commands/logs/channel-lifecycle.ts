@@ -105,12 +105,20 @@ export default class LogsChannelLifecycle extends AblyBaseCommand {
       };
 
       // Handle process termination
-      process.on("SIGINT", () => {
-        this.log("\nSubscription ended");
-        cleanup();
-
-        process.exit(0); // Reinstated: Explicit exit on signal
-      });
+      if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
+        // In interactive mode, just ensure cleanup happens on exit
+        // Don't interfere with signal handling
+        process.on("exit", () => {
+          cleanup();
+        });
+      } else {
+        // Normal mode - handle SIGINT ourselves
+        process.on("SIGINT", () => {
+          this.log("\nSubscription ended");
+          cleanup();
+          process.exit(0);
+        });
+      }
 
       // Wait indefinitely
       await new Promise(() => {});
