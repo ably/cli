@@ -1,6 +1,6 @@
 {
   "name": "@ably/cli",
-  "version": "0.9.0-alpha.2",
+  "version": "0.9.0-alpha.3",
   "description": "Ably CLI for Pub/Sub, Chat, Spaces and the Control API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -142,6 +142,7 @@
     "http-server": "^14.1.1",
     "mocha": "^11",
     "nock": "^14.0.3",
+    "node-pty": "^1.0.0",
     "nyc": "^17.1.0",
     "oclif": "^4.2.10",
     "playwright": "^1.52.0",
