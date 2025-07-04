@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+// For interactive mode, ensure SIGINT exits with code 130
+if (process.argv.includes('interactive')) {
+  process.env.ABLY_INTERACTIVE_MODE = 'true';
+  
+  // Load sigint-exit to ensure proper exit code
+  await import('../dist/src/utils/sigint-exit.js');
+}
+
 import { execute } from "@oclif/core";
 
 // Store original write function
