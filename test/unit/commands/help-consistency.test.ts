@@ -130,8 +130,8 @@ describe('Help Output Consistency', () => {
     });
   });
 
-  describe('Help Command Suggestions', () => {
-    it('should suggest "help ask" when typing "help aska"', function(done) {
+  describe('Support Command Suggestions', () => {
+    it('should suggest "support ask" when typing "support aska"', function(done) {
       this.timeout(timeout);
       
       const child = spawn('node', [binPath, 'interactive'], {
@@ -144,7 +144,7 @@ describe('Help Output Consistency', () => {
       
       child.stdout.on('data', (data) => {
         output += data.toString();
-        if (data.toString().includes('Did you mean help ask?')) {
+        if (data.toString().includes('Did you mean support ask?')) {
           foundSuggestion = true;
           setTimeout(() => {
             child.stdin.write('n\n');
@@ -153,7 +153,7 @@ describe('Help Output Consistency', () => {
       });
       
       setTimeout(() => {
-        child.stdin.write('help aska\n');
+        child.stdin.write('support aska\n');
       }, 500);
       
       setTimeout(() => {
@@ -162,7 +162,11 @@ describe('Help Output Consistency', () => {
       
       child.on('exit', () => {
         expect(foundSuggestion).to.be.true;
-        expect(output).to.include('help aska is not an ably command');
+        // When declining suggestion, topic commands show their help
+        expect(output).to.include('Ably support commands:');
+        expect(output).to.include('support ask');
+        expect(output).to.include('support contact');
+        expect(output).to.include('support info');
         done();
       });
     });
