@@ -199,7 +199,7 @@ export default class CustomHelp extends Help {
     this.isShowingRootHelp = true;
 
     const args = process.argv || [];
-    const isWebCliHelp = args.includes("web-cli") || args.includes("webcli");
+    const isWebCliHelp = args.includes("--web-cli-help");
 
     // Show web CLI help if:
     // 1. We're in web CLI mode and not showing full help AND not in interactive mode
@@ -373,15 +373,10 @@ export default class CustomHelp extends Help {
 
   formatCommand(command: Command.Loadable): string {
     let output: string;
-    // Special case handling for web-cli help command
-    if (command.id === "help:web-cli" || command.id === "help:webcli") {
-      this.isShowingRootHelp = true; // Prevent further sections
-      output = this.formatWebCliRoot();
-    } else {
-      // Reset root help flag when showing individual command help
-      this.isShowingRootHelp = false;
-      // Use super's formatCommand
-      output = super.formatCommand(command);
+    // Reset root help flag when showing individual command help
+    this.isShowingRootHelp = false;
+    // Use super's formatCommand
+    output = super.formatCommand(command);
       
       // In interactive mode, remove the 'ably' prefix from usage examples
       if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
@@ -434,7 +429,6 @@ export default class CustomHelp extends Help {
           ].join("\n");
         }
       }
-    }
     return output; // Let the overridden render handle stripping
   }
 

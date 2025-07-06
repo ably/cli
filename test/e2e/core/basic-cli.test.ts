@@ -149,28 +149,25 @@ describe("Basic CLI E2E", function() {
         expect(result.stdout).to.include("channels");
         expect(result.stdout).to.include("auth");
         expect(result.stdout).to.include("config"); // Base topic exists
-        expect(result.stdout).to.include("help"); // Help topic itself
-        // Check for specific help subcommands
-        expect(result.stdout).to.include("help ask");
-        expect(result.stdout).to.include("help contact");
-        expect(result.stdout).to.include("help support");
-        expect(result.stdout).to.include("help status");
+        expect(result.stdout).to.include("help"); // Help command itself
+        expect(result.stdout).to.include("status"); // Status is now root command
+        expect(result.stdout).to.include("support"); // Support topic
       });
 
       it("should fail when attempting to get help for a non-existent command", async function() {
-        // Use the `--help` flag pattern on a non-existent command with non-interactive flag
-        const result = await runCommand(["help", "doesnotexist", "--non-interactive"], {
+        // Use the help command on a non-existent command
+        const result = await runCommand(["help", "doesnotexist"], {
           env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
           timeoutMs: 5000
         });
 
         expect(result.exitCode).not.to.equal(0);
         // Should show command not found error
-        expect(result.stderr).to.include("Command help doesnotexist not found");
+        expect(result.stderr).to.include('Command "doesnotexist" not found');
       });
 
-      it("should display web CLI help when running help web-cli", async function() {
-        const result = await runCommand(["help", "web-cli"], {
+      it("should display web CLI help when running help with --web-cli-help flag", async function() {
+        const result = await runCommand(["help", "--web-cli-help"], {
           env: { NODE_OPTIONS: "", ABLY_CLI_NON_INTERACTIVE: "true" },
           timeoutMs: 5000
         });

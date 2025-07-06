@@ -54,7 +54,8 @@ describe("Minimal CLI E2E Tests", function() {
 
     // Basic help check
     expect(result.exitCode).to.equal(0);
-    expect(result.stdout).to.include("Ably help commands");
-    expect(result.stdout).to.include("ably help");
+    expect(result.stdout).to.include("help");
+    expect(result.stdout).to.include("support");
+    expect(result.stdout).to.include("status");
   });
 });
