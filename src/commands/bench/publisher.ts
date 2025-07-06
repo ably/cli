@@ -890,7 +890,9 @@ export default class BenchPublisher extends AblyBaseCommand {
       ["Progress", "0%"],
     );
 
-    process.stdout.write("\u001B[2J\u001B[0f");
+    if (this.shouldUseTerminalUpdates()) {
+      process.stdout.write("\u001B[2J\u001B[0f");
+    }
     this.log(progressDisplay.toString());
     this.log("\n--- Logs (Last 10) ---");
     intervalId = setInterval(() => {
@@ -984,7 +986,9 @@ export default class BenchPublisher extends AblyBaseCommand {
     const progressBar = `[${"=".repeat(filledChars)}${" ".repeat(progressBarWidth - filledChars)}] ${progressPercent}%`;
 
     // Clear console and redraw table and logs
-    process.stdout.write("\u001B[2J\u001B[0f"); // Clear screen and move cursor to top-left
+    if (this.shouldUseTerminalUpdates()) {
+      process.stdout.write("\u001B[2J\u001B[0f"); // Clear screen and move cursor to top-left
+    }
 
     // Recreate table with updated data
     const updatedTable = new Table({

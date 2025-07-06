@@ -769,7 +769,9 @@ export default class BenchSubscriber extends AblyBaseCommand {
     ];
 
     // Clear console and redraw
-    process.stdout.write("\u001B[2J\u001B[0f"); // Clear screen, move cursor
+    if (this.shouldUseTerminalUpdates()) {
+      process.stdout.write("\u001B[2J\u001B[0f"); // Clear screen, move cursor
+    }
 
     // Recreate table with updated data
     const updatedTable = new Table({
