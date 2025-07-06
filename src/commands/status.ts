@@ -3,7 +3,7 @@ import chalk from "chalk";
 import fetch from "node-fetch";
 import open from "open";
 import ora from "ora";
-import { getCliVersion } from "../../utils/version.js";
+import { getCliVersion } from "../utils/version.js";
 
 interface StatusResponse {
   status: boolean;
