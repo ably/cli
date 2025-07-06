@@ -1,7 +1,7 @@
 import { Flags } from "@oclif/core";
-import { Command } from "@oclif/core";
+import { AblyBaseCommand } from "../../base-command.js";
 
-export default class TestWait extends Command {
+export default class TestWait extends AblyBaseCommand {
   static override description = "Test command that waits for a specified duration";
   
   static override hidden = true; // Hide from help
@@ -24,6 +24,7 @@ export default class TestWait extends Command {
     
     this.log(`Waiting for ${flags.duration} seconds. Press Ctrl+C to interrupt...`);
     
+    
     // Use a simple promise with timeout
     await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
@@ -31,7 +32,7 @@ export default class TestWait extends Command {
         resolve();
       }, flags.duration * 1000);
       
-      // Handle SIGINT to clean up the timeout
+      // Handle cleanup on interrupt
       const cleanup = () => {
         clearTimeout(timeout);
         resolve();

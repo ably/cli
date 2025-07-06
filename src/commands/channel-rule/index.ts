@@ -13,6 +13,7 @@ export default class ChannelRule extends Command {
 
   async run(): Promise<void> {
     // Forward to the channel-rules command using static run method
+    // Direct forward since it's an alias
     await ChannelRules.run(this.argv, this.config);
   }
 }

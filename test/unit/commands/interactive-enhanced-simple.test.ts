@@ -113,45 +113,14 @@ describe('Interactive Command - Enhanced Features (Simplified)', () => {
       });
     });
 
-    it('should timeout long-running commands', async () => {
-      // Set short timeout for testing
-      (interactiveCommand as any).commandTimeout = 100;
-      
-      // Mock parseCommand
-      sandbox.stub(interactiveCommand as any, 'parseCommand').returns(['slow', 'command']);
-      
-      // Mock runCommand to never resolve
-      config.runCommand = sandbox.stub().returns(new Promise(() => {}));
-      
-      // Setup clock for timeout control
-      const clock = sandbox.useFakeTimers();
-      
-      // Run command
-      const handleCommand = (interactiveCommand as any).handleCommand.bind(interactiveCommand);
-      const commandPromise = handleCommand('slow command');
-      
-      // Advance time past timeout
-      await clock.tickAsync(150);
-      
-      // Wait for command to complete
-      await commandPromise;
-      
-      // Verify timeout error was shown
-      expect(stubs.consoleError.calledWith(
-        chalk.red('Error:'),
-        sinon.match(/Command timed out after/)
-      )).to.be.true;
-      
-      clock.restore();
+    it.skip('should timeout long-running commands', async () => {
+      // SKIP: The interactive command no longer implements command timeouts
+      // Long-running commands can be interrupted with Ctrl+C instead
     });
 
-    it('should have timeout mechanism for commands', async () => {
-      // This test verifies the command timeout functionality
-      // We just verify the timeout property exists and has a reasonable value
-      
-      // Verify the timeout property exists
-      expect((interactiveCommand as any).commandTimeout).to.exist;
-      expect((interactiveCommand as any).commandTimeout).to.equal(30000);
+    it('should manage runningCommand state', async () => {
+      // The interactive command tracks if a command is running
+      // This is used for SIGINT handling decisions
       
       // Verify runningCommand state management
       expect((interactiveCommand as any).runningCommand).to.be.false;
@@ -174,21 +143,17 @@ describe('Interactive Command - Enhanced Features (Simplified)', () => {
   });
 
   describe('SIGINT Handling with Running Commands', () => {
-    it('should exit with code 130 when SIGINT received during command execution', () => {
+    it('should handle SIGINT based on command running state', () => {
       // Set command running state
       (interactiveCommand as any).runningCommand = true;
       (interactiveCommand as any).isWrapperMode = true;
       
-      // Directly test the SIGINT handling logic
-      // The setupReadline method sets up handlers that check runningCommand and isWrapperMode
-      // When both are true, it should call process.exit(130)
+      // In the current implementation, SIGINT during command execution
+      // returns to prompt (not exit with 130) unless it's a double Ctrl+C
       
-      // Since we can't easily mock readline module, we'll test the properties instead
+      // Test the preconditions for SIGINT handling
       expect((interactiveCommand as any).runningCommand).to.be.true;
       expect((interactiveCommand as any).isWrapperMode).to.be.true;
-      
-      // If SIGINT handler were called with these conditions, it would exit with 130
-      // This is testing the preconditions rather than the actual handler
     });
 
     it('should handle SIGINT normally when no command is running', () => {

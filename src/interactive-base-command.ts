@@ -1,4 +1,6 @@
-import { Command } from '@oclif/core';
+import { Command, Interfaces } from '@oclif/core';
+
+type PrettyPrintableError = Interfaces.PrettyPrintableError;
 
 /**
  * Base command class that provides interactive-mode-safe error handling.
@@ -9,27 +11,27 @@ export abstract class InteractiveBaseCommand extends Command {
   /**
    * Override error to throw instead of exit in interactive mode
    */
-  error(input: string | Error, options?: any): never {
+  error(input: string | Error, options: {code?: string; exit: false} & PrettyPrintableError): void;
+  error(input: string | Error, options?: {code?: string; exit?: number} & PrettyPrintableError): never;
+  error(input: string | Error, options?: {code?: string; exit?: number | false} & PrettyPrintableError): void | never {
     const error = typeof input === 'string' ? new Error(input) : input;
     
-    // Add oclif error metadata
-    (error as Error & {oclif?: {exit?: number; code?: string}}).oclif = {
-      exit: options?.exit ?? 1,
-      code: options?.code
-    };
-    
     // In interactive mode, throw the error to be caught
-    if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
+    if (process.env.ABLY_INTERACTIVE_MODE === 'true' && options?.exit !== false) {
+      // Add oclif error metadata
+      (error as Error & {oclif?: {exit?: number; code?: string}}).oclif = {
+        exit: options?.exit ?? 1,
+        code: options?.code
+      };
+      
       if (process.env.DEBUG) {
         console.error('[InteractiveBaseCommand] Throwing error instead of exiting:', error.message);
       }
       throw error;
     }
     
-    // In normal mode, use default behavior
-    super.error(input, options);
-    // TypeScript needs this even though super.error never returns
-    throw new Error('Unreachable');
+    // In normal mode or when exit is false, use default behavior
+    return super.error(input, options as any);
   }
   
   /**

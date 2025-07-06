@@ -904,6 +904,12 @@ export abstract class AblyBaseCommand extends InteractiveBaseCommand {
   async init() {
     await super.init();
 
+    // Set current command for interrupt feedback
+    if (this.id) {
+      // Convert command ID to readable format (e.g., "channels:subscribe" stays as is)
+      process.env.ABLY_CURRENT_COMMAND = this.id;
+    }
+
     // Check if command is allowed to run in web CLI mode
     this.checkWebCliRestrictions();
   }
@@ -1167,6 +1173,11 @@ export abstract class AblyBaseCommand extends InteractiveBaseCommand {
     cleanupFunction: () => Promise<void>,
     timeoutMs = 5_000,
   ): Promise<void> {
+    // In interactive mode, respect the 5-second SIGINT timeout
+    // Leave 500ms buffer for the process to exit cleanly
+    const isInteractive = process.env.ABLY_INTERACTIVE_MODE === 'true';
+    const effectiveTimeout = isInteractive ? Math.min(timeoutMs, 4500) : timeoutMs;
+    
     return new Promise((resolve, reject) => {
       let cleanupTimedOut = false;
       const timeout = setTimeout(() => {
@@ -1177,7 +1188,7 @@ export abstract class AblyBaseCommand extends InteractiveBaseCommand {
           this.log(chalk.yellow("Cleanup operation timed out."));
         }
         reject(new Error("Cleanup timed out")); // Reject promise on timeout
-      }, timeoutMs);
+      }, effectiveTimeout);
 
       // Execute the cleanup function
       (async () => {

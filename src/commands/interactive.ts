@@ -1,4 +1,4 @@
-import { Command } from '@oclif/core';
+import { Command, Config } from '@oclif/core';
 import * as readline from 'node:readline';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -8,6 +8,7 @@ import { HistoryManager } from '../services/history-manager.js';
 import { displayLogo } from '../utils/logo.js';
 import { WEB_CLI_RESTRICTED_COMMANDS, WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS, INTERACTIVE_UNSUITABLE_COMMANDS } from '../base-command.js';
 import { TerminalDiagnostics } from '../utils/terminal-diagnostics.js';
+import '../utils/sigint-exit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,18 +53,13 @@ export default class Interactive extends Command {
     originalCursorPos: 0,
   };
 
-  constructor(argv: string[], config: any) {
+  constructor(argv: string[], config: Config) {
     super(argv, config);
   }
 
   async run() {
     TerminalDiagnostics.log('Interactive.run() started');
     
-    if (process.env.DEBUG_SIGINT) {
-      console.error('[DEBUG] Interactive.run() started');
-      console.error(`[DEBUG] stdin.isTTY: ${process.stdin.isTTY}`);
-      console.error(`[DEBUG] Current SIGINT listeners: ${process.listenerCount('SIGINT')}`);
-    }
     
     // In non-TTY mode, readline doesn't convert \x03 to SIGINT
     // We need to handle this at the process level for wrapper compatibility
@@ -71,9 +67,6 @@ export default class Interactive extends Command {
       // Install a data handler on stdin to detect Ctrl+C
       const handleStdinData = (data: Buffer) => {
         if (data.includes(0x03)) { // Ctrl+C byte
-          if (process.env.DEBUG_SIGINT) {
-            console.error('[DEBUG] Detected \\x03 in stdin');
-          }
           if (this.runningCommand) {
             // Exit immediately with 130 during command execution
             process.exit(130);
@@ -85,7 +78,7 @@ export default class Interactive extends Command {
       };
       
       // We'll set this up after readline is created
-      (this as any)._handleStdinData = handleStdinData;
+      (this as Interactive & { _handleStdinData?: (data: Buffer) => void })._handleStdinData = handleStdinData;
     }
     
     try {
@@ -195,23 +188,11 @@ export default class Interactive extends Command {
       await this.setupReadline();
       await this.historyManager.loadHistory(this.rl);
       
-      // Install process-level signal handlers as a safety net
-      // This ensures cleanup happens even if readline's events don't fire
-      process.once('SIGINT', () => {
-        if (process.env.DEBUG_SIGINT) {
-          console.error('[DEBUG] Process-level SIGINT handler triggered');
-        }
-        // Only cleanup if we haven't already
-        if (this.runningCommand && !this.cleanupDone) {
-          this.cleanupAndExit(130);
-        }
-      });
+      // Don't install SIGINT handler - sigint-exit.ts handles this with proper feedback
+      // It will show "↓ Stopping command..." and give 5 seconds for cleanup
       
       // Also handle SIGTERM to ensure cleanup
       process.once('SIGTERM', () => {
-        if (process.env.DEBUG_SIGINT) {
-          console.error('[DEBUG] Process-level SIGTERM handler triggered');
-        }
         if (!this.cleanupDone) {
           this.cleanupAndExit(143); // Standard SIGTERM exit code
         }
@@ -219,16 +200,14 @@ export default class Interactive extends Command {
       
       // Handle unexpected exits to ensure terminal is restored
       process.once('exit', () => {
-        if (!this.cleanupDone) {
-          // Emergency cleanup - just restore terminal
-          if (process.stdin.isTTY && typeof (process.stdin as any).setRawMode === 'function') {
+        if (!this.cleanupDone && // Emergency cleanup - just restore terminal
+          process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & { setRawMode?: (mode: boolean) => void }).setRawMode === 'function') {
             try {
-              (process.stdin as any).setRawMode(false);
+              (process.stdin as NodeJS.ReadStream & { setRawMode: (mode: boolean) => void }).setRawMode(false);
             } catch {
               // Ignore errors
             }
           }
-        }
       });
       
       this.rl.prompt();
@@ -248,7 +227,7 @@ export default class Interactive extends Command {
       console.error(`  - TERM env: ${process.env.TERM}`);
       console.error(`  - COLORTERM env: ${process.env.COLORTERM}`);
       console.error(`  - terminal mode: ${process.stdin.isTTY ? 'TTY' : 'pipe'}`);
-      console.error(`  - setRawMode available: ${typeof (process.stdin as any).setRawMode === 'function'}`);
+      console.error(`  - setRawMode available: ${typeof (process.stdin as NodeJS.ReadStream & { setRawMode?: (mode: boolean) => void }).setRawMode === 'function'}`);
     }
     
     this.rl = readline.createInterface({
@@ -259,13 +238,10 @@ export default class Interactive extends Command {
       completer: this.completer.bind(this)
     });
     
-    if (process.env.DEBUG_SIGINT) {
-      console.error(`[DEBUG] SIGINT listeners after readline creation: ${process.listenerCount('SIGINT')}`);
-    }
     
     // Install stdin data handler for non-TTY mode
-    if ((this as any)._handleStdinData) {
-      process.stdin.on('data', (this as any)._handleStdinData);
+    if ((this as Interactive & { _handleStdinData?: (data: Buffer) => void })._handleStdinData) {
+      process.stdin.on('data', (this as Interactive & { _handleStdinData?: (data: Buffer) => void })._handleStdinData!);
     }
     
     // Store readline instance globally for hooks to access
@@ -288,16 +264,11 @@ export default class Interactive extends Command {
 
     // Handle SIGINT events on readline
     this.rl.on('SIGINT', () => {
-      if (process.env.DEBUG_SIGINT) {
-        console.error(`[DEBUG] Readline SIGINT event, runningCommand=${this.runningCommand}`);
-      }
       
       if (this.runningCommand) {
-        // If a command is running, cleanup and exit with 130
-        if (process.env.DEBUG_SIGINT) {
-          console.error('[DEBUG] Cleaning up and exiting with 130 due to SIGINT during command');
-        }
-        this.cleanupAndExit(130);
+        // Don't handle SIGINT here - sigint-exit.ts will handle it
+        // with proper feedback and 5-second timeout
+        return;
       }
       
       // If in history search mode, exit it
@@ -322,44 +293,15 @@ export default class Interactive extends Command {
       this.rl.prompt();
     });
     
-    // For non-TTY environments, override the simple SIGINT handler
-    // to handle prompt behavior properly
+    // For non-TTY environments, we need special SIGINT handling
+    // But we should NOT interfere with sigint-exit.ts handler
     if (!process.stdin.isTTY) {
-      if (process.env.DEBUG_SIGINT) {
-        console.error('[DEBUG] Overriding SIGINT handler for interactive mode');
-      }
-      
-      // Remove the simple handler from sigint-exit.ts
-      process.removeAllListeners('SIGINT');
-      
-      // Install our interactive handler
-      process.on('SIGINT', () => {
-        if (process.env.DEBUG_SIGINT) {
-          console.error(`[DEBUG] Interactive SIGINT handler called, runningCommand=${this.runningCommand}`);
-        }
-        
-        if (this.runningCommand) {
-          // During command execution, cleanup and exit with 130
-          this.cleanupAndExit(130);
-        } else {
-          // At prompt, show message
-          const currentLine = (this.rl as readline.Interface & {line?: string}).line || '';
-          if (currentLine.length === 0) {
-            process.stdout.write('^C\n');
-            console.log(chalk.yellow('Signal received. To exit this shell, type \'exit\' and press Enter.'));
-          } else {
-            process.stdout.write('^C\n');
-          }
-          this.rl.prompt();
-        }
-      });
-      
-      if (process.env.DEBUG_SIGINT) {
-        console.error(`[DEBUG] SIGINT listeners: ${process.listenerCount('SIGINT')}`);
-      }
+      // Don't install any handler here - sigint-exit.ts handles everything
+      // It will show feedback and manage the 5-second timeout
     }
 
     this.rl.on('close', () => {
+      TerminalDiagnostics.log('readline close event triggered');
       if (!this.runningCommand) {
         this.cleanup();
         // Use special exit code when in wrapper mode
@@ -374,21 +316,27 @@ export default class Interactive extends Command {
       this.rl.close();
       return;
     }
-
+    
     if (input === '') {
       this.rl.prompt();
       return;
     }
 
-    // Save to history
+    // Save to history (before handling any commands)
     await this.historyManager.saveCommand(input);
+
+    // Handle version command (hidden command)
+    if (input === 'version') {
+      const { getVersionInfo } = await import('../utils/version.js');
+      const versionInfo = getVersionInfo(this.config);
+      this.log(`Version: ${versionInfo.version}`);
+      this.rl.prompt();
+      return;
+    }
 
     // Set command running state
     this.runningCommand = true;
-    (globalThis as any).__ablyInteractiveRunningCommand = true;
-    if (process.env.DEBUG_SIGINT) {
-      console.error('[DEBUG] Setting runningCommand = true');
-    }
+    (globalThis as Record<string, unknown>).__ablyInteractiveRunningCommand = true;
     
     // Pause readline
     TerminalDiagnostics.log('Pausing readline for command execution');
@@ -537,10 +485,7 @@ export default class Interactive extends Command {
       
       // Reset command running state
       this.runningCommand = false;
-      (globalThis as any).__ablyInteractiveRunningCommand = false;
-      if (process.env.DEBUG_SIGINT) {
-        console.error('[DEBUG] Setting runningCommand = false');
-      }
+      (globalThis as Record<string, unknown>).__ablyInteractiveRunningCommand = false;
       
       // Restore raw mode for readline with error handling
       if (process.stdin.isTTY && typeof (process.stdin as NodeJS.ReadStream & {setRawMode?: (mode: boolean) => void}).setRawMode === 'function') {
@@ -565,7 +510,9 @@ export default class Interactive extends Command {
       
       // Small delay to ensure error messages are visible
       setTimeout(() => {
-        this.rl.prompt();
+        if (this.rl) {
+          this.rl.prompt();
+        }
       }, 50);
     }
   }
@@ -660,8 +607,8 @@ export default class Interactive extends Command {
         TerminalDiagnostics.log('Closing readline interface');
         this.rl.close();
         TerminalDiagnostics.log('Readline interface closed');
-      } catch (err) {
-        TerminalDiagnostics.log('Error closing readline', err as Error);
+      } catch (error) {
+        TerminalDiagnostics.log('Error closing readline', error as Error);
       }
     }
     
@@ -671,8 +618,8 @@ export default class Interactive extends Command {
         TerminalDiagnostics.log('Restoring terminal to cooked mode');
         (process.stdin as NodeJS.ReadStream & {setRawMode: (mode: boolean) => void}).setRawMode(false);
         TerminalDiagnostics.log('Terminal restored successfully');
-      } catch (err) {
-        TerminalDiagnostics.log('Error restoring terminal', err as Error);
+      } catch (error) {
+        TerminalDiagnostics.log('Error restoring terminal', error as Error);
       }
     }
     

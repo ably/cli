@@ -24,9 +24,12 @@ mkdir -p "$ABLY_CONFIG_DIR" 2>/dev/null || true
 # Initialize history file
 touch "$HISTORY_FILE" 2>/dev/null || true
 
+# Since we're running in foreground, no need for signal forwarding
+# The signals will be sent directly to the node process
+
 # Main loop
 while true; do
-    # Run the CLI
+    # Run the CLI in foreground
     env ABLY_HISTORY_FILE="$HISTORY_FILE" \
         ABLY_WRAPPER_MODE=1 \
         ${ABLY_SUPPRESS_WELCOME:+ABLY_SUPPRESS_WELCOME=1} \
@@ -45,8 +48,8 @@ while true; do
             break
             ;;
         130)
-            # SIGINT (Ctrl+C) - continue loop silently
-            # The new prompt will appear automatically
+            # SIGINT (Ctrl+C) - ensure we're on a new line
+            echo ""
             ;;
         0)
             # Normal exit (shouldn't happen in interactive mode)
