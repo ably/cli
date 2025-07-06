@@ -78,9 +78,10 @@ const SKIP_AUTH_INFO_COMMANDS = [
   "apps:current",
   "auth:keys:current",
   "config",
-  "help:contact",
-  "help:support",
-  "help:status",
+  "status",
+  "support:contact",
+  "support:info",
+  "support:ask",
 ];
 
 export abstract class AblyBaseCommand extends InteractiveBaseCommand {
