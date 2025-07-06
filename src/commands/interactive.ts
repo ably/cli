@@ -334,6 +334,13 @@ export default class Interactive extends Command {
       return;
     }
 
+    // Handle "ably" command - inform user they're already in interactive mode
+    if (input === 'ably') {
+      console.log(chalk.yellow("You're already in interactive mode. Type 'help' or press TAB to see available commands."));
+      this.rl.prompt();
+      return;
+    }
+
     // Set command running state
     this.runningCommand = true;
     (globalThis as Record<string, unknown>).__ablyInteractiveRunningCommand = true;
