@@ -34,7 +34,11 @@ export default class AskCommand extends ControlBaseCommand {
     const { args, flags } = await this.parse(AskCommand);
 
     const controlApi = this.createControlApi(flags);
-    const spinner = ora("Thinking...").start();
+    const isInteractive = process.env.ABLY_INTERACTIVE_MODE === 'true';
+    const spinner = isInteractive ? null : ora("Thinking...").start();
+    if (isInteractive) {
+      this.log("Thinking...");
+    }
 
     try {
       let response: HelpResponse;
@@ -49,7 +53,7 @@ export default class AskCommand extends ControlBaseCommand {
           };
           response = await controlApi.askHelp(args.question, conversation);
         } else {
-          spinner.stop();
+          if (spinner) spinner.stop();
           this.log(
             chalk.yellow(
               "No previous conversation found. Starting a new conversation.",
@@ -63,7 +67,7 @@ export default class AskCommand extends ControlBaseCommand {
         response = await controlApi.askHelp(args.question);
       }
 
-      spinner.stop();
+      if (spinner) spinner.stop();
 
       // Display the AI agent's answer
       // Convert markdown to styled terminal output
@@ -116,7 +120,11 @@ export default class AskCommand extends ControlBaseCommand {
         ),
       );
     } catch (error) {
-      spinner.fail("Failed to get a response from the Ably AI agent");
+      if (spinner) {
+        spinner.fail("Failed to get a response from the Ably AI agent");
+      } else {
+        this.log(chalk.red("Failed to get a response from the Ably AI agent"));
+      }
       if (error instanceof Error) {
         this.error(error.message);
       } else {
