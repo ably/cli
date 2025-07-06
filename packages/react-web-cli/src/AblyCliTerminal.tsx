@@ -849,15 +849,39 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
-      let dataStr: string;
-      if (typeof event.data === 'string') dataStr = event.data;
-      else if (event.data instanceof Blob) dataStr = await event.data.text();
-      else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
-      else dataStr = new TextDecoder().decode(event.data);
+      let data: Uint8Array;
+      
+      // Convert all data types to Uint8Array for consistent handling
+      if (typeof event.data === 'string') {
+        data = new TextEncoder().encode(event.data);
+      } else if (event.data instanceof Blob) {
+        const arrayBuffer = await event.data.arrayBuffer();
+        data = new Uint8Array(arrayBuffer);
+      } else if (event.data instanceof ArrayBuffer) {
+        data = new Uint8Array(event.data);
+      } else {
+        // Assume it's already a Uint8Array or similar
+        data = new Uint8Array(event.data);
+      }
 
-      // Check for control message prefix
-      if (dataStr.startsWith(CONTROL_MESSAGE_PREFIX)) {
-        const jsonStr = dataStr.slice(CONTROL_MESSAGE_PREFIX.length);
+      // Check for control message prefix at byte level
+      const prefixBytes = new TextEncoder().encode(CONTROL_MESSAGE_PREFIX);
+      let isControlMessage = false;
+      
+      if (data.length >= prefixBytes.length) {
+        isControlMessage = true;
+        for (let i = 0; i < prefixBytes.length; i++) {
+          if (data[i] !== prefixBytes[i]) {
+            isControlMessage = false;
+            break;
+          }
+        }
+      }
+
+      if (isControlMessage) {
+        // Extract JSON portion after prefix
+        const jsonBytes = data.slice(prefixBytes.length);
+        const jsonStr = new TextDecoder().decode(jsonBytes);
         try {
           const msg = JSON.parse(jsonStr);
           
@@ -953,6 +977,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
       
       // Everything else is terminal output (including --json command results)
+      // Convert back to string for terminal display
+      const dataStr = new TextDecoder().decode(data);
       if (term.current) {
         term.current.write(dataStr);
       }
