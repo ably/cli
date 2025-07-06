@@ -386,7 +386,7 @@ export default class MessagesSend extends ChatBaseCommand {
             // Clear the last progress line before final summary in an interactive
             // terminal. Avoid this in test mode or non-TTY environments as it
             // makes captured output hard to read.
-            if (process.stdout.isTTY && process.env.ABLY_CLI_TEST_MODE !== "true") {
+            if (this.shouldUseTerminalUpdates()) {
               process.stdout.write(
                 "\r" + " ".repeat(process.stdout.columns) + "\r",
               );
