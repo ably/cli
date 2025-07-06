@@ -33,9 +33,6 @@ describe('Interactive Mode - SIGINT Handling', () => {
       const output = data.toString();
       _output += output;
       
-      if (process.env.DEBUG_TEST) {
-        console.log('STDOUT:', output);
-      }
       
       // Count prompts
       const promptMatches = output.match(/\$ /g);
@@ -48,9 +45,6 @@ describe('Interactive Mode - SIGINT Handling', () => {
         promptSeen = true;
         // Send test:wait command after seeing prompt
         setTimeout(() => {
-          if (process.env.DEBUG_TEST) {
-            console.log('Sending test:wait command...');
-          }
           child.stdin.write('test:wait --duration 10\n');
         }, 100);
       }
@@ -75,9 +69,6 @@ describe('Interactive Mode - SIGINT Handling', () => {
     
     child.stderr.on('data', (data) => {
       errorOutput += data.toString();
-      if (process.env.DEBUG_TEST) {
-        console.log('STDERR:', data.toString());
-      }
     });
     
     child.on('exit', (code) => {
@@ -122,18 +113,12 @@ describe('Interactive Mode - SIGINT Handling', () => {
     child.stdout.on('data', (data) => {
       _output += data.toString();
       
-      if (process.env.DEBUG_TEST) {
-        console.log('STDOUT:', data.toString());
-      }
       
       // Wait for initial prompt
       if (!sigintSent && (data.toString().includes('$ ') || data.toString().includes('$\u001B'))) {
         sigintSent = true;
         // Send SIGINT on empty prompt
         setTimeout(() => {
-          if (process.env.DEBUG_TEST) {
-            console.log('Sending SIGINT...');
-          }
           child.kill('SIGINT');
         }, 100);
       }
@@ -149,13 +134,6 @@ describe('Interactive Mode - SIGINT Handling', () => {
     });
     
     child.on('exit', (code) => {
-      if (process.env.DEBUG_TEST) {
-        console.log('Exit code:', code);
-        console.log('Full output:', _output);
-        console.log('Has ^C:', _output.includes('^C'));
-        console.log('SIGINT sent:', sigintSent);
-        console.log('Prompt count:', _output.split('$').length);
-      }
       expect(code).to.be.oneOf([0, 42]);
       // We should either see ^C or the signal message
       const hasCtrlC = _output.includes('^C');
@@ -219,9 +197,6 @@ describe('Interactive Mode - SIGINT Handling', () => {
     
     // Add timeout fallback - send exit command instead of SIGTERM
     setTimeout(() => {
-      if (process.env.DEBUG_TEST) {
-        console.log('Test timeout - sending exit command');
-      }
       child.stdin.write('exit\n');
     }, timeout - 2000);
   });
