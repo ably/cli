@@ -102,7 +102,7 @@ export default class HelpCommand extends BaseTopicCommand {
               } finally {
                 // Restore listeners and resume
                 lineListeners.forEach((listener) => {
-                  interactiveReadline.on('line', listener as (...args: any[]) => void);
+                  interactiveReadline.on('line', listener as (line: string) => void);
                 });
                 interactiveReadline.resume();
               }

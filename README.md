@@ -54,6 +54,23 @@ This will display installation instructions specific to your shell. Follow them 
 
 For more details, see the [Auto-completion documentation](docs/Auto-completion.md).
 
+## Interactive Mode
+
+The Ably CLI includes an interactive shell mode that provides a more convenient way to work with multiple commands:
+
+```sh-session
+$ ably-interactive
+```
+
+### Features
+
+- **Command history**: Previous commands are saved and can be accessed with up/down arrows
+- **Tab completion**: Full support for command and flag completion
+- **Ctrl+C handling**: 
+  - Single Ctrl+C interrupts the current command and returns to prompt
+  - Double Ctrl+C (within 500ms) force quits the shell
+- **No "ably" prefix needed**: Commands can be typed directly (e.g., just `channels list` instead of `ably channels list`)
+
 # MCP Usage
 
 > [!WARNING]

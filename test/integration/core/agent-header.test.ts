@@ -50,8 +50,8 @@ describe('Agent Header Integration Tests', function() {
       const version = getCliVersion();
       const expectedAgentHeader = `ably-cli/${version}`;
       
-      // Should match the format: ably-cli/x.y.z
-      expect(expectedAgentHeader).to.match(/^ably-cli\/\d+\.\d+\.\d+$/);
+      // Should match the format: ably-cli/x.y.z or ably-cli/x.y.z-alpha.n
+      expect(expectedAgentHeader).to.match(/^ably-cli\/\d+\.\d+\.\d+(-alpha\.\d+)?$/);
     });
   });
 });

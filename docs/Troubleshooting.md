@@ -207,6 +207,41 @@ Property 'x' does not exist on type 'Y'
 
 ---
 
+## Interactive Mode Issues
+
+### Process Exits Unexpectedly
+
+**Problem**: The interactive mode exits with unexpected error codes.
+
+**Solution**:
+- Check the exit code to understand what happened (see [Exit Codes documentation](Exit-Codes.md))
+- Common exit codes:
+  - Exit code 0: Normal exit (usually from 'exit' command)
+  - Exit code 42: User typed 'exit' (special code for wrapper)
+  - Exit code 130: SIGINT/Ctrl+C (double Ctrl+C or force quit)
+  - Exit code 143: SIGTERM received
+
+### Ctrl+C Not Working as Expected
+
+**Problem**: Ctrl+C doesn't interrupt commands or behaves unexpectedly.
+
+**Solution**:
+- Use the wrapper script `ably-interactive` for better Ctrl+C handling
+- Single Ctrl+C should interrupt running command and return to prompt
+- Double Ctrl+C (within 500ms) force quits with exit code 130
+- If running without wrapper, Ctrl+C may exit the entire shell
+
+### Command History Not Persisting
+
+**Problem**: Command history is lost between sessions.
+
+**Solution**:
+- Check that `~/.ably/history` file exists and is writable
+- Verify the `ABLY_HISTORY_FILE` environment variable if using custom location
+- Ensure the history file isn't exceeding size limits (default: 1000 commands)
+
+---
+
 ## Documentation Issues
 
 If you find errors in documentation or rules, please update them using the proper workflow and submit a pull request.

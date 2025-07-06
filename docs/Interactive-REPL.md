@@ -44,7 +44,7 @@ The chosen approach runs commands inline (no spawning/forking) with a bash wrapp
 - **Inline execution**: Commands run in the same process, eliminating spawn overhead
 - **Natural Ctrl+C**: Interrupting commands exits the process, wrapper restarts seamlessly
 - **Persistent history**: Command history saved to `~/.ably/history` across restarts
-- **Special exit handling**: Typing 'exit' uses exit code 42 to signal wrapper to terminate
+- **Special exit handling**: Typing 'exit' uses exit code 42 to signal wrapper to terminate (see [Exit Codes documentation](Exit-Codes.md) for details)
 
 **Expected Performance**:
 - Command execution: 0ms spawn overhead (runs inline)

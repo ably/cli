@@ -1,5 +1,4 @@
-import * as fs from 'fs';
-import * as tty from 'tty';
+import * as fs from 'node:fs';
 
 export interface TerminalState {
   timestamp: string;
@@ -36,13 +35,13 @@ export class TerminalDiagnostics {
       event,
       stdin: {
         isTTY: process.stdin.isTTY,
-        fd: process.stdin.isTTY ? (process.stdin as any).fd : undefined,
+        fd: process.stdin.isTTY ? (process.stdin as NodeJS.ReadStream & { fd?: number }).fd : undefined,
         readable: process.stdin.readable,
         destroyed: process.stdin.destroyed,
       },
       stdout: {
         isTTY: process.stdout.isTTY,
-        fd: process.stdout.isTTY ? (process.stdout as any).fd : undefined,
+        fd: process.stdout.isTTY ? (process.stdout as NodeJS.WriteStream & { fd?: number }).fd : undefined,
         writable: process.stdout.writable,
         destroyed: process.stdout.destroyed,
       },
@@ -59,7 +58,8 @@ export class TerminalDiagnostics {
     }
     
     if (error) {
-      state.error = `${error.name}: ${error.message} (code: ${(error as any).code}, errno: ${(error as any).errno})`;
+      const err = error as Error & { code?: string; errno?: number };
+      state.error = `${err.name}: ${err.message} (code: ${err.code}, errno: ${err.errno})`;
     }
     
     this.logs.push(state);
@@ -75,8 +75,8 @@ export class TerminalDiagnostics {
     try {
       fs.writeFileSync(logPath, JSON.stringify(this.logs, null, 2));
       console.error(`[TERMINAL_DIAG] Saved diagnostics to: ${logPath}`);
-    } catch (err) {
-      console.error(`[TERMINAL_DIAG] Failed to save diagnostics:`, err);
+    } catch (error) {
+      console.error(`[TERMINAL_DIAG] Failed to save diagnostics:`, error);
     }
   }
   
@@ -98,17 +98,18 @@ export class TerminalDiagnostics {
     
     // Monitor stdin state changes
     if (process.stdin.isTTY) {
-      const originalSetRawMode = (process.stdin as any).setRawMode;
+      const stdinWithRaw = process.stdin as NodeJS.ReadStream & { setRawMode?: (mode: boolean) => NodeJS.ReadStream };
+      const originalSetRawMode = stdinWithRaw.setRawMode;
       if (originalSetRawMode) {
-        (process.stdin as any).setRawMode = function(mode: boolean) {
+        stdinWithRaw.setRawMode = function(mode: boolean): NodeJS.ReadStream {
           TerminalDiagnostics.log(`setRawMode(${mode}) called`);
           try {
             const result = originalSetRawMode.call(this, mode);
             TerminalDiagnostics.log(`setRawMode(${mode}) succeeded`);
             return result;
-          } catch (err) {
-            TerminalDiagnostics.log(`setRawMode(${mode}) failed`, err as Error);
-            throw err;
+          } catch (error) {
+            TerminalDiagnostics.log(`setRawMode(${mode}) failed`, error as Error);
+            throw error;
           }
         };
       }

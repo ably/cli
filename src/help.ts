@@ -363,7 +363,8 @@ export default class CustomHelp extends Help {
     // Always show help instruction
     lines.push(
       '',
-      `Type ${this.interactiveMode ? chalk.cyan('help') : chalk.cyan(`${cmdPrefix}help`)} to see the complete list of commands.`
+      `Type ${this.interactiveMode ? chalk.cyan('help') : chalk.cyan(`${cmdPrefix}help`)} to see the complete list of commands.`,
+      `Use ${this.interactiveMode ? chalk.cyan('--help') : chalk.cyan(`${cmdPrefix}--help`)} with any command for more details.`
     );
 
     // Join lines and return
