@@ -42,6 +42,7 @@ function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (..
 export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
 const MAX_PTY_BUFFER_LENGTH = 10000; // Max 10k chars in the buffer
+const CONTROL_MESSAGE_PREFIX = '\x00\x00ABLY_CTRL:';
 
 // Prompts that indicate the terminal is ready for input
 const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Basic prompt
@@ -848,11 +849,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
-      if (typeof event.data === 'string') {
+      let dataStr: string;
+      if (typeof event.data === 'string') dataStr = event.data;
+      else if (event.data instanceof Blob) dataStr = await event.data.text();
+      else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
+      else dataStr = new TextDecoder().decode(event.data);
+
+      // Check for control message prefix
+      if (dataStr.startsWith(CONTROL_MESSAGE_PREFIX)) {
+        const jsonStr = dataStr.slice(CONTROL_MESSAGE_PREFIX.length);
         try {
-          const msg = JSON.parse(event.data);
+          const msg = JSON.parse(jsonStr);
+          
+          // Handle control messages (existing logic)
           if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
-            // received hello
             debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
             setSessionId(msg.sessionId);
             if (onSessionId) onSessionId(msg.sessionId);
@@ -864,65 +874,47 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, msg.sessionId);
               window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
             }
-            
             return;
           }
+          
           if (msg.type === 'status') {
-            // received server status message
             debugLog(`⚠️ DIAGNOSTIC: Received server status message: ${msg.payload}`);
-
-            // Treat explicit 'connected' status from server as authoritative –
-            // this avoids hanging in the "connecting" state if prompt detection
-            // fails (e.g. due to coloured PS1 or locale differences).
+            
+            // Handle different status payloads
             if (msg.payload === 'connected') {
               debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
               clearStatusDisplay();
               setIsSessionActive(true);
               updateConnectionStatusAndExpose('connected');
-
-              // Clear any residual spinner character that might be left at the
-              // cursor position. We overwrite the current line locally only –
-              // nothing is sent to the remote shell so no stray newlines are
-              // executed server-side.
+              
               if (term.current) {
                 debugLog(`⚠️ DIAGNOSTIC: Clearing line and focusing terminal`);
-                term.current.write('\x1b[K'); // Clear from cursor to EOL, keeps "$ " intact
+                term.current.write('\x1b[K'); // Clear from cursor to EOL
                 term.current.focus();
               }
-
-              // Don't send a carriage return - let the server handle displaying the prompt
-              // The server already has PS1='$ ' set in its environment
-              debugLog(`⚠️ DIAGNOSTIC: NOT sending carriage return (fix applied)`);
-
+              
               clearPtyBuffer();
               return;
             }
-
+            
             // Handle error & disconnected payloads
             if (msg.payload === 'error' || msg.payload === 'disconnected') {
               const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
-              if (term.current) term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
+              if (term.current) {
+                term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
+              }
               if (onSessionEnd) onSessionEnd(reason);
-              updateConnectionStatusAndExpose(msg.payload); // Reflect server's final say
-
-              // Do NOT cancel the global reconnect loop here. The subsequent WebSocket `close` event
-              // will evaluate the close code (e.g. 4000 for user-initiated exit, 1000 or 1006 for other
-              // scenarios) and take the appropriate action.  Handling it in one place avoids ambiguity
-              // and ensures test expectations around automatic reconnect remain stable.
-
-              // Let the server drive the close handshake so we keep the correct code (1005) and our
-              // subsequent `close` handler can show the proper "Server Disconnect" overlay.  We therefore
-              // purposefully avoid calling `socket.close()` here.
-              debugLog('[AblyCLITerminal] Purging sessionId due to server error/disconnect. sessionId:', sessionId);
-
-              // Persisted session is no longer valid – forget it
+              updateConnectionStatusAndExpose(msg.payload);
+              
+              // Handle session cleanup for disconnected status
               if (resumeOnReload && typeof window !== 'undefined') {
                 const urlDomain = new URL(websocketUrl).host;
                 window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
                 window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
                 setSessionId(null);
               }
-
+              
+              // Show appropriate overlay for disconnected status
               if (term.current && msg.payload === 'disconnected') {
                 const title = "SERVER DISCONNECTED";
                 const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
@@ -946,32 +938,29 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               }
               return;
             }
+            
             return;
           }
-          // Check for PTY stream/hijack meta-message before treating as PTY data
-          if (msg.stream === true && typeof msg.hijack === 'boolean') {
-            // ignoring PTY meta-message
-            debugLog('[AblyCLITerminal] Received PTY stream/hijack meta-message. Ignoring for terminal output.', msg);
-            return; // Do not write this to xterm
-          }
-        } catch (_e) { /* Not JSON, likely PTY data */ }
+          
+          // Log any unrecognized control messages
+          console.warn('[WebSocket] Unrecognized control message:', msg);
+          return;
+          
+        } catch (e) {
+          console.error('[WebSocket] Invalid control message JSON:', e);
+          return;
+        }
       }
       
-      let dataStr: string;
-      if (typeof event.data === 'string') dataStr = event.data;
-      else if (event.data instanceof Blob) dataStr = await event.data.text();
-      else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
-      else dataStr = new TextDecoder().decode(event.data); // Should handle Uint8Array from server
-
-      // Filter stray (possibly fragmented) PTY meta JSON if the server failed to strip it
-      if (isHijackMetaChunk(dataStr.trim())) {
-        debugLog('[AblyCLITerminal] Suppressed PTY meta-message chunk');
-      } else if (term.current) {
+      // Everything else is terminal output (including --json command results)
+      if (term.current) {
         term.current.write(dataStr);
       }
-      handlePtyData(dataStr); // Pass PTY data for prompt detection
-
-    } catch (_e) { console.error('[AblyCLITerminal] Error processing message:', _e); }
+      handlePtyData(dataStr);
+      
+    } catch (e) {
+      console.error('[AblyCLITerminal] Error processing message:', e);
+    }
   }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose, credentialHash, resumeOnReload, sessionId]);
 
   const handleWebSocketError = useCallback((event: Event) => {
