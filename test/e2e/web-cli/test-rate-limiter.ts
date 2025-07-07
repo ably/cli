@@ -53,8 +53,8 @@ const getConfig = () => {
     }
     case 'CI_FAST': {
       return {
-        connectionsPerBatch: 9,    // Aggressive for CI (10 per minute limit with 1 buffer)
-        pauseDuration: 61000,      // 61 seconds to ensure rate limit window reset
+        connectionsPerBatch: 8,    // Reduced from 9 to 8 for more safety
+        pauseDuration: 75000,      // Increased from 61s to 75s for extra safety
       };
     }
     case 'CI_EMERGENCY': {

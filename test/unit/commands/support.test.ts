@@ -1,7 +1,6 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
 import sinon from 'sinon';
-import { Config } from '@oclif/core';
 
 describe('Support Command Tests', function() {
   let sandbox: sinon.SinonSandbox;

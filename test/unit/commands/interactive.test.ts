@@ -133,7 +133,8 @@ describe('Interactive Command', function() {
     });
   });
 
-  describe.skip('Ctrl+C Handling Integration Tests', function() {
+  // eslint-disable-next-line mocha/no-skipped-tests
+  describe.skip('Ctrl+C Handling Integration Tests - FLAKY in CI', function() {
     it('should exit cleanly with code 130 when Ctrl+C is pressed during command execution', function(done) {
       this.timeout(15000);
       
