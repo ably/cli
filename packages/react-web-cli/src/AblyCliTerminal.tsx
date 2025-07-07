@@ -888,9 +888,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           // Handle control messages (existing logic)
           if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
             debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
+            const wasReconnecting = connectionStatusRef.current === 'reconnecting';
             setSessionId(msg.sessionId);
             if (onSessionId) onSessionId(msg.sessionId);
             debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
+            
+            // If we were reconnecting and received a hello, we should activate the session
+            if (wasReconnecting) {
+              debugLog('⚠️ DIAGNOSTIC: Activating session after reconnection hello message');
+              setIsSessionActive(true);
+              updateConnectionStatusAndExpose('connected');
+              if (term.current) {
+                term.current.focus();
+              }
+            }
             
             // Persist to session storage if enabled (domain-scoped)
             if (resumeOnReload && typeof window !== 'undefined') {
