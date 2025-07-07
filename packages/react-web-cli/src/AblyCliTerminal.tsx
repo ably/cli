@@ -893,10 +893,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
             
             // Persist to session storage if enabled (domain-scoped)
-            if (resumeOnReload && typeof window !== 'undefined' && credentialHash) {
+            if (resumeOnReload && typeof window !== 'undefined') {
               const urlDomain = new URL(websocketUrl).host;
               window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, msg.sessionId);
-              window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+              
+              // Store credential hash if it's already computed
+              if (credentialHash) {
+                window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+              }
             }
             return;
           }
@@ -1690,6 +1694,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     
     initializeSession();
   }, [ablyApiKey, ablyAccessToken, resumeOnReload, websocketUrl]);
+
+  // Store credential hash when it becomes available if we already have a sessionId
+  useEffect(() => {
+    if (resumeOnReload && typeof window !== 'undefined' && sessionId && credentialHash) {
+      const urlDomain = new URL(websocketUrl).host;
+      const storedHash = window.sessionStorage.getItem(`ably.cli.credentialHash.${urlDomain}`);
+      
+      // Only store if we don't already have it stored
+      if (!storedHash) {
+        window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+        debugLog('Stored credential hash for existing session');
+      }
+    }
+  }, [resumeOnReload, sessionId, credentialHash, websocketUrl]);
 
   // Keep latest instance of connectWebSocket for async callbacks
   const connectWebSocketRef = useRef(connectWebSocket);
