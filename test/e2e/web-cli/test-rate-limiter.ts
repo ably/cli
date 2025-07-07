@@ -53,8 +53,8 @@ const getConfig = () => {
     }
     case 'CI_FAST': {
       return {
-        connectionsPerBatch: 8,    // Reduced from 9 to 8 for more safety
-        pauseDuration: 75000,      // Increased from 61s to 75s for extra safety
+        connectionsPerBatch: 12,   // Increased to reduce number of pauses
+        pauseDuration: 65000,      // Reduced from 75s to 65s
       };
     }
     case 'CI_EMERGENCY': {

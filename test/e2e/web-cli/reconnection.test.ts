@@ -85,9 +85,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       }
     });
     
-    // Longer delay to avoid rate limits for reconnection test
-    log('Waiting 10 seconds before test to avoid rate limits...');
-    await page.waitForTimeout(10000);
+    // Small delay to avoid rate limits
+    log('Waiting 2 seconds before test to avoid rate limits...');
+    await page.waitForTimeout(2000);
     
     // 1. Navigate to the Web CLI app
     log('Navigating to Web CLI app...');
@@ -109,9 +109,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     // 4. Wait for terminal to be ready using proper helper
     await waitForTerminalReady(page);
     
-    // Additional delay to ensure terminal is fully connected
-    log('Waiting 5 seconds for terminal to fully stabilize...');
-    await page.waitForTimeout(5000);
+    // Small delay to ensure terminal is fully connected
+    log('Waiting 2 seconds for terminal to stabilize...');
+    await page.waitForTimeout(2000);
 
     // 5. Type initial command to establish session state
     log('Testing initial terminal functionality...');
@@ -240,9 +240,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
     await waitForTerminalReady(page);
     
-    // Additional delay to ensure terminal is fully connected
-    log('Waiting 5 seconds for terminal to fully stabilize...');
-    await page.waitForTimeout(5000);
+    // Small delay to ensure terminal is fully connected
+    log('Waiting 2 seconds for terminal to stabilize...');
+    await page.waitForTimeout(2000);
     
     // Simulate disconnection
     await page.evaluate(() => {
@@ -309,9 +309,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
     await waitForTerminalReady(page);
     
-    // Additional delay to ensure terminal is fully connected
-    log('Waiting 5 seconds for terminal to fully stabilize...');
-    await page.waitForTimeout(5000);
+    // Small delay to ensure terminal is fully connected
+    log('Waiting 2 seconds for terminal to stabilize...');
+    await page.waitForTimeout(2000);
     
     // Run initial command
     await page.locator(terminalSelector).click();

@@ -14,8 +14,8 @@ export default defineConfig({
   globalTeardown: path.join(__dirname, 'global-teardown.ts'),
   
   // Timeout configuration
-  timeout: 90000, // 90s per test (increased for rate limiting)
-  globalTimeout: 1200000, // 20 minutes total (increased for rate limiting)
+  timeout: 120000, // 120s per test (increased for rate limiting)
+  globalTimeout: 1800000, // 30 minutes total (increased for rate limiting)
   
   // Parallel execution settings - CRITICAL for rate limiting
   fullyParallel: false, // MUST run tests serially to enforce rate limits
