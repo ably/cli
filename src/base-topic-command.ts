@@ -20,6 +20,7 @@ export abstract class BaseTopicCommand extends InteractiveBaseCommand {
       // Show help for this topic command using CustomHelp
       const { default: CustomHelp } = await import('./help.js');
       const help = new CustomHelp(this.config);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await help.showCommandHelp(this.constructor as any);
       return;
     }

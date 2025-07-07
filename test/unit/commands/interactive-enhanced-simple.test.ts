@@ -113,10 +113,8 @@ describe('Interactive Command - Enhanced Features (Simplified)', () => {
       });
     });
 
-    it.skip('should timeout long-running commands', async () => {
-      // SKIP: The interactive command no longer implements command timeouts
-      // Long-running commands can be interrupted with Ctrl+C instead
-    });
+    // Removed test: The interactive command no longer implements command timeouts
+    // Long-running commands can be interrupted with Ctrl+C instead
 
     it('should manage runningCommand state', async () => {
       // The interactive command tracks if a command is running

@@ -95,7 +95,8 @@ describe('Interactive Mode - SIGINT Handling', () => {
     }, timeout - 1000);
   });
 
-  it.skip('should handle Ctrl+C on empty prompt', function(done) {
+  // eslint-disable-next-line mocha/no-skipped-tests
+  it.skip('should handle Ctrl+C on empty prompt - FLAKY in non-TTY environments', function(done) {
     // SKIPPED: This test is flaky in non-TTY environments
     // The interactive mode readline SIGINT handler may not work properly
     // when stdio is piped instead of connected to a TTY
@@ -151,7 +152,8 @@ describe('Interactive Mode - SIGINT Handling', () => {
     }, timeout - 1000);
   });
 
-  it.skip('should handle Ctrl+C with partial command input', function(done) {
+  // eslint-disable-next-line mocha/no-skipped-tests
+  it.skip('should handle Ctrl+C with partial command input - FLAKY in non-TTY environments', function(done) {
     // SKIPPED: This test is flaky in non-TTY environments
     // The interactive mode readline SIGINT handler may not work properly
     // when stdio is piped instead of connected to a TTY

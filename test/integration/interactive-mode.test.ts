@@ -90,7 +90,7 @@ describe('Interactive Mode Command Tests', function() {
       'mcp'
     ];
 
-    unsuitableCommands.forEach(cmd => {
+    for (const cmd of unsuitableCommands) {
       it(`should block ${cmd} command in interactive mode`, function(done) {
         this.timeout(timeout);
         
@@ -137,16 +137,16 @@ describe('Interactive Mode Command Tests', function() {
         child.on('exit', () => {
           const fullOutput = output + errorOutput;
           // Should either show "not available" or "command not found"
-          if (!blockedMessage && !fullOutput.match(/command.*not.*found|Unknown command/i)) {
+          if (!blockedMessage && !/command.*not.*found|Unknown command/i.test(fullOutput)) {
             console.log(`Test failed for ${cmd}:`);
             console.log('Output:', output);
             console.log('Error:', errorOutput);
           }
-          expect(blockedMessage || fullOutput.match(/command.*not.*found|Unknown command/i)).to.be.true;
+          expect(blockedMessage || /command.*not.*found|Unknown command/i.test(fullOutput)).to.be.true;
           done();
         });
       });
-    });
+    }
   });
 
   describe('Ably Command Feedback', function() {

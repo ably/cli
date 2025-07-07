@@ -31,6 +31,7 @@ export abstract class InteractiveBaseCommand extends Command {
     }
     
     // In normal mode or when exit is false, use default behavior
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return super.error(input, options as any);
   }
   

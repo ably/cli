@@ -6,13 +6,13 @@ import HelpCommand from '../../../src/commands/help.js';
 
 describe('Help Command Tests', function() {
   let sandbox: sinon.SinonSandbox;
-  let consoleLogStub: sinon.SinonStub;
-  let processExitStub: sinon.SinonStub;
+  let _consoleLogStub: sinon.SinonStub;
+  let _processExitStub: sinon.SinonStub;
 
   beforeEach(function() {
     sandbox = sinon.createSandbox();
-    consoleLogStub = sandbox.stub(console, 'log');
-    processExitStub = sandbox.stub(process, 'exit');
+    _consoleLogStub = sandbox.stub(console, 'log');
+    _processExitStub = sandbox.stub(process, 'exit');
   });
 
   afterEach(function() {
