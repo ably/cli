@@ -1,6 +1,6 @@
 {
   "name": "@ably/cli",
-  "version": "0.9.0-alpha.4",
+  "version": "0.9.0",
   "description": "Ably CLI for Pub/Sub, Chat and Spaces",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
