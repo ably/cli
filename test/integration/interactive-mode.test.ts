@@ -429,5 +429,43 @@ describe('Interactive Mode Command Tests', function() {
         done();
       });
     });
+
+    it('should filter restricted subcommands in topic help output', function(done) {
+      this.timeout(timeout);
+      
+      const child = spawn('node', [binPath, 'interactive'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          ABLY_INTERACTIVE_MODE: 'true', 
+          ABLY_WEB_CLI_MODE: 'true',
+          ABLY_ANONYMOUS_USER_MODE: 'true',
+          ABLY_SUPPRESS_WELCOME: '1' 
+        }
+      });
+      
+      let output = '';
+      
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      setTimeout(() => {
+        child.stdin.write('auth\n');
+      }, 500);
+      
+      setTimeout(() => {
+        child.stdin.write('exit\n');
+      }, 1500);
+      
+      child.on('exit', () => {
+        // Should show auth commands but NOT auth keys or auth revoke-token
+        expect(output).to.include('auth issue-ably-token');
+        expect(output).to.include('auth issue-jwt-token');
+        expect(output).to.not.include('auth keys');
+        expect(output).to.not.include('auth revoke-token');
+        done();
+      });
+    });
   });
 });

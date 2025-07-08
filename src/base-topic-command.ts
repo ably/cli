@@ -4,6 +4,7 @@ import pkg from "fast-levenshtein";
 import { InteractiveBaseCommand } from './interactive-base-command.js';
 import { runInquirerWithReadlineRestore } from './utils/readline-helper.js';
 import * as readline from 'node:readline';
+import { WEB_CLI_RESTRICTED_COMMANDS, WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS } from './base-command.js';
 
 const { get: levenshteinDistance } = pkg;
 
@@ -175,6 +176,44 @@ export abstract class BaseTopicCommand extends InteractiveBaseCommand {
     this.log(`Run \`${chalk.cyan(helpCommand)}\` for more information on a command.`);
   }
   
+  /**
+   * Check if a command should be displayed based on web CLI and anonymous mode restrictions
+   */
+  protected shouldDisplayCommand(commandId: string): boolean {
+    // Not in web CLI mode - show all commands
+    if (process.env.ABLY_WEB_CLI_MODE !== 'true') {
+      return true;
+    }
+
+    // Check web CLI restrictions
+    const isWebRestricted = WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
+      if (restricted.endsWith("*")) {
+        const prefix = restricted.slice(0, -1);
+        return commandId === prefix || commandId.startsWith(prefix + ":") || commandId.startsWith(prefix);
+      }
+      return commandId === restricted || commandId.startsWith(restricted + ":");
+    });
+
+    if (isWebRestricted) {
+      return false;
+    }
+
+    // Check anonymous mode restrictions
+    if (process.env.ABLY_ANONYMOUS_USER_MODE === 'true') {
+      const isAnonymousRestricted = WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some((restricted) => {
+        if (restricted.endsWith("*")) {
+          const prefix = restricted.slice(0, -1);
+          return commandId === prefix || commandId.startsWith(prefix + ":") || commandId.startsWith(prefix);
+        }
+        return commandId === restricted || commandId.startsWith(restricted + ":");
+      });
+      
+      return !isAnonymousRestricted;
+    }
+
+    return true;
+  }
+
   protected async getTopicCommands(): Promise<Array<{id: string; description: string}>> {
     const commands: Array<{id: string; description: string}> = [];
     const topicPrefix = `${this.topicName}:`;
@@ -186,7 +225,7 @@ export abstract class BaseTopicCommand extends InteractiveBaseCommand {
         const remainingId = cmd.id.slice(topicPrefix.length);
         const isDirectChild = !remainingId.includes(':');
         
-        if (isDirectChild) {
+        if (isDirectChild && this.shouldDisplayCommand(cmd.id)) {
           try {
             const loadedCmd = await cmd.load();
             if (!loadedCmd.hidden) {
