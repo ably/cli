@@ -1893,12 +1893,45 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Don't send any other data until shell prompt is detected
     });
     
-    // WebSocket message handler
+    // WebSocket message handler with binary framing support
     newSocket.addEventListener('message', async (event) => {
       try {
+        let data: Uint8Array;
+        
+        // Convert all data types to Uint8Array for consistent handling
         if (typeof event.data === 'string') {
+          data = new TextEncoder().encode(event.data);
+        } else if (event.data instanceof Blob) {
+          const arrayBuffer = await event.data.arrayBuffer();
+          data = new Uint8Array(arrayBuffer);
+        } else if (event.data instanceof ArrayBuffer) {
+          data = new Uint8Array(event.data);
+        } else {
+          // Assume it's already a Uint8Array or similar
+          data = new Uint8Array(event.data);
+        }
+
+        // Check for control message prefix at byte level
+        const prefixBytes = new TextEncoder().encode(CONTROL_MESSAGE_PREFIX);
+        let isControlMessage = false;
+        
+        if (data.length >= prefixBytes.length) {
+          isControlMessage = true;
+          for (let i = 0; i < prefixBytes.length; i++) {
+            if (data[i] !== prefixBytes[i]) {
+              isControlMessage = false;
+              break;
+            }
+          }
+        }
+
+        if (isControlMessage) {
+          // Extract JSON portion after prefix
+          const jsonBytes = data.slice(prefixBytes.length);
+          const jsonStr = new TextDecoder().decode(jsonBytes);
           try {
-            const msg = JSON.parse(event.data);
+            const msg = JSON.parse(jsonStr);
+            
             if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
               debugLog(`[Secondary] Received hello. sessionId=${msg.sessionId}`);
               setSecondarySessionId(msg.sessionId);
@@ -1960,15 +1993,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               debugLog('[AblyCLITerminal] [Secondary] Received PTY meta-message. Ignoring.');
               return;
             }
-          } catch (_e) { /* Not JSON, likely PTY data */ }
+          } catch (e) {
+            console.error('[Secondary] Failed to parse control message:', e);
+          }
+          
+          // Control message was handled, return
+          return;
         }
         
-        // Process PTY data
-        let dataStr: string;
-        if (typeof event.data === 'string') dataStr = event.data;
-        else if (event.data instanceof Blob) dataStr = await event.data.text();
-        else if (event.data instanceof ArrayBuffer) dataStr = new TextDecoder().decode(event.data);
-        else dataStr = new TextDecoder().decode(event.data);
+        // Not a control message - process as PTY data
+        const dataStr = new TextDecoder().decode(data);
         
         // Filter PTY meta JSON
         if (isHijackMetaChunk(dataStr.trim())) {
