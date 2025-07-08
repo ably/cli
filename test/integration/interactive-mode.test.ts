@@ -329,4 +329,105 @@ describe('Interactive Mode Command Tests', function() {
       });
     });
   });
+
+  describe('Anonymous Mode Help Filtering', function() {
+    it('should hide restricted commands in anonymous mode help output', function(done) {
+      this.timeout(timeout);
+      
+      const child = spawn('node', [binPath, 'interactive'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          ABLY_INTERACTIVE_MODE: 'true', 
+          ABLY_WEB_CLI_MODE: 'true',
+          ABLY_ANONYMOUS_USER_MODE: 'true',
+          ABLY_SUPPRESS_WELCOME: '1' 
+        }
+      });
+      
+      let output = '';
+      let helpFound = false;
+      
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+        if (data.toString().includes('COMMANDS')) {
+          helpFound = true;
+          setTimeout(() => {
+            child.stdin.write('exit\n');
+          }, 100);
+        }
+      });
+      
+      setTimeout(() => {
+        child.stdin.write('help\n');
+      }, 500);
+      
+      child.on('exit', () => {
+        expect(helpFound).to.be.true;
+        
+        // Should show allowed commands
+        expect(output).to.include('channels');
+        expect(output).to.include('spaces');
+        expect(output).to.include('rooms');
+        
+        // Should NOT show restricted commands like accounts, apps, bench, logs, etc.
+        // Note: we check that these commands don't appear in the commands list
+        // They might appear in command group names, but not as actual executable commands
+        const lines = output.split('\n');
+        const commandLines = lines.filter(line => line.match(/^\s{2}\w+/)); // Command lines start with 2 spaces
+        const commandsText = commandLines.join('\n');
+        
+        expect(commandsText).to.not.match(/^\s{2}accounts/m);
+        expect(commandsText).to.not.match(/^\s{2}apps/m);
+        expect(commandsText).to.not.match(/^\s{2}bench/m);
+        expect(commandsText).to.not.match(/^\s{2}logs/m);
+        expect(commandsText).to.not.match(/^\s{2}integrations/m);
+        expect(commandsText).to.not.match(/^\s{2}queues/m);
+        
+        done();
+      });
+    });
+
+    it('should show restricted message when trying to run anonymous restricted commands', function(done) {
+      this.timeout(timeout);
+      
+      const child = spawn('node', [binPath, 'interactive'], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { 
+          ...process.env, 
+          ABLY_INTERACTIVE_MODE: 'true', 
+          ABLY_WEB_CLI_MODE: 'true',
+          ABLY_ANONYMOUS_USER_MODE: 'true',
+          ABLY_SUPPRESS_WELCOME: '1' 
+        }
+      });
+      
+      let output = '';
+      let errorOutput = '';
+      
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+      
+      child.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+      
+      setTimeout(() => {
+        child.stdin.write('channels logs\n');
+      }, 500);
+      
+      setTimeout(() => {
+        child.stdin.write('exit\n');
+      }, 1500);
+      
+      child.on('exit', () => {
+        const fullOutput = output + errorOutput;
+        // Should show anonymous restriction message
+        expect(fullOutput).to.include('not available in anonymous mode');
+        expect(fullOutput).to.include('provide an access token to use this command');
+        done();
+      });
+    });
+  });
 });

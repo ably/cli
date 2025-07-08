@@ -4,7 +4,7 @@ export default class Auth extends BaseTopicCommand {
   protected topicName = 'auth';
   protected commandGroup = 'authentication';
   
-  static description = 'Authentication for Ably including key management and token generation';
+  static description = 'Manage authentication, keys and tokens';
   
   static examples = [
     '<%= config.bin %> <%= command.id %> keys list',
