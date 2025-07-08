@@ -13,6 +13,9 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
   let manualReconnectAttempts = 0;
   const maxManualReconnects = process.env.CI ? 5 : 3;
   
+  // Add retry logic for flaky operations
+  const retryCount = process.env.CI ? 3 : 1;
+  
   // Wait for the terminal element to exist
   await page.waitForSelector('.xterm', { timeout: 15000 });
   
@@ -140,4 +143,78 @@ export async function waitForPromptSimple(page: Page, _timeout = 30000): Promise
   }
   
   throw new Error('No prompt or text found in terminal');
+}
+
+/**
+ * Wait for a specific terminal output with retry logic
+ */
+export async function waitForTerminalOutput(
+  page: Page, 
+  expectedText: string, 
+  options: { timeout?: number; exact?: boolean } = {}
+): Promise<void> {
+  const { timeout = 30000, exact = false } = options;
+  const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
+  
+  await page.waitForFunction(
+    ({ expectedText, exact }) => {
+      const terminalElement = document.querySelector(".xterm");
+      if (!terminalElement) return false;
+      const content = terminalElement.textContent || "";
+      return exact ? content.includes(expectedText) : content.toLowerCase().includes(expectedText.toLowerCase());
+    },
+    { expectedText, exact },
+    { timeout: effectiveTimeout }
+  );
+}
+
+/**
+ * Wait for terminal to be in a stable state (no ongoing operations)
+ */
+export async function waitForTerminalStable(page: Page, stabilityDuration = 1000): Promise<void> {
+  const checkInterval = 100;
+  let lastContent = "";
+  let stableTime = 0;
+  
+  while (stableTime < stabilityDuration) {
+    const currentContent = await page.locator(".xterm").textContent() || "";
+    
+    if (currentContent === lastContent) {
+      stableTime += checkInterval;
+    } else {
+      stableTime = 0;
+      lastContent = currentContent;
+    }
+    
+    await page.waitForTimeout(checkInterval);
+  }
+}
+
+/**
+ * Wait for session to be active with proper synchronization
+ */
+export async function waitForSessionActive(page: Page, timeout = 30000): Promise<void> {
+  const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
+  
+  await page.waitForFunction(
+    () => {
+      const state = (window as any).getAblyCliTerminalReactState?.();
+      return state?.isSessionActive === true && state?.componentConnectionStatus === "connected";
+    },
+    null,
+    { timeout: effectiveTimeout }
+  );
+}
+
+/**
+ * Safely reload page and wait for terminal to be ready
+ */
+export async function reloadAndWaitForTerminal(page: Page): Promise<void> {
+  await page.reload();
+  await waitForTerminalReady(page);
+  await waitForSessionActive(page);
+  // Additional stabilization time for CI
+  if (process.env.CI) {
+    await page.waitForTimeout(2000);
+  }
 }

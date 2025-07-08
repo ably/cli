@@ -7,7 +7,12 @@ declare const window: any;
 
 import { test, expect, getTestUrl, log } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
-import { waitForTerminalReady } from './wait-helpers.js';
+import { 
+  waitForTerminalReady,
+  waitForSessionActive,
+  waitForTerminalStable,
+  waitForTerminalOutput
+} from './wait-helpers.js';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
@@ -85,9 +90,10 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       }
     });
     
-    // Small delay to avoid rate limits
-    log('Waiting 2 seconds before test to avoid rate limits...');
-    await page.waitForTimeout(2000);
+    // Small delay to avoid rate limits (increased for CI)
+    const rateDelay = process.env.CI ? 5000 : 2000;
+    log(`Waiting ${rateDelay/1000} seconds before test to avoid rate limits...`);
+    await page.waitForTimeout(rateDelay);
     
     // 1. Navigate to the Web CLI app
     log('Navigating to Web CLI app...');
@@ -109,9 +115,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     // 4. Wait for terminal to be ready using proper helper
     await waitForTerminalReady(page);
     
-    // Small delay to ensure terminal is fully connected
-    log('Waiting 2 seconds for terminal to stabilize...');
-    await page.waitForTimeout(2000);
+    // Wait for terminal to stabilize
+    log('Waiting for terminal to stabilize...');
+    await waitForTerminalStable(page);
 
     // 5. Type initial command to establish session state
     log('Testing initial terminal functionality...');
@@ -176,9 +182,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
       return state?.componentConnectionStatus === 'connected';
     }, { timeout: 30000 });
     
-    // Give a moment for the session to stabilize
+    // Wait for the session to stabilize
     log('Connection restored, waiting for session to stabilize...');
-    await page.waitForTimeout(2000);
+    await waitForTerminalStable(page);
     
     // Get reconnection info for logging
     const reconnectionInfo = await page.evaluate(() => {
@@ -201,8 +207,8 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     // 9. Verify reconnection succeeded and terminal is operational
     await expect(page.locator(terminalSelector)).toBeVisible();
     
-    // Give terminal time to stabilize
-    await page.waitForTimeout(2000);
+    // Wait for terminal to stabilize
+    await waitForTerminalStable(page);
     
     // 10. Test that terminal is functional after reconnection
     log('Testing terminal after reconnection...');
@@ -240,9 +246,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
     await waitForTerminalReady(page);
     
-    // Small delay to ensure terminal is fully connected
-    log('Waiting 2 seconds for terminal to stabilize...');
-    await page.waitForTimeout(2000);
+    // Wait for terminal to stabilize
+    log('Waiting for terminal to stabilize...');
+    await waitForTerminalStable(page);
     
     // Simulate disconnection
     await page.evaluate(() => {
@@ -291,9 +297,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should handle disconnection gracefully', async ({ page }) => {
-    // Small delay for test stability
-    log('Waiting 2 seconds for test stability...');
-    await page.waitForTimeout(2000);
+    // Wait for terminal to be ready
+    log('Waiting for terminal to be ready...');
+    await waitForTerminalStable(page, 500);
     
     // Navigate and authenticate
     await page.goto(getTestUrl());
@@ -309,9 +315,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     await expect(page.locator(terminalSelector)).toBeVisible({ timeout: 30000 });
     await waitForTerminalReady(page);
     
-    // Small delay to ensure terminal is fully connected
-    log('Waiting 2 seconds for terminal to stabilize...');
-    await page.waitForTimeout(2000);
+    // Wait for terminal to stabilize
+    log('Waiting for terminal to stabilize...');
+    await waitForTerminalStable(page);
     
     // Run initial command
     await page.locator(terminalSelector).click();
@@ -397,7 +403,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     
     // Verify reconnection messages appear inside terminal
     // The reconnection might happen very quickly, so we need to be more lenient
-    await page.waitForTimeout(500);
+    await waitForTerminalStable(page, 500);
     
     // Check the terminal content
     const terminalText = await page.locator(terminalSelector).textContent();
@@ -412,7 +418,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     }
     
     // Wait for reconnecting state to be stable
-    await page.waitForTimeout(1000);
+    await waitForTerminalStable(page, 1000);
     
     // Check if we can see any reconnection messaging in the terminal
     try {

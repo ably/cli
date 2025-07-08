@@ -1,5 +1,12 @@
 import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
+import { 
+  waitForTerminalReady, 
+  waitForSessionActive, 
+  waitForTerminalStable,
+  reloadAndWaitForTerminal,
+  waitForTerminalOutput
+} from './wait-helpers';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
@@ -48,14 +55,11 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     // Wait for terminal to reappear after reload
     await terminal.waitFor({ timeout: 60000 });
 
-    // Wait for session resume
-    await page.waitForFunction(() => {
-      const state = (window as any).getAblyCliTerminalReactState?.();
-      return state?.componentConnectionStatus === 'connected';
-    }, { timeout: 30000 });
-
-    // Give some time for any errant prompts to appear
-    await page.waitForTimeout(3000);
+    // Wait for session resume with proper synchronization
+    await waitForSessionActive(page);
+    
+    // Wait for terminal to stabilize after reload
+    await waitForTerminalStable(page);
 
     // Take a screenshot after reload for debugging
     await page.screenshot({ path: 'test-results/prompt-after-reload.png' });
@@ -117,13 +121,12 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
 
       // Wait for terminal to reappear
       await terminal.waitFor({ timeout: 60000 });
-      await page.waitForFunction(() => {
-        const state = (window as any).getAblyCliTerminalReactState?.();
-        return state?.componentConnectionStatus === 'connected';
-      }, { timeout: 30000 });
-
-      // Give time for any errant prompts
-      await page.waitForTimeout(2000);
+      
+      // Wait for session to be active
+      await waitForSessionActive(page);
+      
+      // Wait for terminal to stabilize
+      await waitForTerminalStable(page);
     }
 
     // Check final prompt count

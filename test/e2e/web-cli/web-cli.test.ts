@@ -1,6 +1,11 @@
 import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
-import { waitForTerminalReady } from './wait-helpers.js';
+import { 
+  waitForTerminalReady,
+  waitForSessionActive,
+  waitForTerminalStable,
+  waitForTerminalOutput
+} from './wait-helpers.js';
 
 // Type for browser context in evaluate() calls
 type _BrowserContext = {
@@ -20,67 +25,16 @@ const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
  * @param terminalSelector Selector for the terminal element
  * @param timeout Maximum time to wait in milliseconds
  */
-async function _waitForPrompt(page: any, terminalSelector: string, timeout = 60000): Promise<void> {
-  log('Waiting for terminal prompt...');
-  
-  // Alternative approach: wait for either the prompt text OR the connected status
-  // This handles both cases where server sends status message or prompt appears
-  try {
-    await Promise.race([
-      // Option 1: Wait for prompt text to appear
-      page.waitForSelector(`${terminalSelector} >> text=/\\$/`, { timeout }),
-      
-      // Option 2: Wait for React component to report connected status
-      page.waitForFunction(() => {
-        const state = (window as any).getAblyCliTerminalReactState?.();
-        return state?.componentConnectionStatus === 'connected' && state?.isSessionActive === true;
-      }, null, { timeout })
-    ]);
-    
-    log('Terminal is ready (prompt detected or connected status).');
-    
-    // Small delay to ensure terminal is fully ready
-    await page.waitForTimeout(500);
-    
-  } catch (_error) {
-    console.error('Terminal did not become ready within timeout.');
-    
-    // Get debug information
-    const debugInfo = await page.evaluate(() => {
-      const state = (window as any).getAblyCliTerminalReactState?.();
-      const socketStates = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'];
-      const socketState = (window as any).ablyCliSocket?.readyState;
-      const logs = (window as any).__consoleLogs || [];
-      
-      return {
-        reactState: state,
-        socketReadyState: socketState,
-        socketStateText: socketStates[socketState] || 'UNKNOWN',
-        sessionId: (window as any)._sessionId,
-        hasStateFunction: typeof (window as any).getAblyCliTerminalReactState === 'function',
-        recentConsoleLogs: logs.slice(-20)
-      };
-    });
-    
-    console.log('--- Terminal Debug Info ---');
-    console.log('Debug state:', JSON.stringify(debugInfo, null, 2));
-    
-    const terminalContent = await page.locator(terminalSelector).textContent();
-    console.log('Terminal content:', terminalContent?.slice(0, 500) || 'No content');
-    console.log('-----------------------------------------');
-    
-    throw new Error(`Terminal not ready: ${debugInfo.reactState?.componentConnectionStatus || 'unknown state'}`);
-  }
-}
+// Removed _waitForPrompt - using wait helpers instead
 
 // --- Test Suite ---
 test.describe('Web CLI E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
 
   test('should load the terminal, connect to public server, and run basic commands', async ({ page }) => {
-    // Small delay for test stability
-    log('Waiting 2 seconds for test stability...');
-    await page.waitForTimeout(2000);
+    // Wait for test stability
+    log('Waiting for test stability...');
+    await waitForTerminalStable(page, 2000);
     
     // Use the public terminal server
     const pageUrl = `${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
@@ -96,8 +50,8 @@ test.describe('Web CLI E2E Tests', () => {
     const _terminalElement = await page.waitForSelector(terminalSelector, { timeout: 15000 });
     log('Terminal element found.');
     
-    // Add a small delay to ensure React has mounted and exposed the state function
-    await page.waitForTimeout(1000);
+    // Wait for React to mount and expose the state function
+    await waitForTerminalStable(page, 1000);
     
     // Check if the React state function is available
     const hasStateFunction = await page.evaluate(() => {
@@ -129,8 +83,8 @@ test.describe('Web CLI E2E Tests', () => {
     await expect(page.locator(terminalSelector)).toContainText(versionOutputText, { timeout: 15000 });
     log("'ably --version' output verified.");
 
-    // Add a small delay to ensure output is fully rendered if needed
-    await page.waitForTimeout(500);
+    // Wait for output to be fully rendered
+    await waitForTerminalStable(page, 500);
 
     // Check if the scrollbar appears when needed
     const scrollbarInfo = await page.evaluate((selector) => {
@@ -151,11 +105,11 @@ test.describe('Web CLI E2E Tests', () => {
       // Scroll down
       await page.locator(terminalSelector).focus();
       await page.keyboard.press('End');
-      await page.waitForTimeout(500);
+      await waitForTerminalStable(page, 500);
       
       // Scroll up
       await page.keyboard.press('Home');
-      await page.waitForTimeout(500);
+      await waitForTerminalStable(page, 500);
       log('Scrollbar functionality verified.');
     }
   });
@@ -263,7 +217,7 @@ test.describe('Web CLI E2E Tests', () => {
     
     // Test mobile size
     await page.setViewportSize({ width: 600, height: 800 });
-    await page.waitForTimeout(500); // Wait for resize transition
+    await waitForTerminalStable(page, 500); // Wait for resize transition
     
     // Drawer should still be visible
     await expect(drawer).toBeVisible();
