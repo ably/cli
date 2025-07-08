@@ -994,9 +994,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Everything else is terminal output (including --json command results)
       // Convert back to string for terminal display
       const dataStr = new TextDecoder().decode(data);
-      if (term.current) {
+      
+      // Filter PTY meta JSON chunks
+      if (isHijackMetaChunk(dataStr.trim())) {
+        debugLog('[AblyCLITerminal] Suppressed PTY meta-message chunk');
+      } else if (term.current) {
         term.current.write(dataStr);
       }
+      
       handlePtyData(dataStr);
       
     } catch (e) {
@@ -1557,19 +1562,24 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
   }, [socket, handleWebSocketOpen, handleWebSocketMessage, handleWebSocketClose, handleWebSocketError]);
 
-  // Persist sessionId to localStorage whenever it changes (if enabled)
+  // Persist sessionId to sessionStorage whenever it changes (if enabled)
   useEffect(() => {
     if (!resumeOnReload || typeof window === 'undefined') return;
-    // Don't clear sessionId until credentials have been validated
-    if (!sessionIdInitialized) return;
+    // Only persist if we have validated credentials
+    if (!credentialsInitialized) return;
     
     const urlDomain = new URL(websocketUrl).host;
     if (sessionId) {
       window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, sessionId);
+      // Also store credential hash if available
+      if (credentialHash) {
+        window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+      }
     } else {
       window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+      window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
     }
-  }, [sessionId, resumeOnReload, sessionIdInitialized, websocketUrl]);
+  }, [sessionId, resumeOnReload, credentialsInitialized, websocketUrl, credentialHash]);
 
   // Debug: log layout metrics when an overlay is rendered
   useEffect(() => {
