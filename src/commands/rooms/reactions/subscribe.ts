@@ -1,4 +1,4 @@
-import { ChatClient, RoomStatus, Subscription } from "@ably/chat";
+import { ChatClient, RoomReactionEvent, RoomStatus, Subscription } from "@ably/chat";
 import { Args } from "@oclif/core";
 import * as Ably from "ably"; // Import Ably
 import chalk from "chalk";
@@ -186,14 +186,15 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
         "subscribing",
         "Subscribing to reactions",
       );
-      this.unsubscribeReactionsFn = room.reactions.subscribe((reaction) => {
+      this.unsubscribeReactionsFn = room.reactions.subscribe((event: RoomReactionEvent) => {
+        const reaction = event.reaction;
         const timestamp = new Date().toISOString(); // Chat SDK doesn't provide timestamp in event
         const eventData = {
           clientId: reaction.clientId,
           metadata: reaction.metadata,
           roomId,
           timestamp,
-          type: reaction.type,
+          name: reaction.name,
         };
         this.logCliEvent(
           flags,
@@ -209,7 +210,7 @@ export default class RoomsReactionsSubscribe extends ChatBaseCommand {
           );
         } else {
           this.log(
-            `[${chalk.dim(timestamp)}] ${chalk.green("⚡")} ${chalk.blue(reaction.clientId || "Unknown")} reacted with ${chalk.yellow(reaction.type || "unknown")}`,
+            `[${chalk.dim(timestamp)}] ${chalk.green("⚡")} ${chalk.blue(reaction.clientId || "Unknown")} reacted with ${chalk.yellow(reaction.name || "unknown")}`,
           );
 
           // Show any additional metadata in the reaction

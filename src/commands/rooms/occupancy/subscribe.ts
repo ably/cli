@@ -1,4 +1,10 @@
-import { OccupancyEvent, RoomStatus, Subscription, RoomStatusChange, ChatClient } from "@ably/chat";
+import {
+  OccupancyEvent,
+  RoomStatus,
+  Subscription,
+  RoomStatusChange,
+  ChatClient,
+} from "@ably/chat";
 import { Args } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
@@ -260,7 +266,8 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
         "Subscribing to occupancy updates",
       );
       this.unsubscribeOccupancyFn = room.occupancy.subscribe(
-        (occupancyMetrics: OccupancyEvent) => {
+        (occupancyEvent: OccupancyEvent) => {
+          const occupancyMetrics = occupancyEvent.occupancy;
           this.logCliEvent(
             flags,
             "occupancy",

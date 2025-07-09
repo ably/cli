@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@ably/chat':
-        specifier: ^0.7.0
-        version: 0.7.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        specifier: ^0.10.0
+        version: 0.10.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@ably/spaces':
         specifier: ^0.4.0
         version: 0.4.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -367,8 +367,8 @@ importers:
 
 packages:
 
-  '@ably/chat@0.7.0':
-    resolution: {integrity: sha512-m7gChuLoXcB2KWDAwyLBfh+V5YJf3v5aweml+zdIwt5/JNztChmolN4pqJhEv0B5dT21tQU/fWkFtcyXBFJOvQ==}
+  '@ably/chat@0.10.0':
+    resolution: {integrity: sha512-74T/XAiYQkrNkRVcV18jnUjEiH23K3lOgt4yrZ0MXta0QJ9iWhqnemlmL+IDT9i/bN57AuhNXOVn8RdSSHjHnw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       ably: ^2.9.0
@@ -6152,7 +6152,7 @@ packages:
 
 snapshots:
 
-  '@ably/chat@0.7.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@ably/chat@0.10.0(ably@2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       ably: 2.9.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       async-mutex: 0.5.0

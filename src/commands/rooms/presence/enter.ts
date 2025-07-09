@@ -1,4 +1,4 @@
-import { ChatClient, Room, RoomStatus, RoomStatusChange, Subscription as ChatSubscription, StatusSubscription } from "@ably/chat";
+import { ChatClient, Room, RoomStatus, RoomStatusChange, Subscription as ChatSubscription, StatusSubscription, PresenceEvent, PresenceEventType } from "@ably/chat";
 import { Args, Flags, Interfaces } from "@oclif/core";
 import * as Ably from "ably";
 import chalk from "chalk";
@@ -142,23 +142,24 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
         );
 
         this.unsubscribePresenceFn = currentRoom.presence.subscribe(
-          (event) => { 
-            if (event.clientId !== this.chatClient?.clientId) {
+          (event: PresenceEvent) => { 
+            const member = event.member;
+            if (member.clientId !== this.chatClient?.clientId) {
               const timestamp = new Date().toISOString();
-              const eventData = { action: event.action, member: { clientId: event.clientId, data: event.data }, roomId: this.roomId, timestamp };
-              this.logCliEvent(flags, "presence", event.action, `Presence event '${event.action}' received`, eventData);
+              const eventData = { type: event.type, member: { clientId: member.clientId, data: member.data }, roomId: this.roomId, timestamp };
+              this.logCliEvent(flags, "presence", event.type, `Presence event '${event.type}' received`, eventData);
               if (this.shouldOutputJson(flags)) {
                 this.log(this.formatJsonOutput({ success: true, ...eventData }, flags));
               } else {
                 let actionSymbol = "•"; let actionColor = chalk.white;
-                if (event.action === "enter") { actionSymbol = "✓"; actionColor = chalk.green; }
-                if (event.action === "leave") { actionSymbol = "✗"; actionColor = chalk.red; }
-                if (event.action === "update") { actionSymbol = "⟲"; actionColor = chalk.yellow; }
-                this.log(`[${timestamp}] ${actionColor(actionSymbol)} ${chalk.blue(event.clientId || "Unknown")} ${actionColor(event.action)}`);
-                if (event.data && typeof event.data === 'object' && Object.keys(event.data).length > 0) {
-                  const profile = event.data as { name?: string };
+                if (event.type === PresenceEventType.Enter) { actionSymbol = "✓"; actionColor = chalk.green; }
+                if (event.type === PresenceEventType.Leave) { actionSymbol = "✗"; actionColor = chalk.red; }
+                if (event.type === PresenceEventType.Update) { actionSymbol = "⟲"; actionColor = chalk.yellow; }
+                this.log(`[${timestamp}] ${actionColor(actionSymbol)} ${chalk.blue(member.clientId || "Unknown")} ${actionColor(event.type)}`);
+                if (member.data && typeof member.data === 'object' && Object.keys(member.data).length > 0) {
+                  const profile = member.data as { name?: string };
                   if (profile.name) { this.log(`  ${chalk.dim("Name:")} ${profile.name}`); }
-                  this.log(`  ${chalk.dim("Full Profile Data:")} ${this.formatJsonOutput({ data: event.data }, flags)}`);
+                  this.log(`  ${chalk.dim("Full Profile Data:")} ${this.formatJsonOutput({ data: member.data }, flags)}`);
                 }
               }
             }
@@ -294,4 +295,3 @@ export default class RoomsPresenceEnter extends ChatBaseCommand {
     this.logCliEvent(flags, "connection", "AFTER_properlyCloseAblyClient", "Finished awaiting properlyCloseAblyClient.");
   }
 }
-
