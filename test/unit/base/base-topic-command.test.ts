@@ -15,10 +15,12 @@ describe('BaseTopicCommand', () => {
   let logStub: sinon.SinonStub;
   let config: any;
   let command: TestTopicCommand;
+  let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
     logStub = sandbox.stub();
+    originalEnv = { ...process.env };
     
     // Mock config with commands
     config = {
@@ -64,7 +66,7 @@ describe('BaseTopicCommand', () => {
 
   afterEach(function() {
     sandbox.restore();
-    delete process.env.ABLY_INTERACTIVE_MODE;
+    process.env = originalEnv;
   });
 
   it('should list all non-hidden sub-commands', async () => {
@@ -285,6 +287,104 @@ describe('BaseTopicCommand', () => {
       // Check footer
       const lastCall = logStub.getCall(logStub.callCount - 1);
       expect(lastCall.args[0]).to.contain('ably test COMMAND --help');
+    });
+  });
+
+  describe('Anonymous Mode Command Filtering', () => {
+    beforeEach(() => {
+      // Create auth-like command structure
+      config.commands = [
+        {
+          id: 'test:issue-token',
+          hidden: false,
+          load: async () => ({ description: 'Issue a token', hidden: false })
+        },
+        {
+          id: 'test:keys',
+          hidden: false,
+          load: async () => ({ description: 'Key management', hidden: false })
+        },
+        {
+          id: 'test:revoke-token',
+          hidden: false,
+          load: async () => ({ description: 'Revoke a token', hidden: false })
+        }
+      ];
+
+      // Mock environment for testing - simulate auth:keys* and auth:revoke-token restrictions
+      process.env.ABLY_WEB_CLI_MODE = 'true';
+      process.env.ABLY_ANONYMOUS_USER_MODE = 'true';
+    });
+
+    it('should filter commands based on anonymous restrictions', async () => {
+      // Override the test command to be auth command
+      class AuthTopicCommand extends BaseTopicCommand {
+        protected topicName = 'auth';
+        protected commandGroup = 'authentication';
+      }
+
+      // Create auth command with proper restricted patterns
+      const authCommand = new AuthTopicCommand([], config as Config);
+      authCommand.log = logStub;
+
+      // Update config to have auth commands
+      config.commands = [
+        {
+          id: 'auth:issue-ably-token',
+          hidden: false,
+          load: async () => ({ description: 'Issue Ably token', hidden: false })
+        },
+        {
+          id: 'auth:issue-jwt-token',
+          hidden: false,
+          load: async () => ({ description: 'Issue JWT token', hidden: false })
+        },
+        {
+          id: 'auth:keys',
+          hidden: false,
+          load: async () => ({ description: 'Key management', hidden: false })
+        },
+        {
+          id: 'auth:revoke-token',
+          hidden: false,
+          load: async () => ({ description: 'Revoke a token', hidden: false })
+        }
+      ];
+
+      await authCommand.run();
+
+      // Should show the allowed commands
+      expect(logStub.calledWithMatch(/auth issue-ably-token/)).to.be.true;
+      expect(logStub.calledWithMatch(/auth issue-jwt-token/)).to.be.true;
+
+      // Should NOT show restricted commands
+      expect(logStub.calledWithMatch(/auth keys/)).to.be.false;
+      expect(logStub.calledWithMatch(/auth revoke-token/)).to.be.false;
+    });
+
+    it('should show all commands when not in anonymous mode', async () => {
+      // Remove anonymous mode
+      delete process.env.ABLY_ANONYMOUS_USER_MODE;
+
+      await command.run();
+
+      // All commands should be visible
+      expect(logStub.calledWithMatch(/test issue-token/)).to.be.true;
+      expect(logStub.calledWithMatch(/test keys/)).to.be.true;
+      expect(logStub.calledWithMatch(/test revoke-token/)).to.be.true;
+    });
+
+    it('should show all commands when not in web CLI mode', async () => {
+      // Remove web CLI mode entirely
+      delete process.env.ABLY_WEB_CLI_MODE;
+      delete process.env.ABLY_ANONYMOUS_USER_MODE;
+
+      await command.run();
+
+      // All commands should be visible
+      expect(logStub.calledWithMatch(/test issue-token/)).to.be.true;
+      expect(logStub.calledWithMatch(/test keys/)).to.be.true;
+      expect(logStub.calledWithMatch(/test revoke-token/)).to.be.true;
     });
   });
 });

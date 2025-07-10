@@ -454,12 +454,13 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
   }
 
   private displayOccupancyMetrics(
-    occupancyMetrics: OccupancyMetrics,
+    occupancyMetrics: OccupancyMetrics | OccupancyEvent,
     roomId: string | null,
     flags: Record<string, unknown>,
     isInitial = false,
   ): void {
     if (!roomId) return; // Guard against null roomId
+    if (!occupancyMetrics) return; // Guard against undefined occupancyMetrics
     
     const timestamp = new Date().toISOString();
     const logData = {
@@ -481,10 +482,14 @@ export default class RoomsOccupancySubscribe extends ChatBaseCommand {
     } else {
       const prefix = isInitial ? "Initial occupancy" : "Occupancy update";
       this.log(`[${timestamp}] ${prefix} for room '${roomId}'`);
-      this.log(`  Connections: ${occupancyMetrics.connections ?? 0}`);
+      // Type guard to handle both OccupancyMetrics and OccupancyEvent
+      const connections = 'connections' in occupancyMetrics ? occupancyMetrics.connections : 0;
+      const presenceMembers = 'presenceMembers' in occupancyMetrics ? occupancyMetrics.presenceMembers : undefined;
+      
+      this.log(`  Connections: ${connections ?? 0}`);
 
-      if (occupancyMetrics.presenceMembers !== undefined) {
-        this.log(`  Presence Members: ${occupancyMetrics.presenceMembers}`);
+      if (presenceMembers !== undefined) {
+        this.log(`  Presence Members: ${presenceMembers}`);
       }
 
       this.log(""); // Empty line for better readability

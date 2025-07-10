@@ -41,20 +41,20 @@ const getConfig = () => {
   const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS || process.env.TRAVIS || process.env.CIRCLECI);
   
   // Can be overridden by environment variable
-  const configType = process.env.RATE_LIMIT_CONFIG || (isCI ? 'CI_FAST' : 'LOCAL');
+  const configType = process.env.RATE_LIMIT_CONFIG || (isCI ? 'CI' : 'LOCAL');
   console.log(`[RateLimit Config] Using ${configType} configuration`);
   
   switch (configType) {
     case 'CI': {
       return {
-        connectionsPerBatch: 8,    // More efficient for CI (10 per minute limit with 2 buffer)
-        pauseDuration: 62000,      // 62 seconds to ensure rate limit window reset
+        connectionsPerBatch: 8,    // Increased from 5 to reduce number of pauses
+        pauseDuration: 65000,      // 65 seconds to ensure rate limit window fully resets
       };
     }
     case 'CI_FAST': {
       return {
-        connectionsPerBatch: 12,   // Increased to reduce number of pauses
-        pauseDuration: 65000,      // Reduced from 75s to 65s
+        connectionsPerBatch: 7,    // Reduced from 12 to 7 for safety
+        pauseDuration: 70000,      // Increased to 70s for full reset
       };
     }
     case 'CI_EMERGENCY': {
@@ -65,8 +65,8 @@ const getConfig = () => {
     }
     case 'LOCAL': {
       return {
-        connectionsPerBatch: 8,    // Closer to limit but still safe (10 - 2 buffer)
-        pauseDuration: 62000,      // 62 seconds to ensure rate limit window reset
+        connectionsPerBatch: 5,    // More conservative: only 5 connections per minute
+        pauseDuration: 65000,      // 65 seconds to ensure rate limit window fully resets
       };
     }
     case 'AGGRESSIVE': {

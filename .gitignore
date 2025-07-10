@@ -54,3 +54,4 @@ tsconfig.tsbuildinfo
 
 # Playwright logs
 playwright-report/
+test/e2e/web-cli/*.log

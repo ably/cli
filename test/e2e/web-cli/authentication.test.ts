@@ -1,6 +1,7 @@
 import { test, expect, getTestUrl, buildTestUrl, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForTerminalReady, waitForSessionActive } from './wait-helpers';
 
 test.describe('Web CLI Authentication E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
@@ -81,6 +82,16 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     
     // Use form-based authentication explicitly (don't use query params)
     await authenticateWebCli(page, apiKey, false);
+    
+    // Wait for terminal with explicit timeout for CI debugging
+    try {
+      await waitForTerminalReady(page, process.env.CI ? 30000 : 15000);
+    } catch (error) {
+      console.error('Failed to wait for terminal ready:', error);
+      // Capture page screenshot for debugging
+      await page.screenshot({ path: 'test-results/auth-terminal-timeout.png' });
+      throw error;
+    }
     
     // Should transition to terminal view
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
@@ -315,12 +326,13 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     await page.click('button:has-text("Connect to Terminal")');
     await expect(page.locator('.xterm')).toBeVisible({ timeout: 15000 });
     
-    // Wait for terminal prompt
-    await page.waitForTimeout(2000);
+    // Wait for terminal to be ready and session to be active
+    await waitForTerminalReady(page);
+    await waitForSessionActive(page);
     
     // Type a command to establish session state
     await page.locator('.xterm').click();
-    await page.keyboard.type('echo "test session"');
+    await page.keyboard.type('help');
     await page.keyboard.press('Enter');
     
     // Open auth settings
@@ -332,7 +344,8 @@ test.describe('Web CLI Authentication E2E Tests', () => {
     
     // Terminal should still be visible and session should be maintained
     await expect(page.locator('.xterm')).toBeVisible();
-    await expect(page.locator('.xterm')).toContainText('test session');
+    // Verify the help command output is still visible
+    await expect(page.locator('.xterm')).toContainText('COMMANDS');
   });
 
   test('should show SERVER DISCONNECT overlay for invalid credentials', async ({ page }) => {

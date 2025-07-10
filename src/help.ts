@@ -5,7 +5,7 @@ import stripAnsi from "strip-ansi";
 import { ConfigManager } from "./services/config-manager.js";
 import { displayLogo } from "./utils/logo.js";
 
-import { WEB_CLI_RESTRICTED_COMMANDS } from "./base-command.js"; // Import the single source of truth
+import { WEB_CLI_RESTRICTED_COMMANDS, WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS } from "./base-command.js"; // Import the single source of truth
 
 export default class CustomHelp extends Help {
   static skipCache = true; // For development - prevents help commands from being cached
@@ -13,6 +13,7 @@ export default class CustomHelp extends Help {
   protected webCliMode: boolean;
   protected configManager: ConfigManager;
   protected interactiveMode: boolean;
+  protected anonymousMode: boolean;
   // Flag to track if we're already showing root help to prevent duplication
   protected isShowingRootHelp: boolean = false;
 
@@ -20,6 +21,7 @@ export default class CustomHelp extends Help {
     super(config, opts);
     this.webCliMode = process.env.ABLY_WEB_CLI_MODE === "true";
     this.interactiveMode = process.env.ABLY_INTERACTIVE_MODE === "true";
+    this.anonymousMode = process.env.ABLY_ANONYMOUS_USER_MODE === "true";
     this.configManager = new ConfigManager();
   }
 
@@ -411,7 +413,7 @@ export default class CustomHelp extends Help {
 
       // Modify based on web CLI mode using the imported list
       if (this.webCliMode) {
-        const isRestricted = WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
+        const isWebRestricted = WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
           // Handle wildcard patterns (e.g., "config*", "mcp*")
           if (restricted.endsWith("*")) {
             const prefix = restricted.slice(0, -1); // Remove the asterisk
@@ -421,12 +423,31 @@ export default class CustomHelp extends Help {
           return command.id === restricted || command.id.startsWith(restricted + ":");
         });
         
-        if (isRestricted) {
+        if (isWebRestricted) {
           output = [
             `${chalk.bold("This command is not available in the web CLI mode.")}`,
             "",
             "Please use the standalone CLI installation instead.",
           ].join("\n");
+        } else if (this.anonymousMode) {
+          // Check anonymous restrictions
+          const isAnonymousRestricted = WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some((restricted) => {
+            // Handle wildcard patterns (e.g., "accounts*", "logs*")
+            if (restricted.endsWith("*")) {
+              const prefix = restricted.slice(0, -1); // Remove the asterisk
+              return command.id === prefix || command.id.startsWith(prefix + ":") || command.id.startsWith(prefix);
+            }
+            // Exact match or command starts with restricted:
+            return command.id === restricted || command.id.startsWith(restricted + ":");
+          });
+          
+          if (isAnonymousRestricted) {
+            output = [
+              `${chalk.bold("This command is not available in anonymous mode.")}`,
+              "",
+              "Please provide an access token to use this command.",
+            ].join("\n");
+          }
         }
       }
     return output; // Let the overridden render handle stripping
@@ -440,7 +461,7 @@ export default class CustomHelp extends Help {
 
     // In web mode, check if the command should be hidden using the imported list
     // Check if the commandId matches any restricted command pattern
-    return !WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
+    const isWebRestricted = WEB_CLI_RESTRICTED_COMMANDS.some((restricted) => {
       // Handle wildcard patterns (e.g., "config*", "mcp*")
       if (restricted.endsWith("*")) {
         const prefix = restricted.slice(0, -1); // Remove the asterisk
@@ -449,6 +470,27 @@ export default class CustomHelp extends Help {
       // Exact match or command starts with restricted:
       return command.id === restricted || command.id.startsWith(restricted + ":");
     });
+
+    if (isWebRestricted) {
+      return false;
+    }
+
+    // In anonymous mode, also check anonymous restricted commands
+    if (this.anonymousMode) {
+      const isAnonymousRestricted = WEB_CLI_ANONYMOUS_RESTRICTED_COMMANDS.some((restricted) => {
+        // Handle wildcard patterns (e.g., "accounts*", "logs*")
+        if (restricted.endsWith("*")) {
+          const prefix = restricted.slice(0, -1); // Remove the asterisk
+          return command.id === prefix || command.id.startsWith(prefix + ":") || command.id.startsWith(prefix);
+        }
+        // Exact match or command starts with restricted:
+        return command.id === restricted || command.id.startsWith(restricted + ":");
+      });
+      
+      return !isAnonymousRestricted;
+    }
+
+    return true;
   }
 
   formatCommands(commands: Command.Loadable[]): string {

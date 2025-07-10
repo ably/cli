@@ -6,8 +6,8 @@ The web-cli terminal server has rate limits: **10 connections per minute per IP 
 
 The test suite implements rate limiting to avoid hitting server limits:
 
-- **LOCAL**: 8 connections per batch, 62s pause
-- **CI**: 6 connections per batch, 65s pause  
+- **LOCAL**: 5 connections per batch, 65s pause
+- **CI**: 8 connections per batch, 65s pause  
 - **AGGRESSIVE**: 9 connections per batch, 61s pause
 
 ## Running Tests

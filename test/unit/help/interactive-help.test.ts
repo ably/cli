@@ -18,6 +18,8 @@ describe('Interactive Mode Help Formatting', function() {
   afterEach(function() {
     // Clean up environment variables
     delete process.env.ABLY_INTERACTIVE_MODE;
+    delete process.env.ABLY_WEB_CLI_MODE;
+    delete process.env.ABLY_ANONYMOUS_USER_MODE;
   });
   
   describe('stripAblyPrefix', function() {
@@ -127,6 +129,119 @@ $ channels publish test "msg2"
       if (output.includes('login')) {
         expect(output).to.include('$ ably accounts login');
       }
+    });
+  });
+
+  describe('Anonymous Mode Command Filtering', function() {
+    beforeEach(function() {
+      // Set up a more complete config with various commands
+      config = {
+        bin: 'ably',
+        commands: [
+          { id: 'channels:publish', description: 'Publish a message', hidden: false },
+          { id: 'channels:subscribe', description: 'Subscribe to channel', hidden: false },
+          { id: 'channels:list', description: 'List channels', hidden: false },
+          { id: 'channels:logs', description: 'View channel logs', hidden: false },
+          { id: 'accounts:list', description: 'List accounts', hidden: false },
+          { id: 'apps:list', description: 'List apps', hidden: false },
+          { id: 'bench:publisher', description: 'Benchmark publisher', hidden: false },
+          { id: 'auth:keys:list', description: 'List auth keys', hidden: false },
+          { id: 'logs:app:history', description: 'View app logs', hidden: false },
+          { id: 'spaces:list', description: 'List spaces', hidden: false },
+          { id: 'rooms:list', description: 'List rooms', hidden: false },
+          { id: 'integrations:create', description: 'Create integration', hidden: false },
+          { id: 'queues:create', description: 'Create queue', hidden: false }
+        ],
+        topics: [],
+        findCommand: (id: string) => config.commands.find(c => c.id === id)
+      } as any;
+    });
+
+    it('should display all commands when not in web CLI mode', function() {
+      help = new CustomHelp(config);
+      
+      // Test shouldDisplay for various commands
+      expect(help.shouldDisplay({ id: 'channels:list' } as any)).to.be.true;
+      expect(help.shouldDisplay({ id: 'accounts:list' } as any)).to.be.true;
+      expect(help.shouldDisplay({ id: 'apps:list' } as any)).to.be.true;
+      expect(help.shouldDisplay({ id: 'bench:publisher' } as any)).to.be.true;
+    });
+
+    it('should filter web CLI restricted commands in web mode', function() {
+      process.env.ABLY_WEB_CLI_MODE = 'true';
+      help = new CustomHelp(config);
+      
+      // These should be hidden in web CLI mode
+      expect(help.shouldDisplay({ id: 'accounts:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'apps:create' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'config' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'mcp:start' } as any)).to.be.false;
+      
+      // These should still be visible
+      expect(help.shouldDisplay({ id: 'channels:publish' } as any)).to.be.true;
+      expect(help.shouldDisplay({ id: 'channels:list' } as any)).to.be.true;
+    });
+
+    it('should filter anonymous restricted commands in anonymous mode', function() {
+      process.env.ABLY_WEB_CLI_MODE = 'true';
+      process.env.ABLY_ANONYMOUS_USER_MODE = 'true';
+      help = new CustomHelp(config);
+      
+      // These should be hidden in anonymous mode
+      expect(help.shouldDisplay({ id: 'channels:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'channels:logs' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'accounts:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'apps:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'bench:publisher' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'auth:keys:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'logs:app:history' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'spaces:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'rooms:list' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'integrations:create' } as any)).to.be.false;
+      expect(help.shouldDisplay({ id: 'queues:create' } as any)).to.be.false;
+      
+      // These should still be visible
+      expect(help.shouldDisplay({ id: 'channels:publish' } as any)).to.be.true;
+      expect(help.shouldDisplay({ id: 'channels:subscribe' } as any)).to.be.true;
+    });
+
+    it('should handle wildcard patterns correctly', function() {
+      process.env.ABLY_WEB_CLI_MODE = 'true';
+      process.env.ABLY_ANONYMOUS_USER_MODE = 'true';
+      help = new CustomHelp(config);
+      
+      // Test wildcard patterns
+      expect(help.shouldDisplay({ id: 'accounts' } as any)).to.be.false; // matches accounts*
+      expect(help.shouldDisplay({ id: 'accounts:stats' } as any)).to.be.false; // matches accounts*
+      expect(help.shouldDisplay({ id: 'apps' } as any)).to.be.false; // matches apps*
+      expect(help.shouldDisplay({ id: 'apps:current' } as any)).to.be.false; // matches apps*
+      expect(help.shouldDisplay({ id: 'bench' } as any)).to.be.false; // matches bench*
+      expect(help.shouldDisplay({ id: 'bench:subscriber' } as any)).to.be.false; // matches bench*
+      expect(help.shouldDisplay({ id: 'logs' } as any)).to.be.false; // matches logs*
+      expect(help.shouldDisplay({ id: 'logs:push:subscribe' } as any)).to.be.false; // matches logs*
+    });
+
+    it('should show appropriate message for anonymous restricted commands', function() {
+      process.env.ABLY_WEB_CLI_MODE = 'true';
+      process.env.ABLY_ANONYMOUS_USER_MODE = 'true';
+      help = new CustomHelp(config);
+      
+      const command = { id: 'channels:list', description: 'List channels' };
+      const output = help.formatCommand(command as any);
+      
+      expect(output).to.include('This command is not available in anonymous mode');
+      expect(output).to.include('Please provide an access token to use this command');
+    });
+
+    it('should show appropriate message for web CLI restricted commands', function() {
+      process.env.ABLY_WEB_CLI_MODE = 'true';
+      help = new CustomHelp(config);
+      
+      const command = { id: 'accounts:login', description: 'Login to account' };
+      const output = help.formatCommand(command as any);
+      
+      expect(output).to.include('This command is not available in the web CLI mode');
+      expect(output).to.include('Please use the standalone CLI installation instead');
     });
   });
 });
