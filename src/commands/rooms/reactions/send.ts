@@ -203,7 +203,7 @@ export default class RoomsReactionsSend extends ChatBaseCommand {
         { emoji, metadata: this.metadataObj || {} },
       );
       await room.reactions.send({
-        type: emoji,
+        name: emoji,
         metadata: this.metadataObj || {},
       });
       this.logCliEvent(

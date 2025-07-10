@@ -236,7 +236,7 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
         }
       );
 
-      await room.messages.reactions.add({ serial: messageSerial }, reactionParams);
+      await room.messages.reactions.send({ serial: messageSerial }, reactionParams);
       
       this.logCliEvent(
         flags,

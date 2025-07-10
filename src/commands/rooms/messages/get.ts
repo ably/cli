@@ -80,7 +80,7 @@ export default class MessagesGet extends ChatBaseCommand {
       }
 
       // Get historical messages
-      const messagesResult = await room.messages.get({ limit: flags.limit });
+      const messagesResult = await room.messages.history({ limit: flags.limit });
       const { items } = messagesResult;
 
       if (this.shouldOutputJson(flags)) {

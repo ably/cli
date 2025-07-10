@@ -1,6 +1,6 @@
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
-import { Subscription, StatusSubscription, MessageEvent } from "@ably/chat"; // Import ChatClient and StatusSubscription
+import { Subscription, StatusSubscription, ChatMessageEvent } from "@ably/chat"; // Import ChatClient and StatusSubscription
 import chalk from "chalk";
 
 import { ChatBaseCommand } from "../../../chat-base-command.js";
@@ -29,7 +29,7 @@ interface StatusChange {
 // Define room interface
 interface ChatRoom {
   messages: {
-    subscribe: (callback: (event: MessageEvent) => void) => Subscription;
+    subscribe: (callback: (event: ChatMessageEvent) => void) => Subscription;
   };
   onStatusChange: (callback: (statusChange: unknown) => void) => StatusSubscription;
   attach: () => Promise<void>;
@@ -191,7 +191,7 @@ export default class MessagesSubscribe extends ChatBaseCommand {
         `Subscribing to messages in room ${this.roomId}`,
       );
       this.messageSubscription = room.messages.subscribe(
-        (messageEvent: MessageEvent) => {
+        (messageEvent: ChatMessageEvent) => {
           const { message } = messageEvent;
           const messageLog: ChatMessage = {
             clientId: message.clientId,
