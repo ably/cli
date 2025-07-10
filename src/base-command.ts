@@ -20,6 +20,7 @@ export const WEB_CLI_RESTRICTED_COMMANDS = [
   "accounts:current",
   "accounts:list",
   "accounts:login",
+  "login",
   "accounts:logout",
   "accounts:switch",
 
@@ -30,6 +31,8 @@ export const WEB_CLI_RESTRICTED_COMMANDS = [
 
   // The key you use for auth is controlled from the web UI
   "auth:keys:switch",
+
+  "autocomplete*",
 
   // config only applicable to local env
   "config*",

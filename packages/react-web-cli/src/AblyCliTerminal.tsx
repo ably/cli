@@ -281,7 +281,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Update state
       setIsSplit(false);
       setSessionId(tempSessionId);
-      setIsSessionActive(tempIsActive);
+      updateSessionActive(tempIsActive);
       
       // Reset secondary terminal state
       updateSecondaryConnectionStatus('initial');
@@ -389,6 +389,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   // Guard to ensure we do NOT double-count a failed attempt when both the
   // `error` and the subsequent `close` events fire for the *same* socket.
   const reconnectScheduledThisCycleRef = useRef<boolean>(false);
+  
+  // Keep a ref in sync with session active state for use in closures
+  const isSessionActiveRef = useRef<boolean>(false);
 
   // Use block-based spinner where empty dots are invisible in most monospace fonts
   const spinnerFrames = ['●  ', ' ● ', '  ●', ' ● '];
@@ -486,6 +489,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     ptyBuffer.current = '';
   }, []);
   
+  // Helper to update both session active state and ref
+  const updateSessionActive = useCallback((active: boolean) => {
+    debugLog(`⚠️ DIAGNOSTIC: Updating session active to: ${active}`);
+    setIsSessionActive(active);
+    isSessionActiveRef.current = active;
+  }, []);
+  
   // Connection timeout management
   const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
@@ -524,13 +534,17 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       // Only detect the prompt if it appears at the end of the buffer,
       // not somewhere in the middle of previous output
-      if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
-        debugLog(`⚠️ DIAGNOSTIC: Shell prompt detected at end of buffer`);
+      // Also check for common Ably CLI prompts
+      const hasShellPrompt = TERMINAL_PROMPT_PATTERN.test(cleanBuf);
+      const hasAblyPrompt = cleanBuf.endsWith('$ ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('ably> ');
+      
+      if (hasShellPrompt || hasAblyPrompt) {
+        debugLog(`⚠️ DIAGNOSTIC: Prompt detected at end of buffer (shell: ${hasShellPrompt}, ably: ${hasAblyPrompt})`);
         clearStatusDisplay(); // Clear the status box as per plan
         
         // Only set active if not already active to prevent multiple state updates
         if (!isSessionActive) {
-          setIsSessionActive(true);
+          updateSessionActive(true);
           grSuccessfulConnectionReset();
           updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
           if (term.current) term.current.focus();
@@ -544,7 +558,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         clearPtyBuffer();
       }
     }
-  }, [isSessionActive, updateConnectionStatusAndExpose, clearPtyBuffer, clearStatusDisplay, clearInstallInstructionsTimer]);
+  }, [isSessionActive, updateConnectionStatusAndExpose, updateSessionActive, clearPtyBuffer, clearStatusDisplay, clearInstallInstructionsTimer]);
 
   // Secondary terminal instance references
   const secondaryRootRef = useRef<HTMLDivElement>(null);
@@ -597,8 +611,12 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       const cleanBuf = secondaryPtyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
       
       // Only detect the prompt if it appears at the end of the buffer
-      if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
-        debugLog('[AblyCLITerminal] [Secondary] Shell prompt detected – session active');
+      // Also check for common Ably CLI prompts
+      const hasShellPrompt = TERMINAL_PROMPT_PATTERN.test(cleanBuf);
+      const hasAblyPrompt = cleanBuf.endsWith('$ ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('ably> ');
+      
+      if (hasShellPrompt || hasAblyPrompt) {
+        debugLog('[AblyCLITerminal] [Secondary] Prompt detected – session active');
         clearSecondaryStatusDisplay(); // Clear the overlay when prompt is detected
         
         // Only set active if not already active
@@ -790,7 +808,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     
     // Do not reset reconnection attempts here; wait until terminal prompt confirms full session
     setShowManualReconnectPrompt(false);
-    clearPtyBuffer(); // Clear buffer for new session prompt detection
+    
+    // Only clear buffer for new sessions, not when resuming
+    if (!sessionId) {
+      clearPtyBuffer(); // Clear buffer for new session prompt detection
+    } else {
+      debugLog(`⚠️ DIAGNOSTIC: Skipping PTY buffer clear for resumed session ${sessionId}`);
+    }
 
     debugLog('⚠️ DIAGNOSTIC: WebSocket open handler started - tracking initialization sequence');
 
@@ -821,10 +845,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Wait until we detect the prompt before sending an initialCommand if there is one
     // This prevents sending commands before the shell is ready
-    if (initialCommand) {
-      debugLog(`⚠️ DIAGNOSTIC: Initial command present: "${initialCommand}" - will wait for prompt`);
+    // Skip initial command if we're resuming an existing session
+    if (initialCommand && !sessionId) {
+      debugLog(`⚠️ DIAGNOSTIC: Initial command present: "${initialCommand}" - will wait for prompt (new session)`);
       const waitForPrompt = () => {
-        if (isSessionActive && term.current) {
+        if (isSessionActiveRef.current && term.current) {
           debugLog('⚠️ DIAGNOSTIC: Session active, sending initial command');
           setTimeout(() => { 
             if (term.current && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -841,11 +866,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       // Start waiting for prompt
       waitForPrompt();
+    } else if (initialCommand && sessionId) {
+      debugLog(`⚠️ DIAGNOSTIC: Skipping initial command for resumed session ${sessionId}`);
     }
 
     // persistence handled by dedicated useEffect
     debugLog('WebSocket OPEN handler completed. sessionId:', sessionId);
-  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, isSessionActive, clearConnectionTimeout, credentialHash]);
+  }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, clearConnectionTimeout, credentialHash]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
     try {
@@ -889,18 +916,18 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
             debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
             const wasReconnecting = connectionStatusRef.current === 'reconnecting';
+            const wasConnecting = connectionStatusRef.current === 'connecting';
             setSessionId(msg.sessionId);
             if (onSessionId) onSessionId(msg.sessionId);
             debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
             
-            // If we were reconnecting and received a hello, we should activate the session
-            if (wasReconnecting) {
-              debugLog('⚠️ DIAGNOSTIC: Activating session after reconnection hello message');
-              setIsSessionActive(true);
-              updateConnectionStatusAndExpose('connected');
-              if (term.current) {
-                term.current.focus();
-              }
+            // Always activate the session when we receive a hello message
+            // This handles cases where the server doesn't send a separate "connected" status message
+            debugLog(`⚠️ DIAGNOSTIC: Activating session after hello message (wasReconnecting: ${wasReconnecting}, wasConnecting: ${wasConnecting})`);
+            updateSessionActive(true);
+            updateConnectionStatusAndExpose('connected');
+            if (term.current) {
+              term.current.focus();
             }
             
             // Persist to session storage if enabled (domain-scoped)
@@ -923,7 +950,6 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             if (msg.payload === 'connected') {
               debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
               clearStatusDisplay();
-              setIsSessionActive(true);
               updateConnectionStatusAndExpose('connected');
               
               if (term.current) {
@@ -931,6 +957,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
                 term.current.write('\x1b[K'); // Clear from cursor to EOL
                 term.current.focus();
               }
+              
+              // Set session active immediately on connected status
+              debugLog(`⚠️ DIAGNOSTIC: Setting session active on 'connected' status`);
+              updateSessionActive(true);
+              grSuccessfulConnectionReset();
               
               clearPtyBuffer();
               return;
@@ -994,15 +1025,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Everything else is terminal output (including --json command results)
       // Convert back to string for terminal display
       const dataStr = new TextDecoder().decode(data);
-      if (term.current) {
+      
+      // Filter PTY meta JSON chunks
+      if (isHijackMetaChunk(dataStr.trim())) {
+        debugLog('[AblyCLITerminal] Suppressed PTY meta-message chunk');
+      } else if (term.current) {
         term.current.write(dataStr);
       }
+      
       handlePtyData(dataStr);
       
     } catch (e) {
       console.error('[AblyCLITerminal] Error processing message:', e);
     }
-  }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose, credentialHash, resumeOnReload, sessionId]);
+  }, [handlePtyData, onSessionEnd, updateConnectionStatusAndExpose, updateSessionActive, credentialHash, resumeOnReload, sessionId]);
 
   const handleWebSocketError = useCallback((event: Event) => {
     console.error('[AblyCLITerminal] WebSocket error event received:', event);
@@ -1076,7 +1112,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     debugLog(`[AblyCLITerminal] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}, Clean: ${event.wasClean}`);
     clearConnectionTimeout(); // Clear timeout on close
     clearTerminalBoxOnly();
-    setIsSessionActive(false); 
+    updateSessionActive(false); 
 
     // Check if this was a user-initiated close
     const userClosedTerminal = event.reason === 'user-closed-primary' || 
@@ -1192,7 +1228,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Prevent any (unlikely) duplicate scheduling from other late events
       reconnectScheduledThisCycleRef.current = true;
     }
-  }, [startConnectingAnimation, updateConnectionStatusAndExpose, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId, clearConnectionTimeout]);
+  }, [startConnectingAnimation, updateConnectionStatusAndExpose, updateSessionActive, clearTerminalBoxOnly, websocketUrl, resumeOnReload, sessionId, clearConnectionTimeout]);
 
   useEffect(() => {
     // Setup terminal
@@ -1528,8 +1564,39 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       grIsCancelled: grIsCancelledState(),
       grIsMaxReached: grIsMaxAttemptsReached(),
     });
+    
+    // Expose a function to get terminal buffer content for testing
+    (window as any).getTerminalBufferText = () => {
+      if (!term.current) return '';
+      const buffer = term.current.buffer.active;
+      let text = '';
+      for (let i = 0; i < buffer.length; i++) {
+        const line = buffer.getLine(i);
+        if (line) {
+          text += line.translateToString(true) + '\n';
+        }
+      }
+      return text.trimEnd();
+    };
+    
+    // Expose terminal buffer info for debugging
+    (window as any).getTerminalBufferInfo = () => {
+      if (!term.current) return { exists: false };
+      const buffer = term.current.buffer.active;
+      return {
+        exists: true,
+        length: buffer.length,
+        cursorY: buffer.cursorY,
+        cursorX: buffer.cursorX,
+        baseY: buffer.baseY,
+        trimmedLength: buffer.length - buffer.baseY
+      };
+    };
+    
     return () => {
       delete (window as any).getAblyCliTerminalReactState;
+      delete (window as any).getTerminalBufferText;
+      delete (window as any).getTerminalBufferInfo;
     };
   }, [
     componentConnectionStatus, isSessionActive, connectionHelpMessage, 
@@ -1557,19 +1624,24 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
   }, [socket, handleWebSocketOpen, handleWebSocketMessage, handleWebSocketClose, handleWebSocketError]);
 
-  // Persist sessionId to localStorage whenever it changes (if enabled)
+  // Persist sessionId to sessionStorage whenever it changes (if enabled)
   useEffect(() => {
     if (!resumeOnReload || typeof window === 'undefined') return;
-    // Don't clear sessionId until credentials have been validated
-    if (!sessionIdInitialized) return;
+    // Only persist if we have validated credentials
+    if (!credentialsInitialized) return;
     
     const urlDomain = new URL(websocketUrl).host;
     if (sessionId) {
       window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, sessionId);
+      // Also store credential hash if available
+      if (credentialHash) {
+        window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+      }
     } else {
       window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+      window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
     }
-  }, [sessionId, resumeOnReload, sessionIdInitialized, websocketUrl]);
+  }, [sessionId, resumeOnReload, credentialsInitialized, websocketUrl, credentialHash]);
 
   // Debug: log layout metrics when an overlay is rendered
   useEffect(() => {
@@ -1939,6 +2011,15 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               // Persist to session storage if enabled
               if (resumeOnReload && typeof window !== 'undefined') {
                 window.sessionStorage.setItem('ably.cli.secondarySessionId', msg.sessionId);
+              }
+              
+              // Always activate session after hello message
+              debugLog(`[Secondary] Activating session after hello message`);
+              setIsSecondarySessionActive(true);
+              updateSecondaryConnectionStatus('connected');
+              clearSecondaryStatusDisplay();
+              if (secondaryTerm.current) {
+                secondaryTerm.current.focus();
               }
               
               return;

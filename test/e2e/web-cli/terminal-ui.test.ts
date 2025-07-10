@@ -155,18 +155,18 @@ test.describe('Web CLI Terminal UI Tests', () => {
       // Type in the first terminal
       const primaryTerminal = page.locator('[data-testid="terminal-container"] .xterm');
       await primaryTerminal.click();
-      await page.keyboard.type('echo "terminal 1"');
+      await page.keyboard.type('help');
       await page.keyboard.press('Enter');
       
       // Type in the second terminal
       const secondaryTerminal = page.locator('[data-testid="terminal-container-secondary"] .xterm');
       await secondaryTerminal.click();
-      await page.keyboard.type('echo "terminal 2"');
+      await page.keyboard.type('--version');
       await page.keyboard.press('Enter');
       
       // Verify each terminal has its own output
-      await expect(primaryTerminal).toContainText('terminal 1');
-      await expect(secondaryTerminal).toContainText('terminal 2');
+      await expect(primaryTerminal).toContainText('COMMANDS');
+      await expect(secondaryTerminal).toContainText('browser-based interactive CLI');
     });
   });
 });

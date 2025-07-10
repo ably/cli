@@ -26,6 +26,24 @@ async function globalSetup() {
     console.log('[Global Setup] No .env file found. Using environment variables from current environment.');
   }
   
+  // In CI, test network connectivity to the WebSocket server
+  if (process.env.CI) {
+    console.log('[Global Setup] Testing network connectivity in CI...');
+    try {
+      const https = await import('node:https');
+      const testUrl = new URL('https://web-cli.ably.com');
+      await new Promise<void>((resolve, reject) => {
+        https.get(testUrl.href, (res) => {
+          console.log(`[Global Setup] HTTPS connection test: status ${res.statusCode}`);
+          res.destroy();
+          resolve();
+        }).on('error', reject);
+      });
+    } catch (error) {
+      console.error('[Global Setup] Network connectivity test failed:', error);
+    }
+  }
+  
   // Initialize rate limiter configuration
   console.log('[Global Setup] Configuring rate limiter...');
   setupRateLimiter();
@@ -38,8 +56,10 @@ async function globalSetup() {
   
   // Add initial delay to ensure we start with a clean rate limit window
   if (!process.env.SKIP_INITIAL_DELAY) {
-    console.log('[Global Setup] Waiting 10 seconds to ensure clean rate limit window...');
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+    const initialDelay = isCI ? 30000 : 10000; // 30s for CI, 10s for local
+    console.log(`[Global Setup] Waiting ${initialDelay/1000} seconds to ensure clean rate limit window...`);
+    await new Promise(resolve => setTimeout(resolve, initialDelay));
   }
   
   // Start the shared web server
