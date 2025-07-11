@@ -962,8 +962,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               updateConnectionStatusAndExpose('connected');
               
               if (term.current) {
-                debugLog(`⚠️ DIAGNOSTIC: Clearing terminal and focusing`);
-                term.current.clear(); // Clear the entire terminal to remove "Connecting..." message
+                debugLog(`⚠️ DIAGNOSTIC: Focusing terminal`);
                 term.current.focus();
               }
               
