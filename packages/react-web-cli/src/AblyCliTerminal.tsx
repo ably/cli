@@ -659,7 +659,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       : 'Connecting to Ably CLI server...';
     const initialContent = [statusText, '']; // Second line for potential countdown or messages
 
-    // Draw the initial box
+    // Write connecting message to terminal like secondary does
+    if (term.current && !isRetry) {
+      // Store the current line position so we can clear it later
+      const connectingLine = term.current.buffer.active.cursorY;
+      term.current.writeln(statusText);
+      // Store line number for later clearing
+      (term.current as any)._connectingLine = connectingLine;
+    }
+
+    // Draw the initial box (even though it's a stub, keep for compatibility)
     if (term.current) {
       // Keep content as is - no install instructions in the reconnecting box
       const boxContent = [...initialContent];
@@ -936,6 +945,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             updateSessionActive(true);
             updateConnectionStatusAndExpose('connected');
             if (term.current) {
+              // Clear the "Connecting..." message if it exists
+              if ((term.current as any)._connectingLine !== undefined) {
+                const currentY = term.current.buffer.active.cursorY;
+                const currentX = term.current.buffer.active.cursorX;
+                const connectingLine = (term.current as any)._connectingLine;
+                
+                // Move to the connecting line and clear it
+                term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                term.current.write('\x1b[2K'); // Clear entire line
+                
+                // Move cursor back to previous position
+                term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                
+                delete (term.current as any)._connectingLine;
+              }
               term.current.focus();
             }
             
@@ -962,7 +986,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               updateConnectionStatusAndExpose('connected');
               
               if (term.current) {
-                debugLog(`⚠️ DIAGNOSTIC: Focusing terminal`);
+                debugLog(`⚠️ DIAGNOSTIC: Clearing connecting message and focusing terminal`);
+                // Clear the "Connecting..." message if it exists
+                if ((term.current as any)._connectingLine !== undefined) {
+                  const currentY = term.current.buffer.active.cursorY;
+                  const currentX = term.current.buffer.active.cursorX;
+                  const connectingLine = (term.current as any)._connectingLine;
+                  
+                  // Move to the connecting line and clear it
+                  term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                  term.current.write('\x1b[2K'); // Clear entire line
+                  
+                  // Move cursor back to previous position
+                  term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                  
+                  delete (term.current as any)._connectingLine;
+                }
                 term.current.focus();
               }
               
@@ -1936,7 +1975,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Show connecting animation in secondary terminal
     if (secondaryTerm.current) {
+      // Store the current line position so we can clear it later
+      const connectingLine = secondaryTerm.current.buffer.active.cursorY;
       secondaryTerm.current.writeln('Connecting to Ably CLI server...');
+      // Store line number for later clearing
+      (secondaryTerm.current as any)._connectingLine = connectingLine;
     }
 
     // Create new WebSocket
@@ -2028,6 +2071,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               updateSecondaryConnectionStatus('connected');
               clearSecondaryStatusDisplay();
               if (secondaryTerm.current) {
+                // Clear the "Connecting..." message if it exists
+                if ((secondaryTerm.current as any)._connectingLine !== undefined) {
+                  const currentY = secondaryTerm.current.buffer.active.cursorY;
+                  const currentX = secondaryTerm.current.buffer.active.cursorX;
+                  const connectingLine = (secondaryTerm.current as any)._connectingLine;
+                  
+                  // Move to the connecting line and clear it
+                  secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                  secondaryTerm.current.write('\x1b[2K'); // Clear entire line
+                  
+                  // Move cursor back to previous position
+                  secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                  
+                  delete (secondaryTerm.current as any)._connectingLine;
+                }
                 secondaryTerm.current.focus();
               }
               
@@ -2043,7 +2101,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
                 setIsSecondarySessionActive(true);
                 
                 if (secondaryTerm.current) {
-                  secondaryTerm.current.write('\x1b[K'); // Clear from cursor to EOL
+                  // Clear the "Connecting..." message if it exists
+                  if ((secondaryTerm.current as any)._connectingLine !== undefined) {
+                    const currentY = secondaryTerm.current.buffer.active.cursorY;
+                    const currentX = secondaryTerm.current.buffer.active.cursorX;
+                    const connectingLine = (secondaryTerm.current as any)._connectingLine;
+                    
+                    // Move to the connecting line and clear it
+                    secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                    secondaryTerm.current.write('\x1b[2K'); // Clear entire line
+                    
+                    // Move cursor back to previous position
+                    secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                    
+                    delete (secondaryTerm.current as any)._connectingLine;
+                  }
                   secondaryTerm.current.focus();
                 }
                 
@@ -2145,11 +2217,35 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     
     // WebSocket close handler
     newSocket.addEventListener('close', (event) => {
-      debugLog(`[AblyCLITerminal] [Secondary] WebSocket closed. Code: ${event.code}`);
+      debugLog(`[AblyCLITerminal] [Secondary] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
       setIsSecondarySessionActive(false);
-                      updateSecondaryConnectionStatus('disconnected');
+      updateSecondaryConnectionStatus('disconnected');
       
-      if (secondaryTerm.current) {
+      // Check if this is a non-recoverable error
+      const NON_RECOVERABLE_CLOSE_CODES = new Set<number>([
+        4001, // Policy violation (e.g. invalid credentials)
+        4008, // Token expired
+        1013, // Try again later
+        4002, // Session resume rejected
+        4000, // Generic server error
+        4004, // Unsupported protocol version
+        4009, // Server at capacity
+      ]);
+      
+      if (NON_RECOVERABLE_CLOSE_CODES.has(event.code)) {
+        // Clear the secondary session ID as it's no longer valid
+        setSecondarySessionId(null);
+        if (resumeOnReload && typeof window !== 'undefined') {
+          window.sessionStorage.removeItem('ably.cli.secondarySessionId');
+          debugLog('[AblyCLITerminal] [Secondary] Cleared invalid session ID due to non-recoverable error');
+        }
+      }
+      
+      // Check if this was a user-initiated close
+      const userClosedTerminal = event.reason === 'user-closed-secondary' || 
+                                 event.reason === 'manual-reconnect';
+      
+      if (!userClosedTerminal && secondaryTerm.current) {
         const title = "DISCONNECTED";
         const message1 = `Connection closed (Code: ${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
         const message2 = '';
@@ -2157,14 +2253,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         
         secondaryStatusBoxRef.current = drawBox(secondaryTerm.current, boxColour.yellow, title, [message1, message2, message3], 60);
         setSecondaryOverlay({variant:'error', title, lines:[message1, message2, message3]});
+        
+        secondaryShowManualReconnectPromptRef.current = true;
+        setSecondaryShowManualReconnectPrompt(true);
       }
-      
-      secondaryShowManualReconnectPromptRef.current = true;
-      setSecondaryShowManualReconnectPrompt(true);
     });
     
     return newSocket;
-  }, [websocketUrl, ablyAccessToken, ablyApiKey]);
+  }, [websocketUrl, ablyAccessToken, ablyApiKey, resumeOnReload, secondarySessionId]);
 
   // Initialize the secondary terminal when split mode is enabled
   useEffect(() => {
