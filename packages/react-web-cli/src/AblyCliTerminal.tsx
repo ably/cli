@@ -1982,6 +1982,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
 
     debugLog('[AblyCLITerminal] Creating secondary WebSocket instance');
+    console.log('[AblyCLITerminal] Secondary WebSocket connecting to:', websocketUrl);
 
     // Update connection status
       updateSecondaryConnectionStatus('connecting');
@@ -2238,7 +2239,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // WebSocket error handler
     newSocket.addEventListener('error', (event) => {
       console.error('[AblyCLITerminal] [Secondary] WebSocket error:', event);
-                      updateSecondaryConnectionStatus('error');
+      console.error('[AblyCLITerminal] [Secondary] WebSocket URL was:', websocketUrl);
+      console.error('[AblyCLITerminal] [Secondary] WebSocket state:', newSocket.readyState);
+      updateSecondaryConnectionStatus('error');
     });
     
     // WebSocket close handler
@@ -2272,10 +2275,18 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
                                  event.reason === 'manual-reconnect';
       
       if (!userClosedTerminal && secondaryTerm.current) {
-        const title = "DISCONNECTED";
-        const message1 = `Connection closed (Code: ${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
-        const message2 = '';
-        const message3 = `Press ⏎ to reconnect.`;
+        let title = "DISCONNECTED";
+        let message1 = `Connection closed (Code: ${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
+        let message2 = '';
+        let message3 = `Press ⏎ to reconnect.`;
+        
+        // Provide more helpful message for common error codes
+        if (event.code === 1006) {
+          title = "CONNECTION FAILED";
+          message1 = `Unable to connect to server.`;
+          message2 = `This may be due to network issues or server availability.`;
+          message3 = `Press ⏎ to try again.`;
+        }
         
         secondaryStatusBoxRef.current = drawBox(secondaryTerm.current, boxColour.yellow, title, [message1, message2, message3], 60);
         setSecondaryOverlay({variant:'error', title, lines:[message1, message2, message3]});
@@ -2459,11 +2470,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       console.error("Error during initial secondary terminal fit:", e);
     }
 
-    // Connect to WebSocket after terminal is initialized
-    connectSecondaryWebSocket();
+    // Connect to WebSocket after terminal is initialized with a delay to avoid rate limits
+    const connectTimer = setTimeout(() => {
+      connectSecondaryWebSocket();
+    }, 1000); // 1 second delay to ensure primary connection is established first
 
     // Cleanup function to properly dispose
     return () => {
+      // Clear connect timer if still pending
+      clearTimeout(connectTimer);
+      
       // Execute cleanup for resize listener
       if (secondaryTermCleanupRef.current) {
         secondaryTermCleanupRef.current();
