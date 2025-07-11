@@ -492,6 +492,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   // Helper to update both session active state and ref
   const updateSessionActive = useCallback((active: boolean) => {
     debugLog(`⚠️ DIAGNOSTIC: Updating session active to: ${active}`);
+    console.log(`[AblyCLITerminal] PRODUCTION DEBUG: updateSessionActive called with: ${active}`);
     setIsSessionActive(active);
     isSessionActiveRef.current = active;
   }, []);
@@ -517,11 +518,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   }, []);
   
   const handlePtyData = useCallback((data: string) => {
-    if (!isSessionActive) {
+    // Always log what data we receive
+    const sanitizedData = data.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+    debugLog(`⚠️ DIAGNOSTIC: handlePtyData called. isSessionActive: ${isSessionActiveRef.current}, data: "${sanitizedData}"`);
+    
+    if (!isSessionActiveRef.current) {
       ptyBuffer.current += data;
       
-      // Log received data in a way that makes control chars visible
-      const sanitizedData = data.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
       debugLog(`⚠️ DIAGNOSTIC: Received PTY data (session inactive): "${sanitizedData}"`);
       
       if (ptyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
@@ -538,12 +541,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       const hasShellPrompt = TERMINAL_PROMPT_PATTERN.test(cleanBuf);
       const hasAblyPrompt = cleanBuf.endsWith('$ ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('ably> ');
       
+      debugLog(`⚠️ DIAGNOSTIC: Checking for prompt. hasShellPrompt: ${hasShellPrompt}, hasAblyPrompt: ${hasAblyPrompt}, buffer end: "${cleanBuf.slice(-20)}"`);
+      
       if (hasShellPrompt || hasAblyPrompt) {
         debugLog(`⚠️ DIAGNOSTIC: Prompt detected at end of buffer (shell: ${hasShellPrompt}, ably: ${hasAblyPrompt})`);
         clearStatusDisplay(); // Clear the status box as per plan
         
         // Only set active if not already active to prevent multiple state updates
-        if (!isSessionActive) {
+        if (!isSessionActiveRef.current) {
           updateSessionActive(true);
           grSuccessfulConnectionReset();
           updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
@@ -557,8 +562,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         
         clearPtyBuffer();
       }
+    } else {
+      debugLog(`⚠️ DIAGNOSTIC: Session already active, not buffering data`);
     }
-  }, [isSessionActive, updateConnectionStatusAndExpose, updateSessionActive, clearPtyBuffer, clearStatusDisplay, clearInstallInstructionsTimer]);
+  }, [updateConnectionStatusAndExpose, updateSessionActive, clearPtyBuffer, clearStatusDisplay, clearInstallInstructionsTimer]);
 
   // Secondary terminal instance references
   const secondaryRootRef = useRef<HTMLDivElement>(null);
@@ -915,6 +922,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           // Handle control messages (existing logic)
           if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
             debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
+            console.log(`[AblyCLITerminal] PRODUCTION DEBUG: Received hello message, sessionId=${msg.sessionId}, current isSessionActive=${isSessionActive}`);
             const wasReconnecting = connectionStatusRef.current === 'reconnecting';
             const wasConnecting = connectionStatusRef.current === 'connecting';
             setSessionId(msg.sessionId);
@@ -924,6 +932,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             // Always activate the session when we receive a hello message
             // This handles cases where the server doesn't send a separate "connected" status message
             debugLog(`⚠️ DIAGNOSTIC: Activating session after hello message (wasReconnecting: ${wasReconnecting}, wasConnecting: ${wasConnecting})`);
+            console.log(`[AblyCLITerminal] PRODUCTION DEBUG: Activating session now`);
             updateSessionActive(true);
             updateConnectionStatusAndExpose('connected');
             if (term.current) {
@@ -953,8 +962,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               updateConnectionStatusAndExpose('connected');
               
               if (term.current) {
-                debugLog(`⚠️ DIAGNOSTIC: Clearing line and focusing terminal`);
-                term.current.write('\x1b[K'); // Clear from cursor to EOL
+                debugLog(`⚠️ DIAGNOSTIC: Clearing terminal and focusing`);
+                term.current.clear(); // Clear the entire terminal to remove "Connecting..." message
                 term.current.focus();
               }
               
@@ -1030,6 +1039,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       if (isHijackMetaChunk(dataStr.trim())) {
         debugLog('[AblyCLITerminal] Suppressed PTY meta-message chunk');
       } else if (term.current) {
+        console.log(`[AblyCLITerminal] PRODUCTION DEBUG: Writing PTY data to terminal, isSessionActive=${isSessionActiveRef.current}, dataStr="${dataStr.replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`);
         term.current.write(dataStr);
       }
       
@@ -2443,7 +2453,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             className="Terminal-container bg-black relative overflow-hidden"
             style={{ 
               flex: '1',
-              padding: '0',
+              padding: '10px',
               margin: '0',
               boxSizing: 'border-box',
               minHeight: '0', // Important to allow flex container to shrink
@@ -2561,7 +2571,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               className="Terminal-container bg-black relative overflow-hidden"
               style={{ 
                 flex: '1',
-                padding: '0',
+                padding: '10px',
                 margin: '0',
                 boxSizing: 'border-box',
                 minHeight: '0', // Important to allow flex container to shrink
