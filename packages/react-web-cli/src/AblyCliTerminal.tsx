@@ -662,10 +662,15 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Write connecting message to terminal like secondary does
     if (term.current && !isRetry) {
       // Store the current line position so we can clear it later
-      const connectingLine = term.current.buffer.active.cursorY;
-      term.current.writeln(statusText);
-      // Store line number for later clearing
-      (term.current as any)._connectingLine = connectingLine;
+      try {
+        const connectingLine = term.current.buffer?.active?.cursorY ?? 0;
+        term.current.writeln(statusText);
+        // Store line number for later clearing
+        (term.current as any)._connectingLine = connectingLine;
+      } catch (e) {
+        // If buffer is not ready, just write without tracking line number
+        term.current.writeln(statusText);
+      }
     }
 
     // Draw the initial box (even though it's a stub, keep for compatibility)
@@ -947,18 +952,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             if (term.current) {
               // Clear the "Connecting..." message if it exists
               if ((term.current as any)._connectingLine !== undefined) {
-                const currentY = term.current.buffer.active.cursorY;
-                const currentX = term.current.buffer.active.cursorX;
-                const connectingLine = (term.current as any)._connectingLine;
-                
-                // Move to the connecting line and clear it
-                term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                term.current.write('\x1b[2K'); // Clear entire line
-                
-                // Move cursor back to previous position
-                term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                
-                delete (term.current as any)._connectingLine;
+                try {
+                  const currentY = term.current.buffer?.active?.cursorY ?? 0;
+                  const currentX = term.current.buffer?.active?.cursorX ?? 0;
+                  const connectingLine = (term.current as any)._connectingLine;
+                  
+                  // Move to the connecting line and clear it
+                  term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                  term.current.write('\x1b[2K'); // Clear entire line
+                  
+                  // Move cursor back to previous position
+                  term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                  
+                  delete (term.current as any)._connectingLine;
+                } catch (e) {
+                  console.warn('[AblyCLITerminal] Could not clear connecting message:', e);
+                }
               }
               term.current.focus();
             }
@@ -989,18 +998,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
                 debugLog(`⚠️ DIAGNOSTIC: Clearing connecting message and focusing terminal`);
                 // Clear the "Connecting..." message if it exists
                 if ((term.current as any)._connectingLine !== undefined) {
-                  const currentY = term.current.buffer.active.cursorY;
-                  const currentX = term.current.buffer.active.cursorX;
-                  const connectingLine = (term.current as any)._connectingLine;
-                  
-                  // Move to the connecting line and clear it
-                  term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                  term.current.write('\x1b[2K'); // Clear entire line
-                  
-                  // Move cursor back to previous position
-                  term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                  
-                  delete (term.current as any)._connectingLine;
+                  try {
+                    const currentY = term.current.buffer?.active?.cursorY ?? 0;
+                    const currentX = term.current.buffer?.active?.cursorX ?? 0;
+                    const connectingLine = (term.current as any)._connectingLine;
+                    
+                    // Move to the connecting line and clear it
+                    term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                    term.current.write('\x1b[2K'); // Clear entire line
+                    
+                    // Move cursor back to previous position
+                    term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                    
+                    delete (term.current as any)._connectingLine;
+                  } catch (e) {
+                    console.warn('[AblyCLITerminal] Could not clear connecting message:', e);
+                  }
                 }
                 term.current.focus();
               }
@@ -1976,10 +1989,15 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Show connecting animation in secondary terminal
     if (secondaryTerm.current) {
       // Store the current line position so we can clear it later
-      const connectingLine = secondaryTerm.current.buffer.active.cursorY;
-      secondaryTerm.current.writeln('Connecting to Ably CLI server...');
-      // Store line number for later clearing
-      (secondaryTerm.current as any)._connectingLine = connectingLine;
+      try {
+        const connectingLine = secondaryTerm.current.buffer?.active?.cursorY ?? 0;
+        secondaryTerm.current.writeln('Connecting to Ably CLI server...');
+        // Store line number for later clearing
+        (secondaryTerm.current as any)._connectingLine = connectingLine;
+      } catch (e) {
+        // If buffer is not ready, just write without tracking line number
+        secondaryTerm.current.writeln('Connecting to Ably CLI server...');
+      }
     }
 
     // Create new WebSocket
@@ -2073,18 +2091,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               if (secondaryTerm.current) {
                 // Clear the "Connecting..." message if it exists
                 if ((secondaryTerm.current as any)._connectingLine !== undefined) {
-                  const currentY = secondaryTerm.current.buffer.active.cursorY;
-                  const currentX = secondaryTerm.current.buffer.active.cursorX;
-                  const connectingLine = (secondaryTerm.current as any)._connectingLine;
-                  
-                  // Move to the connecting line and clear it
-                  secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                  secondaryTerm.current.write('\x1b[2K'); // Clear entire line
-                  
-                  // Move cursor back to previous position
-                  secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                  
-                  delete (secondaryTerm.current as any)._connectingLine;
+                  try {
+                    const currentY = secondaryTerm.current.buffer?.active?.cursorY ?? 0;
+                    const currentX = secondaryTerm.current.buffer?.active?.cursorX ?? 0;
+                    const connectingLine = (secondaryTerm.current as any)._connectingLine;
+                    
+                    // Move to the connecting line and clear it
+                    secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                    secondaryTerm.current.write('\x1b[2K'); // Clear entire line
+                    
+                    // Move cursor back to previous position
+                    secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                    
+                    delete (secondaryTerm.current as any)._connectingLine;
+                  } catch (e) {
+                    console.warn('[AblyCLITerminal] [Secondary] Could not clear connecting message:', e);
+                  }
                 }
                 secondaryTerm.current.focus();
               }
@@ -2103,18 +2125,22 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
                 if (secondaryTerm.current) {
                   // Clear the "Connecting..." message if it exists
                   if ((secondaryTerm.current as any)._connectingLine !== undefined) {
-                    const currentY = secondaryTerm.current.buffer.active.cursorY;
-                    const currentX = secondaryTerm.current.buffer.active.cursorX;
-                    const connectingLine = (secondaryTerm.current as any)._connectingLine;
-                    
-                    // Move to the connecting line and clear it
-                    secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                    secondaryTerm.current.write('\x1b[2K'); // Clear entire line
-                    
-                    // Move cursor back to previous position
-                    secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                    
-                    delete (secondaryTerm.current as any)._connectingLine;
+                    try {
+                      const currentY = secondaryTerm.current.buffer?.active?.cursorY ?? 0;
+                      const currentX = secondaryTerm.current.buffer?.active?.cursorX ?? 0;
+                      const connectingLine = (secondaryTerm.current as any)._connectingLine;
+                      
+                      // Move to the connecting line and clear it
+                      secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
+                      secondaryTerm.current.write('\x1b[2K'); // Clear entire line
+                      
+                      // Move cursor back to previous position
+                      secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+                      
+                      delete (secondaryTerm.current as any)._connectingLine;
+                    } catch (e) {
+                      console.warn('[AblyCLITerminal] [Secondary] Could not clear connecting message:', e);
+                    }
                   }
                   secondaryTerm.current.focus();
                 }
