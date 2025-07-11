@@ -223,7 +223,6 @@ function App() {
         resumeOnReload={true}
         enableSplitScreen={true}
         maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
-        initialCommand="echo 'Connecting to Ably CLI Terminal...'"
       />
     ) : null
   ), [isAuthenticated, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);
