@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rate Limit Testing</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #444;
+        }
+        #log {
+            margin-top: 20px;
+            padding: 10px;
+            background: #000;
+            border: 1px solid #333;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .error { color: #ff6b6b; }
+        .success { color: #51cf66; }
+        .info { color: #339af0; }
+        .warn { color: #ffd43b; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Rate Limit Testing</h1>
+    
+    <div>
+        <label>WebSocket URL: 
+            <input type="text" id="wsUrl" value="ws://localhost:8080" style="width: 300px;">
+        </label>
+    </div>
+    
+    <div style="margin-top: 10px;">
+        <label>API Key (optional): 
+            <input type="text" id="apiKey" placeholder="Leave empty for dummy key" style="width: 300px;">
+        </label>
+        <small style="color: #999;">Format: key:secret</small>
+    </div>
+    
+    <div>
+        <button onclick="rapidConnect(5)">Rapid Connect (5 times)</button>
+        <button onclick="rapidConnect(10)">Rapid Connect (10 times)</button>
+        <button onclick="testWithDelay(5, 1000)">Connect with 1s delay (5 times)</button>
+        <button onclick="testWithDelay(10, 500)">Connect with 0.5s delay (10 times)</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <div id="log"></div>
+    
+    <script>
+        const connections = [];
+        
+        function log(message, className = '') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = className;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            // Close all existing connections
+            connections.forEach(ws => {
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                    ws.close();
+                }
+            });
+            connections.length = 0;
+            log('Log cleared and connections closed', 'info');
+        }
+        
+        async function createConnection(index) {
+            const url = document.getElementById('wsUrl').value;
+            log(`Connection ${index}: Attempting to connect to ${url}`, 'info');
+            
+            const ws = new WebSocket(url);
+            connections.push(ws);
+            
+            return new Promise((resolve) => {
+                let resolved = false;
+                
+                ws.onopen = () => {
+                    log(`Connection ${index}: Connected successfully`, 'success');
+                    resolved = true;
+                    
+                    // Send auth payload with credentials
+                    const apiKeyInput = document.getElementById('apiKey').value.trim();
+                    const payload = {
+                        environmentVariables: { ABLY_WEB_CLI_MODE: 'true' },
+                        apiKey: apiKeyInput || 'dummy-api-key-for-testing:dummy-secret',
+                    };
+                    ws.send(JSON.stringify(payload));
+                    log(`Connection ${index}: Sent auth payload with ${apiKeyInput ? 'provided' : 'dummy'} API key`, 'info');
+                    
+                    resolve({ success: true, index });
+                };
+                
+                ws.onerror = (error) => {
+                    log(`Connection ${index}: Error occurred`, 'error');
+                    if (!resolved) {
+                        resolved = true;
+                        resolve({ success: false, index, error: 'connection_error' });
+                    }
+                };
+                
+                ws.onclose = (event) => {
+                    const codeInfo = getCloseCodeInfo(event.code);
+                    log(`Connection ${index}: Closed - Code: ${event.code} (${codeInfo}), Reason: ${event.reason || 'No reason provided'}`, 
+                        event.code === 4003 ? 'warn' : 'error');
+                    
+                    if (!resolved) {
+                        resolved = true;
+                        resolve({ 
+                            success: false, 
+                            index, 
+                            code: event.code, 
+                            reason: event.reason,
+                            codeInfo 
+                        });
+                    }
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        // Check if it's a control message
+                        if (event.data instanceof Blob) {
+                            event.data.text().then(text => {
+                                if (text.includes('ABLY_CTRL:')) {
+                                    const jsonStart = text.indexOf('{');
+                                    if (jsonStart !== -1) {
+                                        const msg = JSON.parse(text.substring(jsonStart));
+                                        log(`Connection ${index}: Control message - ${msg.type}`, 'info');
+                                    }
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        // Not JSON, probably terminal output
+                    }
+                };
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        ws.close();
+                        resolve({ success: false, index, error: 'timeout' });
+                    }
+                }, 10000);
+            });
+        }
+        
+        function getCloseCodeInfo(code) {
+            const codes = {
+                1000: 'Normal Closure',
+                1001: 'Going Away',
+                1002: 'Protocol Error',
+                1003: 'Unsupported Data',
+                1005: 'No Status',
+                1006: 'Abnormal Closure',
+                1013: 'Try Again Later',
+                4000: 'Generic Server Error',
+                4001: 'Policy Violation',
+                4002: 'Session Resume Rejected',
+                4003: 'Rate Limit Exceeded',
+                4004: 'Unsupported Protocol Version',
+                4008: 'Token Expired',
+                4009: 'Server at Capacity'
+            };
+            return codes[code] || 'Unknown';
+        }
+        
+        async function rapidConnect(count) {
+            log(`Starting rapid connection test with ${count} connections...`, 'info');
+            const promises = [];
+            
+            for (let i = 1; i <= count; i++) {
+                promises.push(createConnection(i));
+            }
+            
+            const results = await Promise.all(promises);
+            
+            const successful = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            const rateLimited = results.filter(r => r.code === 4003).length;
+            
+            log(`Test complete: ${successful} successful, ${failed} failed (${rateLimited} rate limited)`, 'info');
+        }
+        
+        async function testWithDelay(count, delayMs) {
+            log(`Starting delayed connection test with ${count} connections (${delayMs}ms delay)...`, 'info');
+            
+            for (let i = 1; i <= count; i++) {
+                await createConnection(i);
+                if (i < count) {
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                }
+            }
+            
+            log(`Delayed test complete`, 'info');
+        }
+        
+        // Initial log
+        log('Rate limit testing tool ready', 'info');
+        log('Testing tips:', 'info');
+        log('- For localhost testing, use ws://localhost:8080 (rate limits are 50x higher)', 'info');
+        log('- For production testing, use wss://web-cli.ably.com', 'info');
+        log('- Provide a valid API key or the server will reject with code 4001', 'info');
+        log('', '');
+        log('Expected WebSocket close codes:', 'info');
+        log('- 1006: Connection failed (network/server unavailable)', 'info');
+        log('- 4001: Policy violation (missing/invalid credentials)', 'error');
+        log('- 4003: Rate limit exceeded', 'warn');
+        log('- 4009: Server at capacity', 'warn');
+    </script>
+</body>
+</html>
