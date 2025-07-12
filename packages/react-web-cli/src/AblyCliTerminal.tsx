@@ -1198,6 +1198,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       1013, // Try again later – the server is telling us not to retry
       4002, // Session resume rejected
       4000, // Generic server error
+      4003, // Rate limit exceeded
       4004, // Unsupported protocol version
       4009, // Server at capacity
       // Note: 1005 removed - it's used for both graceful exit AND network disconnections
@@ -1214,11 +1215,24 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       grResetState();
       updateConnectionStatusAndExpose('disconnected');
       if (term.current) {
-        let message = event.code === 4009 || event.reason?.toLowerCase().includes('capacity') 
-          ? getConnectionMessage('capacityReached')
-          : getConnectionMessage('serverDisconnect');
+        let message;
+        if (event.code === 4009 || event.reason?.toLowerCase().includes('capacity')) {
+          message = getConnectionMessage('capacityReached');
+        } else if (event.code === 4003 || event.reason?.toLowerCase().includes('rate limit')) {
+          message = {
+            title: 'RATE LIMIT EXCEEDED',
+            lines: [
+              'Too many connection attempts from your IP address.',
+              event.reason || 'Please wait before trying again.',
+              '',
+              'This limit helps ensure service availability for all users.'
+            ]
+          };
+        } else {
+          message = getConnectionMessage('serverDisconnect');
+        }
         
-        // Prepend the specific error code/reason to the first line
+        // Prepend the specific error code/reason to the first line if not already included
         const lines = [...message.lines];
         lines[0] = `Connection closed by server (${event.code})${event.reason ? `: ${event.reason}` : ''}.`;
         
@@ -2257,6 +2271,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         1013, // Try again later
         4002, // Session resume rejected
         4000, // Generic server error
+        4003, // Rate limit exceeded
         4004, // Unsupported protocol version
         4009, // Server at capacity
       ]);
@@ -2286,6 +2301,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           message1 = `Unable to connect to server.`;
           message2 = `This may be due to network issues or server availability.`;
           message3 = `Press ⏎ to try again.`;
+        } else if (event.code === 4003 || event.reason?.toLowerCase().includes('rate limit')) {
+          title = "RATE LIMIT EXCEEDED";
+          message1 = `Too many connection attempts.`;
+          message2 = event.reason || `Please wait before trying again.`;
+          message3 = ``;
         }
         
         secondaryStatusBoxRef.current = drawBox(secondaryTerm.current, boxColour.yellow, title, [message1, message2, message3], 60);
