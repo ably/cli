@@ -4,7 +4,7 @@
 
 - [ ] Consider changing the transport to use Ably instead of direct WebSocket to the terminal server
 `timeout` is a good safe guard anyway to avoid human intervention when commands lock up.
-- [ ] Support new endpoint client options when available in our public APIs -> https://github.com/ably/ably-js/pull/1973
+- [x] Support new endpoint client options when available in our public APIs -> https://github.com/ably/ably-js/pull/1973
 
 ## API and Architecture
 
@@ -248,4 +248,4 @@
 - [ ] **Web Example:** Test the web terminal interface with real commands.
   - [ ] Test terminal rendering and command execution
   - [ ] Test session timeout and reconnection
-- [ ] **Environment Overrides:** Test `--host`, `--env`, `--control-host` flags override endpoints
+- [ ] **Environment Overrides:** Test `--host`, `--env`, `--endpoint`, `--control-host` flags override endpoints

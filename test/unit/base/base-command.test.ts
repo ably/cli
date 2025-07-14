@@ -67,6 +67,10 @@ class TestCommand extends AblyBaseCommand {
     return this.isRestrictedInAnonymousMode(commandId);
   }
 
+  public testGetClientOptions(flags: BaseFlags): any {
+    return this.getClientOptions(flags);
+  }
+
   async run(): Promise<void> {
     // Empty implementation
   }
@@ -481,6 +485,45 @@ describe("AblyBaseCommand", function() {
       const result = await command.testEnsureAppAndKey(flags);
 
       expect(result).to.be.null;
+    });
+  });
+
+  describe("endpoint flag handling", function() {
+    it("should set endpoint in client options when endpoint flag is provided", function() {
+      const flags: BaseFlags = {
+        endpoint: "custom-endpoint.example.com",
+        "api-key": "test-key:secret"
+      };
+
+      const clientOptions = command.testGetClientOptions(flags);
+
+      expect(clientOptions.endpoint).to.equal("custom-endpoint.example.com");
+    });
+
+    it("should not set endpoint when flag is not provided", function() {
+      const flags: BaseFlags = {
+        "api-key": "test-key:secret"
+      };
+
+      const clientOptions = command.testGetClientOptions(flags);
+
+      expect(clientOptions.endpoint).to.be.undefined;
+    });
+
+    it("should work alongside other flags like env and host", function() {
+      const flags: BaseFlags = {
+        endpoint: "custom-endpoint.example.com",
+        env: "sandbox",
+        host: "custom-host.example.com",
+        "api-key": "test-key:secret"
+      };
+
+      const clientOptions = command.testGetClientOptions(flags);
+
+      expect(clientOptions.endpoint).to.equal("custom-endpoint.example.com");
+      expect(clientOptions.environment).to.equal("sandbox");
+      expect(clientOptions.realtimeHost).to.equal("custom-host.example.com");
+      expect(clientOptions.restHost).to.equal("custom-host.example.com");
     });
   });
 });
