@@ -111,6 +111,10 @@ export abstract class AblyBaseCommand extends InteractiveBaseCommand {
     env: Flags.string({
       description: "Override the environment for all product API calls",
     }),
+    endpoint: Flags.string({
+      description: "Override the endpoint for all product API calls",
+      env: "ABLY_ENDPOINT",
+    }),
     host: Flags.string({
       description: "Override the host endpoint for all product API calls",
     }),
@@ -833,6 +837,10 @@ export abstract class AblyBaseCommand extends InteractiveBaseCommand {
 
     if (flags.env) {
       options.environment = flags.env;
+    }
+
+    if (flags.endpoint) {
+      options.endpoint = flags.endpoint;
     }
 
     if (flags.port) {

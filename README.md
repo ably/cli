@@ -260,8 +260,8 @@ Show the current Ably account
 
 ```
 USAGE
-  $ ably accounts current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v]
+  $ ably accounts current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -269,6 +269,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -294,8 +295,8 @@ List locally configured Ably accounts
 
 ```
 USAGE
-  $ ably accounts list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v]
+  $ ably accounts list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -303,6 +304,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -329,7 +331,7 @@ Log in to your Ably account
 ```
 USAGE
   $ ably accounts login [TOKEN] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-a <value>] [--no-browser]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-a <value>] [--no-browser]
 
 ARGUMENTS
   TOKEN  Access token (if not provided, will prompt for it)
@@ -341,6 +343,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -370,7 +373,7 @@ Log out from an Ably account
 ```
 USAGE
   $ ably accounts logout [ALIAS] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f]
 
 ARGUMENTS
   ALIAS  Alias of the account to log out from (defaults to current account)
@@ -382,6 +385,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -409,9 +413,9 @@ Get account stats with optional live updates
 
 ```
 USAGE
-  $ ably accounts stats [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>] [--interval <value>] [--limit
-    <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
+  $ ably accounts stats [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>]
+    [--interval <value>] [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -421,6 +425,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --debug                 Show debug information for live stats polling
       --end=<value>           End time in milliseconds since epoch
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
@@ -463,7 +468,7 @@ Switch to a different Ably account
 ```
 USAGE
   $ ably accounts switch [ALIAS] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ALIAS  Alias of the account to switch to
@@ -474,6 +479,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -568,10 +574,10 @@ Create a channel rule
 ```
 USAGE
   $ ably apps channel-rules create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--authenticated]
-    [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>]
-    [--conflation-key <value>] [--expose-time-serial] [--persist-last] [--persisted] [--populate-channel-registry]
-    [--push-enabled] [--tls-only]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--authenticated] [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval
+    <value>] [--conflation-key <value>] [--expose-time-serial] [--persist-last] [--persisted]
+    [--populate-channel-registry] [--push-enabled] [--tls-only]
 
 FLAGS
   -v, --verbose                      Output verbose logs
@@ -586,6 +592,7 @@ FLAGS
       --conflation-enabled           Whether to enable conflation for messages on channels matching this rule
       --conflation-interval=<value>  The conflation interval for messages on channels matching this rule
       --conflation-key=<value>       The conflation key for messages on channels matching this rule
+      --endpoint=<value>             Override the endpoint for all product API calls
       --env=<value>                  Override the environment for all product API calls
       --expose-time-serial           Whether to expose the time serial for messages on channels matching this rule
       --host=<value>                 Override the host endpoint for all product API calls
@@ -619,7 +626,7 @@ Delete a channel rule
 ```
 USAGE
   $ ably apps channel-rules delete NAMEORID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
 
 ARGUMENTS
   NAMEORID  Name or ID of the channel rule to delete
@@ -632,6 +639,7 @@ FLAGS
       --app=<value>           App ID or name to delete the channel rule from
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -685,10 +693,10 @@ Update a channel rule
 ```
 USAGE
   $ ably apps channel-rules update NAMEORID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--authenticated]
-    [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval <value>]
-    [--conflation-key <value>] [--expose-time-serial] [--persist-last] [--persisted] [--populate-channel-registry]
-    [--push-enabled] [--tls-only]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--authenticated] [--batching-enabled] [--batching-interval <value>] [--conflation-enabled] [--conflation-interval
+    <value>] [--conflation-key <value>] [--expose-time-serial] [--persist-last] [--persisted]
+    [--populate-channel-registry] [--push-enabled] [--tls-only]
 
 ARGUMENTS
   NAMEORID  Name or ID of the channel rule to update
@@ -706,6 +714,7 @@ FLAGS
       --[no-]conflation-enabled         Whether to enable conflation for messages on channels matching this rule
       --conflation-interval=<value>     The conflation interval for messages on channels matching this rule
       --conflation-key=<value>          The conflation key for messages on channels matching this rule
+      --endpoint=<value>                Override the endpoint for all product API calls
       --env=<value>                     Override the environment for all product API calls
       --[no-]expose-time-serial         Whether to expose the time serial for messages on channels matching this rule
       --host=<value>                    Override the host endpoint for all product API calls
@@ -738,7 +747,7 @@ Create a new app
 ```
 USAGE
   $ ably apps create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--tls-only]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--tls-only]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -746,6 +755,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -773,8 +783,8 @@ Show the currently selected app
 
 ```
 USAGE
-  $ ably apps current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v]
+  $ ably apps current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -782,6 +792,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -808,7 +819,7 @@ Delete an app
 ```
 USAGE
   $ ably apps delete [ID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f] [--app <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f] [--app <value>]
 
 ARGUMENTS
   ID  App ID to delete (uses current app if not specified)
@@ -821,6 +832,7 @@ FLAGS
       --app=<value>           App ID to delete (overrides argument and current app)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -854,8 +866,8 @@ List all apps in the current account
 
 ```
 USAGE
-  $ ably apps list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v]
+  $ ably apps list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -863,6 +875,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -909,8 +922,9 @@ Alias for `ably logs app history`
 
 ```
 USAGE
-  $ ably apps logs history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--pretty-json | --json] [--token <value>] [-v] [--direction backwards|forwards] [--limit <value>]
+  $ ably apps logs history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--direction
+    backwards|forwards] [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -920,6 +934,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --direction=<option>    [default: backwards] Direction of message retrieval
                               <options: backwards|forwards>
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results in JSON format
@@ -950,8 +965,8 @@ Alias for ably logs app subscribe
 
 ```
 USAGE
-  $ ably apps logs subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
+  $ ably apps logs subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -959,6 +974,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results as JSON
@@ -984,8 +1000,8 @@ Upload Apple Push Notification Service P12 certificate for an app
 ```
 USAGE
   $ ably apps set-apns-p12 ID --certificate <value> [--access-token <value>] [--api-key <value>] [--client-id <value>]
-    [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--password <value>]
-    [--use-for-sandbox]
+    [--env <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--password
+    <value>] [--use-for-sandbox]
 
 ARGUMENTS
   ID  App ID to set the APNS certificate for
@@ -997,6 +1013,7 @@ FLAGS
       --certificate=<value>   (required) Path to the P12 certificate file
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1025,8 +1042,8 @@ Get app stats with optional live updates
 ```
 USAGE
   $ ably apps stats [ID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>] [--interval <value>]
-    [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>]
+    [--interval <value>] [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
 
 ARGUMENTS
   ID  App ID to get stats for (uses default app if not provided)
@@ -1039,6 +1056,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --debug                 Show debug information for live stats polling
       --end=<value>           End time in milliseconds since epoch
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
@@ -1087,7 +1105,7 @@ Switch to a different Ably app
 ```
 USAGE
   $ ably apps switch [APPID] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   APPID  ID of the app to switch to
@@ -1098,6 +1116,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1122,7 +1141,7 @@ Update an app
 ```
 USAGE
   $ ably apps update ID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--name <value>] [--tls-only]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--name <value>] [--tls-only]
 
 ARGUMENTS
   ID  App ID to update
@@ -1133,6 +1152,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1158,14 +1178,14 @@ _See code: [src/commands/apps/update.ts](https://github.com/ably/cli/blob/v0.9.0
 
 ## `ably auth`
 
-Authentication for Ably including key management and token generation
+Manage authentication, keys and tokens
 
 ```
 USAGE
   $ ably auth
 
 DESCRIPTION
-  Authentication for Ably including key management and token generation
+  Manage authentication, keys and tokens
 
 EXAMPLES
   $ ably auth keys list
@@ -1189,9 +1209,9 @@ Creates an Ably Token with capabilities
 
 ```
 USAGE
-  $ ably auth issue-ably-token [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capability <value>] [--token-only]
-    [--ttl <value>]
+  $ ably auth issue-ably-token [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capability
+    <value>] [--token-only] [--ttl <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1201,6 +1221,7 @@ FLAGS
       --capability=<value>    [default: {"*":["*"]}] Capabilities JSON string (e.g. {"channel":["publish","subscribe"]})
       --client-id=<value>     Client ID to associate with the token. Use "none" to explicitly issue a token with no
                               client ID, otherwise a default will be generated.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1240,9 +1261,9 @@ Creates an Ably JWT token with capabilities
 
 ```
 USAGE
-  $ ably auth issue-jwt-token [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capability <value>] [--token-only]
-    [--ttl <value>]
+  $ ably auth issue-jwt-token [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capability
+    <value>] [--token-only] [--ttl <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1252,6 +1273,7 @@ FLAGS
       --capability=<value>    [default: {"*":["*"]}] Capabilities JSON string (e.g. {"channel":["publish","subscribe"]})
       --client-id=<value>     Client ID to associate with the token. Use "none" to explicitly issue a token with no
                               client ID, otherwise a default will be generated.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1317,7 +1339,8 @@ Create a new API key for an app
 ```
 USAGE
   $ ably auth keys create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capabilities <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--capabilities <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1328,6 +1351,7 @@ FLAGS
                               '{"channel:*":["publish"]}'
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1366,8 +1390,8 @@ Show the current API key for the selected app
 
 ```
 USAGE
-  $ ably auth keys current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+  $ ably auth keys current [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1376,6 +1400,7 @@ FLAGS
       --app=<value>           App ID to check key for (uses current app if not specified)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1404,7 +1429,7 @@ Get details for a specific key
 ```
 USAGE
   $ ably auth keys get KEYNAMEORVALUE [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 ARGUMENTS
   KEYNAMEORVALUE  Key name (APP_ID.KEY_ID) or full value of the key to get details for
@@ -1416,6 +1441,7 @@ FLAGS
       --app=<value>           App ID the key belongs to (uses current app if not specified)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1443,8 +1469,8 @@ List all keys in the app
 
 ```
 USAGE
-  $ ably auth keys list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+  $ ably auth keys list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -1453,6 +1479,7 @@ FLAGS
       --app=<value>           App ID to list keys for (uses current app if not specified)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1481,7 +1508,7 @@ Revoke an API key (permanently disables the key)
 ```
 USAGE
   $ ably auth keys revoke KEYNAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--force]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--force]
 
 ARGUMENTS
   KEYNAME  Key name (APP_ID.KEY_ID) of the key to revoke
@@ -1493,6 +1520,7 @@ FLAGS
       --app=<value>           App ID the key belongs to (uses current app if not specified)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --force                 Skip confirmation prompt
       --host=<value>          Override the host endpoint for all product API calls
@@ -1524,7 +1552,7 @@ Switch to a different API key for the current app
 ```
 USAGE
   $ ably auth keys switch [KEYNAMEORVALUE] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 ARGUMENTS
   KEYNAMEORVALUE  Key name (APP_ID.KEY_ID) or full value of the key to switch to
@@ -1536,6 +1564,7 @@ FLAGS
       --app=<value>           App ID to switch keys for (uses current app if not specified)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1562,8 +1591,8 @@ Update a key's properties
 ```
 USAGE
   $ ably auth keys update KEYNAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--capabilities <value>] [--name
-    <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--capabilities <value>] [--name <value>]
 
 ARGUMENTS
   KEYNAME  Key name (APP_ID.KEY_ID) of the key to update
@@ -1576,6 +1605,7 @@ FLAGS
       --capabilities=<value>  New capabilities for the key (comma-separated list)
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1602,8 +1632,8 @@ Revokes the token provided
 
 ```
 USAGE
-  $ ably auth revoke-token TOKEN [--access-token <value>] [--api-key <value>] [-c <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--debug]
+  $ ably auth revoke-token TOKEN [--access-token <value>] [--api-key <value>] [-c <value>] [--env <value>] [--endpoint
+    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--debug]
 
 ARGUMENTS
   TOKEN  Token to revoke
@@ -1615,6 +1645,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --app=<value>           App ID to use (uses current app if not specified)
       --debug                 Show debug information
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1697,8 +1728,8 @@ Run a publisher benchmark test
 ```
 USAGE
   $ ably bench publisher CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--message-size <value>] [-m <value>] [-r <value>]
-    [-t rest|realtime] [--wait-for-subscribers]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--message-size <value>] [-m
+    <value>] [-r <value>] [-t rest|realtime] [--wait-for-subscribers]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
@@ -1713,6 +1744,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1741,7 +1773,7 @@ Run a subscriber benchmark test
 ```
 USAGE
   $ ably bench subscriber CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   CHANNEL  The channel name to subscribe to
@@ -1752,6 +1784,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1805,8 +1838,8 @@ Publish messages to multiple Ably channels with a single request
 ```
 USAGE
   $ ably channels batch-publish [MESSAGE] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--channels <value> | --channels-json <value> |
-    --spec <value>] [-e <value> | ] [-n <value> | ]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--channels <value> |
+    --channels-json <value> | --spec <value>] [-e <value> | ] [-n <value> | ]
 
 ARGUMENTS
   MESSAGE  The message to publish (JSON format or plain text, not needed if using --spec)
@@ -1821,6 +1854,7 @@ FLAGS
       --channels-json=<value>  JSON array of channel names to publish to
       --client-id=<value>      Overrides any default client ID when using API authentication. Use "none" to explicitly
                                set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>       Override the endpoint for all product API calls
       --env=<value>            Override the environment for all product API calls
       --host=<value>           Override the host endpoint for all product API calls
       --json                   Output in JSON format
@@ -1857,8 +1891,8 @@ Retrieve message history for a channel
 ```
 USAGE
   $ ably channels history CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--cipher <value>] [--direction backwards|forwards]
-    [--end <value>] [--limit <value>] [--start <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--cipher <value>]
+    [--direction backwards|forwards] [--end <value>] [--limit <value>] [--start <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to retrieve history for
@@ -1873,6 +1907,7 @@ FLAGS
       --direction=<option>    [default: backwards] Direction of message retrieval
                               <options: backwards|forwards>
       --end=<value>           End time for the history query (ISO 8601 format)
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1906,8 +1941,8 @@ List active channels using the channel enumeration API
 
 ```
 USAGE
-  $ ably channels list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
+  $ ably channels list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter channels by prefix
@@ -1916,6 +1951,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -1947,7 +1983,7 @@ Alias for ably logs channel-lifecycle subscribe
 ```
 USAGE
   $ ably channels logs [TOPIC] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 ARGUMENTS
   TOPIC  [default: channel-lifecycle] Log topic to subscribe to (currently only channel-lifecycle is supported)
@@ -1958,6 +1994,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results as JSON
@@ -2002,7 +2039,7 @@ Get current occupancy metrics for a channel
 ```
 USAGE
   $ ably channels occupancy get CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   CHANNEL  Channel name to get occupancy for
@@ -2013,6 +2050,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2041,7 +2079,7 @@ Subscribe to occupancy events on a channel
 ```
 USAGE
   $ ably channels occupancy subscribe CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to subscribe to occupancy events
@@ -2053,6 +2091,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2104,7 +2143,8 @@ Enter presence on a channel and listen for presence events
 ```
 USAGE
   $ ably channels presence enter CHANNELNAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--data <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--data
+    <value>]
 
 ARGUMENTS
   CHANNELNAME  Channel name to enter presence on
@@ -2117,6 +2157,7 @@ FLAGS
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --data=<value>          Optional JSON data to associate with the presence
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2151,7 +2192,7 @@ Subscribe to presence events on a channel
 ```
 USAGE
   $ ably channels presence subscribe CHANNEL [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   CHANNEL  Channel name to subscribe to presence events
@@ -2163,6 +2204,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2197,8 +2239,8 @@ Publish a message to an Ably channel
 ```
 USAGE
   $ ably channels publish CHANNEL MESSAGE [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-c <value>] [-d <value>] [-e <value>] [-n
-    <value>] [--transport rest|realtime]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-c <value>] [-d
+    <value>] [-e <value>] [-n <value>] [--transport rest|realtime]
 
 ARGUMENTS
   CHANNEL  The channel name to publish to
@@ -2214,6 +2256,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2258,8 +2301,9 @@ Subscribe to messages published on one or more Ably channels
 ```
 USAGE
   $ ably channels subscribe CHANNELS... [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--cipher-algorithm <value>] [--cipher-key
-    <value>] [--cipher-key-length <value>] [--cipher-mode <value>] [--delta] [-D <value>] [--rewind <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--cipher-algorithm
+    <value>] [--cipher-key <value>] [--cipher-key-length <value>] [--cipher-mode <value>] [--delta] [-D <value>]
+    [--rewind <value>]
 
 ARGUMENTS
   CHANNELS...  Channel name(s) to subscribe to
@@ -2276,6 +2320,7 @@ FLAGS
       --client-id=<value>          Overrides any default client ID when using API authentication. Use "none" to
                                    explicitly set no client ID. Not applicable when using token authentication.
       --delta                      Enable delta compression for messages
+      --endpoint=<value>           Override the endpoint for all product API calls
       --env=<value>                Override the environment for all product API calls
       --host=<value>               Override the host endpoint for all product API calls
       --json                       Output in JSON format
@@ -2316,8 +2361,8 @@ Open the Ably config file in the default text editor
 
 ```
 USAGE
-  $ ably config [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [-e <value>]
+  $ ably config [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-e <value>]
 
 FLAGS
   -e, --editor=<value>        Text editor to use (defaults to $EDITOR environment variable)
@@ -2326,6 +2371,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2374,7 +2420,7 @@ Alias for ably logs connection-lifecycle subscribe
 ```
 USAGE
   $ ably connections logs [TOPIC] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 ARGUMENTS
   TOPIC  [default: connections-lifecycle] Log topic to subscribe to (currently only connections-lifecycle is supported)
@@ -2385,6 +2431,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results as JSON
@@ -2409,9 +2456,9 @@ View connection statistics for an Ably app
 
 ```
 USAGE
-  $ ably connections stats [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>] [--interval <value>] [--limit
-    <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
+  $ ably connections stats [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--debug] [--end <value>]
+    [--interval <value>] [--limit <value>] [--live] [--start <value>] [--unit minute|hour|day|month]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2421,6 +2468,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --debug                 Show debug information for live stats polling
       --end=<value>           End time in milliseconds since epoch
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --interval=<value>      [default: 6] Polling interval in seconds (only used with --live)
@@ -2460,8 +2508,8 @@ Test connection to Ably
 
 ```
 USAGE
-  $ ably connections test [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--transport ws|xhr|all]
+  $ ably connections test [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--transport ws|xhr|all]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2469,6 +2517,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2550,9 +2599,9 @@ Create an integration rule
 USAGE
   $ ably integrations create --rule-type http|amqp|kinesis|firehose|pulsar|kafka|azure|azure-functions|mqtt|cloudmqtt
     --source-type channel.message|channel.presence|channel.lifecycle|presence.message [--access-token <value>]
-    [--api-key <value>] [--client-id <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token
-    <value>] [-v] [--app <value>] [--channel-filter <value>] [--request-mode single|batch] [--status enabled|disabled]
-    [--target-url <value>]
+    [--api-key <value>] [--client-id <value>] [--env <value>] [--endpoint <value>] [--host <value>] [--json |
+    --pretty-json] [--token <value>] [-v] [--app <value>] [--channel-filter <value>] [--request-mode single|batch]
+    [--status enabled|disabled] [--target-url <value>]
 
 FLAGS
   -v, --verbose                 Output verbose logs
@@ -2562,6 +2611,7 @@ FLAGS
       --channel-filter=<value>  Channel filter pattern
       --client-id=<value>       Overrides any default client ID when using API authentication. Use "none" to explicitly
                                 set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>        Override the endpoint for all product API calls
       --env=<value>             Override the environment for all product API calls
       --host=<value>            Override the host endpoint for all product API calls
       --json                    Output in JSON format
@@ -2595,7 +2645,7 @@ Delete an integration rule
 ```
 USAGE
   $ ably integrations delete RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
 
 ARGUMENTS
   RULEID  The rule ID to delete
@@ -2608,6 +2658,7 @@ FLAGS
       --app=<value>           App ID or name to delete the integration rule from
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2634,7 +2685,7 @@ Get an integration rule by ID
 ```
 USAGE
   $ ably integrations get RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 ARGUMENTS
   RULEID  The rule ID to get
@@ -2646,6 +2697,7 @@ FLAGS
       --app=<value>           App ID or name to get the integration rule from
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2671,8 +2723,8 @@ List all integration rules
 
 ```
 USAGE
-  $ ably integrations list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+  $ ably integrations list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2681,6 +2733,7 @@ FLAGS
       --app=<value>           App ID or name to list integration rules for
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2707,8 +2760,9 @@ Update an integration rule
 ```
 USAGE
   $ ably integrations update RULEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--channel-filter <value>]
-    [--status enabled|disabled] [--target-url <value>] [--request-mode <value>] [--source <value>] [--target <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--channel-filter <value>] [--status enabled|disabled] [--target-url <value>] [--request-mode <value>] [--source
+    <value>] [--target <value>]
 
 ARGUMENTS
   RULEID  The rule ID to update
@@ -2721,6 +2775,7 @@ FLAGS
       --channel-filter=<value>  Channel filter pattern
       --client-id=<value>       Overrides any default client ID when using API authentication. Use "none" to explicitly
                                 set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>        Override the endpoint for all product API calls
       --env=<value>             Override the environment for all product API calls
       --host=<value>            Override the host endpoint for all product API calls
       --json                    Output in JSON format
@@ -2753,7 +2808,7 @@ Log in to your Ably account (alias for "ably accounts login")
 ```
 USAGE
   $ ably login [TOKEN] [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-a <value>] [--no-browser]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-a <value>] [--no-browser]
 
 ARGUMENTS
   TOKEN  Access token (if not provided, will prompt for it)
@@ -2765,6 +2820,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2837,8 +2893,9 @@ Retrieve application log history
 
 ```
 USAGE
-  $ ably logs app history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction backwards|forwards] [--limit <value>]
+  $ ably logs app history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction
+    backwards|forwards] [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2848,6 +2905,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --direction=<option>    [default: backwards] Direction of log retrieval
                               <options: backwards|forwards>
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2878,8 +2936,8 @@ Subscribe to live app logs
 
 ```
 USAGE
-  $ ably logs app subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--type
+  $ ably logs app subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--type
     channel.lifecycle|channel.occupancy|channel.presence|connection.lifecycle|push.publish]
 
 FLAGS
@@ -2889,6 +2947,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -2921,8 +2980,8 @@ Stream logs from [meta]channel.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs channel-lifecycle [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
+  $ ably logs channel-lifecycle [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2930,6 +2989,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results as JSON
@@ -2954,8 +3014,8 @@ Stream logs from [meta]channel.lifecycle meta channel
 
 ```
 USAGE
-  $ ably logs channel-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
+  $ ably logs channel-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -2963,6 +3023,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results as JSON
@@ -3006,8 +3067,9 @@ Retrieve connection lifecycle log history
 
 ```
 USAGE
-  $ ably logs connection-lifecycle history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction backwards|forwards] [--limit <value>]
+  $ ably logs connection-lifecycle history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction
+    backwards|forwards] [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3017,6 +3079,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --direction=<option>    [default: backwards] Direction of log retrieval
                               <options: backwards|forwards>
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3047,8 +3110,9 @@ Subscribe to live connection lifecycle logs
 
 ```
 USAGE
-  $ ably logs connection-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--rewind <value>]
+  $ ably logs connection-lifecycle subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>] [--rewind
+    <value>]
 
 FLAGS
   -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
@@ -3057,6 +3121,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3085,8 +3150,8 @@ Subscribe to live connection logs
 
 ```
 USAGE
-  $ ably logs connection subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+  $ ably logs connection subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 FLAGS
   -D, --duration=<value>      Automatically exit after the given number of seconds (0 = run indefinitely)
@@ -3095,6 +3160,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3143,8 +3209,9 @@ Retrieve push notification log history
 
 ```
 USAGE
-  $ ably logs push history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction backwards|forwards] [--limit <value>]
+  $ ably logs push history [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--direction
+    backwards|forwards] [--limit <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3154,6 +3221,7 @@ FLAGS
                               set no client ID. Not applicable when using token authentication.
       --direction=<option>    [default: backwards] Direction of log retrieval
                               <options: backwards|forwards>
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3184,8 +3252,8 @@ Stream logs from the push notifications meta channel [meta]log:push
 
 ```
 USAGE
-  $ ably logs push subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
+  $ ably logs push subscribe [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--pretty-json | --json] [--token <value>] [-v] [--rewind <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3193,6 +3261,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output results as JSON
@@ -3281,8 +3350,8 @@ Create a queue
 ```
 USAGE
   $ ably queues create --name <value> [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [--max-length <value>]
-    [--region <value>] [--ttl <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+    [--max-length <value>] [--region <value>] [--ttl <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3291,6 +3360,7 @@ FLAGS
       --app=<value>           App ID or name to create the queue in
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3321,7 +3391,7 @@ Delete a queue
 ```
 USAGE
   $ ably queues delete QUEUENAME [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>] [-f]
 
 ARGUMENTS
   QUEUENAME  Name of the queue to delete
@@ -3334,6 +3404,7 @@ FLAGS
       --app=<value>           App ID or name to delete the queue from
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3359,8 +3430,8 @@ List all queues
 
 ```
 USAGE
-  $ ably queues list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
+  $ ably queues list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--app <value>]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -3369,6 +3440,7 @@ FLAGS
       --app=<value>           App ID or name to list queues for
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3423,8 +3495,8 @@ List active chat rooms
 
 ```
 USAGE
-  $ ably rooms list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
+  $ ably rooms list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter rooms by prefix
@@ -3433,6 +3505,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3487,7 +3560,7 @@ Get historical messages from an Ably Chat room
 ```
 USAGE
   $ ably rooms messages get ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-l <value>] [--show-metadata]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-l <value>] [--show-metadata]
 
 ARGUMENTS
   ROOMID  The room ID to get messages from
@@ -3499,6 +3572,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3553,8 +3627,8 @@ Add a reaction to a message in a chat room
 ```
 USAGE
   $ ably rooms messages reactions add ROOMID MESSAGESERIAL REACTION [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--count <value> --type
-    unique|distinct|multiple]
+    <value>] [--env <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--count <value> --type unique|distinct|multiple]
 
 ARGUMENTS
   ROOMID         The room ID where the message is located
@@ -3568,6 +3642,7 @@ FLAGS
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --count=<value>         Count value for Multiple type reactions
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3600,8 +3675,8 @@ Remove a reaction from a message in a chat room
 ```
 USAGE
   $ ably rooms messages reactions remove ROOMID MESSAGESERIAL REACTION [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--type
-    unique|distinct|multiple]
+    <value>] [--env <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--type unique|distinct|multiple]
 
 ARGUMENTS
   ROOMID         The room ID where the message is located
@@ -3614,6 +3689,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3644,7 +3720,7 @@ Subscribe to message reactions in a chat room
 ```
 USAGE
   $ ably rooms messages reactions subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--raw]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--raw]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to message reactions in
@@ -3655,6 +3731,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3684,8 +3761,8 @@ Send a message to an Ably Chat room
 ```
 USAGE
   $ ably rooms messages send ROOMID TEXT [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-c <value>] [-d <value>] [--metadata
-    <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-c <value>] [-d
+    <value>] [--metadata <value>]
 
 ARGUMENTS
   ROOMID  The room ID to send the message to
@@ -3699,6 +3776,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3734,7 +3812,7 @@ Subscribe to messages in an Ably Chat room
 ```
 USAGE
   $ ably rooms messages subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--show-metadata] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--show-metadata] [-D <value>]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to messages from
@@ -3746,6 +3824,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3798,7 +3877,7 @@ Get current occupancy metrics for a room
 ```
 USAGE
   $ ably rooms occupancy get ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to get occupancy for
@@ -3809,6 +3888,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3837,7 +3917,7 @@ Subscribe to real-time occupancy metrics for a room
 ```
 USAGE
   $ ably rooms occupancy subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to occupancy for
@@ -3848,6 +3928,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3893,8 +3974,8 @@ Enter presence in a chat room and remain present until terminated
 ```
 USAGE
   $ ably rooms presence enter ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile-data <value>] [--show-others] [-D
-    <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile-data <value>]
+    [--show-others] [-D <value>]
 
 ARGUMENTS
   ROOMID  Room ID to enter presence on
@@ -3906,6 +3987,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3934,7 +4016,7 @@ Subscribe to presence events in a chat room
 ```
 USAGE
   $ ably rooms presence subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to presence for
@@ -3946,6 +4028,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -3991,7 +4074,7 @@ Send a reaction in a chat room
 ```
 USAGE
   $ ably rooms reactions send ROOMID EMOJI [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--metadata <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--metadata <value>]
 
 ARGUMENTS
   ROOMID  The room ID to send the reaction to
@@ -4003,6 +4086,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4032,7 +4116,7 @@ Subscribe to reactions in a chat room
 ```
 USAGE
   $ ably rooms reactions subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  Room ID to subscribe to reactions in
@@ -4043,6 +4127,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4088,7 +4173,7 @@ Send a typing indicator in an Ably Chat room (use --autoType to keep typing auto
 ```
 USAGE
   $ ably rooms typing keystroke ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--autoType]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--autoType]
 
 ARGUMENTS
   ROOMID  The room ID to start typing in
@@ -4100,6 +4185,7 @@ FLAGS
       --autoType              Automatically keep typing indicator active
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4130,7 +4216,7 @@ Subscribe to typing indicators in an Ably Chat room
 ```
 USAGE
   $ ably rooms typing subscribe ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   ROOMID  The room ID to subscribe to typing indicators from
@@ -4141,6 +4227,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4221,7 +4308,7 @@ Get all current cursors in a space
 ```
 USAGE
   $ ably spaces cursors get-all SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to get cursors from
@@ -4232,6 +4319,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4258,8 +4346,8 @@ Set a cursor with position data in a space
 ```
 USAGE
   $ ably spaces cursors set SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>] [--x <value>] [--y <value>]
-    [--simulate] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>] [--x <value>]
+    [--y <value>] [--simulate] [-D <value>]
 
 ARGUMENTS
   SPACEID  The space ID to set cursor in
@@ -4273,6 +4361,7 @@ FLAGS
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --data=<value>          The cursor data to set (as JSON string)
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4314,7 +4403,7 @@ Subscribe to cursor movements in a space
 ```
 USAGE
   $ ably spaces cursors subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to cursors for
@@ -4326,6 +4415,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4353,8 +4443,8 @@ List active spaces
 
 ```
 USAGE
-  $ ably spaces list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
+  $ ably spaces list [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--limit <value>] [-p <value>]
 
 FLAGS
   -p, --prefix=<value>        Filter spaces by prefix
@@ -4363,6 +4453,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4393,8 +4484,8 @@ Spaces Locations API commands (Ably Spaces client-to-client location sharing)
 
 ```
 USAGE
-  $ ably spaces locations [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>] [--host
-    <value>] [--json | --pretty-json] [--token <value>] [-v]
+  $ ably spaces locations [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 FLAGS
   -v, --verbose               Output verbose logs
@@ -4402,6 +4493,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4421,7 +4513,7 @@ Get all current locations in a space
 ```
 USAGE
   $ ably spaces locations get-all SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f text|json]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-f text|json]
 
 ARGUMENTS
   SPACEID  Space ID to get locations from
@@ -4434,6 +4526,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4460,7 +4553,8 @@ Set your location in a space
 ```
 USAGE
   $ ably spaces locations set SPACEID --location <value> [--access-token <value>] [--api-key <value>] [--client-id
-    <value>] [--env <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    <value>] [--env <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D
+    <value>]
 
 ARGUMENTS
   SPACEID  Space ID to set location in
@@ -4473,6 +4567,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4498,7 +4593,7 @@ Subscribe to location updates for members in a space
 ```
 USAGE
   $ ably spaces locations subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to locations for
@@ -4510,6 +4605,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4561,7 +4657,7 @@ Acquire a lock in a space
 ```
 USAGE
   $ ably spaces locks acquire SPACEID LOCKID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--data <value>]
 
 ARGUMENTS
   SPACEID  Space ID to acquire lock in
@@ -4574,6 +4670,7 @@ FLAGS
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --data=<value>          Optional data to associate with the lock (JSON format)
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4598,7 +4695,7 @@ Get a lock in a space
 ```
 USAGE
   $ ably spaces locks get SPACEID LOCKID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env
-    <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    <value>] [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to get lock from
@@ -4610,6 +4707,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4636,7 +4734,7 @@ Get all current locks in a space
 ```
 USAGE
   $ ably spaces locks get-all SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v]
 
 ARGUMENTS
   SPACEID  Space ID to get locks from
@@ -4647,6 +4745,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4673,7 +4772,7 @@ Subscribe to lock events in a space
 ```
 USAGE
   $ ably spaces locks subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to locks for
@@ -4685,6 +4784,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4732,7 +4832,8 @@ Enter a space and remain present until terminated
 ```
 USAGE
   $ ably spaces members enter SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile <value>] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--profile <value>] [-D
+    <value>]
 
 ARGUMENTS
   SPACEID  Space ID to enter
@@ -4744,6 +4845,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4771,7 +4873,7 @@ Subscribe to member presence events in a space
 ```
 USAGE
   $ ably spaces members subscribe SPACEID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-D <value>]
 
 ARGUMENTS
   SPACEID  Space ID to subscribe to members for
@@ -4783,6 +4885,7 @@ FLAGS
       --api-key=<value>       Overrides any configured API key used for the product APIs
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format
@@ -4858,7 +4961,7 @@ Ask a question to the Ably AI agent for help
 ```
 USAGE
   $ ably support ask QUESTION [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
-    [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--continue] [-h]
+    [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [--continue] [-h]
 
 ARGUMENTS
   QUESTION  The question to ask the Ably AI agent
@@ -4871,6 +4974,7 @@ FLAGS
       --client-id=<value>     Overrides any default client ID when using API authentication. Use "none" to explicitly
                               set no client ID. Not applicable when using token authentication.
       --continue              Continue the previous conversation with the Ably AI agent
+      --endpoint=<value>      Override the endpoint for all product API calls
       --env=<value>           Override the environment for all product API calls
       --host=<value>          Override the host endpoint for all product API calls
       --json                  Output in JSON format

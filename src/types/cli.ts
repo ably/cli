@@ -10,6 +10,7 @@ export interface BaseFlags {
   "client-id"?: string;
   "control-host"?: string;
   env?: string;
+  endpoint?: string;
   host?: string;
   port?: number;
   tls?: string;

@@ -310,6 +310,7 @@ The `AblyCliTerminal` React component can optionally support a split-screen mode
     - `ABLY_CONTROL_HOST`: Optional Control API host override.
     - `ABLY_HOST`: Optional Data Plane host override.
     - `ABLY_ENVIRONMENT`: Optional Data Plane environment override.
+    - `ABLY_ENDPOINT`: Optional Data Plane endpoint override.
 - **Behavior**:
     - Disables all interactive prompts.
     - Sets a maximum execution time per request (e.g., 15 seconds). Long-running commands like `subscribe` will run for this duration then exit gracefully.
