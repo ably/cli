@@ -1947,6 +1947,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       // Only restore session if credentials match AND it's for the same domain
       if (storedSessionId && storedHash === currentHash) {
+        debugLog(`⚠️ DIAGNOSTIC: Restoring sessionId ${storedSessionId} from sessionStorage`);
         setSessionId(storedSessionId);
         console.log('[AblyCLITerminal] Restored session with matching credentials for domain:', urlDomain);
       } else if ((storedSessionId || storedHash) && storedHash !== currentHash) {
@@ -1959,6 +1960,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       setCredentialsInitialized(true);
       setSessionIdInitialized(true);
+      debugLog(`⚠️ DIAGNOSTIC: Credentials initialized, restored sessionId: ${storedSessionId || 'none'}`);
     };
     
     initializeSession();
