@@ -32,7 +32,7 @@ test.describe('Session Resume E2E Tests', () => {
     // Authenticate first
     await authenticateWebCli(page, apiKey);
     
-    const terminal = page.locator('.xterm');
+    const _terminal = page.locator('.xterm');
 
     // Wait for terminal to be ready
     await waitForTerminalReady(page);
@@ -206,7 +206,7 @@ test.describe('Session Resume E2E Tests', () => {
   test('preserves session across page reload when resumeOnReload is enabled', async ({ page }) => {
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
     await authenticateWebCli(page);
-    const terminal = page.locator('.xterm');
+    const _terminal = page.locator('.xterm');
 
     // Wait for terminal to be ready
     await waitForTerminalReady(page);
@@ -258,7 +258,7 @@ test.describe('Session Resume E2E Tests', () => {
     
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
     await authenticateWebCli(page);
-    const terminal = page.locator('.xterm');
+    const _terminal = page.locator('.xterm');
 
     // Wait for terminal to be ready
     await waitForTerminalReady(page);

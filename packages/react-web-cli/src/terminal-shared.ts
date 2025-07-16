@@ -8,7 +8,7 @@ import { FitAddon } from '@xterm/addon-fit';
 
 // Constants
 export const MAX_PTY_BUFFER_LENGTH = 10000;
-export const CONTROL_MESSAGE_PREFIX = '\x00\x00ABLY_CTRL:';
+export const CONTROL_MESSAGE_PREFIX = '\u0000\u0000ABLY_CTRL:';
 export const TERMINAL_PROMPT_PATTERN = /\$\s$/;
 export const MAX_HANDSHAKE_BUFFER_LENGTH = 200;
 
@@ -130,8 +130,8 @@ export function safeFit(fitAddon: FitAddon | null, terminalName: string = 'termi
   
   try {
     fitAddon.fit();
-  } catch (e) {
-    console.warn(`[${terminalName}] Error during fit:`, e);
+  } catch (error) {
+    console.warn(`[${terminalName}] Error during fit:`, error);
   }
 }
 
@@ -187,8 +187,8 @@ export function parseControlMessage(data: Uint8Array): any | null {
     const jsonBytes = data.slice(prefixBytes.length);
     const jsonStr = new TextDecoder().decode(jsonBytes);
     return JSON.parse(jsonStr);
-  } catch (e) {
-    console.error('Failed to parse control message:', e);
+  } catch (error) {
+    console.error('Failed to parse control message:', error);
     return null;
   }
 }
@@ -225,16 +225,16 @@ export function clearConnectingMessage(term: Terminal): void {
       const viewportY = term.buffer?.active?.viewportY ?? 0;
       
       // Move to the connecting line and clear it
-      term.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-      term.write('\x1b[2K'); // Clear entire line
+      term.write(`\u001B[${connectingLine + 1};1H`); // Move to line
+      term.write('\u001B[2K'); // Clear entire line
       
       // Move cursor back to previous position
-      term.write(`\x1b[${currentY + 1};${currentX + 1}H`);
+      term.write(`\u001B[${currentY + 1};${currentX + 1}H`);
       
       delete termAny._connectingLine;
       delete termAny._connectingMessageLength;
-    } catch (e) {
-      console.warn('Could not clear connecting message:', e);
+    } catch (error) {
+      console.warn('Could not clear connecting message:', error);
     }
   }
 }
@@ -255,8 +255,8 @@ export function showConnectingMessage(term: Terminal, message: string = 'Connect
     // Store line number for later clearing
     (term as any)._connectingLine = cursorY;
     (term as any)._connectingMessageLength = message.length;
-  } catch (e) {
-    console.error(`[showConnectingMessage] Error:`, e);
+  } catch (error) {
+    console.error(`[showConnectingMessage] Error:`, error);
     // If buffer is not ready, just write without tracking line number
     term.writeln(message);
   }
@@ -266,7 +266,7 @@ export function showConnectingMessage(term: Terminal, message: string = 'Connect
  * Debug logging helper
  */
 export function debugLog(...args: unknown[]): void {
-  if (typeof window !== 'undefined' && (window as any).ABLY_CLI_DEBUG) {
+  if (typeof globalThis !== 'undefined' && (globalThis as any).ABLY_CLI_DEBUG) {
     console.log('[AblyCLITerminal DEBUG]', ...args);
   }
 }

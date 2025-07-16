@@ -564,13 +564,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           grSuccessfulConnectionReset();
           updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
           
-          // Write the buffered content to the terminal now that session is active
-          if (term.current && ptyBuffer.current) {
-            debugLog(`⚠️ DIAGNOSTIC: Writing buffered content to terminal (${ptyBuffer.current.length} chars)`);
-            // Clear the connecting message first if it exists
-            clearConnectingMessage(term.current);
-            // Then write the buffered content
-            term.current.write(ptyBuffer.current);
+          // The buffered content has already been written to the terminal
+          // Just focus the terminal now that session is active
+          if (term.current) {
+            debugLog(`⚠️ DIAGNOSTIC: Session is now active, focusing terminal`);
             term.current.focus();
           }
           
@@ -900,6 +897,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, clearConnectionTimeout, credentialHash]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
+    debugLog(`⚠️ DIAGNOSTIC: handleWebSocketMessage called with event.data type: ${typeof event.data}`);
     try {
       const data = await messageDataToUint8Array(event.data);
       
@@ -920,21 +918,20 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             // This handles cases where the server doesn't send a separate "connected" status message
             debugLog(`⚠️ DIAGNOSTIC: Activating session after hello message (wasReconnecting: ${wasReconnecting}, wasConnecting: ${wasConnecting})`);
             
-            // Clear the "Connecting..." message BEFORE activating session
+            // Clear the "Connecting..." message and status box BEFORE activating session
             if (term.current) {
               clearConnectingMessage(term.current);
               term.current.focus();
             }
             
+            // Clear the status box
+            clearStatusDisplay();
+            
             updateSessionActive(true);
             updateConnectionStatusAndExpose('connected');
             
-            // Write any buffered content now that session is active
-            if (term.current && ptyBuffer.current) {
-              debugLog(`⚠️ DIAGNOSTIC: Writing buffered content after hello message (${ptyBuffer.current.length} chars)`);
-              term.current.write(ptyBuffer.current);
-              clearPtyBuffer();
-            }
+            // Clear the buffer since content has already been written to terminal
+            clearPtyBuffer();
             
             // Persist to session storage if enabled (domain-scoped)
             if (resumeOnReload && typeof window !== 'undefined') {
@@ -972,12 +969,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               updateSessionActive(true);
               grSuccessfulConnectionReset();
               
-              // Write any buffered content now that session is active
-              if (term.current && ptyBuffer.current) {
-                debugLog(`⚠️ DIAGNOSTIC: Writing buffered content after connected status (${ptyBuffer.current.length} chars)`);
-                term.current.write(ptyBuffer.current);
-              }
-              
+              // Clear the buffer since content has already been written to terminal
               clearPtyBuffer();
               return;
             }
@@ -1035,15 +1027,19 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Everything else is terminal output (including --json command results)
       // Convert back to string for terminal display
       const dataStr = new TextDecoder().decode(data);
+      debugLog(`⚠️ DIAGNOSTIC: Processing as terminal output: "${dataStr}"`);
       
       // Filter Docker handshake JSON using the shared buffering logic
       const filteredData = filterDockerHandshake(dataStr, handshakeFilterState.current);
+      debugLog(`⚠️ DIAGNOSTIC: After filtering: "${filteredData}"`);
       
       // Only write and process if we have data after filtering
       if (filteredData.length > 0) {
+        debugLog(`⚠️ DIAGNOSTIC: Filtered data received, length: ${filteredData.length}`);
         
-        // Only write to terminal if session is active to prevent cursor position issues
-        if (term.current && isSessionActiveRef.current) {
+        // Write to terminal regardless of session state
+        // This ensures terminal displays content during connection phase
+        if (term.current) {
           term.current.write(filteredData);
         }
         // Always process the data for prompt detection
