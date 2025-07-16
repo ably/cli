@@ -50,6 +50,17 @@ export function filterDockerHandshake(
     return data;
   }
 
+  // IMPORTANT: Check if this is a text-based control message that should bypass filtering
+  // This handles cases where control messages arrive as text (e.g., through proxies)
+  if (data.includes('ABLY_CTRL:')) {
+    // Don't buffer control messages - pass them through immediately
+    filterState.handshakeHandled = true;
+    const bufferedData = filterState.handshakeBuffer;
+    filterState.handshakeBuffer = '';
+    // Return any buffered data plus the control message
+    return bufferedData + data;
+  }
+
   // Accumulate data in buffer
   filterState.handshakeBuffer += data;
 
