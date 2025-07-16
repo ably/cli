@@ -1039,131 +1039,154 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         
         // Check for text-based control messages (e.g., from proxies that strip binary prefixes)
         if (filteredData.includes('ABLY_CTRL:')) {
-          // Extract and process each control message
-          const lines = filteredData.split('\n');
-          for (const line of lines) {
-            const ctrlIndex = line.indexOf('ABLY_CTRL:');
-            if (ctrlIndex !== -1) {
-              try {
-                const jsonStr = line.substring(ctrlIndex + 'ABLY_CTRL:'.length);
-                const msg = JSON.parse(jsonStr);
-                debugLog(`⚠️ DIAGNOSTIC: Found text-based control message:`, msg);
+          // Process the data to extract control messages and regular output
+          let regularOutput = '';
+          let currentPos = 0;
+          
+          while (currentPos < filteredData.length) {
+            const ctrlIndex = filteredData.indexOf('ABLY_CTRL:', currentPos);
+            
+            if (ctrlIndex === -1) {
+              // No more control messages, append the rest
+              regularOutput += filteredData.substring(currentPos);
+              break;
+            }
+            
+            // Append any text before the control message
+            if (ctrlIndex > currentPos) {
+              regularOutput += filteredData.substring(currentPos, ctrlIndex);
+            }
+            
+            // Find the end of the control message (either newline or end of string)
+            let msgEnd = filteredData.indexOf('\n', ctrlIndex);
+            if (msgEnd === -1) msgEnd = filteredData.indexOf('\r', ctrlIndex);
+            if (msgEnd === -1) msgEnd = filteredData.length;
+            
+            // Extract the control message
+            const ctrlLine = filteredData.substring(ctrlIndex, msgEnd);
+            
+            try {
+              const jsonStr = ctrlLine.substring('ABLY_CTRL:'.length);
+              const msg = JSON.parse(jsonStr);
+              debugLog(`⚠️ DIAGNOSTIC: Found text-based control message:`, msg);
+              
+              // Process the control message using the same logic as binary control messages
+              if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
+                debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
+                const wasReconnecting = connectionStatusRef.current === 'reconnecting';
+                const wasConnecting = connectionStatusRef.current === 'connecting';
+                setSessionId(msg.sessionId);
+                if (onSessionId) onSessionId(msg.sessionId);
+                debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
                 
-                // Process the control message using the same logic as binary control messages
-                if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
-                  debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
-                  const wasReconnecting = connectionStatusRef.current === 'reconnecting';
-                  const wasConnecting = connectionStatusRef.current === 'connecting';
-                  setSessionId(msg.sessionId);
-                  if (onSessionId) onSessionId(msg.sessionId);
-                  debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
+                // Clear the "Connecting..." message and status box BEFORE activating session
+                if (term.current) {
+                  clearConnectingMessage(term.current);
+                  term.current.focus();
+                }
+                
+                // Clear the status box
+                clearStatusDisplay();
+                
+                updateSessionActive(true);
+                updateConnectionStatusAndExpose('connected');
+                
+                // Clear the buffer since content has already been written to terminal
+                clearPtyBuffer();
+                
+                // Persist to session storage if enabled (domain-scoped)
+                if (resumeOnReload && typeof window !== 'undefined') {
+                  const urlDomain = new URL(websocketUrl).host;
+                  window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, msg.sessionId);
                   
-                  // Clear the "Connecting..." message and status box BEFORE activating session
+                  // Store credential hash if it's already computed
+                  if (credentialHash) {
+                    window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+                  }
+                }
+              } else if (msg.type === 'status') {
+                debugLog(`⚠️ DIAGNOSTIC: Received server status message: ${msg.payload}`);
+                
+                if (msg.payload === 'connected') {
+                  debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
+                  clearStatusDisplay();
+                  
+                  // Clear the "Connecting..." message BEFORE activating session
                   if (term.current) {
+                    debugLog(`⚠️ DIAGNOSTIC: Clearing connecting message and focusing terminal`);
                     clearConnectingMessage(term.current);
                     term.current.focus();
                   }
                   
-                  // Clear the status box
-                  clearStatusDisplay();
-                  
-                  updateSessionActive(true);
+                  // Now update connection status and activate session
                   updateConnectionStatusAndExpose('connected');
+                  
+                  // Set session active immediately on connected status
+                  debugLog(`⚠️ DIAGNOSTIC: Setting session active on 'connected' status`);
+                  updateSessionActive(true);
+                  grSuccessfulConnectionReset();
                   
                   // Clear the buffer since content has already been written to terminal
                   clearPtyBuffer();
+                } else if (msg.payload === 'error' || msg.payload === 'disconnected') {
+                  const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
+                  if (term.current) {
+                    term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
+                  }
+                  if (onSessionEnd) onSessionEnd(reason);
+                  updateConnectionStatusAndExpose(msg.payload);
                   
-                  // Persist to session storage if enabled (domain-scoped)
+                  // Handle session cleanup for disconnected status
                   if (resumeOnReload && typeof window !== 'undefined') {
                     const urlDomain = new URL(websocketUrl).host;
-                    window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, msg.sessionId);
-                    
-                    // Store credential hash if it's already computed
-                    if (credentialHash) {
-                      window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
-                    }
+                    window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+                    window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
+                    setSessionId(null);
                   }
-                } else if (msg.type === 'status') {
-                  debugLog(`⚠️ DIAGNOSTIC: Received server status message: ${msg.payload}`);
                   
-                  if (msg.payload === 'connected') {
-                    debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
-                    clearStatusDisplay();
+                  // Show appropriate overlay for disconnected status
+                  if (term.current && msg.payload === 'disconnected') {
+                    const title = "SERVER DISCONNECTED";
+                    const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
+                    const message2 = '';
+                    const message3 = `Press ⏎ to reconnect`;
                     
-                    // Clear the "Connecting..." message BEFORE activating session
-                    if (term.current) {
-                      debugLog(`⚠️ DIAGNOSTIC: Clearing connecting message and focusing terminal`);
-                      clearConnectingMessage(term.current);
-                      term.current.focus();
-                    }
+                    const lines = [message1, message2, message3];
                     
-                    // Now update connection status and activate session
-                    updateConnectionStatusAndExpose('connected');
-                    
-                    // Set session active immediately on connected status
-                    debugLog(`⚠️ DIAGNOSTIC: Setting session active on 'connected' status`);
-                    updateSessionActive(true);
-                    grSuccessfulConnectionReset();
-                    
-                    // Clear the buffer since content has already been written to terminal
-                    clearPtyBuffer();
-                  } else if (msg.payload === 'error' || msg.payload === 'disconnected') {
-                    const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
-                    if (term.current) {
-                      term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
-                    }
-                    if (onSessionEnd) onSessionEnd(reason);
-                    updateConnectionStatusAndExpose(msg.payload);
-                    
-                    // Handle session cleanup for disconnected status
-                    if (resumeOnReload && typeof window !== 'undefined') {
-                      const urlDomain = new URL(websocketUrl).host;
-                      window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
-                      window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
-                      setSessionId(null);
-                    }
-                    
-                    // Show appropriate overlay for disconnected status
-                    if (term.current && msg.payload === 'disconnected') {
-                      const title = "SERVER DISCONNECTED";
-                      const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
-                      const message2 = '';
-                      const message3 = `Press ⏎ to reconnect`;
-                      
-                      const lines = [message1, message2, message3];
-                      
-                      statusBoxRef.current = drawBox(term.current, boxColour.red, title, lines, 60);
-                      setOverlay({ 
-                        variant: 'error', 
-                        title, 
-                        lines: lines,
-                        drawer: {
-                          lines: [
-                            'Pro tip: Install the CLI locally for a faster experience with all features',
-                            '    npm install -g @ably/cli'
-                          ]
-                        }
-                      });
-                    }
+                    statusBoxRef.current = drawBox(term.current, boxColour.red, title, lines, 60);
+                    setOverlay({ 
+                      variant: 'error', 
+                      title, 
+                      lines: lines,
+                      drawer: {
+                        lines: [
+                          'Pro tip: Install the CLI locally for a faster experience with all features',
+                          '    npm install -g @ably/cli'
+                        ]
+                      }
+                    });
                   }
                 }
-              } catch (error) {
-                console.warn('[WebSocket] Failed to parse text-based control message:', error);
               }
-              
-              // Remove the control message from the output
-              const beforeCtrl = line.substring(0, ctrlIndex);
-              if (beforeCtrl && term.current) {
-                term.current.write(beforeCtrl);
-              }
-              // Skip writing the control message itself to the terminal
-              continue;
+            } catch (error) {
+              console.warn('[WebSocket] Failed to parse text-based control message:', error);
             }
             
-            // Write non-control lines to terminal
-            if (term.current && line) {
-              term.current.write(line + '\n');
+            // Move past this control message
+            currentPos = msgEnd;
+            // Skip the newline if present
+            if (currentPos < filteredData.length && (filteredData[currentPos] === '\n' || filteredData[currentPos] === '\r')) {
+              if (filteredData[currentPos] === '\r' && currentPos + 1 < filteredData.length && filteredData[currentPos + 1] === '\n') {
+                currentPos += 2; // Skip \r\n
+              } else {
+                currentPos += 1; // Skip single \n or \r
+              }
             }
+          }
+          
+          // Write the regular output to terminal (without control messages)
+          if (regularOutput && term.current) {
+            term.current.write(regularOutput);
           }
         } else {
           // No control messages, write filtered data as-is
