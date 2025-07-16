@@ -537,6 +537,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       ptyBuffer.current += data;
       
       debugLog(`⚠️ DIAGNOSTIC: Received PTY data (session inactive): "${sanitizedData}"`);
+      debugLog(`⚠️ DIAGNOSTIC: Current connection status: ${connectionStatusRef.current}, sessionId: ${sessionIdRef.current}`);
       
       if (ptyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
         ptyBuffer.current = ptyBuffer.current.slice(ptyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
@@ -757,6 +758,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const connectWebSocket = useCallback(() => {
     // console.log('[AblyCLITerminal] connectWebSocket called.');
     debugLog('⚠️ DIAGNOSTIC: connectWebSocket called - start of connection process');
+    debugLog(`⚠️ DIAGNOSTIC: Current sessionId: ${sessionId}, credentialsInitialized: ${credentialsInitialized}`);
 
     // Skip attempt if terminal not visible to avoid unnecessary server load
     if (!isVisible) {
@@ -843,8 +845,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Only clear buffer for new sessions, not when resuming
     if (!sessionId) {
       clearPtyBuffer(); // Clear buffer for new session prompt detection
+      debugLog(`⚠️ DIAGNOSTIC: Cleared PTY buffer for new session`);
     } else {
       debugLog(`⚠️ DIAGNOSTIC: Skipping PTY buffer clear for resumed session ${sessionId}`);
+      // For resumed sessions, we might already be at a prompt
+      // Check if we need to activate the session immediately
+      if (connectionStatusRef.current === 'connected' && !isSessionActiveRef.current) {
+        debugLog(`⚠️ DIAGNOSTIC: Resumed session but not active - checking for existing prompt`);
+      }
     }
 
     debugLog('⚠️ DIAGNOSTIC: WebSocket open handler started - tracking initialization sequence');
@@ -859,6 +867,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     const payload = createAuthPayload(ablyApiKey, ablyAccessToken, sessionId);
     
     debugLog(`⚠️ DIAGNOSTIC: Preparing to send auth payload with env vars: ${JSON.stringify(payload.environmentVariables)}`);
+    debugLog(`⚠️ DIAGNOSTIC: Auth payload includes sessionId: ${payload.sessionId || 'none (new session)'}`);
     
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       debugLog('⚠️ DIAGNOSTIC: Sending auth payload to server');
