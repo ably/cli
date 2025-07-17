@@ -16,10 +16,12 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   test.setTimeout(120_000);
 
   test('Page reload resumes session without injecting extra blank prompts', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) throw new Error('API key required for tests');
     
-    await waitForRateLimitLock();
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
@@ -107,10 +109,12 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   });
 
   test('Multiple reloads should not accumulate prompts', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) throw new Error('API key required for tests');
     
-    await waitForRateLimitLock();
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });

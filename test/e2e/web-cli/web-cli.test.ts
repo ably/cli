@@ -1,5 +1,6 @@
 import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
+import { waitForRateLimitLock } from './rate-limit-lock';
 import { 
   waitForTerminalReady,
   waitForTerminalStable
@@ -30,6 +31,8 @@ test.describe('Web CLI E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
 
   test('should load the terminal, connect to public server, and run basic commands', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
     // Wait for test stability
     log('Waiting for test stability...');
     await waitForTerminalStable(page, 2000);
@@ -113,6 +116,9 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('side drawer persists state across page reloads', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Navigate to the Web CLI app
     await page.goto(getTestUrl());
     
@@ -182,6 +188,8 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('bottom drawer adapts to different screen sizes', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
     // Navigate to the Web CLI app
     await page.goto(getTestUrl());
     
@@ -232,6 +240,8 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('terminal maintains functionality with drawer interactions', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
     // Navigate to the Web CLI app
     await page.goto(getTestUrl());
     
