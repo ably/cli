@@ -1,6 +1,7 @@
 import { test, expect, getTestUrl } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 const BOX_TOP_LEFT = '┌';
 const BOX_BOTTOM_LEFT = '└';
@@ -27,6 +28,9 @@ test.describe('Web CLI Terminal UI Tests', () => {
       const terminalSelector = '.xterm-viewport';
       const terminalRowsSelector = `${terminalSelector} .xterm-rows`;
       const statusSelector = '.status';
+      
+      // Wait for any ongoing rate limit pause
+      await waitForRateLimitLock();
       
       // Check rate limit before attempting connection
       await waitForRateLimitIfNeeded();

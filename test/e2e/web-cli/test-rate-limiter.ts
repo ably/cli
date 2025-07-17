@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acquireRateLimitLock, releaseRateLimitLock } from './rate-limit-lock';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,6 +163,9 @@ export async function waitForRateLimitIfNeeded(): Promise<void> {
     console.log(`[TestRateLimiter] This ensures we stay under 10 connections/minute`);
     console.log(`[TestRateLimiter] Pause started at ${new Date().toISOString()}`);
     
+    // Acquire lock to prevent other tests from running during pause
+    acquireRateLimitLock('Rate limit pause', delay);
+    
     try {
       await new Promise(resolve => setTimeout(resolve, delay));
       resetRateLimitWindow();
@@ -170,6 +174,9 @@ export async function waitForRateLimitIfNeeded(): Promise<void> {
     } catch (error) {
       console.error(`[TestRateLimiter] Error during rate limit pause:`, error);
       throw error;
+    } finally {
+      // Always release the lock
+      releaseRateLimitLock();
     }
   }
 }

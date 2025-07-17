@@ -1,5 +1,6 @@
 import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 import { 
   waitForTerminalReady, 
   waitForSessionActive, 
@@ -18,6 +19,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) throw new Error('API key required for tests');
     
+    await waitForRateLimitLock();
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
@@ -108,6 +110,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) throw new Error('API key required for tests');
     
+    await waitForRateLimitLock();
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });

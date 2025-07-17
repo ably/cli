@@ -3,6 +3,7 @@ import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 // Load environment variables from .env for Playwright tests
 const rootEnvPath = resolve(process.cwd(), '.env');
@@ -28,6 +29,9 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
   console.log(`[Auth Helper] API key format valid: ${/^.+\..+:.+$/.test(key)}`);
   console.log(`[Auth Helper] Using ${useQueryParam ? 'query param' : 'form'} authentication`);
 
+  // Wait for any ongoing rate limit pause to complete
+  await waitForRateLimitLock();
+  
   // Check rate limit before attempting connection
   await waitForRateLimitIfNeeded();
 
@@ -103,6 +107,9 @@ export async function navigateAndAuthenticate(page: Page, url: string, apiKey?: 
   if (!key) {
     throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
   }
+  
+  // Wait for any ongoing rate limit pause to complete
+  await waitForRateLimitLock();
   
   // Check rate limit before attempting connection
   await waitForRateLimitIfNeeded();

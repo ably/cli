@@ -1,5 +1,6 @@
 import { test, expect, getTestUrl } from './helpers/base-test';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 test.describe('Domain-Scoped Authentication E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
@@ -16,6 +17,9 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
     
     // Check remember credentials checkbox
     await page.check('#rememberCredentials');
+    
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
     
     // Check rate limit before attempting connection
     await waitForRateLimitIfNeeded();
