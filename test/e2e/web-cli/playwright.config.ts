@@ -5,7 +5,14 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export default defineConfig({
+// Log configuration details
+console.log(`[Playwright Config] Loading configuration at ${new Date().toISOString()}`);
+console.log(`[Playwright Config] Process ID: ${process.pid}`);
+console.log(`[Playwright Config] Node version: ${process.version}`);
+console.log(`[Playwright Config] Platform: ${process.platform}`);
+console.log(`[Playwright Config] Environment: ${process.env.CI ? 'CI' : 'Local'}`);
+
+const config = defineConfig({
   testDir: '.',
   testMatch: '**/*.test.ts',
   
@@ -60,3 +67,12 @@ export default defineConfig({
   // Output folder
   outputDir: path.join(__dirname, '../../../test-results'),
 });
+
+// Log final configuration
+console.log(`[Playwright Config] Workers configured: ${config.workers}`);
+console.log(`[Playwright Config] Fully parallel: ${config.fullyParallel}`);
+console.log(`[Playwright Config] Test timeout: ${config.timeout}ms`);
+console.log(`[Playwright Config] Global timeout: ${config.globalTimeout}ms`);
+console.log(`[Playwright Config] Configuration complete at ${new Date().toISOString()}`);
+
+export default config;

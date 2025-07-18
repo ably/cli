@@ -77,11 +77,15 @@ class GlobalRateLimiter {
    * Record a connection attempt
    */
   private recordAttempt(testName: string, success: boolean): void {
-    this.connectionAttempts.push({
+    const attempt = {
       timestamp: Date.now(),
       testName,
       success
-    });
+    };
+    this.connectionAttempts.push(attempt);
+    console.log(`[RateLimiter] Recorded connection attempt at ${new Date().toISOString()}`);
+    console.log(`[RateLimiter] Test: "${testName}", Success: ${success}, Process ID: ${process.pid}`);
+    console.log(`[RateLimiter] Total attempts in window: ${this.getRecentAttempts().length}`);
   }
 
   /**
@@ -137,6 +141,13 @@ class GlobalRateLimiter {
     testName: string,
     connectionFn: () => Promise<T>
   ): Promise<T> {
+    console.log(`[RateLimiter] executeWithRateLimit called for "${testName}" at ${new Date().toISOString()}`);
+    console.log(`[RateLimiter] Process ID: ${process.pid}`);
+    
+    // Log stack trace to understand call context
+    const stack = new Error().stack;
+    console.log(`[RateLimiter] Execute stack trace:\n${stack}`);
+    
     let lastError: Error | undefined;
     
     for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {
@@ -148,12 +159,13 @@ class GlobalRateLimiter {
         this.recordAttempt(testName, false);
         
         // Execute the connection
-        console.log(`[RateLimiter] Test "${testName}" attempting connection (attempt ${attempt + 1}/${this.config.maxRetries})`);
+        console.log(`[RateLimiter] Test "${testName}" attempting connection (attempt ${attempt + 1}/${this.config.maxRetries}) at ${new Date().toISOString()}`);
+        console.log(`[RateLimiter] About to create WebSocket connection...`);
         const result = await connectionFn();
         
         // Mark as successful
         this.connectionAttempts.at(-1)!.success = true;
-        console.log(`[RateLimiter] Test "${testName}" connected successfully`);
+        console.log(`[RateLimiter] Test "${testName}" connected successfully at ${new Date().toISOString()}`);
         
         return result;
       } catch (error) {

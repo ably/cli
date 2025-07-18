@@ -130,16 +130,26 @@ if (!initialState.initialized) {
 }
 
 export function incrementConnectionCount(): void {
+  console.log(`[TestRateLimiter] incrementConnectionCount called at ${new Date().toISOString()}, pid=${process.pid}`);
+  
+  // Log stack trace to understand who is incrementing
+  const stack = new Error().stack;
+  console.log(`[TestRateLimiter] Increment stack trace:\n${stack}`);
+  
   const state = readState();
+  const previousCount = state.connectionCount;
   state.connectionCount++;
-  console.log(`[TestRateLimiter] Connection count: ${state.connectionCount}`);
+  console.log(`[TestRateLimiter] Connection count: ${previousCount} -> ${state.connectionCount}`);
+  console.log(`[TestRateLimiter] Current batch progress: ${state.connectionCount % config.connectionsPerBatch}/${config.connectionsPerBatch}`);
   writeState(state);
 }
 
 export function shouldDelayForRateLimit(): boolean {
   const state = readState();
   // After every N connections, we should wait to ensure rate limit window resets
-  return state.connectionCount > 0 && state.connectionCount % config.connectionsPerBatch === 0;
+  const shouldDelay = state.connectionCount > 0 && state.connectionCount % config.connectionsPerBatch === 0;
+  console.log(`[TestRateLimiter] shouldDelayForRateLimit: ${shouldDelay} (count=${state.connectionCount}, batch=${config.connectionsPerBatch})`);
+  return shouldDelay;
 }
 
 export function getRateLimitDelay(): number {
@@ -154,14 +164,21 @@ export function resetRateLimitWindow(): void {
 }
 
 export async function waitForRateLimitIfNeeded(): Promise<void> {
+  console.log(`[TestRateLimiter] waitForRateLimitIfNeeded called at ${new Date().toISOString()}, pid=${process.pid}`);
+  
   if (shouldDelayForRateLimit()) {
     const state = readState();
     const delay = getRateLimitDelay();
-    console.log(`[TestRateLimiter] === RATE LIMIT PAUSE ===`);
+    console.log(`[TestRateLimiter] === RATE LIMIT PAUSE STARTING ===`);
+    console.log(`[TestRateLimiter] Timestamp: ${new Date().toISOString()}`);
+    console.log(`[TestRateLimiter] Process ID: ${process.pid}`);
     console.log(`[TestRateLimiter] Completed ${state.connectionCount} connections`);
     console.log(`[TestRateLimiter] Waiting ${delay}ms (${Math.round(delay/1000)}s) to reset rate limit window...`);
     console.log(`[TestRateLimiter] This ensures we stay under 10 connections/minute`);
-    console.log(`[TestRateLimiter] Pause started at ${new Date().toISOString()}`);
+    
+    // Log stack trace to understand the call context
+    const stack = new Error().stack;
+    console.log(`[TestRateLimiter] Rate limit pause stack trace:\n${stack}`);
     
     // Acquire lock to prevent other tests from running during pause
     acquireRateLimitLock('Rate limit pause', delay);
@@ -169,15 +186,19 @@ export async function waitForRateLimitIfNeeded(): Promise<void> {
     try {
       await new Promise(resolve => setTimeout(resolve, delay));
       resetRateLimitWindow();
-      console.log(`[TestRateLimiter] Pause ended at ${new Date().toISOString()}`);
+      console.log(`[TestRateLimiter] === RATE LIMIT PAUSE ENDED ===`);
+      console.log(`[TestRateLimiter] Timestamp: ${new Date().toISOString()}`);
+      console.log(`[TestRateLimiter] Process ID: ${process.pid}`);
       console.log(`[TestRateLimiter] === RESUMING TESTS ===`);
     } catch (error) {
-      console.error(`[TestRateLimiter] Error during rate limit pause:`, error);
+      console.error(`[TestRateLimiter] Error during rate limit pause at ${new Date().toISOString()}:`, error);
       throw error;
     } finally {
       // Always release the lock
       releaseRateLimitLock();
     }
+  } else {
+    console.log(`[TestRateLimiter] No rate limit pause needed`);
   }
 }
 
@@ -186,10 +207,12 @@ export function getRateLimiterState(): RateLimiterState {
 }
 
 export function resetConnectionCount(): void {
+  console.log(`[TestRateLimiter] resetConnectionCount called at ${new Date().toISOString()}, pid=${process.pid}`);
   const state = readState();
+  const previousCount = state.connectionCount;
   state.connectionCount = 0;
   state.lastResetTime = Date.now();
-  console.log(`[TestRateLimiter] Connection count reset`);
+  console.log(`[TestRateLimiter] Connection count reset: ${previousCount} -> 0`);
   writeState(state);
 }
 
