@@ -21,10 +21,12 @@ function readLockState(): LockState {
   try {
     if (fs.existsSync(LOCK_FILE)) {
       const data = fs.readFileSync(LOCK_FILE, 'utf8');
-      return JSON.parse(data);
+      const state = JSON.parse(data);
+      console.log(`[RateLimitLock] Read lock state: isLocked=${state.isLocked}, reason="${state.lockReason}", pid=${process.pid}`);
+      return state;
     }
   } catch (error) {
-    console.warn('[RateLimitLock] Failed to read lock file:', error);
+    console.warn(`[RateLimitLock] Failed to read lock file at ${new Date().toISOString()}:`, error);
   }
   
   return { isLocked: false };
@@ -32,13 +34,21 @@ function readLockState(): LockState {
 
 function writeLockState(state: LockState): void {
   try {
+    console.log(`[RateLimitLock] Writing lock state: isLocked=${state.isLocked}, reason="${state.lockReason}", pid=${process.pid}`);
     fs.writeFileSync(LOCK_FILE, JSON.stringify(state, null, 2));
   } catch (error) {
-    console.error('[RateLimitLock] Failed to write lock file:', error);
+    console.error(`[RateLimitLock] Failed to write lock file at ${new Date().toISOString()}:`, error);
   }
 }
 
 export function acquireRateLimitLock(reason: string, duration: number): void {
+  console.log(`[RateLimitLock] Acquiring lock at ${new Date().toISOString()}, pid=${process.pid}`);
+  console.log(`[RateLimitLock] Lock reason: "${reason}", duration: ${duration}ms`);
+  
+  // Log stack trace to understand who is acquiring the lock
+  const stack = new Error().stack;
+  console.log(`[RateLimitLock] Acquire stack trace:\n${stack}`);
+  
   const state: LockState = {
     isLocked: true,
     lockedAt: Date.now(),
@@ -46,16 +56,29 @@ export function acquireRateLimitLock(reason: string, duration: number): void {
     expectedUnlockAt: Date.now() + duration
   };
   writeLockState(state);
-  console.log(`[RateLimitLock] Lock acquired: ${reason}`);
+  console.log(`[RateLimitLock] Lock acquired successfully at ${new Date().toISOString()}`);
   console.log(`[RateLimitLock] Expected unlock at: ${new Date(state.expectedUnlockAt).toISOString()}`);
 }
 
 export function releaseRateLimitLock(): void {
+  console.log(`[RateLimitLock] Releasing lock at ${new Date().toISOString()}, pid=${process.pid}`);
+  
+  // Log stack trace to understand who is releasing the lock
+  const stack = new Error().stack;
+  console.log(`[RateLimitLock] Release stack trace:\n${stack}`);
+  
   writeLockState({ isLocked: false });
-  console.log('[RateLimitLock] Lock released');
+  console.log(`[RateLimitLock] Lock released successfully at ${new Date().toISOString()}`);
 }
 
 export async function waitForRateLimitLock(): Promise<void> {
+  const startTime = Date.now();
+  console.log(`[RateLimitLock] waitForRateLimitLock called at ${new Date().toISOString()}, pid=${process.pid}`);
+  
+  // Log stack trace to understand who is waiting
+  const stack = new Error().stack;
+  console.log(`[RateLimitLock] Wait stack trace:\n${stack}`);
+  
   let checkCount = 0;
   const maxChecks = 1200; // 10 minutes max wait (500ms intervals)
   
@@ -63,12 +86,15 @@ export async function waitForRateLimitLock(): Promise<void> {
     const state = readLockState();
     
     if (!state.isLocked) {
+      console.log(`[RateLimitLock] Lock is available, proceeding at ${new Date().toISOString()}`);
+      console.log(`[RateLimitLock] Total wait time: ${Date.now() - startTime}ms`);
       return; // Lock is available
     }
     
     // Check if lock is stale (older than 10 minutes)
     if (state.lockedAt && Date.now() - state.lockedAt > 600000) {
-      console.warn('[RateLimitLock] Clearing stale lock (older than 10 minutes)');
+      console.warn(`[RateLimitLock] Clearing stale lock at ${new Date().toISOString()} (older than 10 minutes)`);
+      console.warn(`[RateLimitLock] Lock was created at: ${new Date(state.lockedAt).toISOString()}`);
       releaseRateLimitLock();
       return;
     }
@@ -101,12 +127,17 @@ export async function waitForRateLimitLock(): Promise<void> {
 }
 
 export function clearRateLimitLock(): void {
+  console.log(`[RateLimitLock] clearRateLimitLock called at ${new Date().toISOString()}, pid=${process.pid}`);
   try {
     if (fs.existsSync(LOCK_FILE)) {
+      const state = readLockState();
+      console.log(`[RateLimitLock] Clearing lock file with state: isLocked=${state.isLocked}, reason="${state.lockReason}"`);
       fs.unlinkSync(LOCK_FILE);
-      console.log('[RateLimitLock] Lock file cleared');
+      console.log(`[RateLimitLock] Lock file cleared successfully at ${new Date().toISOString()}`);
+    } else {
+      console.log(`[RateLimitLock] No lock file exists to clear`);
     }
   } catch (error) {
-    console.error('[RateLimitLock] Failed to clear lock file:', error);
+    console.error(`[RateLimitLock] Failed to clear lock file at ${new Date().toISOString()}:`, error);
   }
 }

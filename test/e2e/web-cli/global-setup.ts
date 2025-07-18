@@ -8,7 +8,15 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 
 async function globalSetup() {
-  console.log('[Global Setup] Starting...');
+  const startTime = Date.now();
+  console.log(`[Global Setup] Starting at ${new Date().toISOString()}`);
+  console.log(`[Global Setup] Process ID: ${process.pid}`);
+  console.log(`[Global Setup] Current working directory: ${process.cwd()}`);
+  console.log(`[Global Setup] Memory usage: ${JSON.stringify(process.memoryUsage())}`);
+  
+  // Log call stack to understand execution context
+  const stack = new Error().stack;
+  console.log(`[Global Setup] Call stack:\n${stack}`);
   
   // Load environment variables from .env file
   const envPath = resolve(process.cwd(), '.env');
@@ -46,16 +54,19 @@ async function globalSetup() {
   }
   
   // Initialize rate limiter configuration
-  console.log('[Global Setup] Configuring rate limiter...');
+  console.log(`[Global Setup] Configuring rate limiter at ${new Date().toISOString()}`);
   setupRateLimiter();
   
   // Reset rate limiter to ensure clean state
+  console.log(`[Global Setup] Resetting rate limiter state...`);
   resetRateLimiter();
   
   // Reset connection count for rate limiting
+  console.log(`[Global Setup] Resetting connection count...`);
   resetConnectionCount();
   
   // Clear any stale rate limit locks
+  console.log(`[Global Setup] Clearing any stale rate limit locks...`);
   clearRateLimitLock();
   
   // Add initial delay to ensure we start with a clean rate limit window
@@ -67,13 +78,20 @@ async function globalSetup() {
   }
   
   // Start the shared web server
+  console.log(`[Global Setup] Starting web server at ${new Date().toISOString()}`);
   const url = await setupWebServer();
-  console.log(`[Global Setup] Web server ready at ${url}`);
+  console.log(`[Global Setup] Web server ready at ${url} at ${new Date().toISOString()}`);
   
   // Store the URL in environment variable for tests to use
   process.env.WEB_CLI_TEST_URL = url;
   
-  console.log('[Global Setup] Complete.');
+  console.log(`[Global Setup] Complete at ${new Date().toISOString()}`);
+  console.log(`[Global Setup] Total setup duration: ${Date.now() - startTime}ms`);
+  
+  // Return cleanup function
+  return async () => {
+    console.log(`[Global Setup] Cleanup called at ${new Date().toISOString()}`);
+  };
 }
 
 export default globalSetup;

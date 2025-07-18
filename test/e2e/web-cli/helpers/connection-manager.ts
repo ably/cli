@@ -24,7 +24,13 @@ export async function establishConnection(
 ): Promise<void> {
   const { apiKey, serverUrl, timeout = 60000, testName } = options;
   
-  console.log(`[ConnectionManager] Establishing connection for test: ${testName}`);
+  console.log(`[ConnectionManager] establishConnection called at ${new Date().toISOString()}`);
+  console.log(`[ConnectionManager] Test name: "${testName}", Process ID: ${process.pid}`);
+  console.log(`[ConnectionManager] Server URL: ${serverUrl || 'default'}`);
+  
+  // Log stack trace to understand call context
+  const stack = new Error().stack;
+  console.log(`[ConnectionManager] Establish connection stack trace:\n${stack}`);
   
   // Log current rate limiter status
   const status = getRateLimiterStatus();
@@ -36,24 +42,32 @@ export async function establishConnection(
     async () => {
       // Navigate to the page (this creates the WebSocket connection)
       const url = serverUrl || process.env.WEB_CLI_TEST_URL || 'http://localhost:5173';
+      console.log(`[ConnectionManager] About to navigate to: ${url} at ${new Date().toISOString()}`);
+      console.log(`[ConnectionManager] This will create a new WebSocket connection`);
+      
       await page.goto(url);
+      console.log(`[ConnectionManager] Navigation complete, WebSocket connection should be initiated`);
       
       // Authenticate if API key provided
+      console.log(`[ConnectionManager] Starting authentication process...`);
       if (apiKey) {
         await authenticateWebCli(page, apiKey);
       } else {
         await authenticateWebCli(page);
       }
+      console.log(`[ConnectionManager] Authentication complete`);
       
       // Wait for terminal to be ready
       const terminalSelector = '.xterm';
+      console.log(`[ConnectionManager] Waiting for terminal selector: ${terminalSelector}`);
       await page.waitForSelector(terminalSelector, { timeout });
       await waitForTerminalReady(page, timeout);
+      console.log(`[ConnectionManager] Terminal is ready`);
     },
     testName
   );
   
-  console.log(`[ConnectionManager] Connection established for test: ${testName}`);
+  console.log(`[ConnectionManager] Connection established successfully for test: "${testName}" at ${new Date().toISOString()}`);
 }
 
 /**
