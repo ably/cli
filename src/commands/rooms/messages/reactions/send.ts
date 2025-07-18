@@ -1,6 +1,11 @@
 import { Args, Flags } from "@oclif/core";
 import * as Ably from "ably";
-import { ChatClient, RoomStatus, RoomStatusChange, MessageReactionType } from "@ably/chat";
+import {
+  ChatClient,
+  RoomStatus,
+  RoomStatusChange,
+  MessageReactionType,
+} from "@ably/chat";
 import chalk from "chalk";
 
 import { ChatBaseCommand } from "../../../../chat-base-command.js";
@@ -23,7 +28,7 @@ interface MessageReactionResult {
   error?: string;
 }
 
-export default class MessagesReactionsAdd extends ChatBaseCommand {
+export default class MessagesReactionsSend extends ChatBaseCommand {
   static override args = {
     roomId: Args.string({
       description: "The room ID where the message is located",
@@ -34,19 +39,19 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
       required: true,
     }),
     reaction: Args.string({
-      description: "The reaction to add (e.g. 👍, ❤️, 😂)",
+      description: "The reaction to send (e.g. 👍, ❤️, 😂)",
       required: true,
     }),
   };
 
-  static override description = "Add a reaction to a message in a chat room";
+  static override description = "Send a reaction to a message in a chat room";
 
   static override examples = [
-    "$ ably rooms messages reactions add my-room message-serial 👍",
-    '$ ably rooms messages reactions add --api-key "YOUR_API_KEY" my-room message-serial ❤️',
-    "$ ably rooms messages reactions add my-room message-serial 👍 --type multiple --count 10",
-    "$ ably rooms messages reactions add my-room message-serial 👍 --type unique",
-    "$ ably rooms messages reactions add my-room message-serial 👍 --json",
+    "$ ably rooms messages reactions send my-room message-serial 👍",
+    '$ ably rooms messages reactions send --api-key "YOUR_API_KEY" my-room message-serial ❤️',
+    "$ ably rooms messages reactions send my-room message-serial 👍 --type multiple --count 10",
+    "$ ably rooms messages reactions send my-room message-serial 👍 --type unique",
+    "$ ably rooms messages reactions send my-room message-serial 👍 --json",
   ];
 
   static override flags = {
@@ -85,13 +90,18 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
   }
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(MessagesReactionsAdd);
+    const { args, flags } = await this.parse(MessagesReactionsSend);
     const { roomId, messageSerial, reaction } = args;
 
     try {
       // Validate count for Multiple type
-      if (flags.type === "multiple" && flags.count !== undefined && flags.count <= 0) {
-        const errorMsg = "Count must be a positive integer for Multiple type reactions";
+      if (
+        flags.type === "multiple" &&
+        flags.count !== undefined &&
+        flags.count <= 0
+      ) {
+        const errorMsg =
+          "Count must be a positive integer for Multiple type reactions";
         this.logCliEvent(flags, "reaction", "invalidCount", errorMsg, {
           error: errorMsg,
           count: flags.count,
@@ -224,25 +234,28 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
         reactionParams.count = flags.count;
       }
 
-      // Add the reaction
+      // Send the reaction
       this.logCliEvent(
         flags,
         "reaction",
-        "adding",
-        `Adding reaction ${reaction} to message`,
+        "sending",
+        `Sending reaction ${reaction} to message`,
         {
           messageSerial,
           reaction: reactionParams,
-        }
+        },
       );
 
-      await room.messages.reactions.send({ serial: messageSerial }, reactionParams);
-      
+      await room.messages.reactions.send(
+        { serial: messageSerial },
+        reactionParams,
+      );
+
       this.logCliEvent(
         flags,
         "reaction",
-        "added",
-        `Successfully added reaction ${reaction} to message`,
+        "sent",
+        `Successfully sent reaction ${reaction} to message`,
       );
 
       // Format the response
@@ -259,7 +272,7 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
         this.log(this.formatJsonOutput(resultData, flags));
       } else {
         this.log(
-          `${chalk.green("✓")} Added reaction ${chalk.yellow(reaction)} to message ${chalk.cyan(messageSerial)} in room ${chalk.cyan(roomId)}`,
+          `${chalk.green("✓")} Sent reaction ${chalk.yellow(reaction)} to message ${chalk.cyan(messageSerial)} in room ${chalk.cyan(roomId)}`,
         );
       }
 
@@ -287,7 +300,7 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
         flags,
         "reaction",
         "error",
-        `Failed to add reaction: ${errorMsg}`,
+        `Failed to send reaction: ${errorMsg}`,
         { error: errorMsg, roomId, messageSerial, reaction },
       );
 
@@ -299,11 +312,11 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
-            { 
-              error: errorMsg, 
-              roomId, 
-              messageSerial, 
-              reaction, 
+            {
+              error: errorMsg,
+              roomId,
+              messageSerial,
+              reaction,
               success: false,
               ...(flags.type && { type: flags.type }),
               ...(flags.count && { count: flags.count }),
@@ -312,7 +325,7 @@ export default class MessagesReactionsAdd extends ChatBaseCommand {
           ),
         );
       } else {
-        this.error(`Failed to add reaction: ${errorMsg}`);
+        this.error(`Failed to send reaction: ${errorMsg}`);
       }
     }
   }
