@@ -46,7 +46,7 @@ export function acquireRateLimitLock(reason: string, duration: number): void {
   console.log(`[RateLimitLock] Lock reason: "${reason}", duration: ${duration}ms`);
   
   // Log stack trace to understand who is acquiring the lock
-  const stack = new Error().stack;
+  const stack = new Error('Stack trace for lock acquisition').stack;
   console.log(`[RateLimitLock] Acquire stack trace:\n${stack}`);
   
   const state: LockState = {
@@ -64,7 +64,7 @@ export function releaseRateLimitLock(): void {
   console.log(`[RateLimitLock] Releasing lock at ${new Date().toISOString()}, pid=${process.pid}`);
   
   // Log stack trace to understand who is releasing the lock
-  const stack = new Error().stack;
+  const stack = new Error('Stack trace for lock release').stack;
   console.log(`[RateLimitLock] Release stack trace:\n${stack}`);
   
   writeLockState({ isLocked: false });
@@ -76,7 +76,7 @@ export async function waitForRateLimitLock(): Promise<void> {
   console.log(`[RateLimitLock] waitForRateLimitLock called at ${new Date().toISOString()}, pid=${process.pid}`);
   
   // Log stack trace to understand who is waiting
-  const stack = new Error().stack;
+  const stack = new Error('Stack trace for lock wait').stack;
   console.log(`[RateLimitLock] Wait stack trace:\n${stack}`);
   
   let checkCount = 0;

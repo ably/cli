@@ -29,7 +29,7 @@ export async function establishConnection(
   console.log(`[ConnectionManager] Server URL: ${serverUrl || 'default'}`);
   
   // Log stack trace to understand call context
-  const stack = new Error().stack;
+  const stack = new Error('Stack trace for connection establishment').stack;
   console.log(`[ConnectionManager] Establish connection stack trace:\n${stack}`);
   
   // Log current rate limiter status

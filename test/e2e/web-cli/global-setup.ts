@@ -15,7 +15,7 @@ async function globalSetup() {
   console.log(`[Global Setup] Memory usage: ${JSON.stringify(process.memoryUsage())}`);
   
   // Log call stack to understand execution context
-  const stack = new Error().stack;
+  const stack = new Error('Stack trace for global setup context').stack;
   console.log(`[Global Setup] Call stack:\n${stack}`);
   
   // Load environment variables from .env file
