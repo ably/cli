@@ -864,6 +864,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     
     // Send auth payload - but no additional data
+    console.log(`[SESSION-RESUME-DEBUG] Creating auth payload in handleWebSocketOpen: sessionId=${sessionId}`);
     const payload = createAuthPayload(ablyApiKey, ablyAccessToken, sessionId);
     
     debugLog(`⚠️ DIAGNOSTIC: Preparing to send auth payload with env vars: ${JSON.stringify(payload.environmentVariables)}`);

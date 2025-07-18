@@ -133,7 +133,7 @@ export function incrementConnectionCount(): void {
   console.log(`[TestRateLimiter] incrementConnectionCount called at ${new Date().toISOString()}, pid=${process.pid}`);
   
   // Log stack trace to understand who is incrementing
-  const stack = new Error().stack;
+  const stack = new Error('Stack trace for connection increment').stack;
   console.log(`[TestRateLimiter] Increment stack trace:\n${stack}`);
   
   const state = readState();
@@ -177,7 +177,7 @@ export async function waitForRateLimitIfNeeded(): Promise<void> {
     console.log(`[TestRateLimiter] This ensures we stay under 10 connections/minute`);
     
     // Log stack trace to understand the call context
-    const stack = new Error().stack;
+    const stack = new Error('Stack trace for rate limit pause').stack;
     console.log(`[TestRateLimiter] Rate limit pause stack trace:\n${stack}`);
     
     // Acquire lock to prevent other tests from running during pause
