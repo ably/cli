@@ -41,13 +41,13 @@ test.describe('Web CLI E2E Tests', () => {
     console.log(`[WebCLI Test Suite] Process ID: ${process.pid}`);
   });
 
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeEach(async ({ page: _page }, testInfo) => {
     console.log(`[WebCLI Test] beforeEach hook for "${testInfo.title}" at ${new Date().toISOString()}`);
     console.log(`[WebCLI Test] Test status: ${testInfo.status}`);
     console.log(`[WebCLI Test] Test retry: ${testInfo.retry}`);
   });
 
-  test.afterEach(async ({ page }, testInfo) => {
+  test.afterEach(async ({ page: _page }, testInfo) => {
     console.log(`[WebCLI Test] afterEach hook for "${testInfo.title}" at ${new Date().toISOString()}`);
     console.log(`[WebCLI Test] Test status: ${testInfo.status}`);
     console.log(`[WebCLI Test] Test duration: ${testInfo.duration}ms`);

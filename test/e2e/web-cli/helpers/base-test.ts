@@ -32,7 +32,7 @@ export const test = base.extend({
       console.log(`[WebSocket] Test: "${testInfo.title}", Process ID: ${process.pid}`);
       
       // Log stack trace to understand WebSocket creation context
-      const stack = new Error().stack;
+      const stack = new Error('Stack trace for WebSocket creation').stack;
       console.log(`[WebSocket] Creation stack trace:\n${stack}`);
       
       ws.on('framesent', frame => {

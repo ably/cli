@@ -145,7 +145,7 @@ class GlobalRateLimiter {
     console.log(`[RateLimiter] Process ID: ${process.pid}`);
     
     // Log stack trace to understand call context
-    const stack = new Error().stack;
+    const stack = new Error('Stack trace for rate limiter execution').stack;
     console.log(`[RateLimiter] Execute stack trace:\n${stack}`);
     
     let lastError: Error | undefined;
