@@ -1,11 +1,15 @@
 import { test, expect, getTestUrl } from './helpers/base-test';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 test.describe('Domain-Scoped Authentication E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
   test.describe.configure({ mode: 'serial' }); // Run tests serially to avoid interference
 
   test('should store credentials scoped to WebSocket domain', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -47,6 +51,9 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
   });
 
   test('should not share credentials between different domains', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -97,6 +104,9 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
   });
 
   test('should clear only current domain credentials when clearing', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -146,6 +156,9 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
   });
 
   test('should use correct domain-scoped credentials when serverUrl parameter changes', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');

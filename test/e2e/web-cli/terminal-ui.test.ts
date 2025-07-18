@@ -1,6 +1,7 @@
 import { test, expect, getTestUrl } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 const BOX_TOP_LEFT = '┌';
 const BOX_BOTTOM_LEFT = '└';
@@ -11,6 +12,9 @@ test.describe('Web CLI Terminal UI Tests', () => {
   test.describe('Connection Animation', () => {
     // eslint-disable-next-line mocha/no-skipped-tests
     test.skip('should display ASCII box animation during connection - TIMING sensitive test', async ({ page }) => {
+      // Wait for any ongoing rate limit pause
+      await waitForRateLimitLock();
+      
       const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
       if (!apiKey) {
         throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -73,6 +77,9 @@ test.describe('Web CLI Terminal UI Tests', () => {
 
   test.describe('Split Screen Feature', () => {
     test('should toggle split-screen terminal via button', async ({ page }) => {
+      // Wait for any ongoing rate limit pause
+      await waitForRateLimitLock();
+      
       const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
       if (!apiKey) {
         throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -134,6 +141,9 @@ test.describe('Web CLI Terminal UI Tests', () => {
     });
 
     test('should maintain independent sessions in split terminals', async ({ page }) => {
+      // Wait for any ongoing rate limit pause
+      await waitForRateLimitLock();
+      
       const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
       if (!apiKey) {
         throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');

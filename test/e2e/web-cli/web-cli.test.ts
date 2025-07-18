@@ -1,5 +1,6 @@
 import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper.js';
+import { waitForRateLimitLock } from './rate-limit-lock';
 import { 
   waitForTerminalReady,
   waitForTerminalStable
@@ -29,7 +30,37 @@ const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
 test.describe('Web CLI E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
 
-  test('should load the terminal, connect to public server, and run basic commands', async ({ page }) => {
+  test.beforeAll(async () => {
+    console.log(`[WebCLI Test Suite] beforeAll hook started at ${new Date().toISOString()}`);
+    console.log(`[WebCLI Test Suite] Process ID: ${process.pid}`);
+    console.log(`[WebCLI Test Suite] Total tests in suite: ${test.describe.name}`);
+  });
+
+  test.afterAll(async () => {
+    console.log(`[WebCLI Test Suite] afterAll hook started at ${new Date().toISOString()}`);
+    console.log(`[WebCLI Test Suite] Process ID: ${process.pid}`);
+  });
+
+  test.beforeEach(async ({ page: _page }, testInfo) => {
+    console.log(`[WebCLI Test] beforeEach hook for "${testInfo.title}" at ${new Date().toISOString()}`);
+    console.log(`[WebCLI Test] Test status: ${testInfo.status}`);
+    console.log(`[WebCLI Test] Test retry: ${testInfo.retry}`);
+  });
+
+  test.afterEach(async ({ page: _page }, testInfo) => {
+    console.log(`[WebCLI Test] afterEach hook for "${testInfo.title}" at ${new Date().toISOString()}`);
+    console.log(`[WebCLI Test] Test status: ${testInfo.status}`);
+    console.log(`[WebCLI Test] Test duration: ${testInfo.duration}ms`);
+  });
+
+  test('should load the terminal, connect to public server, and run basic commands', async ({ page }, testInfo) => {
+    console.log(`[WebCLI Test] Test body started: "${testInfo.title}" at ${new Date().toISOString()}`);
+    
+    // Wait for any ongoing rate limit pause
+    console.log(`[WebCLI Test] Waiting for rate limit lock before test execution...`);
+    await waitForRateLimitLock();
+    console.log(`[WebCLI Test] Rate limit lock check complete`);
+    
     // Wait for test stability
     log('Waiting for test stability...');
     await waitForTerminalStable(page, 2000);
@@ -113,6 +144,9 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('side drawer persists state across page reloads', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Navigate to the Web CLI app
     await page.goto(getTestUrl());
     
@@ -182,6 +216,8 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('bottom drawer adapts to different screen sizes', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
     // Navigate to the Web CLI app
     await page.goto(getTestUrl());
     
@@ -232,6 +268,8 @@ test.describe('Web CLI E2E Tests', () => {
   });
 
   test('terminal maintains functionality with drawer interactions', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
     // Navigate to the Web CLI app
     await page.goto(getTestUrl());
     

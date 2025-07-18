@@ -2,12 +2,16 @@ import { test, expect, getTestUrl, buildTestUrl, reloadPageWithRateLimit } from 
 import { authenticateWebCli } from './auth-helper';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
 import { waitForTerminalReady, waitForSessionActive } from './wait-helpers';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 test.describe('Web CLI Authentication E2E Tests', () => {
   test.setTimeout(120_000); // Overall test timeout
   test.describe.configure({ mode: 'serial' }); // Run tests serially to avoid interference
 
   test('should display auth screen on initial load', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Clear any stored credentials before navigating
     await page.addInitScript(() => {
       localStorage.clear();
@@ -28,6 +32,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should validate API key is required', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Clear any stored credentials before navigating
     await page.addInitScript(() => {
       localStorage.clear();
@@ -47,6 +54,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should validate API key format', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Clear any stored credentials before navigating
     await page.addInitScript(() => {
       localStorage.clear();
@@ -67,6 +77,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should authenticate with valid API key and show terminal', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -104,6 +117,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should persist authentication state across page reloads with remember checked', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -140,6 +156,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should not persist authentication state across page reloads when remember is unchecked', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -178,6 +197,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should allow changing credentials via auth settings', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -220,6 +242,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should show credential display with proper redaction', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -257,6 +282,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should handle authentication with access token', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -284,6 +312,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should clear error message when user starts typing', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Clear any stored credentials before navigating
     await page.addInitScript(() => {
       localStorage.clear();
@@ -304,6 +335,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should maintain terminal session when updating auth settings without changing credentials', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -349,6 +383,9 @@ test.describe('Web CLI Authentication E2E Tests', () => {
   });
 
   test('should show SERVER DISCONNECT overlay for invalid credentials', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required for e2e tests');
@@ -404,6 +441,9 @@ test.describe('Web CLI Auto-Login E2E Tests', () => {
   test.setTimeout(120_000);
 
   test('should automatically authenticate when API key is provided via query parameter', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     const url = buildTestUrl({ apiKey: apiKey! });
     
@@ -420,6 +460,9 @@ test.describe('Web CLI Auto-Login E2E Tests', () => {
   });
 
   test('should allow switching from query param auth to custom auth', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     const url = buildTestUrl({ apiKey: apiKey! });
     

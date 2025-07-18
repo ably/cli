@@ -68,6 +68,10 @@ export function buildTestUrl(params?: Record<string, string>): string {
 // Helper to track reload connections
 export async function reloadPageWithRateLimit(page: Page): Promise<void> {
   const { incrementConnectionCount, waitForRateLimitIfNeeded } = await import('../test-rate-limiter');
+  const { waitForRateLimitLock } = await import('../rate-limit-lock');
+  
+  // ALWAYS wait for any ongoing rate limit pause before proceeding
+  await waitForRateLimitLock();
   
   // Check if the page will auto-connect after reload (has credentials or apiKey in URL)
   const currentUrl = page.url();
