@@ -8,6 +8,9 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    concurrency:
+      group: web-cli-release-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: "write"
       id-token: "write"
