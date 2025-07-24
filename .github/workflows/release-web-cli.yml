@@ -1,0 +1,62 @@
+name: npm release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "write"
+      id-token: "write"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10 # Use pnpm version 10
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        with:
+          node-version: "22.x" # Use Node.js 22.x
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org/"
+
+      # The version check is necessary because the web-cli is published as a separate package from the main CLI
+      # and we can't guarantee a version bump every time the CLI releases.
+      - name: Check if version already exists on npm
+        id: version-check
+        run: |
+          cd packages/react-web-cli
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Package version: $VERSION"
+
+          if pnpm view @ably/react-web-cli@$VERSION > /dev/null 2>&1; then
+            echo "Version $VERSION already exists on npm"
+            echo "should-publish=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version $VERSION does not exist on npm, proceeding with publish"
+            echo "should-publish=true" >> $GITHUB_OUTPUT
+          fi
+
+      # Only publish if the version doesn't already exist on npm.
+      - name: Install dependencies and publish
+        if: steps.version-check.outputs.should-publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/react-web-cli
+          pnpm install --frozen-lockfile
+          pnpm run build
+          pnpm publish --provenance --access public --no-git-checks
+
+      - name: Skip publish - version already exists
+        if: steps.version-check.outputs.should-publish == 'false'
+        run: |
+          echo "Skipping publish because the version already exists on npm"
