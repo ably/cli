@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2025-07-24
+
+### Added
+
+- Added `endpoint` option, to allow use with custom endpoints and dedicated environments.
+
+### Changed
+
+- For chat rooms, `rooms messages reactions add` is now `rooms messages reactions send` 
+
+### Fixed
+
+- Race conditions in session storage to ensure smoother reconnection and consistent handling
+
 ## [0.9.0] - 2025-07-07
 
 ### Added
