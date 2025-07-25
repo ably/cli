@@ -275,6 +275,23 @@ export async function waitForSessionActive(page: Page, timeout = 30000): Promise
   
   console.log('Session is now active');
   
+  // Wait for a clean prompt to appear
+  try {
+    await page.waitForFunction(
+      () => {
+        const terminalEl = document.querySelector('.xterm');
+        const content = terminalEl?.textContent || '';
+        // Look for a prompt at the end of the content
+        return content.trim().endsWith('$') || content.trim().endsWith('$ ');
+      },
+      null,
+      { timeout: 5000 }
+    );
+    console.log('Clean prompt detected');
+  } catch (_e) {
+    console.log('No clean prompt found, continuing anyway');
+  }
+  
   // In CI, add extra stabilization time
   if (process.env.CI) {
     await page.waitForTimeout(1000);
@@ -336,13 +353,54 @@ export async function executeCommandWithRetry(
   const { retries = 3, retryDelay = 1000, timeout = 10000 } = options;
   const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
   
+  console.log(`[SESSION-RESUME-DEBUG] executeCommandWithRetry starting: command="${command}", expectedOutput="${expectedOutput}"`);
+  
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       console.log(`Executing command (attempt ${attempt}/${retries}): ${command}`);
       
-      // Ensure terminal is focused
+      // Check session state before executing
+      const sessionState = await page.evaluate(() => {
+        const win = window as Window & { 
+          _sessionId?: string;
+          getAblyCliTerminalReactState?: () => {
+            isSessionActive?: boolean;
+            connectionStatus?: string;
+          };
+          ablyCliSocket?: {
+            readyState?: number;
+          };
+        };
+        const state = win.getAblyCliTerminalReactState?.();
+        return {
+          sessionId: win._sessionId,
+          isSessionActive: state?.isSessionActive,
+          connectionStatus: state?.componentConnectionStatus,
+          socket: {
+            exists: !!win.ablyCliSocket,
+            readyState: win.ablyCliSocket?.readyState
+          }
+        };
+      });
+      console.log(`[SESSION-RESUME-DEBUG] Pre-command session state:`, JSON.stringify(sessionState));
+      
+      // Ensure terminal is focused and ready
       await terminal.click();
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(200);
+      
+      // Check if we need to get a fresh prompt first
+      const needsPrompt = await page.evaluate(() => {
+        const content = document.querySelector('.xterm')?.textContent || '';
+        // If the last character isn't $ or space after $, we might need a new prompt
+        const trimmed = content.trim();
+        return !trimmed.endsWith('$') && !trimmed.endsWith('$ ');
+      });
+      
+      if (needsPrompt) {
+        console.log('No clean prompt detected, sending Enter to get fresh prompt');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(500);
+      }
       
       // Clear any partial input only on retry attempts
       if (attempt > 1) {
@@ -361,6 +419,25 @@ export async function executeCommandWithRetry(
       return;
     } catch (error) {
       console.log(`Command execution failed (attempt ${attempt}/${retries}): ${error}`);
+      
+      // Log detailed error state
+      const errorState = await page.evaluate(() => {
+        const win = window as Window & { 
+          _sessionId?: string;
+          getAblyCliTerminalReactState?: () => {
+            isSessionActive?: boolean;
+            connectionStatus?: string;
+          };
+        };
+        const state = win.getAblyCliTerminalReactState?.();
+        return {
+          sessionId: win._sessionId,
+          isSessionActive: state?.isSessionActive,
+          connectionStatus: state?.componentConnectionStatus,
+          terminalContent: document.querySelector('.xterm')?.textContent?.slice(-300) || 'No content'
+        };
+      });
+      console.log(`[SESSION-RESUME-DEBUG] Error state after attempt ${attempt}:`, JSON.stringify(errorState));
       
       if (attempt < retries) {
         console.log(`Waiting ${retryDelay}ms before retry...`);

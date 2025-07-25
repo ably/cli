@@ -1,6 +1,7 @@
 import { test, expect, getTestUrl } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper';
 import { getRateLimiterState } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 const log = console.log.bind(console);
 
@@ -8,6 +9,9 @@ test.describe('Z-Rate Limit Config Test - MUST RUN LAST', () => {
   test.setTimeout(120_000); // 2 minute timeout for CI rate limit scenarios
 
   test('should handle server disconnections and verify reconnection configuration', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // This test verifies that disconnections are handled properly
     // It adapts to different server behaviors (4000 errors, rate limits, etc.)
     log('Starting disconnection handling and configuration test');
