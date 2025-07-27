@@ -8,8 +8,8 @@ import {
 } from './wait-helpers.js';
 import { waitForRateLimitLock } from './rate-limit-lock';
 
-// Public terminal server endpoint
-const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+// Terminal server endpoint - configurable for local testing
+const PUBLIC_TERMINAL_SERVER_URL = process.env.ABLY_CLI_WEBSOCKET_URL || 'wss://web-cli.ably.com';
 
 // Removed _waitForPrompt - using wait helpers instead
 

@@ -1,0 +1,347 @@
+name: Web CLI E2E Tests (Parallel)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/e2e/web-cli/**'
+      - 'examples/web-cli/**'
+      - 'packages/react-web-cli/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - '.github/workflows/e2e-web-cli-parallel.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'test/e2e/web-cli/**'
+      - 'examples/web-cli/**'
+      - 'packages/react-web-cli/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.json'
+      - '.github/workflows/e2e-web-cli-parallel.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Shared setup job to build once and share artifacts
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm run build
+
+      - name: Lint check
+        run: pnpm run lint
+
+      - name: Build React Web CLI
+        run: pnpm --filter @ably/react-web-cli build
+
+      - name: Build Web CLI Example
+        run: |
+          cd examples/web-cli
+          pnpm build
+
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            dist/
+            packages/react-web-cli/dist/
+            examples/web-cli/dist/
+            node_modules/.cache/
+          retention-days: 1
+
+  # Group 1: Authentication & Security Tests (18 tests)
+  auth-tests:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+      CI_BYPASS_SECRET: ${{ secrets.CI_BYPASS_SECRET }}
+      E2E_TESTS: true
+      HEADLESS: true
+      TEST_GROUP: auth
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Run Authentication & Security Tests
+        run: |
+          echo "Running Authentication & Security Tests..."
+          pnpm exec playwright test \
+            --config test/e2e/web-cli/playwright.config.ts \
+            test/e2e/web-cli/authentication.test.ts \
+            test/e2e/web-cli/domain-scoped-auth.test.ts \
+            --reporter=json,html
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-auth
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Group 2: Session & Reconnection Tests (10 tests)
+  session-tests:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+      CI_BYPASS_SECRET: ${{ secrets.CI_BYPASS_SECRET }}
+      E2E_TESTS: true
+      HEADLESS: true
+      TEST_GROUP: session
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Run Session & Reconnection Tests
+        run: |
+          echo "Running Session & Reconnection Tests..."
+          pnpm exec playwright test \
+            --config test/e2e/web-cli/playwright.config.ts \
+            test/e2e/web-cli/session-resume.test.ts \
+            test/e2e/web-cli/reconnection.test.ts \
+            test/e2e/web-cli/reconnection-diagnostic.test.ts \
+            --reporter=json,html
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-session
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Group 3: UI & Core Features Tests (8 tests)
+  ui-tests:
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+      CI_BYPASS_SECRET: ${{ secrets.CI_BYPASS_SECRET }}
+      E2E_TESTS: true
+      HEADLESS: true
+      TEST_GROUP: ui
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Run UI & Core Features Tests
+        run: |
+          echo "Running UI & Core Features Tests..."
+          pnpm exec playwright test \
+            --config test/e2e/web-cli/playwright.config.ts \
+            test/e2e/web-cli/terminal-ui.test.ts \
+            test/e2e/web-cli/web-cli.test.ts \
+            test/e2e/web-cli/prompt-integrity.test.ts \
+            --reporter=json,html
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-ui
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Group 4: Rate Limit Test (1 test - must run last)
+  rate-limit-test:
+    needs: [auth-tests, session-tests, ui-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
+      # Rate limit test should NOT use CI bypass
+      # CI_BYPASS_SECRET is intentionally not set
+      E2E_TESTS: true
+      HEADLESS: true
+      TEST_GROUP: rate-limit
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+
+      - name: Run Rate Limit Test
+        run: |
+          echo "Running Rate Limit Test..."
+          pnpm exec playwright test \
+            --config test/e2e/web-cli/playwright.config.ts \
+            test/e2e/web-cli/z-rate-limit-trigger.test.ts \
+            --reporter=json,html
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-rate-limit
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Aggregate results
+  test-summary:
+    needs: [auth-tests, session-tests, ui-tests, rate-limit-test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+
+      - name: Display test summary
+        run: |
+          echo "## Web CLI E2E Test Summary"
+          echo "All test groups have completed."
+          echo ""
+          echo "### Test Groups:"
+          echo "- Auth Tests: ${{ needs.auth-tests.result }}"
+          echo "- Session Tests: ${{ needs.session-tests.result }}"
+          echo "- UI Tests: ${{ needs.ui-tests.result }}"
+          echo "- Rate Limit Test: ${{ needs.rate-limit-test.result }}"
+          
+          # Check if all tests passed
+          if [[ "${{ needs.auth-tests.result }}" == "success" && \
+                "${{ needs.session-tests.result }}" == "success" && \
+                "${{ needs.ui-tests.result }}" == "success" && \
+                "${{ needs.rate-limit-test.result }}" == "success" ]]; then
+            echo ""
+            echo "✅ All tests passed!"
+            exit 0
+          else
+            echo ""
+            echo "❌ Some tests failed. Check individual job logs for details."
+            exit 1
+          fi

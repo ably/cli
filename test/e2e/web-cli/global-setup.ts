@@ -9,14 +9,17 @@ import { existsSync } from 'node:fs';
 
 async function globalSetup() {
   const startTime = Date.now();
-  console.log(`[Global Setup] Starting at ${new Date().toISOString()}`);
-  console.log(`[Global Setup] Process ID: ${process.pid}`);
-  console.log(`[Global Setup] Current working directory: ${process.cwd()}`);
-  console.log(`[Global Setup] Memory usage: ${JSON.stringify(process.memoryUsage())}`);
   
-  // Log call stack to understand execution context
-  const stack = new Error('Stack trace for global setup context').stack;
-  console.log(`[Global Setup] Call stack:\n${stack}`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Starting at ${new Date().toISOString()}`);
+    console.log(`[Global Setup] Process ID: ${process.pid}`);
+    console.log(`[Global Setup] Current working directory: ${process.cwd()}`);
+    console.log(`[Global Setup] Memory usage: ${JSON.stringify(process.memoryUsage())}`);
+    
+    // Log call stack to understand execution context
+    const stack = new Error('Stack trace for global setup context').stack;
+    console.log(`[Global Setup] Call stack:\n${stack}`);
+  }
   
   // Load environment variables from .env file
   const envPath = resolve(process.cwd(), '.env');
@@ -24,19 +27,19 @@ async function globalSetup() {
     const result = config({ path: envPath });
     if (result.error) {
       console.warn(`[Global Setup] Warning: Error loading .env file: ${result.error.message}`);
-    } else if (result.parsed) {
+    } else if (result.parsed && (!process.env.CI || process.env.VERBOSE_TESTS)) {
       console.log(`[Global Setup] Loaded environment variables from .env file`);
       // Log API key presence (not the actual key)
       if (process.env.E2E_ABLY_API_KEY) {
         console.log('[Global Setup] E2E_ABLY_API_KEY is set');
       }
     }
-  } else {
+  } else if (!process.env.CI || process.env.VERBOSE_TESTS) {
     console.log('[Global Setup] No .env file found. Using environment variables from current environment.');
   }
   
   // In CI, test network connectivity to the WebSocket server
-  if (process.env.CI) {
+  if (process.env.CI && process.env.VERBOSE_TESTS) {
     console.log('[Global Setup] Testing network connectivity in CI...');
     try {
       const https = await import('node:https');
@@ -54,43 +57,63 @@ async function globalSetup() {
   }
   
   // Initialize rate limiter configuration
-  console.log(`[Global Setup] Configuring rate limiter at ${new Date().toISOString()}`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Configuring rate limiter at ${new Date().toISOString()}`);
+  }
   setupRateLimiter();
   
   // Reset rate limiter to ensure clean state
-  console.log(`[Global Setup] Resetting rate limiter state...`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Resetting rate limiter state...`);
+  }
   resetRateLimiter();
   
   // Reset connection count for rate limiting
-  console.log(`[Global Setup] Resetting connection count...`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Resetting connection count...`);
+  }
   resetConnectionCount();
   
   // Clear any stale rate limit locks
-  console.log(`[Global Setup] Clearing any stale rate limit locks...`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Clearing any stale rate limit locks...`);
+  }
   clearRateLimitLock();
   
   // Add initial delay to ensure we start with a clean rate limit window
-  if (!process.env.SKIP_INITIAL_DELAY) {
+  if (!process.env.SKIP_INITIAL_DELAY && !process.env.CI_BYPASS_SECRET) {
     const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
     const initialDelay = isCI ? 30000 : 10000; // 30s for CI, 10s for local
-    console.log(`[Global Setup] Waiting ${initialDelay/1000} seconds to ensure clean rate limit window...`);
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log(`[Global Setup] Waiting ${initialDelay/1000} seconds to ensure clean rate limit window...`);
+    }
     await new Promise(resolve => setTimeout(resolve, initialDelay));
   }
   
   // Start the shared web server
-  console.log(`[Global Setup] Starting web server at ${new Date().toISOString()}`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Starting web server at ${new Date().toISOString()}`);
+  }
+  
   const url = await setupWebServer();
-  console.log(`[Global Setup] Web server ready at ${url} at ${new Date().toISOString()}`);
+  
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Web server ready at ${url} at ${new Date().toISOString()}`);
+  }
   
   // Store the URL in environment variable for tests to use
   process.env.WEB_CLI_TEST_URL = url;
   
-  console.log(`[Global Setup] Complete at ${new Date().toISOString()}`);
-  console.log(`[Global Setup] Total setup duration: ${Date.now() - startTime}ms`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Global Setup] Complete at ${new Date().toISOString()}`);
+    console.log(`[Global Setup] Total setup duration: ${Date.now() - startTime}ms`);
+  }
   
   // Return cleanup function
   return async () => {
-    console.log(`[Global Setup] Cleanup called at ${new Date().toISOString()}`);
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log(`[Global Setup] Cleanup called at ${new Date().toISOString()}`);
+    }
   };
 }
 

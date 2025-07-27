@@ -15,14 +15,20 @@ export function setupConsoleCapture(page: Page): void {
     };
     consoleMessages.push(entry);
     
-    // Only output immediately if verbose mode or error
-    if (process.env.VERBOSE_TESTS || msg.type() === 'error') {
+    // Only output immediately if verbose mode
+    if (process.env.VERBOSE_TESTS) {
+      console.log(`[Browser ${msg.type()}] ${msg.text()}`);
+    } else if (!process.env.CI && msg.type() === 'error') {
+      // In non-CI environments, still show errors
       console.log(`[Browser ${msg.type()}] ${msg.text()}`);
     }
   });
   
   page.on('pageerror', error => {
-    console.error('[Page Error]', error);
+    // Only log page errors that aren't rate limiting in CI
+    if (!process.env.CI || !error.message?.includes('429') || process.env.VERBOSE_TESTS) {
+      console.error('[Page Error]', error);
+    }
     isTestFailing = true;
   });
 }
@@ -49,6 +55,15 @@ export function getTestUrl(): string {
   if (!baseUrl) {
     throw new Error('WEB_CLI_TEST_URL not set. Is the global setup running?');
   }
+  
+  // If a custom terminal server URL is set, append it as a query param
+  const terminalServerUrl = process.env.TERMINAL_SERVER_URL;
+  if (terminalServerUrl) {
+    const url = new URL(baseUrl);
+    url.searchParams.set('serverUrl', terminalServerUrl);
+    return url.toString();
+  }
+  
   return baseUrl;
 }
 
@@ -57,6 +72,13 @@ export function buildTestUrl(params?: Record<string, string>): string {
   const url = new URL(getTestUrl());
   // Always clear credentials in tests to ensure consistent state
   url.searchParams.set('clearCredentials', 'true');
+  
+  // Use custom terminal server URL if provided
+  const terminalServerUrl = process.env.TERMINAL_SERVER_URL;
+  if (terminalServerUrl) {
+    url.searchParams.set('serverUrl', terminalServerUrl);
+  }
+  
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.set(key, value);

@@ -5,10 +5,13 @@ import { Page } from 'playwright/test';
  * This is a more robust approach that checks multiple conditions
  */
 export async function waitForTerminalReady(page: Page, timeout = 60000): Promise<void> {
-  console.log('Waiting for terminal to be ready...');
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log('Waiting for terminal to be ready...');
+  }
   
-  // Increase timeout for CI environments
-  const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
+  // Increase timeout for CI environments or when using production server
+  const isProduction = !process.env.TERMINAL_SERVER_URL || process.env.TERMINAL_SERVER_URL.includes('web-cli.ably.com');
+  const effectiveTimeout = (process.env.CI || isProduction) ? timeout * 2 : timeout;
   const startTime = Date.now();
   let manualReconnectAttempts = 0;
   const maxManualReconnects = process.env.CI ? 5 : 3;
@@ -30,7 +33,9 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
     return (window as Window & { getAblyCliTerminalReactState?: () => unknown }).getAblyCliTerminalReactState?.();
   }) as { componentConnectionStatus?: string; isSessionActive?: boolean; showManualReconnectPrompt?: boolean } | undefined;
   
-  console.log('Initial connection state:', currentState?.componentConnectionStatus);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log('Initial connection state:', currentState?.componentConnectionStatus);
+  }
   
   // Handle different states
   while (Date.now() - startTime < effectiveTimeout) {
@@ -39,11 +44,15 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
     }) as { componentConnectionStatus?: string; isSessionActive?: boolean; showManualReconnectPrompt?: boolean } | undefined;
     
     if (currentState?.componentConnectionStatus === 'connected' && currentState?.isSessionActive) {
-      console.log('Terminal connected and session active');
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log('Terminal connected and session active');
+      }
       // Check if terminal has any content (like the warning message)
       const terminalText = await page.locator('.xterm').textContent();
       if (terminalText && terminalText.trim().length > 0) {
-        console.log('Terminal has content, proceeding...');
+        if (!process.env.CI || process.env.VERBOSE_TESTS) {
+          console.log('Terminal has content, proceeding...');
+        }
         // Extra stabilization for CI
         const stabilizationTime = process.env.CI ? 2000 : 1000;
         await page.waitForTimeout(stabilizationTime);
@@ -132,7 +141,9 @@ export async function waitForTerminalReady(page: Page, timeout = 60000): Promise
  * Simple wait for prompt that's more forgiving
  */
 export async function waitForPromptSimple(page: Page, _timeout = 30000): Promise<void> {
-  console.log('Waiting for terminal prompt (simple)...');
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log('Waiting for terminal prompt (simple)...');
+  }
   
   // Just wait for any character that typically appears in prompts
   const prompts = ['$', '#', '>', '~'];
@@ -143,7 +154,9 @@ export async function waitForPromptSimple(page: Page, _timeout = 30000): Promise
         timeout: 5000, 
         state: 'visible' 
       });
-      console.log(`Found prompt character: ${prompt}`);
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log(`Found prompt character: ${prompt}`);
+      }
       return;
     } catch {
       // Try next prompt character
@@ -153,7 +166,9 @@ export async function waitForPromptSimple(page: Page, _timeout = 30000): Promise
   // If no prompt found, just check if terminal has any text
   const terminalText = await page.locator('.xterm').textContent();
   if (terminalText && terminalText.trim().length > 0) {
-    console.log('Terminal has text, proceeding...');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('Terminal has text, proceeding...');
+    }
     return;
   }
   
@@ -171,7 +186,9 @@ export async function waitForTerminalOutput(
   const { timeout = 30000, exact = false } = options;
   const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
   
-  console.log(`Waiting for terminal output: "${expectedText}" (exact: ${exact}, timeout: ${effectiveTimeout}ms)`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`Waiting for terminal output: "${expectedText}" (exact: ${exact}, timeout: ${effectiveTimeout}ms)`);
+  }
   
   try {
     await page.waitForFunction(
@@ -247,7 +264,9 @@ export async function waitForTerminalStable(page: Page, stabilityDuration = 1000
 export async function waitForSessionActive(page: Page, timeout = 30000): Promise<void> {
   const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
   
-  console.log('Waiting for session to become active...');
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log('Waiting for session to become active...');
+  }
   
   // First wait for connected state
   await page.waitForFunction(
@@ -260,7 +279,9 @@ export async function waitForSessionActive(page: Page, timeout = 30000): Promise
     { timeout: effectiveTimeout }
   );
   
-  console.log('Connected state reached, waiting for session activation...');
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log('Connected state reached, waiting for session activation...');
+  }
   
   // Then wait for session to be active
   await page.waitForFunction(
@@ -273,7 +294,9 @@ export async function waitForSessionActive(page: Page, timeout = 30000): Promise
     { timeout: effectiveTimeout }
   );
   
-  console.log('Session is now active');
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log('Session is now active');
+  }
   
   // Wait for a clean prompt to appear
   try {
@@ -287,9 +310,13 @@ export async function waitForSessionActive(page: Page, timeout = 30000): Promise
       null,
       { timeout: 5000 }
     );
-    console.log('Clean prompt detected');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('Clean prompt detected');
+    }
   } catch (_e) {
-    console.log('No clean prompt found, continuing anyway');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('No clean prompt found, continuing anyway');
+    }
   }
   
   // In CI, add extra stabilization time
@@ -321,7 +348,9 @@ export async function waitForConnectionState(
 ): Promise<void> {
   const effectiveTimeout = process.env.CI ? timeout * 2 : timeout;
   
-  console.log(`Waiting for connection state: ${expectedState}`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`Waiting for connection state: ${expectedState}`);
+  }
   
   await page.waitForFunction(
     (state) => {
@@ -333,7 +362,9 @@ export async function waitForConnectionState(
     { timeout: effectiveTimeout }
   );
   
-  console.log(`Connection state is now: ${expectedState}`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`Connection state is now: ${expectedState}`);
+  }
 }
 
 /**
@@ -353,11 +384,15 @@ export async function executeCommandWithRetry(
   const { retries = 3, retryDelay = 1000, timeout = 10000 } = options;
   const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
   
-  console.log(`[SESSION-RESUME-DEBUG] executeCommandWithRetry starting: command="${command}", expectedOutput="${expectedOutput}"`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[SESSION-RESUME-DEBUG] executeCommandWithRetry starting: command="${command}", expectedOutput="${expectedOutput}"`);
+  }
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      console.log(`Executing command (attempt ${attempt}/${retries}): ${command}`);
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log(`Executing command (attempt ${attempt}/${retries}): ${command}`);
+      }
       
       // Check session state before executing
       const sessionState = await page.evaluate(() => {
@@ -382,7 +417,9 @@ export async function executeCommandWithRetry(
           }
         };
       });
-      console.log(`[SESSION-RESUME-DEBUG] Pre-command session state:`, JSON.stringify(sessionState));
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log(`[SESSION-RESUME-DEBUG] Pre-command session state:`, JSON.stringify(sessionState));
+      }
       
       // Ensure terminal is focused and ready
       await terminal.click();
@@ -397,7 +434,9 @@ export async function executeCommandWithRetry(
       });
       
       if (needsPrompt) {
-        console.log('No clean prompt detected, sending Enter to get fresh prompt');
+        if (!process.env.CI || process.env.VERBOSE_TESTS) {
+          console.log('No clean prompt detected, sending Enter to get fresh prompt');
+        }
         await page.keyboard.press('Enter');
         await page.waitForTimeout(500);
       }
@@ -415,10 +454,14 @@ export async function executeCommandWithRetry(
       // Wait for expected output
       await waitForTerminalOutput(page, expectedOutput, { timeout });
       
-      console.log(`Command executed successfully: ${command}`);
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log(`Command executed successfully: ${command}`);
+      }
       return;
     } catch (error) {
-      console.log(`Command execution failed (attempt ${attempt}/${retries}): ${error}`);
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log(`Command execution failed (attempt ${attempt}/${retries}): ${error}`);
+      }
       
       // Log detailed error state
       const errorState = await page.evaluate(() => {
@@ -437,10 +480,14 @@ export async function executeCommandWithRetry(
           terminalContent: document.querySelector('.xterm')?.textContent?.slice(-300) || 'No content'
         };
       });
-      console.log(`[SESSION-RESUME-DEBUG] Error state after attempt ${attempt}:`, JSON.stringify(errorState));
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log(`[SESSION-RESUME-DEBUG] Error state after attempt ${attempt}:`, JSON.stringify(errorState));
+      }
       
       if (attempt < retries) {
-        console.log(`Waiting ${retryDelay}ms before retry...`);
+        if (!process.env.CI || process.env.VERBOSE_TESTS) {
+          console.log(`Waiting ${retryDelay}ms before retry...`);
+        }
         await page.waitForTimeout(retryDelay);
         
         // Ensure session is still active before retry

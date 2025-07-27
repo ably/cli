@@ -88,6 +88,10 @@ export interface AblyCliTerminalProps {
   resumeOnReload?: boolean;
   maxReconnectAttempts?: number;
   /**
+   * CI authentication token for bypassing rate limits in tests
+   */
+  ciAuthToken?: string;
+  /**
    * When true, enables split-screen mode with a second independent terminal.
    * A split icon will be displayed in the top-right corner when in single-pane mode.
    */
@@ -864,7 +868,6 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     
     // Send auth payload - but no additional data
-    console.log(`[SESSION-RESUME-DEBUG] Creating auth payload in handleWebSocketOpen: sessionId=${sessionId}`);
     const payload = createAuthPayload(ablyApiKey, ablyAccessToken, sessionId);
     
     debugLog(`⚠️ DIAGNOSTIC: Preparing to send auth payload with env vars: ${JSON.stringify(payload.environmentVariables)}`);
