@@ -25,9 +25,11 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
   }
   
   // Log API key format validation
-  console.log(`[Auth Helper] API key length: ${key.length}`);
-  console.log(`[Auth Helper] API key format valid: ${/^.+\..+:.+$/.test(key)}`);
-  console.log(`[Auth Helper] Using ${useQueryParam ? 'query param' : 'form'} authentication`);
+  if (!process.env.CI || process.env.VERBOSE_TESTS) {
+    console.log(`[Auth Helper] API key length: ${key.length}`);
+    console.log(`[Auth Helper] API key format valid: ${/^.+\..+:.+$/.test(key)}`);
+    console.log(`[Auth Helper] Using ${useQueryParam ? 'query param' : 'form'} authentication`);
+  }
 
   // Wait for any ongoing rate limit pause to complete
   await waitForRateLimitLock();
@@ -38,13 +40,17 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
   // If the page already has the API key in query params, just wait for terminal
   const currentUrl = page.url();
   if (currentUrl.includes('apiKey=') || currentUrl.includes('apikey=')) {
-    console.log('API key already in URL, waiting for terminal...');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('API key already in URL, waiting for terminal...');
+    }
     incrementConnectionCount();
     await page.waitForSelector('.xterm', { timeout: 15000 });
     
     // In CI, wait a bit longer for the connection to stabilize
     if (process.env.CI) {
-      console.log('CI environment detected, waiting for connection to stabilize...');
+      if (process.env.VERBOSE_TESTS) {
+        console.log('CI environment detected, waiting for connection to stabilize...');
+      }
       await page.waitForTimeout(3000);
     }
     return;
@@ -52,7 +58,9 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
 
   // If we should use query param, reload the page with the API key
   if (useQueryParam) {
-    console.log('Adding API key to URL and reloading...');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('Adding API key to URL and reloading...');
+    }
     const url = new URL(currentUrl);
     url.searchParams.set('apiKey', key);
     // Always clear credentials in tests to ensure consistent state
@@ -68,7 +76,9 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
     
     // In CI, wait a bit longer for the connection to stabilize
     if (process.env.CI) {
-      console.log('CI environment detected, waiting for connection to stabilize...');
+      if (process.env.VERBOSE_TESTS) {
+        console.log('CI environment detected, waiting for connection to stabilize...');
+      }
       await page.waitForTimeout(3000);
     }
     return;
@@ -79,18 +89,24 @@ export async function authenticateWebCli(page: Page, apiKey?: string, useQueryPa
   const authScreenVisible = await page.locator('input[placeholder="your_app.key_name:key_secret"]').isVisible().catch(() => false);
   
   if (authScreenVisible) {
-    console.log('Authentication screen detected, logging in...');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('Authentication screen detected, logging in...');
+    }
     await page.fill('input[placeholder="your_app.key_name:key_secret"]', key);
     incrementConnectionCount();
     await page.click('button:has-text("Connect to Terminal")');
-    console.log('Authentication submitted.');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('Authentication submitted.');
+    }
     
     // Wait for terminal to be visible
     await page.waitForSelector('.xterm', { timeout: 15000 });
     
     // In CI, wait a bit longer for the connection to stabilize
     if (process.env.CI) {
-      console.log('CI environment detected, waiting for connection to stabilize...');
+      if (process.env.VERBOSE_TESTS) {
+        console.log('CI environment detected, waiting for connection to stabilize...');
+      }
       await page.waitForTimeout(3000);
     }
   }

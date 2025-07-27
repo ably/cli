@@ -77,67 +77,19 @@ jobs:
             exit 1
           }
 
-  e2e-web-cli:
+  # Web CLI E2E tests are now handled by the parallel workflow
+  # See .github/workflows/e2e-web-cli-parallel.yml
+  # This job is kept as a placeholder and will trigger the parallel workflow
+  e2e-web-cli-trigger:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 5
     
-    env:
-      E2E_ABLY_API_KEY: ${{ secrets.E2E_ABLY_API_KEY }}
-      E2E_TESTS: true
-      HEADLESS: true
-      
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 10
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-          cache: "pnpm"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Build React Web CLI
-        run: pnpm --filter @ably/react-web-cli build
-
-      - name: Build Web CLI Example
+      - name: Trigger Parallel Web CLI E2E Tests
         run: |
-          cd examples/web-cli
-          pnpm build
-
-      - name: Run Web CLI E2E Tests
-        run: |
-          echo "Running Web CLI E2E Tests (using web-cli.ably.com)..."
-          timeout 1800s pnpm test:e2e:web-cli || {
-            echo "Web CLI E2E tests failed or timed out"
-            echo "Attempting to gather artifacts..."
-            if [ -d "test-results" ]; then
-              echo "Test results directory exists"
-              ls -la test-results/
-            fi
-            if [ -d "playwright-report" ]; then
-              echo "Playwright report directory exists"
-              ls -la playwright-report/
-            fi
-            exit 1
-          }
-
-      - name: Upload Playwright Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report-web-cli
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
+          echo "Web CLI E2E tests now run in parallel via e2e-web-cli-parallel.yml workflow"
+          echo "This provides:"
+          echo "- 4x faster execution through parallel job groups"
+          echo "- Better isolation between test types"
+          echo "- Reduced rate limiting conflicts"
+          echo "- More granular test failure reporting"

@@ -154,6 +154,7 @@ export interface AuthPayload {
   accessToken?: string;
   sessionId?: string | null;
   environmentVariables?: Record<string, string>;
+  ciAuthToken?: string;
 }
 
 /**
@@ -176,6 +177,13 @@ export function createAuthPayload(
   if (apiKey) payload.apiKey = apiKey;
   if (accessToken) payload.accessToken = accessToken;
   if (sessionId) payload.sessionId = sessionId;
+
+  // Check for CI auth token in window object
+  // This will be injected during test execution
+  const win = window as any;
+  if (win.__ABLY_CLI_CI_AUTH_TOKEN__) {
+    payload.ciAuthToken = win.__ABLY_CLI_CI_AUTH_TOKEN__;
+  }
 
   return payload;
 }

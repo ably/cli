@@ -18,8 +18,12 @@ const getWebSocketUrl = () => {
     console.log(`[App.tsx] Found serverUrl param: ${serverParam}`);
     return serverParam;
   }
-  console.log(`[App.tsx] Using default URL: ${DEFAULT_WEBSOCKET_URL}`);
   return DEFAULT_WEBSOCKET_URL;
+};
+
+// Get CI auth token if available
+const getCIAuthToken = () => {
+  return (window as any).__ABLY_CLI_CI_AUTH_TOKEN__ || undefined;
 };
 
 // Get credentials from various sources
@@ -223,6 +227,7 @@ function App() {
         resumeOnReload={true}
         enableSplitScreen={true}
         maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
+        ciAuthToken={getCIAuthToken()}
       />
     ) : null
   ), [isAuthenticated, apiKey, accessToken, handleConnectionChange, handleSessionEnd, handleSessionId, currentWebsocketUrl]);

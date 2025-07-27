@@ -117,7 +117,8 @@ export async function setupWebServer(): Promise<string> {
     
     // Handle unexpected exit
     webServerProcess.on('exit', (code) => {
-      if (code !== null && code !== 0) {
+      if (code !== null && code !== 0 && code !== 143) {
+        // Always log unexpected exits (143 is SIGTERM which is expected)
         console.error(`[Shared Setup] Web server exited unexpectedly with code ${code}`);
       }
       webServerProcess = null;
@@ -148,7 +149,9 @@ export async function teardownWebServer(): Promise<void> {
   }
   
   teardownPromise = (async () => {
-    console.log('[Shared Setup] Tearing down web server...');
+    if (!process.env.CI || process.env.VERBOSE_TESTS) {
+      console.log('[Shared Setup] Tearing down web server...');
+    }
     
     if (webServerProcess) {
       webServerProcess.kill('SIGTERM');
@@ -166,7 +169,9 @@ export async function teardownWebServer(): Promise<void> {
       webServerProcess = null;
       webServerUrl = null;
       webServerPort = null;
-      console.log('[Shared Setup] Web server stopped.');
+      if (!process.env.CI || process.env.VERBOSE_TESTS) {
+        console.log('[Shared Setup] Web server stopped.');
+      }
     }
   })();
   

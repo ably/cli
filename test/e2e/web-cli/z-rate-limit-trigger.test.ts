@@ -2,11 +2,18 @@ import { test, expect, getTestUrl } from './helpers/base-test';
 import { authenticateWebCli } from './auth-helper';
 import { getRateLimiterState } from './test-rate-limiter';
 import { waitForRateLimitLock } from './rate-limit-lock';
+import { disableCIAuth } from './helpers/setup-ci-auth';
 
 const log = console.log.bind(console);
 
 test.describe('Z-Rate Limit Config Test - MUST RUN LAST', () => {
   test.setTimeout(120_000); // 2 minute timeout for CI rate limit scenarios
+
+  test.beforeEach(async ({ page }) => {
+    // Disable CI auth for rate limit testing
+    await disableCIAuth(page);
+    log('CI auth disabled for rate limit testing');
+  });
 
   test('should handle server disconnections and verify reconnection configuration', async ({ page }) => {
     // Wait for any ongoing rate limit pause
