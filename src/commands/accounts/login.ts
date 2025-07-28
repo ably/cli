@@ -222,7 +222,7 @@ export default class AccountsLogin extends ControlBaseCommand {
 
               const app = await controlApi.createApp({
                 name: appName,
-                tlsOnly: false, // Default to false for simplicity
+                tlsOnly: true, // Default to true for security
               });
 
               selectedApp = app;
