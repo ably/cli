@@ -180,23 +180,76 @@ export default class AccountsLogin extends ControlBaseCommand {
       // Switch to this account
       this.configManager.switchAccount(alias);
 
+      // Handle app selection based on available apps
+      let selectedApp = null;
+      let isAutoSelected = false;
+      try {
+        const apps = await controlApi.listApps();
+
+        if (apps.length === 1) {
+          // Auto-select the only app
+          selectedApp = apps[0];
+          isAutoSelected = true;
+          this.configManager.setCurrentApp(selectedApp.id);
+          this.configManager.storeAppInfo(selectedApp.id, {
+            appName: selectedApp.name,
+          });
+        } else if (apps.length > 1 && !this.shouldOutputJson(flags)) {
+          // Prompt user to select an app when multiple exist
+          this.log("\nSelect an app to use:");
+
+          selectedApp = await this.interactiveHelper.selectApp(controlApi);
+
+          if (selectedApp) {
+            this.configManager.setCurrentApp(selectedApp.id);
+            this.configManager.storeAppInfo(selectedApp.id, {
+              appName: selectedApp.name,
+            });
+          }
+        }
+        // If apps.length === 0, do nothing - user can create apps later
+      } catch (error) {
+        // Don't fail login if app fetching fails, just log for debugging
+        if (!this.shouldOutputJson(flags)) {
+          this.warn(`Could not fetch apps: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
       if (this.shouldOutputJson(flags)) {
-        this.log(
-          this.formatJsonOutput(
-            {
-              account: {
-                alias,
-                id: account.id,
-                name: account.name,
-                user: {
-                  email: user.email,
-                },
-              },
-              success: true,
+        const response: {
+          account: {
+            alias: string;
+            id: string;
+            name: string;
+            user: { email: string };
+          };
+          success: boolean;
+          app?: {
+            id: string;
+            name: string;
+            autoSelected: boolean;
+          };
+        } = {
+          account: {
+            alias,
+            id: account.id,
+            name: account.name,
+            user: {
+              email: user.email,
             },
-            flags,
-          ),
-        );
+          },
+          success: true,
+        };
+
+        if (selectedApp) {
+          response.app = {
+            id: selectedApp.id,
+            name: selectedApp.name,
+            autoSelected: isAutoSelected,
+          };
+        }
+
+        this.log(this.formatJsonOutput(response, flags));
       } else {
         this.log(
           `Successfully logged in to ${chalk.cyan(account.name)} (account ID: ${chalk.greenBright(account.id)})`,
@@ -206,6 +259,13 @@ export default class AccountsLogin extends ControlBaseCommand {
         }
 
         this.log(`Account ${chalk.cyan(alias)} is now the current account`);
+
+        if (selectedApp) {
+          const message = isAutoSelected
+            ? `${chalk.green("✓")} Automatically selected app: ${chalk.cyan(selectedApp.name)} (${selectedApp.id})`
+            : `${chalk.green("✓")} Selected app: ${chalk.cyan(selectedApp.name)} (${selectedApp.id})`;
+          this.log(message);
+        }
       }
     } catch (error) {
       if (this.shouldOutputJson(flags)) {
