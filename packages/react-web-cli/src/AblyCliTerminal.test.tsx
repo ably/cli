@@ -242,12 +242,12 @@ export const triggerWebSocketOpen = () => {
   } else if (shouldOpenImmediately) {
     // Open synchronously for tests that need it
     mockSocketInstance.readyStateValue = WebSocket.OPEN;
-    // Don't trigger event immediately, let the component set up handlers first
-    Promise.resolve().then(() => {
+    // Store a reference to trigger open event after component mounts
+    pendingWebSocketOpen = () => {
       if (mockSocketInstance) {
         mockSocketInstance.triggerEvent('open', {});
       }
-    });
+    };
   } else {
     // Default async behavior - delay opening to allow React state updates
     // Use a longer delay to ensure all React effects have run
@@ -344,6 +344,14 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
   test('initial state is "initial", then "connecting" when component mounts and WebSocket attempts connection', async () => {
     renderTerminal();
     
+    // Trigger the WebSocket open event within act
+    await act(async () => {
+      if (pendingWebSocketOpen) {
+        pendingWebSocketOpen();
+      }
+      await Promise.resolve();
+    });
+    
     // Wait for the component to process the initial mount and connection attempt
     await waitFor(() => {
       // The component does not emit 'initial' via the callback on mount; it starts at 'connecting'
@@ -353,6 +361,15 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
   test('displays "Connecting..." box animation when component mounts', async () => {
     renderTerminal();
+    
+    // Trigger the WebSocket open event within act
+    await act(async () => {
+      if (pendingWebSocketOpen) {
+        pendingWebSocketOpen();
+      }
+      await Promise.resolve();
+    });
+    
     // The component calls connectWebSocket -> startConnectingAnimation on mount
     await waitFor(() => {
       expect(mockDrawBox).toHaveBeenCalled();
@@ -388,6 +405,14 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
 
   test('clears status box when hello message is received', async () => {
     renderTerminal();
+    
+    // Trigger the WebSocket open event within act
+    await act(async () => {
+      if (pendingWebSocketOpen) {
+        pendingWebSocketOpen();
+      }
+      await Promise.resolve();
+    });
     
     // Wait for the component to be in connecting state
     await waitFor(() => {
