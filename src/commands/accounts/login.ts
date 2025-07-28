@@ -5,6 +5,7 @@ import * as readline from "node:readline";
 
 import { ControlBaseCommand } from "../../control-base-command.js";
 import { ControlApi } from "../../services/control-api.js";
+import { BaseFlags } from "../../types/cli.js";
 import { displayLogo } from "../../utils/logo.js";
 
 // Moved function definition outside the class
@@ -52,6 +53,8 @@ export default class AccountsLogin extends ControlBaseCommand {
     "<%= config.bin %> <%= command.id %> --alias mycompany",
     "<%= config.bin %> <%= command.id %> --json",
     "<%= config.bin %> <%= command.id %> --pretty-json",
+    "<%= config.bin %> <%= command.id %> --non-interactive",
+    "<%= config.bin %> <%= command.id %> TOKEN --alias mycompany --non-interactive",
   ];
 
   static override flags = {
@@ -63,6 +66,10 @@ export default class AccountsLogin extends ControlBaseCommand {
     "no-browser": Flags.boolean({
       default: false,
       description: "Do not open a browser",
+    }),
+    "non-interactive": Flags.boolean({
+      default: false,
+      description: "Run in non-interactive mode with defaults",
     }),
   };
 
@@ -106,54 +113,62 @@ export default class AccountsLogin extends ControlBaseCommand {
     // If no alias flag provided, prompt the user if they want to provide one
     let { alias } = flags;
     if (!alias && !this.shouldOutputJson(flags)) {
-      // Check if the default account already exists
-      const accounts = this.configManager.listAccounts();
-      const hasDefaultAccount = accounts.some(
-        (account) => account.alias === "default",
-      );
-
-      if (hasDefaultAccount) {
-        // Explain to the user the implications of not providing an alias
-        this.log("\nYou have not specified an alias for this account.");
-        this.log(
-          "If you continue without an alias, your existing default account configuration will be overwritten.",
-        );
-        this.log(
-          "To maintain multiple account profiles, please provide an alias.",
-        );
-
-        // Ask if they want to provide an alias
-        const shouldProvideAlias = await this.promptYesNo(
-          "Would you like to provide an alias for this account?",
-        );
-
-        if (shouldProvideAlias) {
-          alias = await this.promptForAlias();
-        } else {
-          alias = "default";
-          this.log(
-            "No alias provided. The default account configuration will be overwritten.",
-          );
+      // In non-interactive mode, use "default" alias
+      if (this.isNonInteractive(flags)) {
+        alias = "default";
+        if (!this.shouldOutputJson(flags)) {
+          this.log("Using default alias in non-interactive mode");
         }
       } else {
-        // No default account exists yet, but still offer to set an alias
-        this.log("\nYou have not specified an alias for this account.");
-        this.log(
-          "Using an alias allows you to maintain multiple account profiles that you can switch between.",
+        // Check if the default account already exists
+        const accounts = this.configManager.listAccounts();
+        const hasDefaultAccount = accounts.some(
+          (account) => account.alias === "default",
         );
 
-        // Ask if they want to provide an alias
-        const shouldProvideAlias = await this.promptYesNo(
-          "Would you like to provide an alias for this account?",
-        );
-
-        if (shouldProvideAlias) {
-          alias = await this.promptForAlias();
-        } else {
-          alias = "default";
+        if (hasDefaultAccount) {
+          // Explain to the user the implications of not providing an alias
+          this.log("\nYou have not specified an alias for this account.");
           this.log(
-            "No alias provided. This will be set as your default account.",
+            "If you continue without an alias, your existing default account configuration will be overwritten.",
           );
+          this.log(
+            "To maintain multiple account profiles, please provide an alias.",
+          );
+
+          // Ask if they want to provide an alias
+          const shouldProvideAlias = await this.promptYesNo(
+            "Would you like to provide an alias for this account?",
+          );
+
+          if (shouldProvideAlias) {
+            alias = await this.promptForAlias();
+          } else {
+            alias = "default";
+            this.log(
+              "No alias provided. The default account configuration will be overwritten.",
+            );
+          }
+        } else {
+          // No default account exists yet, but still offer to set an alias
+          this.log("\nYou have not specified an alias for this account.");
+          this.log(
+            "Using an alias allows you to maintain multiple account profiles that you can switch between.",
+          );
+
+          // Ask if they want to provide an alias
+          const shouldProvideAlias = await this.promptYesNo(
+            "Would you like to provide an alias for this account?",
+          );
+
+          if (shouldProvideAlias) {
+            alias = await this.promptForAlias();
+          } else {
+            alias = "default";
+            this.log(
+              "No alias provided. This will be set as your default account.",
+            );
+          }
         }
       }
     } else if (!alias) {
@@ -195,47 +210,63 @@ export default class AccountsLogin extends ControlBaseCommand {
             appName: selectedApp.name,
           });
         } else if (apps.length > 1 && !this.shouldOutputJson(flags)) {
-          // Prompt user to select an app when multiple exist
-          this.log("\nSelect an app to use:");
-
-          selectedApp = await this.interactiveHelper.selectApp(controlApi);
-
-          if (selectedApp) {
+          if (this.isNonInteractive(flags)) {
+            // In non-interactive mode, select the first app
+            selectedApp = apps[0];
             this.configManager.setCurrentApp(selectedApp.id);
             this.configManager.storeAppInfo(selectedApp.id, {
               appName: selectedApp.name,
             });
+            this.log(`Selected first available app in non-interactive mode: ${selectedApp.name} (${selectedApp.id})`);
+          } else {
+            // Prompt user to select an app when multiple exist
+            this.log("\nSelect an app to use:");
+
+            selectedApp = await this.interactiveHelper.selectApp(controlApi);
+
+            if (selectedApp) {
+              this.configManager.setCurrentApp(selectedApp.id);
+              this.configManager.storeAppInfo(selectedApp.id, {
+                appName: selectedApp.name,
+              });
+            }
           }
         } else if (apps.length === 0 && !this.shouldOutputJson(flags)) {
-          // No apps exist - offer to create one
-          this.log("\nNo apps found in your account.");
+          if (this.isNonInteractive(flags)) {
+            // In non-interactive mode, skip app creation
+            this.log("No apps found. Skipping app creation in non-interactive mode.");
+            this.log("You can create an app later with: ably apps create --name 'My App'");
+          } else {
+            // No apps exist - offer to create one
+            this.log("\nNo apps found in your account.");
 
-          const shouldCreateApp = await this.promptYesNo(
-            "Would you like to create your first app now?"
-          );
+            const shouldCreateApp = await this.promptYesNo(
+              "Would you like to create your first app now?"
+            );
 
-          if (shouldCreateApp) {
-            const appName = await this.promptForAppName();
+            if (shouldCreateApp) {
+              const appName = await this.promptForAppName();
 
-            try {
-              this.log(`\nCreating app "${appName}"...`);
+              try {
+                this.log(`\nCreating app "${appName}"...`);
 
-              const app = await controlApi.createApp({
-                name: appName,
-                tlsOnly: false, // Default to false for simplicity
-              });
+                const app = await controlApi.createApp({
+                  name: appName,
+                  tlsOnly: false, // Default to false for simplicity
+                });
 
-              selectedApp = app;
-              isAutoSelected = true; // Consider this auto-selected since it's the only one
+                selectedApp = app;
+                isAutoSelected = true; // Consider this auto-selected since it's the only one
 
-              // Set as current app
-              this.configManager.setCurrentApp(app.id);
-              this.configManager.storeAppInfo(app.id, { appName: app.name });
+                // Set as current app
+                this.configManager.setCurrentApp(app.id);
+                this.configManager.storeAppInfo(app.id, { appName: app.name });
 
-              this.log(`${chalk.green("✓")} App created successfully!`);
-            } catch (createError) {
-              this.warn(`Failed to create app: ${createError instanceof Error ? createError.message : String(createError)}`);
-              // Continue with login even if app creation fails
+                this.log(`${chalk.green("✓")} App created successfully!`);
+              } catch (createError) {
+                this.warn(`Failed to create app: ${createError instanceof Error ? createError.message : String(createError)}`);
+                // Continue with login even if app creation fails
+              }
             }
           }
         }
@@ -263,16 +294,26 @@ export default class AccountsLogin extends ControlBaseCommand {
               keyName: selectedKey.name || "Unnamed key",
             });
           } else if (keys.length > 1) {
-            // Prompt user to select a key when multiple exist
-            this.log("\nSelect an API key to use:");
-
-            selectedKey = await this.interactiveHelper.selectKey(controlApi, selectedApp.id);
-
-            if (selectedKey) {
+            if (this.isNonInteractive(flags)) {
+              // In non-interactive mode, select the first key (usually the root key)
+              selectedKey = keys[0];
               this.configManager.storeAppKey(selectedApp.id, selectedKey.key, {
                 keyId: selectedKey.id,
                 keyName: selectedKey.name || "Unnamed key",
               });
+              this.log(`Selected first available API key in non-interactive mode: ${selectedKey.name || "Unnamed key"} (${selectedKey.id})`);
+            } else {
+              // Prompt user to select a key when multiple exist
+              this.log("\nSelect an API key to use:");
+
+              selectedKey = await this.interactiveHelper.selectKey(controlApi, selectedApp.id);
+
+              if (selectedKey) {
+                this.configManager.storeAppKey(selectedApp.id, selectedKey.key, {
+                  keyId: selectedKey.id,
+                  keyName: selectedKey.name || "Unnamed key",
+                });
+              }
             }
           }
           // If keys.length === 0, continue without key (should be rare for newly created apps)
@@ -487,5 +528,9 @@ export default class AccountsLogin extends ControlBaseCommand {
 
       askQuestion();
     });
+  }
+
+  private isNonInteractive(flags: BaseFlags): boolean {
+    return Boolean(flags["non-interactive"]) || process.env.ABLY_CLI_NON_INTERACTIVE === 'true';
   }
 }
