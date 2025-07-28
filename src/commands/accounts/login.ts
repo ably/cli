@@ -206,12 +206,79 @@ export default class AccountsLogin extends ControlBaseCommand {
               appName: selectedApp.name,
             });
           }
+        } else if (apps.length === 0 && !this.shouldOutputJson(flags)) {
+          // No apps exist - offer to create one
+          this.log("\nNo apps found in your account.");
+
+          const shouldCreateApp = await this.promptYesNo(
+            "Would you like to create your first app now?"
+          );
+
+          if (shouldCreateApp) {
+            const appName = await this.promptForAppName();
+
+            try {
+              this.log(`\nCreating app "${appName}"...`);
+
+              const app = await controlApi.createApp({
+                name: appName,
+                tlsOnly: false, // Default to false for simplicity
+              });
+
+              selectedApp = app;
+              isAutoSelected = true; // Consider this auto-selected since it's the only one
+
+              // Set as current app
+              this.configManager.setCurrentApp(app.id);
+              this.configManager.storeAppInfo(app.id, { appName: app.name });
+
+              this.log(`${chalk.green("✓")} App created successfully!`);
+            } catch (createError) {
+              this.warn(`Failed to create app: ${createError instanceof Error ? createError.message : String(createError)}`);
+              // Continue with login even if app creation fails
+            }
+          }
         }
-        // If apps.length === 0, do nothing - user can create apps later
+        // If apps.length === 0 and JSON mode, or user declined to create app, do nothing
       } catch (error) {
         // Don't fail login if app fetching fails, just log for debugging
         if (!this.shouldOutputJson(flags)) {
           this.warn(`Could not fetch apps: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+
+      // If we have a selected app, also handle API key selection
+      let selectedKey = null;
+      let isKeyAutoSelected = false;
+      if (selectedApp && !this.shouldOutputJson(flags)) {
+        try {
+          const keys = await controlApi.listKeys(selectedApp.id);
+
+          if (keys.length === 1) {
+            // Auto-select the only key
+            selectedKey = keys[0];
+            isKeyAutoSelected = true;
+            this.configManager.storeAppKey(selectedApp.id, selectedKey.key, {
+              keyId: selectedKey.id,
+              keyName: selectedKey.name || "Unnamed key",
+            });
+          } else if (keys.length > 1) {
+            // Prompt user to select a key when multiple exist
+            this.log("\nSelect an API key to use:");
+
+            selectedKey = await this.interactiveHelper.selectKey(controlApi, selectedApp.id);
+
+            if (selectedKey) {
+              this.configManager.storeAppKey(selectedApp.id, selectedKey.key, {
+                keyId: selectedKey.id,
+                keyName: selectedKey.name || "Unnamed key",
+              });
+            }
+          }
+          // If keys.length === 0, continue without key (should be rare for newly created apps)
+        } catch (keyError) {
+          // Don't fail login if key fetching fails
+          this.warn(`Could not fetch API keys: ${keyError instanceof Error ? keyError.message : String(keyError)}`);
         }
       }
 
@@ -225,6 +292,11 @@ export default class AccountsLogin extends ControlBaseCommand {
           };
           success: boolean;
           app?: {
+            id: string;
+            name: string;
+            autoSelected: boolean;
+          };
+          key?: {
             id: string;
             name: string;
             autoSelected: boolean;
@@ -247,6 +319,14 @@ export default class AccountsLogin extends ControlBaseCommand {
             name: selectedApp.name,
             autoSelected: isAutoSelected,
           };
+
+          if (selectedKey) {
+            response.key = {
+              id: selectedKey.id,
+              name: selectedKey.name || "Unnamed key",
+              autoSelected: isKeyAutoSelected,
+            };
+          }
         }
 
         this.log(this.formatJsonOutput(response, flags));
@@ -265,6 +345,13 @@ export default class AccountsLogin extends ControlBaseCommand {
             ? `${chalk.green("✓")} Automatically selected app: ${chalk.cyan(selectedApp.name)} (${selectedApp.id})`
             : `${chalk.green("✓")} Selected app: ${chalk.cyan(selectedApp.name)} (${selectedApp.id})`;
           this.log(message);
+        }
+
+        if (selectedKey) {
+          const keyMessage = isKeyAutoSelected
+            ? `${chalk.green("✓")} Automatically selected API key: ${chalk.cyan(selectedKey.name || "Unnamed key")} (${selectedKey.id})`
+            : `${chalk.green("✓")} Selected API key: ${chalk.cyan(selectedKey.name || "Unnamed key")} (${selectedKey.id})`;
+          this.log(keyMessage);
         }
       }
     } catch (error) {
@@ -332,6 +419,31 @@ export default class AccountsLogin extends ControlBaseCommand {
       };
 
       askForAlias();
+    });
+  }
+
+  private promptForAppName(): Promise<string> {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    return new Promise((resolve) => {
+      const askForAppName = () => {
+        rl.question('Enter a name for your app: ', (appName) => {
+          const trimmedName = appName.trim();
+
+          if (trimmedName.length === 0) {
+            this.log("Error: App name cannot be empty");
+            askForAppName();
+          } else {
+            rl.close();
+            resolve(trimmedName);
+          }
+        });
+      };
+
+      askForAppName();
     });
   }
 
