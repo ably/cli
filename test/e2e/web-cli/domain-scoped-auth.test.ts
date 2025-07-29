@@ -173,6 +173,8 @@ test.describe('Domain-Scoped Authentication E2E Tests', () => {
   });
 
   test.skip('should use correct domain-scoped credentials when serverUrl parameter changes', async ({ page }) => {
+    // SKIPPED: This test requires implementing serverUrl parameter changes which is not yet supported
+    // TODO: Enable this test when dynamic serverUrl changes are implemented
     // Wait for any ongoing rate limit pause
     await waitForRateLimitLock();
     
