@@ -21,6 +21,23 @@ import { useTerminalVisibility } from './use-terminal-visibility.js';
 import { SplitSquareHorizontal, X } from 'lucide-react';
 import { hashCredentials } from './utils/crypto';
 import { getConnectionMessage } from './connection-messages';
+import {
+  HandshakeFilterState,
+  createHandshakeFilterState,
+  filterDockerHandshake,
+  createTerminal,
+  createFitAddon,
+  safeFit,
+  createAuthPayload,
+  parseControlMessage,
+  messageDataToUint8Array,
+  clearConnectingMessage,
+  showConnectingMessage,
+  debugLog as sharedDebugLog,
+  CONTROL_MESSAGE_PREFIX,
+  MAX_PTY_BUFFER_LENGTH,
+  TERMINAL_PROMPT_PATTERN
+} from './terminal-shared';
 
 /**
  * Simple debounce utility function to prevent rapid successive calls
@@ -41,12 +58,8 @@ function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (..
 
 export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
-const MAX_PTY_BUFFER_LENGTH = 10000; // Max 10k chars in the buffer
-const CONTROL_MESSAGE_PREFIX = '\x00\x00ABLY_CTRL:';
-
 // Prompts that indicate the terminal is ready for input
 const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Basic prompt
-const TERMINAL_PROMPT_PATTERN = /\$\s$/; // Pattern matching prompt at end of line
 
 // Shared CLI installation tip
 const CLI_INSTALL_TIP = {
@@ -81,14 +94,8 @@ export interface AblyCliTerminalProps {
   enableSplitScreen?: boolean;
 }
 
-// Debug logging helper – disabled by default. To enable in local dev set
-// window.ABLY_CLI_DEBUG = true in the browser console *before* the component
-// mounts.
-function debugLog(...args: unknown[]) {
-  if (typeof window !== 'undefined' && (window as any).ABLY_CLI_DEBUG) {
-    console.log('[AblyCLITerminal DEBUG]', ...args);
-  }
-}
+// Use shared debug logging
+const debugLog = sharedDebugLog;
 
 // Automatically enable debug logging if ?cliDebug=true is present in the URL
 if (typeof window !== 'undefined') {
@@ -100,15 +107,8 @@ if (typeof window !== 'undefined') {
   } catch { /* ignore URL parsing errors in non-browser env */ }
 }
 
-// Detect whether a chunk of text is part of the server-side PTY meta JSON that
-// should never be rendered in the terminal.  We look for key markers that can
-// appear in *either* fragment of a split WebSocket frame (e.g. the opening
-// half may contain "\"stream\":true" while the closing half has
-// "\"hijack\":true").  Using separate regexp checks allows us to filter
-// partial fragments reliably without needing to reconstruct the full object.
-function isHijackMetaChunk(txt: string): boolean {
-  return /"stream"\s*:\s*true/.test(txt) || /"hijack"\s*:\s*true/.test(txt);
-}
+// Import isHijackMetaChunk from shared module for backward compatibility
+import { isHijackMetaChunk } from './terminal-shared';
 
 export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   websocketUrl,
@@ -122,6 +122,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   maxReconnectAttempts,
   enableSplitScreen = false,
 }) => {
+  
   const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [connectionHelpMessage, setConnectionHelpMessage] = useState('');
@@ -379,6 +380,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const term = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon>();
   const ptyBuffer = useRef('');
+  const handshakeFilterState = useRef<HandshakeFilterState>(createHandshakeFilterState());
   // Keep a ref in sync with the latest connection status so event handlers have up-to-date value
   const connectionStatusRef = useRef<ConnectionStatus>('initial');
   // Store cleanup function for terminal resize handler
@@ -392,6 +394,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   
   // Keep a ref in sync with session active state for use in closures
   const isSessionActiveRef = useRef<boolean>(false);
+  
+  // Keep a ref for sessionId to use in closures
+  const sessionIdRef = useRef<string | null>(sessionId);
 
   // Use block-based spinner where empty dots are invisible in most monospace fonts
   const spinnerFrames = ['●  ', ' ● ', '  ●', ' ● '];
@@ -476,6 +481,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       setConnectionHelpMessage(''); // Clear help message when not active
     }
   }, [isSessionActive]);
+  
+  // Keep sessionId ref in sync
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   const clearPtyBuffer = useCallback(() => {
     debugLog(`⚠️ DIAGNOSTIC: Clearing PTY buffer, current size: ${ptyBuffer.current.length}`);
@@ -487,12 +497,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       debugLog(`⚠️ DIAGNOSTIC: Buffer content before clear: "${sanitizedBuffer}"`);
     }
     ptyBuffer.current = '';
+    // Reset handshake filter when clearing buffer
+    handshakeFilterState.current = createHandshakeFilterState();
   }, []);
   
   // Helper to update both session active state and ref
   const updateSessionActive = useCallback((active: boolean) => {
     debugLog(`⚠️ DIAGNOSTIC: Updating session active to: ${active}`);
-    console.log(`[AblyCLITerminal] PRODUCTION DEBUG: updateSessionActive called with: ${active}`);
     setIsSessionActive(active);
     isSessionActiveRef.current = active;
   }, []);
@@ -526,6 +537,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       ptyBuffer.current += data;
       
       debugLog(`⚠️ DIAGNOSTIC: Received PTY data (session inactive): "${sanitizedData}"`);
+      debugLog(`⚠️ DIAGNOSTIC: Current connection status: ${connectionStatusRef.current}, sessionId: ${sessionIdRef.current}`);
       
       if (ptyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
         ptyBuffer.current = ptyBuffer.current.slice(ptyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
@@ -552,7 +564,13 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           updateSessionActive(true);
           grSuccessfulConnectionReset();
           updateConnectionStatusAndExpose('connected'); // Explicitly set to connected
-          if (term.current) term.current.focus();
+          
+          // The buffered content has already been written to the terminal
+          // Just focus the terminal now that session is active
+          if (term.current) {
+            debugLog(`⚠️ DIAGNOSTIC: Session is now active, focusing terminal`);
+            term.current.focus();
+          }
           
           // Reset connection tracking
           setConnectionStartTime(null);
@@ -573,6 +591,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const secondaryFitAddon = useRef<FitAddon>();
   const secondarySocketRef = useRef<WebSocket | null>(null);
   const secondaryPtyBuffer = useRef('');
+  const secondaryHandshakeFilterState = useRef<HandshakeFilterState>(createHandshakeFilterState());
   const secondaryTermCleanupRef = useRef<() => void>(() => {});
   
   // Secondary terminal state
@@ -659,18 +678,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       : 'Connecting to Ably CLI server...';
     const initialContent = [statusText, '']; // Second line for potential countdown or messages
 
-    // Write connecting message to terminal like secondary does
-    if (term.current && !isRetry) {
-      // Store the current line position so we can clear it later
-      try {
-        const connectingLine = term.current.buffer?.active?.cursorY ?? 0;
-        term.current.writeln(statusText);
-        // Store line number for later clearing
-        (term.current as any)._connectingLine = connectingLine;
-      } catch (e) {
-        // If buffer is not ready, just write without tracking line number
-        term.current.writeln(statusText);
-      }
+    // Write connecting message to terminal
+    // Only show if it's not a retry AND not resuming a session
+    if (term.current && !isRetry && !sessionIdRef.current) {
+      showConnectingMessage(term.current, statusText);
     }
 
     // Draw the initial box (even though it's a stub, keep for compatibility)
@@ -747,6 +758,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   const connectWebSocket = useCallback(() => {
     // console.log('[AblyCLITerminal] connectWebSocket called.');
     debugLog('⚠️ DIAGNOSTIC: connectWebSocket called - start of connection process');
+    debugLog(`⚠️ DIAGNOSTIC: Current sessionId: ${sessionId}, credentialsInitialized: ${credentialsInitialized}`);
 
     // Skip attempt if terminal not visible to avoid unnecessary server load
     if (!isVisible) {
@@ -833,8 +845,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Only clear buffer for new sessions, not when resuming
     if (!sessionId) {
       clearPtyBuffer(); // Clear buffer for new session prompt detection
+      debugLog(`⚠️ DIAGNOSTIC: Cleared PTY buffer for new session`);
     } else {
       debugLog(`⚠️ DIAGNOSTIC: Skipping PTY buffer clear for resumed session ${sessionId}`);
+      // For resumed sessions, we might already be at a prompt
+      // Check if we need to activate the session immediately
+      if (connectionStatusRef.current === 'connected' && !isSessionActiveRef.current) {
+        debugLog(`⚠️ DIAGNOSTIC: Resumed session but not active - checking for existing prompt`);
+      }
     }
 
     debugLog('⚠️ DIAGNOSTIC: WebSocket open handler started - tracking initialization sequence');
@@ -846,18 +864,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     
     // Send auth payload - but no additional data
-    const payload: any = {
-      environmentVariables: { 
-        ABLY_WEB_CLI_MODE: 'true',
-        // Force explicit PS1 to ensure prompt is visible
-        PS1: '$ '
-      } 
-    };
-    if (ablyApiKey) payload.apiKey = ablyApiKey; // Always required
-    if (ablyAccessToken) payload.accessToken = ablyAccessToken;
-    if (sessionId) payload.sessionId = sessionId;
+    const payload = createAuthPayload(ablyApiKey, ablyAccessToken, sessionId);
     
     debugLog(`⚠️ DIAGNOSTIC: Preparing to send auth payload with env vars: ${JSON.stringify(payload.environmentVariables)}`);
+    debugLog(`⚠️ DIAGNOSTIC: Auth payload includes sessionId: ${payload.sessionId || 'none (new session)'}`);
     
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       debugLog('⚠️ DIAGNOSTIC: Sending auth payload to server');
@@ -896,47 +906,17 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   }, [clearAnimationMessages, ablyAccessToken, ablyApiKey, initialCommand, updateConnectionStatusAndExpose, clearPtyBuffer, sessionId, resumeOnReload, clearConnectionTimeout, credentialHash]);
 
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
+    debugLog(`⚠️ DIAGNOSTIC: handleWebSocketMessage called with event.data type: ${typeof event.data}`);
     try {
-      let data: Uint8Array;
+      const data = await messageDataToUint8Array(event.data);
       
-      // Convert all data types to Uint8Array for consistent handling
-      if (typeof event.data === 'string') {
-        data = new TextEncoder().encode(event.data);
-      } else if (event.data instanceof Blob) {
-        const arrayBuffer = await event.data.arrayBuffer();
-        data = new Uint8Array(arrayBuffer);
-      } else if (event.data instanceof ArrayBuffer) {
-        data = new Uint8Array(event.data);
-      } else {
-        // Assume it's already a Uint8Array or similar
-        data = new Uint8Array(event.data);
-      }
-
-      // Check for control message prefix at byte level
-      const prefixBytes = new TextEncoder().encode(CONTROL_MESSAGE_PREFIX);
-      let isControlMessage = false;
-      
-      if (data.length >= prefixBytes.length) {
-        isControlMessage = true;
-        for (let i = 0; i < prefixBytes.length; i++) {
-          if (data[i] !== prefixBytes[i]) {
-            isControlMessage = false;
-            break;
-          }
-        }
-      }
-
-      if (isControlMessage) {
-        // Extract JSON portion after prefix
-        const jsonBytes = data.slice(prefixBytes.length);
-        const jsonStr = new TextDecoder().decode(jsonBytes);
-        try {
-          const msg = JSON.parse(jsonStr);
+      const msg = parseControlMessage(data);
+      if (msg) {
+        // Handle control messages
           
           // Handle control messages (existing logic)
           if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
             debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
-            console.log(`[AblyCLITerminal] PRODUCTION DEBUG: Received hello message, sessionId=${msg.sessionId}, current isSessionActive=${isSessionActive}`);
             const wasReconnecting = connectionStatusRef.current === 'reconnecting';
             const wasConnecting = connectionStatusRef.current === 'connecting';
             setSessionId(msg.sessionId);
@@ -946,31 +926,21 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             // Always activate the session when we receive a hello message
             // This handles cases where the server doesn't send a separate "connected" status message
             debugLog(`⚠️ DIAGNOSTIC: Activating session after hello message (wasReconnecting: ${wasReconnecting}, wasConnecting: ${wasConnecting})`);
-            console.log(`[AblyCLITerminal] PRODUCTION DEBUG: Activating session now`);
-            updateSessionActive(true);
-            updateConnectionStatusAndExpose('connected');
+            
+            // Clear the "Connecting..." message and status box BEFORE activating session
             if (term.current) {
-              // Clear the "Connecting..." message if it exists
-              if ((term.current as any)._connectingLine !== undefined) {
-                try {
-                  const currentY = term.current.buffer?.active?.cursorY ?? 0;
-                  const currentX = term.current.buffer?.active?.cursorX ?? 0;
-                  const connectingLine = (term.current as any)._connectingLine;
-                  
-                  // Move to the connecting line and clear it
-                  term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                  term.current.write('\x1b[2K'); // Clear entire line
-                  
-                  // Move cursor back to previous position
-                  term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                  
-                  delete (term.current as any)._connectingLine;
-                } catch (e) {
-                  console.warn('[AblyCLITerminal] Could not clear connecting message:', e);
-                }
-              }
+              clearConnectingMessage(term.current);
               term.current.focus();
             }
+            
+            // Clear the status box
+            clearStatusDisplay();
+            
+            updateSessionActive(true);
+            updateConnectionStatusAndExpose('connected');
+            
+            // Clear the buffer since content has already been written to terminal
+            clearPtyBuffer();
             
             // Persist to session storage if enabled (domain-scoped)
             if (resumeOnReload && typeof window !== 'undefined') {
@@ -992,37 +962,23 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             if (msg.payload === 'connected') {
               debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
               clearStatusDisplay();
-              updateConnectionStatusAndExpose('connected');
               
+              // Clear the "Connecting..." message BEFORE activating session
               if (term.current) {
                 debugLog(`⚠️ DIAGNOSTIC: Clearing connecting message and focusing terminal`);
-                // Clear the "Connecting..." message if it exists
-                if ((term.current as any)._connectingLine !== undefined) {
-                  try {
-                    const currentY = term.current.buffer?.active?.cursorY ?? 0;
-                    const currentX = term.current.buffer?.active?.cursorX ?? 0;
-                    const connectingLine = (term.current as any)._connectingLine;
-                    
-                    // Move to the connecting line and clear it
-                    term.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                    term.current.write('\x1b[2K'); // Clear entire line
-                    
-                    // Move cursor back to previous position
-                    term.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                    
-                    delete (term.current as any)._connectingLine;
-                  } catch (e) {
-                    console.warn('[AblyCLITerminal] Could not clear connecting message:', e);
-                  }
-                }
+                clearConnectingMessage(term.current);
                 term.current.focus();
               }
+              
+              // Now update connection status and activate session
+              updateConnectionStatusAndExpose('connected');
               
               // Set session active immediately on connected status
               debugLog(`⚠️ DIAGNOSTIC: Setting session active on 'connected' status`);
               updateSessionActive(true);
               grSuccessfulConnectionReset();
               
+              // Clear the buffer since content has already been written to terminal
               clearPtyBuffer();
               return;
             }
@@ -1072,29 +1028,189 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             return;
           }
           
-          // Log any unrecognized control messages
-          console.warn('[WebSocket] Unrecognized control message:', msg);
-          return;
-          
-        } catch (e) {
-          console.error('[WebSocket] Invalid control message JSON:', e);
-          return;
-        }
+        // Log any unrecognized control messages
+        console.warn('[WebSocket] Unrecognized control message:', msg);
+        return;
       }
       
       // Everything else is terminal output (including --json command results)
       // Convert back to string for terminal display
       const dataStr = new TextDecoder().decode(data);
+      debugLog(`⚠️ DIAGNOSTIC: Processing as terminal output: "${dataStr}"`);
       
-      // Filter PTY meta JSON chunks
-      if (isHijackMetaChunk(dataStr.trim())) {
-        debugLog('[AblyCLITerminal] Suppressed PTY meta-message chunk');
-      } else if (term.current) {
-        console.log(`[AblyCLITerminal] PRODUCTION DEBUG: Writing PTY data to terminal, isSessionActive=${isSessionActiveRef.current}, dataStr="${dataStr.replace(/\r/g, '\\r').replace(/\n/g, '\\n')}"`);
-        term.current.write(dataStr);
+      // Filter Docker handshake JSON using the shared buffering logic
+      const filteredData = filterDockerHandshake(dataStr, handshakeFilterState.current);
+      debugLog(`⚠️ DIAGNOSTIC: After filtering: "${filteredData}"`);
+      
+      // Only write and process if we have data after filtering
+      if (filteredData.length > 0) {
+        debugLog(`⚠️ DIAGNOSTIC: Filtered data received, length: ${filteredData.length}`);
+        
+        // Check for text-based control messages (e.g., from proxies that strip binary prefixes)
+        if (filteredData.includes('ABLY_CTRL:')) {
+          // Process the data to extract control messages and regular output
+          let regularOutput = '';
+          let currentPos = 0;
+          
+          while (currentPos < filteredData.length) {
+            const ctrlIndex = filteredData.indexOf('ABLY_CTRL:', currentPos);
+            
+            if (ctrlIndex === -1) {
+              // No more control messages, append the rest
+              regularOutput += filteredData.substring(currentPos);
+              break;
+            }
+            
+            // Append any text before the control message
+            if (ctrlIndex > currentPos) {
+              regularOutput += filteredData.substring(currentPos, ctrlIndex);
+            }
+            
+            // Find the end of the control message (either newline or end of string)
+            let msgEnd = filteredData.indexOf('\n', ctrlIndex);
+            if (msgEnd === -1) msgEnd = filteredData.indexOf('\r', ctrlIndex);
+            if (msgEnd === -1) msgEnd = filteredData.length;
+            
+            // Extract the control message
+            const ctrlLine = filteredData.substring(ctrlIndex, msgEnd);
+            
+            try {
+              const jsonStr = ctrlLine.substring('ABLY_CTRL:'.length);
+              const msg = JSON.parse(jsonStr);
+              debugLog(`⚠️ DIAGNOSTIC: Found text-based control message:`, msg);
+              
+              // Process the control message using the same logic as binary control messages
+              if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
+                debugLog(`⚠️ DIAGNOSTIC: Received hello message with sessionId=${msg.sessionId}`);
+                const wasReconnecting = connectionStatusRef.current === 'reconnecting';
+                const wasConnecting = connectionStatusRef.current === 'connecting';
+                setSessionId(msg.sessionId);
+                if (onSessionId) onSessionId(msg.sessionId);
+                debugLog('Received hello. sessionId=', msg.sessionId, ' (was:', sessionId, ')');
+                
+                // Clear the "Connecting..." message and status box BEFORE activating session
+                if (term.current) {
+                  clearConnectingMessage(term.current);
+                  term.current.focus();
+                }
+                
+                // Clear the status box
+                clearStatusDisplay();
+                
+                updateSessionActive(true);
+                updateConnectionStatusAndExpose('connected');
+                
+                // Clear the buffer since content has already been written to terminal
+                clearPtyBuffer();
+                
+                // Persist to session storage if enabled (domain-scoped)
+                if (resumeOnReload && typeof window !== 'undefined') {
+                  const urlDomain = new URL(websocketUrl).host;
+                  window.sessionStorage.setItem(`ably.cli.sessionId.${urlDomain}`, msg.sessionId);
+                  
+                  // Store credential hash if it's already computed
+                  if (credentialHash) {
+                    window.sessionStorage.setItem(`ably.cli.credentialHash.${urlDomain}`, credentialHash);
+                  }
+                }
+              } else if (msg.type === 'status') {
+                debugLog(`⚠️ DIAGNOSTIC: Received server status message: ${msg.payload}`);
+                
+                if (msg.payload === 'connected') {
+                  debugLog(`⚠️ DIAGNOSTIC: Handling 'connected' status message`);
+                  clearStatusDisplay();
+                  
+                  // Clear the "Connecting..." message BEFORE activating session
+                  if (term.current) {
+                    debugLog(`⚠️ DIAGNOSTIC: Clearing connecting message and focusing terminal`);
+                    clearConnectingMessage(term.current);
+                    term.current.focus();
+                  }
+                  
+                  // Now update connection status and activate session
+                  updateConnectionStatusAndExpose('connected');
+                  
+                  // Set session active immediately on connected status
+                  debugLog(`⚠️ DIAGNOSTIC: Setting session active on 'connected' status`);
+                  updateSessionActive(true);
+                  grSuccessfulConnectionReset();
+                  
+                  // Clear the buffer since content has already been written to terminal
+                  clearPtyBuffer();
+                } else if (msg.payload === 'error' || msg.payload === 'disconnected') {
+                  const reason = msg.reason || (msg.payload === 'error' ? 'Server error' : 'Server disconnected');
+                  if (term.current) {
+                    term.current.writeln(`\r\n--- ${msg.payload === 'error' ? 'Error' : 'Session Ended (from server)'}: ${reason} ---`);
+                  }
+                  if (onSessionEnd) onSessionEnd(reason);
+                  updateConnectionStatusAndExpose(msg.payload);
+                  
+                  // Handle session cleanup for disconnected status
+                  if (resumeOnReload && typeof window !== 'undefined') {
+                    const urlDomain = new URL(websocketUrl).host;
+                    window.sessionStorage.removeItem(`ably.cli.sessionId.${urlDomain}`);
+                    window.sessionStorage.removeItem(`ably.cli.credentialHash.${urlDomain}`);
+                    setSessionId(null);
+                  }
+                  
+                  // Show appropriate overlay for disconnected status
+                  if (term.current && msg.payload === 'disconnected') {
+                    const title = "SERVER DISCONNECTED";
+                    const message1 = `Connection closed by server (${msg.code})${msg.reason ? `: ${msg.reason}` : ''}.`;
+                    const message2 = '';
+                    const message3 = `Press ⏎ to reconnect`;
+                    
+                    const lines = [message1, message2, message3];
+                    
+                    statusBoxRef.current = drawBox(term.current, boxColour.red, title, lines, 60);
+                    setOverlay({ 
+                      variant: 'error', 
+                      title, 
+                      lines: lines,
+                      drawer: {
+                        lines: [
+                          'Pro tip: Install the CLI locally for a faster experience with all features',
+                          '    npm install -g @ably/cli'
+                        ]
+                      }
+                    });
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn('[WebSocket] Failed to parse text-based control message:', error);
+            }
+            
+            // Move past this control message
+            currentPos = msgEnd;
+            // Skip the newline if present
+            if (currentPos < filteredData.length && (filteredData[currentPos] === '\n' || filteredData[currentPos] === '\r')) {
+              if (filteredData[currentPos] === '\r' && currentPos + 1 < filteredData.length && filteredData[currentPos + 1] === '\n') {
+                currentPos += 2; // Skip \r\n
+              } else {
+                currentPos += 1; // Skip single \n or \r
+              }
+            }
+          }
+          
+          // Write the regular output to terminal (without control messages)
+          if (regularOutput && term.current) {
+            term.current.write(regularOutput);
+          }
+        } else {
+          // No control messages, write filtered data as-is
+          if (term.current) {
+            term.current.write(filteredData);
+          }
+        }
+        
+        // Always process the data for prompt detection
+        handlePtyData(filteredData);
+      } else if (handshakeFilterState.current.handshakeHandled) {
+        // If handshake was just handled and no data remains, still process empty string
+        // to ensure any state updates happen
+        handlePtyData('');
       }
-      
-      handlePtyData(dataStr);
       
     } catch (e) {
       console.error('[AblyCLITerminal] Error processing message:', e);
@@ -1311,12 +1427,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // initializing terminal instance
       debugLog('[AblyCLITerminal] Initializing Terminal instance.');
       debugLog('⚠️ DIAGNOSTIC: Creating new Terminal instance');
-      term.current = new Terminal({
-        cursorBlink: true, cursorStyle: 'block', fontFamily: 'monospace', fontSize: 14,
-        theme: { background: '#000000', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
-        convertEol: true,
-      });
-      fitAddon.current = new FitAddon();
+      term.current = createTerminal();
+      fitAddon.current = createFitAddon();
       term.current.loadAddon(fitAddon.current);
       
       // Track current input line for autocomplete
@@ -1588,16 +1700,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       });
     }
 
+    // Set max reconnect attempts if provided
+    if (maxReconnectAttempts && maxReconnectAttempts !== grGetMaxAttempts()) {
+      debugLog('[AblyCLITerminal] Setting max reconnect attempts to', maxReconnectAttempts);
+      grSetMaxAttempts(maxReconnectAttempts);
+    }
+
     // Initial connection on mount – only if already visible
     if (componentConnectionStatus === 'initial' && isVisible) {
-      if (maxReconnectAttempts && maxReconnectAttempts !== grGetMaxAttempts()) {
-        // set max attempts
-        debugLog('[AblyCLITerminal] Setting max reconnect attempts to', maxReconnectAttempts);
-        grSetMaxAttempts(maxReconnectAttempts);
-      }
-      // starting connection
-      debugLog('[AblyCLITerminal] Initial effect: Starting connection.');
-      debugLog('⚠️ DIAGNOSTIC: Starting initial connection in mount effect');
       grResetState();
       clearPtyBuffer();
       connectWebSocket();
@@ -1625,6 +1735,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       clearConnectionTimeout(); // Clear any pending connection timeout
     };
   }, []);
+
 
   useEffect(() => {
     // Expose a debug function to get current component state for Playwright
@@ -1836,6 +1947,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       // Only restore session if credentials match AND it's for the same domain
       if (storedSessionId && storedHash === currentHash) {
+        debugLog(`⚠️ DIAGNOSTIC: Restoring sessionId ${storedSessionId} from sessionStorage`);
         setSessionId(storedSessionId);
         console.log('[AblyCLITerminal] Restored session with matching credentials for domain:', urlDomain);
       } else if ((storedSessionId || storedHash) && storedHash !== currentHash) {
@@ -1848,6 +1960,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       
       setCredentialsInitialized(true);
       setSessionIdInitialized(true);
+      debugLog(`⚠️ DIAGNOSTIC: Credentials initialized, restored sessionId: ${storedSessionId || 'none'}`);
     };
     
     initializeSession();
@@ -1983,6 +2096,9 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   // Split-screen Terminal Logic (Step 6.2 - Secondary session)
   // -------------------------------------------------------------
   
+  // Store the latest connectSecondaryWebSocket in a ref to avoid effect re-runs
+  const connectSecondaryWebSocketRef = useRef<(() => void) | null>(null);
+  
   // Connect secondary terminal WebSocket
   const connectSecondaryWebSocket = useCallback(() => {
     // Skip if secondary terminal is not available
@@ -2003,15 +2119,11 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Show connecting animation in secondary terminal
     if (secondaryTerm.current) {
-      // Store the current line position so we can clear it later
-      try {
-        const connectingLine = secondaryTerm.current.buffer?.active?.cursorY ?? 0;
-        secondaryTerm.current.writeln('Connecting to Ably CLI server...');
-        // Store line number for later clearing
-        (secondaryTerm.current as any)._connectingLine = connectingLine;
-      } catch (e) {
-        // If buffer is not ready, just write without tracking line number
-        secondaryTerm.current.writeln('Connecting to Ably CLI server...');
+      // Only clear terminal if this is a new session (not resuming)
+      if (!secondarySessionId) {
+        secondaryTerm.current.clear();
+        // Store the current line position so we can clear it later
+        showConnectingMessage(secondaryTerm.current);
       }
     }
 
@@ -2036,12 +2148,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
       
       // Send auth payload - only include necessary data
-      const payload: any = {
-        environmentVariables: { ABLY_WEB_CLI_MODE: 'true' } 
-      };
-      if (ablyApiKey) payload.apiKey = ablyApiKey;
-      if (ablyAccessToken) payload.accessToken = ablyAccessToken;
-      if (secondarySessionId) payload.sessionId = secondarySessionId;
+      const payload = createAuthPayload(ablyApiKey, ablyAccessToken, secondarySessionId);
       
       if (newSocket.readyState === WebSocket.OPEN) {
         newSocket.send(JSON.stringify(payload));
@@ -2053,43 +2160,12 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // WebSocket message handler with binary framing support
     newSocket.addEventListener('message', async (event) => {
       try {
-        let data: Uint8Array;
-        
-        // Convert all data types to Uint8Array for consistent handling
-        if (typeof event.data === 'string') {
-          data = new TextEncoder().encode(event.data);
-        } else if (event.data instanceof Blob) {
-          const arrayBuffer = await event.data.arrayBuffer();
-          data = new Uint8Array(arrayBuffer);
-        } else if (event.data instanceof ArrayBuffer) {
-          data = new Uint8Array(event.data);
-        } else {
-          // Assume it's already a Uint8Array or similar
-          data = new Uint8Array(event.data);
-        }
+        const data = await messageDataToUint8Array(event.data);
 
-        // Check for control message prefix at byte level
-        const prefixBytes = new TextEncoder().encode(CONTROL_MESSAGE_PREFIX);
-        let isControlMessage = false;
-        
-        if (data.length >= prefixBytes.length) {
-          isControlMessage = true;
-          for (let i = 0; i < prefixBytes.length; i++) {
-            if (data[i] !== prefixBytes[i]) {
-              isControlMessage = false;
-              break;
-            }
-          }
-        }
-
-        if (isControlMessage) {
-          // Extract JSON portion after prefix
-          const jsonBytes = data.slice(prefixBytes.length);
-          const jsonStr = new TextDecoder().decode(jsonBytes);
-          try {
-            const msg = JSON.parse(jsonStr);
-            
-            if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
+        const msg = parseControlMessage(data);
+        if (msg) {
+          // Handle control messages
+          if (msg.type === 'hello' && typeof msg.sessionId === 'string') {
               debugLog(`[Secondary] Received hello. sessionId=${msg.sessionId}`);
               setSecondarySessionId(msg.sessionId);
               
@@ -2100,31 +2176,16 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               
               // Always activate session after hello message
               debugLog(`[Secondary] Activating session after hello message`);
+              
+              // Clear the "Connecting..." message BEFORE activating session
+              if (secondaryTerm.current) {
+                clearConnectingMessage(secondaryTerm.current);
+                secondaryTerm.current.focus();
+              }
+              
               setIsSecondarySessionActive(true);
               updateSecondaryConnectionStatus('connected');
               clearSecondaryStatusDisplay();
-              if (secondaryTerm.current) {
-                // Clear the "Connecting..." message if it exists
-                if ((secondaryTerm.current as any)._connectingLine !== undefined) {
-                  try {
-                    const currentY = secondaryTerm.current.buffer?.active?.cursorY ?? 0;
-                    const currentX = secondaryTerm.current.buffer?.active?.cursorX ?? 0;
-                    const connectingLine = (secondaryTerm.current as any)._connectingLine;
-                    
-                    // Move to the connecting line and clear it
-                    secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                    secondaryTerm.current.write('\x1b[2K'); // Clear entire line
-                    
-                    // Move cursor back to previous position
-                    secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                    
-                    delete (secondaryTerm.current as any)._connectingLine;
-                  } catch (e) {
-                    console.warn('[AblyCLITerminal] [Secondary] Could not clear connecting message:', e);
-                  }
-                }
-                secondaryTerm.current.focus();
-              }
               
               return;
             }
@@ -2134,31 +2195,15 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               if (msg.payload === 'connected') {
                 // Clear any overlay when connected
                 clearSecondaryStatusDisplay();
-                updateSecondaryConnectionStatus('connected');
-                setIsSecondarySessionActive(true);
                 
+                // Clear the "Connecting..." message BEFORE activating session
                 if (secondaryTerm.current) {
-                  // Clear the "Connecting..." message if it exists
-                  if ((secondaryTerm.current as any)._connectingLine !== undefined) {
-                    try {
-                      const currentY = secondaryTerm.current.buffer?.active?.cursorY ?? 0;
-                      const currentX = secondaryTerm.current.buffer?.active?.cursorX ?? 0;
-                      const connectingLine = (secondaryTerm.current as any)._connectingLine;
-                      
-                      // Move to the connecting line and clear it
-                      secondaryTerm.current.write(`\x1b[${connectingLine + 1};1H`); // Move to line
-                      secondaryTerm.current.write('\x1b[2K'); // Clear entire line
-                      
-                      // Move cursor back to previous position
-                      secondaryTerm.current.write(`\x1b[${currentY + 1};${currentX + 1}H`);
-                      
-                      delete (secondaryTerm.current as any)._connectingLine;
-                    } catch (e) {
-                      console.warn('[AblyCLITerminal] [Secondary] Could not clear connecting message:', e);
-                    }
-                  }
+                  clearConnectingMessage(secondaryTerm.current);
                   secondaryTerm.current.focus();
                 }
+                
+                updateSecondaryConnectionStatus('connected');
+                setIsSecondarySessionActive(true);
                 
                 // Don't send a carriage return to the server
                 // The server will handle displaying the prompt
@@ -2191,13 +2236,10 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               return;
             }
             
-            // Check for PTY stream/hijack meta-message
-            if (msg.stream === true && typeof msg.hijack === 'boolean') {
-              debugLog('[AblyCLITerminal] [Secondary] Received PTY meta-message. Ignoring.');
-              return;
-            }
-          } catch (e) {
-            console.error('[Secondary] Failed to parse control message:', e);
+          // Check for PTY stream/hijack meta-message
+          if (msg.stream === true && typeof msg.hijack === 'boolean') {
+            debugLog('[AblyCLITerminal] [Secondary] Received PTY meta-message. Ignoring.');
+            return;
           }
           
           // Control message was handled, return
@@ -2207,42 +2249,53 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
         // Not a control message - process as PTY data
         const dataStr = new TextDecoder().decode(data);
         
-        // Filter PTY meta JSON
-        if (isHijackMetaChunk(dataStr.trim())) {
-          debugLog('[AblyCLITerminal] [Secondary] Suppressed PTY meta-message chunk');
-        } else if (secondaryTerm.current) {
-          secondaryTerm.current.write(dataStr);
-        }
+        // Filter Docker handshake JSON using the shared buffering logic
+        const filteredData = filterDockerHandshake(dataStr, secondaryHandshakeFilterState.current);
         
-        // Use the improved prompt detection logic for the secondary terminal too
-        if (!isSecondarySessionActive) {
-          secondaryPtyBuffer.current += dataStr;
-          
-          // Log received data in a way that makes control chars visible
-          const sanitizedData = dataStr.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
-          debugLog(`[AblyCLITerminal] [Secondary] Received PTY data: "${sanitizedData}"`);
-          
-          if (secondaryPtyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
-            secondaryPtyBuffer.current = secondaryPtyBuffer.current.slice(secondaryPtyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
+        // Only write if we have data after filtering
+        if (filteredData.length > 0) {
+          // Always write PTY data to terminal for the secondary terminal
+          // This ensures character echo works properly
+          if (secondaryTerm.current) {
+            secondaryTerm.current.write(filteredData);
           }
           
-          // Strip ANSI codes
-          const cleanBuf = secondaryPtyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
+          // Use the improved prompt detection logic for the secondary terminal too
+          if (!isSecondarySessionActive) {
+            secondaryPtyBuffer.current += filteredData;
           
-          // Only detect the prompt if it appears at the end of the buffer
-          if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
-            debugLog('[AblyCLITerminal] [Secondary] Shell prompt detected at end of buffer');
-            clearSecondaryStatusDisplay(); // Clear the overlay when prompt is detected
+            // Log received data in a way that makes control chars visible
+            const sanitizedData = filteredData.replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+            debugLog(`[AblyCLITerminal] [Secondary] Received PTY data: "${sanitizedData}"`);
             
-            // Only set active if not already active
-            if (!isSecondarySessionActive) {
-              setIsSecondarySessionActive(true);
-              updateSecondaryConnectionStatus('connected');
-              
-              if (secondaryTerm.current) secondaryTerm.current.focus();
+            if (secondaryPtyBuffer.current.length > MAX_PTY_BUFFER_LENGTH) {
+              secondaryPtyBuffer.current = secondaryPtyBuffer.current.slice(secondaryPtyBuffer.current.length - MAX_PTY_BUFFER_LENGTH);
             }
             
-            secondaryPtyBuffer.current = '';
+            // Strip ANSI codes
+            const cleanBuf = secondaryPtyBuffer.current.replace(/\u001B\[[0-9;]*[mGKHF]/g, '');
+            
+            // Only detect the prompt if it appears at the end of the buffer
+            if (TERMINAL_PROMPT_PATTERN.test(cleanBuf)) {
+              debugLog('[AblyCLITerminal] [Secondary] Shell prompt detected at end of buffer');
+              clearSecondaryStatusDisplay(); // Clear the overlay when prompt is detected
+              
+              // Only set active if not already active
+              if (!isSecondarySessionActive) {
+                setIsSecondarySessionActive(true);
+                updateSecondaryConnectionStatus('connected');
+                
+                // Clear the connecting message if it exists
+                if (secondaryTerm.current) {
+                  clearConnectingMessage(secondaryTerm.current);
+                  secondaryTerm.current.focus();
+                }
+                // Note: We don't need to write the buffer content here because
+                // we're now writing all PTY data immediately as it arrives
+              }
+              
+              secondaryPtyBuffer.current = '';
+            }
           }
         }
       } catch (e) { 
@@ -2318,12 +2371,32 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     
     return newSocket;
   }, [websocketUrl, ablyAccessToken, ablyApiKey, resumeOnReload, secondarySessionId]);
+  
+  // Keep the ref updated with the latest callback
+  connectSecondaryWebSocketRef.current = connectSecondaryWebSocket;
 
   // Initialize the secondary terminal when split mode is enabled
   useEffect(() => {
     // Force a resize event on split mode change to ensure terminals resize correctly
     if (isSplit) {
       window.dispatchEvent(new Event('resize'));
+      // Also trigger a delayed fit for both terminals after split
+      setTimeout(() => {
+        if (fitAddon.current) {
+          try {
+            fitAddon.current.fit();
+          } catch (e) {
+            console.warn("Error fitting primary terminal after split:", e);
+          }
+        }
+        if (secondaryFitAddon.current) {
+          try {
+            secondaryFitAddon.current.fit();
+          } catch (e) {
+            console.warn("Error fitting secondary terminal after split:", e);
+          }
+        }
+      }, 100);
     }
     
     if (!isSplit || !secondaryRootRef.current || secondaryTerm.current) {
@@ -2332,12 +2405,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
 
     // Initialize secondary terminal
     debugLog('[AblyCLITerminal] Initializing secondary Terminal instance.');
-    secondaryTerm.current = new Terminal({
-      cursorBlink: true, cursorStyle: 'block', fontFamily: 'monospace', fontSize: 14,
-      theme: { background: '#000000', foreground: '#abb2bf', cursor: '#528bff', selectionBackground: '#3e4451', selectionForeground: '#ffffff' },
-      convertEol: true,
-    });
-    secondaryFitAddon.current = new FitAddon();
+    secondaryTerm.current = createTerminal();
+    secondaryFitAddon.current = createFitAddon();
     secondaryTerm.current.loadAddon(secondaryFitAddon.current);
     
     // Track current input line for autocomplete (secondary)
@@ -2441,7 +2510,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
           setTimeout(() => {
             debugLog('[AblyCLITerminal] [Secondary] Starting fresh reconnect sequence');
             secondaryPtyBuffer.current = ''; // Clear buffer
-            connectSecondaryWebSocket();
+            secondaryHandshakeFilterState.current = createHandshakeFilterState(); // Reset handshake filter
+            connectSecondaryWebSocketRef.current?.();
           }, 20);
           
           return;
@@ -2474,25 +2544,44 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     // Open terminal in the DOM
     secondaryTerm.current.open(secondaryRootRef.current);
 
-    try {
-      // Do the initial fit only
-      secondaryFitAddon.current.fit();
-      
-      // Initial timeout fit for edge cases
-      setTimeout(() => { 
-        try { 
-          secondaryFitAddon.current?.fit(); 
-        } catch(e) { 
-          console.warn("Error fitting secondary addon initial timeout:", e);
+    // Delay initial fit to ensure DOM is ready
+    setTimeout(() => {
+      try {
+        // Do the initial fit after DOM is ready
+        secondaryFitAddon.current?.fit();
+        
+        // Additional fit after a longer delay for edge cases
+        setTimeout(() => { 
+          try { 
+            secondaryFitAddon.current?.fit(); 
+          } catch(e) { 
+            console.warn("Error fitting secondary addon delayed fit:", e);
+          }
+        }, 200);
+      } catch (e) {
+        console.error("Error during initial secondary terminal fit:", e);
+      }
+    }, 50); // Small delay to ensure terminal is attached to DOM
+
+    // Setup resize handler for secondary terminal
+    const handleResize = () => {
+      if (secondaryFitAddon.current) {
+        try {
+          secondaryFitAddon.current.fit();
+        } catch (e) {
+          console.warn("Error fitting secondary terminal on resize:", e);
         }
-      }, 100);
-    } catch (e) {
-      console.error("Error during initial secondary terminal fit:", e);
-    }
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    secondaryTermCleanupRef.current = () => {
+      window.removeEventListener('resize', handleResize);
+    };
 
     // Connect to WebSocket after terminal is initialized with a delay to avoid rate limits
     const connectTimer = setTimeout(() => {
-      connectSecondaryWebSocket();
+      connectSecondaryWebSocketRef.current?.();
     }, 1000); // 1 second delay to ensure primary connection is established first
 
     // Cleanup function to properly dispose
@@ -2526,7 +2615,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       setSecondarySessionId(null);
       setSecondaryOverlay(null);
     };
-  }, [isSplit, connectSecondaryWebSocket]);
+  }, [isSplit]); // Only re-run when split mode changes, not when connectSecondaryWebSocket changes
 
   // Persist secondary sessionId to localStorage whenever it changes (if enabled)
   useEffect(() => {
@@ -2555,6 +2644,19 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       className="flex flex-col w-full h-full bg-gray-800 text-white overflow-hidden relative"
       style={{ position: 'relative' }}
     >
+      <style>{`
+        .Terminal-container .xterm {
+          padding: 10px;
+          height: 100%;
+          box-sizing: border-box;
+        }
+        .Terminal-container .xterm-viewport {
+          background-color: transparent !important;
+        }
+        .Terminal-container .xterm-screen {
+          height: 100% !important;
+        }
+      `}</style>
       {/* Panes with explicit widths to prevent resize issues */}
       <div 
         ref={outerContainerRef}
@@ -2610,12 +2712,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             className="Terminal-container bg-black relative overflow-hidden"
             style={{ 
               flex: '1',
-              padding: '10px',
+              padding: '0',
               margin: '0',
               boxSizing: 'border-box',
               minHeight: '0', // Important to allow flex container to shrink
               width: '100%',
-              position: 'relative'
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column'
             }}
           >
             {/* Split button – only when not already split and enableSplitScreen is true */}
@@ -2728,12 +2832,14 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               className="Terminal-container bg-black relative overflow-hidden"
               style={{ 
                 flex: '1',
-                padding: '10px',
+                padding: '0',
                 margin: '0',
                 boxSizing: 'border-box',
                 minHeight: '0', // Important to allow flex container to shrink
                 width: '100%',
-                position: 'relative'
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column'
               }}
             >
               {secondaryOverlay && <TerminalOverlay {...secondaryOverlay} />}
