@@ -50,6 +50,15 @@ export const test = base.extend({
           if (process.env.VERBOSE_TESTS) {
             console.log(`[WebSocket] Sent at ${new Date().toISOString()}:`, frame.payload?.toString().slice(0, 100));
           }
+          // Special handling for auth payloads in CI
+          if (process.env.CI && frame.payload) {
+            const payloadStr = frame.payload.toString();
+            if (payloadStr.includes('"apiKey"') || payloadStr.includes('"accessToken"')) {
+              // This is likely an auth payload - check for CI auth token
+              const hasCIToken = payloadStr.includes('"ciAuthToken"');
+              console.log(`[WebSocket] Auth payload sent, CI token included: ${hasCIToken}`);
+            }
+          }
         });
         
         ws.on('framereceived', frame => {

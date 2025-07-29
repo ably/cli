@@ -180,9 +180,19 @@ export function createAuthPayload(
 
   // Check for CI auth token in window object
   // This will be injected during test execution
-  const win = window as any;
+  const win = globalThis as any;
   if (win.__ABLY_CLI_CI_AUTH_TOKEN__) {
     payload.ciAuthToken = win.__ABLY_CLI_CI_AUTH_TOKEN__;
+    // Debug logging in CI
+    if (win.__ABLY_CLI_CI_MODE__ === 'true') {
+      console.log('[CI Auth] Including CI auth token in payload', {
+        tokenLength: payload.ciAuthToken.length,
+        testGroup: win.__ABLY_CLI_TEST_GROUP__ || 'unknown',
+        runId: win.__ABLY_CLI_RUN_ID__ || 'unknown'
+      });
+    }
+  } else if (win.__ABLY_CLI_CI_MODE__ === 'true') {
+    console.warn('[CI Auth] CI mode enabled but no auth token found in window object!');
   }
 
   return payload;
