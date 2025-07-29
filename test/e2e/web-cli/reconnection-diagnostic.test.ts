@@ -10,6 +10,7 @@ declare const window: any;
 import { test, expect, getTestUrl } from './helpers/base-test';
 const log = console.log.bind(console);
 import { authenticateWebCli } from './auth-helper.js';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
@@ -20,6 +21,9 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   test.setTimeout(isCI ? 300_000 : 120_000); // 5 minutes in CI, 2 minutes locally
 
   test('exposes correct debugging information', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     if (isCI) {
       log('Running in CI environment - using extended timeouts');
     }
@@ -81,6 +85,9 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   });
 
   test('captures console logs when debugging enabled', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Set up console log capture before navigation
     await page.addInitScript(() => {
       (window as any).__consoleLogs = [];
@@ -149,6 +156,9 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   });
 
   test('debugging functions persist through reconnection', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Add longer delay to avoid rate limits since this test creates multiple connections
     log('Waiting 10 seconds before test to avoid rate limits...');
     await page.waitForTimeout(10000);
