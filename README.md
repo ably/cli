@@ -5095,6 +5095,10 @@ The MCP server also provides the following resources:
 
 Please see the documentation in [`.cursor/rules/Workflow.mdc`](.cursor/rules/Workflow.mdc) for details on how to contribute to this project, including our mandatory development workflow, testing requirements, and code quality standards.
 
+## For AI Assistants
+
+**IMPORTANT**: See `.claude/CLAUDE.md` for mandatory instructions before making any changes.
+
 ## Quick Development Validation
 
 Before submitting any changes, run our automated validation script to ensure your code meets all requirements:

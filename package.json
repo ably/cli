@@ -46,6 +46,8 @@
     "preversion": "pnpm run prepare",
     "version": "oclif readme && git add README.md",
     "validate": "./scripts/pre-push-validation.sh",
+    "pre-commit": "pnpm validate",
+    "ai-init": "echo 'AI Assistant Instructions:' && cat .claude/CLAUDE.md",
     "cli": "bin/run.js",
     "dev:examples": "pnpm build:packages && pnpm build:examples && cd examples/web-cli && pnpm dev",
     "dev": "pnpm run build && pnpm link . && ably"
