@@ -47,6 +47,26 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
 
     let cleanupInProgress = false;
     const { spaceId } = args;
+    
+    // Handle process termination gracefully
+    const cleanup = async () => {
+      if (!cleanupInProgress) {
+        cleanupInProgress = true;
+        try {
+          if (this.space) {
+            await this.space.leave();
+          }
+          if (this.realtimeClient) {
+            this.realtimeClient.close();
+          }
+        } catch {
+          // Ignore cleanup errors during signal handling
+        }
+      }
+    };
+    
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
 
     try {
       // Create Spaces client using setupSpacesClient
@@ -173,7 +193,14 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
         }
       };
 
-      await this.space.cursors.subscribe('update', cursorUpdateHandler);
+      try {
+        await this.space.cursors.subscribe('update', cursorUpdateHandler);
+      } catch (error) {
+        // If subscription fails, continue anyway
+        if (!this.shouldOutputJson(flags)) {
+          this.debug(`Cursor subscription error: ${error}`);
+        }
+      }
 
       // Wait for 5 seconds (or shorter in test mode)
       const waitTime = this.isTestMode() ? 500 : 5000;
@@ -190,16 +217,49 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       // Unsubscribe from cursor updates
       this.space.cursors.unsubscribe('update', cursorUpdateHandler);
 
-      // Now get all cursors (including locally cached ones) and merge with live updates
-      const allCursors = await this.space.cursors.getAll();
-      
-      // Add any cached cursors that we didn't see in live updates
-      if (Array.isArray(allCursors)) {
-        allCursors.forEach((cursor: CursorUpdate) => {
-          if (cursor.connectionId && !cursorMap.has(cursor.connectionId)) {
-            cursorMap.set(cursor.connectionId, cursor);
+      // Ensure connection is stable before calling getAll()
+      if (this.realtimeClient.connection.state !== 'connected') {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Timed out waiting for connection to stabilize'));
+          }, 5000);
+          
+          this.realtimeClient!.connection.once('connected', () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          
+          if (this.realtimeClient!.connection.state === 'connected') {
+            clearTimeout(timeout);
+            resolve();
           }
         });
+      }
+      
+      // Now get all cursors (including locally cached ones) and merge with live updates
+      try {
+        const allCursors = await this.space.cursors.getAll();
+        
+        // Add any cached cursors that we didn't see in live updates
+        if (Array.isArray(allCursors)) {
+          allCursors.forEach((cursor) => {
+            if (cursor && cursor.connectionId && !cursorMap.has(cursor.connectionId)) {
+              cursorMap.set(cursor.connectionId, cursor as CursorUpdate);
+            }
+          });
+        } else if (allCursors && typeof allCursors === 'object') {
+          // Handle object return type
+          Object.values(allCursors).forEach((cursor) => {
+            if (cursor && cursor.connectionId && !cursorMap.has(cursor.connectionId)) {
+              cursorMap.set(cursor.connectionId, cursor as CursorUpdate);
+            }
+          });
+        }
+      } catch (error) {
+        // If getAll fails due to connection issues, use only the live updates we collected
+        if (!this.shouldOutputJson(flags)) {
+          this.log(chalk.yellow('Warning: Could not fetch all cursors, showing only live updates'));
+        }
       }
       
       const cursors = [...cursorMap.values()];
@@ -289,24 +349,32 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       // Mark that we're done
       cleanupInProgress = true;
     } catch (error) {
+      // Check if this is a connection closed error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isConnectionError = errorMessage.includes('Connection closed') || 
+                               errorMessage.includes('connection') ||
+                               (error as any)?.code === 80017;
+      
       if (this.shouldOutputJson(flags)) {
         this.log(
           this.formatJsonOutput(
             {
-              error: `Error getting cursors: ${error instanceof Error ? error.message : String(error)}`,
+              error: isConnectionError 
+                ? "Connection was closed before operation completed. Please try again."
+                : `Error getting cursors: ${errorMessage}`,
               spaceId: args.spaceId,
               status: "error",
               success: false,
+              connectionError: isConnectionError,
             },
             flags,
           ),
         );
       } else {
-        this.log(
-          chalk.red(
-            `Error getting cursors: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-        );
+        const message = isConnectionError
+          ? "Connection was closed before operation completed. Please try again."
+          : `Error getting cursors: ${errorMessage}`;
+        this.log(chalk.red(message));
       }
     } finally {
       if (!cleanupInProgress) {
@@ -317,19 +385,34 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       try {
         if (this.space) {
           await this.space.leave();
+          // Wait a bit after leaving space
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
-      } catch {
-        // Ignore cleanup errors
+      } catch (error) {
+        // Log but don't throw cleanup errors
+        if (!this.shouldOutputJson(flags)) {
+          this.debug(`Space leave error: ${error}`);
+        }
       }
       
       try {
         if (this.realtimeClient && this.realtimeClient.connection.state !== 'closed') {
+          // Ensure we're not in the middle of any operations
+          if (this.realtimeClient.connection.state === 'connecting' || 
+              this.realtimeClient.connection.state === 'disconnected') {
+            // Wait for connection to stabilize before closing
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
           this.realtimeClient.close();
           // Give the connection a moment to close
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-      } catch {
-        // Ignore cleanup errors
+      } catch (error) {
+        // Log but don't throw cleanup errors
+        if (!this.shouldOutputJson(flags)) {
+          this.debug(`Realtime close error: ${error}`);
+        }
       }
       
       // Force exit if we're done and cleaned up
