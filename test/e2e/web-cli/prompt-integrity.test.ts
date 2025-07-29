@@ -1,5 +1,6 @@
 import { test, expect, getTestUrl, log, reloadPageWithRateLimit } from './helpers/base-test';
 import { incrementConnectionCount, waitForRateLimitIfNeeded } from './test-rate-limiter';
+import { waitForRateLimitLock } from './rate-limit-lock';
 import { 
   waitForTerminalReady, 
   waitForSessionActive, 
@@ -15,6 +16,9 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   test.setTimeout(120_000);
 
   test('Page reload resumes session without injecting extra blank prompts', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) throw new Error('API key required for tests');
     
@@ -105,6 +109,9 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   });
 
   test('Multiple reloads should not accumulate prompts', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
     if (!apiKey) throw new Error('API key required for tests');
     

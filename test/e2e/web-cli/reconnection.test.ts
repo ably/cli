@@ -14,6 +14,7 @@ import {
   waitForTerminalStable,
   executeCommandWithRetry
 } from './wait-helpers.js';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
@@ -84,6 +85,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should handle disconnection and reconnection gracefully', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Enable console logging to see what's happening
     page.on('console', msg => {
       if (msg.type() === 'log' || msg.type() === 'error' || msg.type() === 'warning') {
@@ -217,6 +221,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should show reconnection status messages', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Longer delay to avoid rate limits for reconnection test
     log('Waiting 10 seconds before test to avoid rate limits...');
     await page.waitForTimeout(10000);
@@ -286,6 +293,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should handle disconnection gracefully', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Small delay to avoid rate limits
     log('Waiting 10 seconds before test to avoid rate limits...');
     await page.waitForTimeout(10000);
@@ -340,6 +350,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   });
 
   test('should allow cancelling auto-reconnect via Enter key', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Helper to add WebSocket interception
     await page.addInitScript(() => {
       const NativeWebSocket = window.WebSocket;
@@ -432,6 +445,9 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
 
   // eslint-disable-next-line mocha/no-skipped-tests
   test.skip('should show manual reconnect prompt after max attempts - COMPLEX test with timing issues', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     test.setTimeout(90000); // Extended timeout for multiple reconnection attempts
     
     // Helper to add WebSocket interception

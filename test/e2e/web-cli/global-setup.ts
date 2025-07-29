@@ -2,6 +2,7 @@ import { setupWebServer } from './shared-setup';
 import { setupRateLimiter } from './rate-limit-config';
 import { resetRateLimiter } from './helpers/rate-limiter';
 import { resetConnectionCount } from './test-rate-limiter';
+import { clearRateLimitLock } from './rate-limit-lock';
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -53,6 +54,9 @@ async function globalSetup() {
   
   // Reset connection count for rate limiting
   resetConnectionCount();
+  
+  // Clear any stale rate limit locks
+  clearRateLimitLock();
   
   // Add initial delay to ensure we start with a clean rate limit window
   if (!process.env.SKIP_INITIAL_DELAY) {

@@ -6,6 +6,7 @@ import {
   waitForTerminalStable,
   executeCommandWithRetry
 } from './wait-helpers.js';
+import { waitForRateLimitLock } from './rate-limit-lock';
 
 // Public terminal server endpoint
 const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
@@ -17,6 +18,9 @@ test.describe('Session Resume E2E Tests', () => {
   test.setTimeout(process.env.CI ? 180_000 : 120_000);
 
   test('connects to public server and can resume session after reconnection', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Longer delay to avoid rate limits for session resume test
     log('Waiting 10 seconds before test to avoid rate limits...');
     await page.waitForTimeout(10000);
@@ -204,6 +208,9 @@ test.describe('Session Resume E2E Tests', () => {
   });
 
   test('preserves session across page reload when resumeOnReload is enabled', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
     await authenticateWebCli(page);
     const _terminal = page.locator('.xterm');
@@ -253,6 +260,9 @@ test.describe('Session Resume E2E Tests', () => {
   });
 
   test('handles session timeout gracefully', async ({ page }) => {
+    // Wait for any ongoing rate limit pause
+    await waitForRateLimitLock();
+    
     // Add timeout log
     log('Starting session timeout test...');
     
