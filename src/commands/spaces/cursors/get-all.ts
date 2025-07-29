@@ -255,7 +255,7 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
             }
           });
         }
-      } catch (error) {
+      } catch {
         // If getAll fails due to connection issues, use only the live updates we collected
         if (!this.shouldOutputJson(flags)) {
           this.log(chalk.yellow('Warning: Could not fetch all cursors, showing only live updates'));
@@ -353,7 +353,7 @@ export default class SpacesCursorsGetAll extends SpacesBaseCommand {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const isConnectionError = errorMessage.includes('Connection closed') || 
                                errorMessage.includes('connection') ||
-                               (error as any)?.code === 80017;
+                               (error as Error & { code?: number })?.code === 80017;
       
       if (this.shouldOutputJson(flags)) {
         this.log(

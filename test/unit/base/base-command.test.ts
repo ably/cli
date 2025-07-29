@@ -497,7 +497,8 @@ describe("AblyBaseCommand", function() {
 
       const clientOptions = command.testGetClientOptions(flags);
 
-      expect(clientOptions.endpoint).to.equal("custom-endpoint.example.com");
+      expect(clientOptions.realtimeHost).to.equal("custom-endpoint.example.com");
+      expect(clientOptions.restHost).to.equal("custom-endpoint.example.com");
     });
 
     it("should not set endpoint when flag is not provided", function() {
@@ -507,7 +508,8 @@ describe("AblyBaseCommand", function() {
 
       const clientOptions = command.testGetClientOptions(flags);
 
-      expect(clientOptions.endpoint).to.be.undefined;
+      expect(clientOptions.realtimeHost).to.be.undefined;
+      expect(clientOptions.restHost).to.be.undefined;
     });
 
     it("should work alongside other flags like env and host", function() {
@@ -520,7 +522,7 @@ describe("AblyBaseCommand", function() {
 
       const clientOptions = command.testGetClientOptions(flags);
 
-      expect(clientOptions.endpoint).to.equal("custom-endpoint.example.com");
+      // When both endpoint and host are provided, host takes precedence
       expect(clientOptions.environment).to.equal("sandbox");
       expect(clientOptions.realtimeHost).to.equal("custom-host.example.com");
       expect(clientOptions.restHost).to.equal("custom-host.example.com");
