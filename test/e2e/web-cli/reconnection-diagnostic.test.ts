@@ -156,6 +156,8 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   });
 
   test.skip('debugging functions persist through reconnection', async ({ page }) => {
+    // SKIPPED: This test is flaky due to timing issues with reconnection and debugging state
+    // TODO: Investigate and fix the race condition in debugging state persistence
     // Wait for any ongoing rate limit pause
     await waitForRateLimitLock();
     
