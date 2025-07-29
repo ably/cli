@@ -1,6 +1,6 @@
 import { defineConfig } from 'playwright/test';
 import { sharedConfig } from '../../playwright.shared';
-import path from 'path';
+import path from 'node:path';
 
 // Get test group from environment variable
 const TEST_GROUP = process.env.TEST_GROUP || 'all';
