@@ -186,7 +186,7 @@ describe('apps:delete command', () => {
       })
       .stdin(`${mockAppName}\ny\n`)
       .command(['apps:delete', mockAppId])
-      .skip()
+      .skip() // See: https://github.com/ably/cli/issues/70
       .it('should proceed with deletion when user confirms', ctx => {
         expect(ctx.stdout).to.include('You are about to delete the following app:');
         expect(ctx.stdout).to.include(`App ID: ${mockAppId}`);
@@ -222,7 +222,7 @@ describe('apps:delete command', () => {
       })
       .stdin('wrong-name\n')
       .command(['apps:delete', mockAppId])
-      .skip()
+      .skip() // See: https://github.com/ably/cli/issues/70
       .it('should cancel deletion when app name doesnt match', ctx => {
         expect(ctx.stdout).to.include('You are about to delete the following app:');
         expect(ctx.stdout).to.include('Deletion cancelled - app name did not match');
@@ -256,7 +256,7 @@ describe('apps:delete command', () => {
       })
       .stdin(`${mockAppName}\nn\n`)
       .command(['apps:delete', mockAppId])
-      .skip()
+      .skip() // See: https://github.com/ably/cli/issues/70
       .it('should cancel deletion when user responds no to confirmation', ctx => {
         expect(ctx.stdout).to.include('You are about to delete the following app:');
         expect(ctx.stdout).to.include('Deletion cancelled');

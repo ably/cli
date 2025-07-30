@@ -99,6 +99,7 @@ describe('Interactive Mode - SIGINT Handling', () => {
   it.skip('should handle Ctrl+C on empty prompt - FLAKY in non-TTY environments', function(done) {
     // SKIPPED: This test is flaky in non-TTY environments
     // The interactive mode readline SIGINT handler may not work properly
+    // See: https://github.com/ably/cli/issues/70
     // when stdio is piped instead of connected to a TTY
     this.timeout(timeout);
     
@@ -156,6 +157,7 @@ describe('Interactive Mode - SIGINT Handling', () => {
   it.skip('should handle Ctrl+C with partial command input - FLAKY in non-TTY environments', function(done) {
     // SKIPPED: This test is flaky in non-TTY environments
     // The interactive mode readline SIGINT handler may not work properly
+    // See: https://github.com/ably/cli/issues/70
     // when stdio is piped instead of connected to a TTY
     this.timeout(timeout);
     

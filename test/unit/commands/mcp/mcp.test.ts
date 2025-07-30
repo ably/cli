@@ -182,6 +182,7 @@ describe("mcp commands", function () {
       });
 
       it.skip("should handle basic server lifecycle", async function () {
+        // See: https://github.com/ably/cli/issues/70
         // Mock process.exit to prevent actual exit
         const _originalExit = process.exit;
         const exitSpy = sandbox.stub(process, "exit");

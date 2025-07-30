@@ -12,6 +12,7 @@ test.describe('Web CLI Terminal UI Tests', () => {
   test.describe('Connection Animation', () => {
     // eslint-disable-next-line mocha/no-skipped-tests
     test.skip('should display ASCII box animation during connection - TIMING sensitive test', async ({ page }) => {
+      // See: https://github.com/ably/cli/issues/66
       // Wait for any ongoing rate limit pause
       await waitForRateLimitLock();
       
