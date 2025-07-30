@@ -20,10 +20,15 @@ describe('Control API E2E Workflow Tests', () => {
   before(async function() {
     process.on('SIGINT', forceExit);
 
+    const accessToken = process.env.E2E_ABLY_ACCESS_TOKEN;
+    if (!accessToken) {
+      throw new Error('E2E_ABLY_ACCESS_TOKEN environment variable is required for control API e2e tests');
+    }
+
     // Set up CLI path and API client
     cliPath = './bin/run.js';
     controlApi = new ControlApi({
-      accessToken: process.env.E2E_ABLY_ACCESS_TOKEN!,
+      accessToken,
       logErrors: false
     });
 
