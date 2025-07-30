@@ -445,6 +445,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
 
   // eslint-disable-next-line mocha/no-skipped-tests
   test.skip('should show manual reconnect prompt after max attempts - COMPLEX test with timing issues', async ({ page }) => {
+    // See: https://github.com/ably/cli/issues/66
     // Wait for any ongoing rate limit pause
     await waitForRateLimitLock();
     

@@ -135,6 +135,7 @@ describe('Interactive Command', function() {
 
   // eslint-disable-next-line mocha/no-skipped-tests
   describe.skip('Ctrl+C Handling Integration Tests - FLAKY in CI', function() {
+    // See: https://github.com/ably/cli/issues/70
     it('should exit cleanly with code 130 when Ctrl+C is pressed during command execution', function(done) {
       this.timeout(15000);
       

@@ -161,6 +161,7 @@ describe("LogsConnectionSubscribe", function() {
   it.skip("should handle rewind parameter", async function() {
     // Skip this test - the logs/connection/subscribe command doesn't support rewind parameter
     // Only logs/connection-lifecycle/subscribe supports rewind
+    // See: https://github.com/ably/cli/issues/70
   });
 
   it("should handle connection state changes", async function() {
