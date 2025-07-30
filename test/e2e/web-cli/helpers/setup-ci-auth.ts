@@ -39,7 +39,7 @@ export async function setupCIAuth(page: Page): Promise<void> {
   if (process.env.CI) {
     console.log('[CI Auth] Token generated:', {
       tokenLength: ciAuthToken.length,
-      tokenPrefix: ciAuthToken.slice(0, 20) + '...',
+      tokenGenerated: true,
       testGroup,
       runId
     });
