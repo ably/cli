@@ -17,7 +17,9 @@ describe('Control API Integration Tests', () => {
   before(async function() {
     const accessToken = process.env.E2E_ABLY_ACCESS_TOKEN;
     if (!accessToken) {
-      throw new Error('E2E_ABLY_ACCESS_TOKEN environment variable is required for control API tests');
+      console.log('E2E_ABLY_ACCESS_TOKEN not available, skipping Control API tests');
+      this.skip();
+      return;
     }
     
     controlApi = new ControlApi({
