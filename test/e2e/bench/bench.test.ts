@@ -18,7 +18,10 @@ describe("E2E: ably bench publisher and subscriber", function () {
 
   before(async function () {
     process.on('SIGINT', forceExit);
-    apiKey = process.env.E2E_ABLY_API_KEY!;
+    apiKey = process.env.E2E_ABLY_API_KEY;
+    if (!apiKey) {
+      throw new Error('E2E_ABLY_API_KEY environment variable is required for e2e tests');
+    }
     testChannel = `cli-e2e-bench-${Date.now()}`;
   });
 
