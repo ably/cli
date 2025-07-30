@@ -18,10 +18,6 @@ describe('Control API E2E Workflow Tests', () => {
   };
 
   before(async function() {
-    // Skip if no access token is provided
-    if (!process.env.E2E_ABLY_ACCESS_TOKEN) {
-      this.skip();
-    }
     process.on('SIGINT', forceExit);
 
     // Set up CLI path and API client
