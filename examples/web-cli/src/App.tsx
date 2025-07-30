@@ -7,6 +7,12 @@ import { CliDrawer } from "./components/CliDrawer";
 import { AuthSettings } from "./components/AuthSettings";
 import { AuthScreen } from "./components/AuthScreen";
 
+// Extend Window interface for CLI-specific properties
+interface CliWindow extends Window {
+  __ABLY_CLI_CI_AUTH_TOKEN__?: string;
+  _sessionId?: string;
+}
+
 // Default WebSocket URL - use public endpoint for production, localhost for development
 const DEFAULT_WEBSOCKET_URL = "wss://web-cli.ably.com";
 
@@ -22,8 +28,8 @@ const getWebSocketUrl = () => {
 };
 
 // Get CI auth token if available
-const getCIAuthToken = () => {
-  return (window as any).__ABLY_CLI_CI_AUTH_TOKEN__ || undefined;
+const getCIAuthToken = (): string | undefined => {
+  return (window as CliWindow).__ABLY_CLI_CI_AUTH_TOKEN__;
 };
 
 // Get credentials from various sources
@@ -126,7 +132,7 @@ function App() {
   // Store the latest sessionId globally for E2E tests / debugging
   const handleSessionId = useCallback((id: string) => {
     console.log(`[App] Received sessionId: ${id}`);
-    (window as any)._sessionId = id; // Expose for Playwright
+    (window as CliWindow)._sessionId = id; // Expose for Playwright
   }, []);
 
   const handleConnectionChange = useCallback((status: TermStatus) => {
