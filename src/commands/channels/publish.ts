@@ -42,9 +42,9 @@ export default class ChannelsPublish extends AblyBaseCommand {
     }),
     delay: Flags.integer({
       char: "d",
-      default: 0,
+      default: 40,
       description:
-        "Delay between messages in milliseconds",
+        "Delay between messages in milliseconds (default: 40ms, max 25 msgs/sec)",
     }),
     encoding: Flags.string({
       char: "e",
@@ -87,8 +87,11 @@ export default class ChannelsPublish extends AblyBaseCommand {
   async run(): Promise<void> {
     const { args, flags } = await this.parse(ChannelsPublish);
 
-    // Use REST by default now - only create Realtime client if explicitly requested
-    await (flags.transport === "realtime"
+    // Use Realtime transport by default when publishing multiple messages to ensure ordering
+    const shouldUseRealtime = flags.transport === "realtime" || 
+      (flags.transport !== "rest" && flags.count > 1);
+    
+    await (shouldUseRealtime
       ? this.publishWithRealtime(args, flags)
       : this.publishWithRest(args, flags));
   }
@@ -262,8 +265,6 @@ export default class ChannelsPublish extends AblyBaseCommand {
       () => errorCount,
     );
 
-    const publishes = [];
-
     for (let i = 0; i < count; i++) {
       if (delay > 0 && i > 0) {
         // Wait for the specified delay before publishing the next message
@@ -275,8 +276,9 @@ export default class ChannelsPublish extends AblyBaseCommand {
         flags,
         messageIndex,
       );
-      const published = publisher(message)
-      .then(() => {
+      
+      try {
+        await publisher(message);
         publishedCount++;
         const result = { index: messageIndex, message, success: true };
         results.push(result);
@@ -296,9 +298,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
             `${chalk.green("✓")} Message ${messageIndex} published successfully to channel "${args.channel}".`,
           );
         }
-
-      })
-      .catch((error) => {
+      } catch (error) {
         errorCount++;
         const errorMsg = error instanceof Error ? error.message : String(error);
         const result = { error: errorMsg, index: messageIndex, success: false };
@@ -318,15 +318,7 @@ export default class ChannelsPublish extends AblyBaseCommand {
             `${chalk.red("✗")} Error publishing message ${messageIndex}: ${errorMsg}`,
           );
         }
-      })
-
-      publishes.push(published);
-    }
-
-    try {
-      await Promise.all(publishes);
-    } catch {
-      // noop
+      }
     }
 
     this.clearProgressIndicator();

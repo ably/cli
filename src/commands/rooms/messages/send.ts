@@ -62,9 +62,9 @@ export default class MessagesSend extends ChatBaseCommand {
     }),
     delay: Flags.integer({
       char: "d",
-      default: 0,
+      default: 40,
       description:
-        "Delay between messages in milliseconds (min 10ms when count > 1)",
+        "Delay between messages in milliseconds (default: 40ms, max 25 msgs/sec)",
     }),
     metadata: Flags.string({
       description: "Additional metadata for the message (JSON format)",
@@ -220,13 +220,13 @@ export default class MessagesSend extends ChatBaseCommand {
       let { delay } = flags;
 
       // Enforce minimum delay when sending multiple messages
-      if (count > 1 && delay < 10) {
-        delay = 10;
+      if (count > 1 && delay < 40) {
+        delay = 40;
         this.logCliEvent(
           flags,
           "message",
           "minDelayEnforced",
-          "Using minimum delay of 10ms for multiple messages",
+          "Using minimum delay of 40ms for multiple messages",
           { delay },
         );
       }
