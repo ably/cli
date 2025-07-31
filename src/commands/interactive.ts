@@ -233,7 +233,7 @@ export default class Interactive extends Command {
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: '$ ',
+      prompt: 'ably> ',
       terminal: true,
       completer: this.completer.bind(this)
     });

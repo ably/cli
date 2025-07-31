@@ -44,8 +44,8 @@ export default class CustomHelp extends Help {
   private stripAblyPrefix(text: string): string {
     if (!this.interactiveMode) return text;
     
-    // Replace "$ ably " with "$ " in examples
-    text = text.replaceAll('$ ably ', '$ ');
+    // Replace "$ ably " with "ably> " in examples
+    text = text.replaceAll('$ ably ', 'ably> ');
     
     // Replace "ably " at the beginning of lines (for usage examples)
     text = text.replaceAll(/^ably /gm, '');
@@ -240,7 +240,7 @@ export default class CustomHelp extends Help {
       chalk.bold(titleText),
       "",
       `${chalk.bold("USAGE")}`,
-      `  $ ${this.interactiveMode ? '' : config.bin + ' '}[COMMAND]`,
+      `  ${this.interactiveMode ? 'ably> ' : '$ ' + config.bin + ' '}[COMMAND]`,
       "",
       chalk.bold("COMMANDS"), // Use the desired single heading
     ];
@@ -309,7 +309,7 @@ export default class CustomHelp extends Help {
           chalk.yellow(
             "You are not logged in. Run the following command to log in:",
           ),
-          chalk.cyan(`  $ ${cmdPrefix}accounts login`),
+          chalk.cyan(`  ${this.interactiveMode ? 'ably> ' : '$ '}${cmdPrefix}accounts login`),
         );
       }
     }
@@ -382,8 +382,8 @@ export default class CustomHelp extends Help {
       
       // In interactive mode, remove the 'ably' prefix from usage examples
       if (process.env.ABLY_INTERACTIVE_MODE === 'true') {
-        // Replace '$ ably ' with '$ ' in usage and examples
-        output = output.replaceAll('$ ably ', '$ ');
+        // Replace '$ ably ' with 'ably> ' in usage and examples
+        output = output.replaceAll('$ ably ', 'ably> ');
       }
       
       // Fix COMMANDS section formatting - replace colons with spaces
