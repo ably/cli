@@ -8,8 +8,8 @@ import {
 } from './wait-helpers.js';
 import { waitForRateLimitLock } from './rate-limit-lock';
 
-// Terminal server endpoint - configurable for local testing
-const PUBLIC_TERMINAL_SERVER_URL = process.env.ABLY_CLI_WEBSOCKET_URL || 'wss://web-cli.ably.com';
+// Terminal server endpoint - use environment variable or default to public server
+const TERMINAL_SERVER_URL = process.env.TERMINAL_SERVER_URL || process.env.ABLY_CLI_WEBSOCKET_URL || 'wss://web-cli.ably.com';
 
 // Removed _waitForPrompt - using wait helpers instead
 
@@ -31,7 +31,7 @@ test.describe('Session Resume E2E Tests', () => {
       throw new Error('E2E_ABLY_API_KEY or ABLY_API_KEY environment variable is required');
     }
     
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
     
     // Authenticate first
     await authenticateWebCli(page, apiKey);
@@ -211,7 +211,7 @@ test.describe('Session Resume E2E Tests', () => {
     // Wait for any ongoing rate limit pause
     await waitForRateLimitLock();
     
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
     await authenticateWebCli(page);
     const _terminal = page.locator('.xterm');
 
@@ -386,7 +386,7 @@ test.describe('Session Resume E2E Tests', () => {
     // Add timeout log
     log('Starting session timeout test...');
     
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}`, { waitUntil: 'networkidle' });
     await authenticateWebCli(page);
     const _terminal = page.locator('.xterm');
 
