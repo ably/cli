@@ -7,7 +7,7 @@ export default class MessagesIndex extends Command {
   static override examples = [
     '$ ably rooms messages send my-room "Hello world!"',
     "$ ably rooms messages subscribe my-room",
-    "$ ably rooms messages get my-room",
+    "$ ably rooms messages history my-room",
     '$ ably rooms messages reactions add my-room "message-id" "👍"',
   ];
 
@@ -21,7 +21,7 @@ export default class MessagesIndex extends Command {
       "  ably rooms messages subscribe  - Subscribe to messages in a chat room",
     );
     this.log(
-      "  ably rooms messages get        - Get historical messages from a chat room",
+      "  ably rooms messages history    - Get historical messages from a chat room",
     );
     this.log(
       "  ably rooms messages reactions  - Work with message reactions in a chat room",

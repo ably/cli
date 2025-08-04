@@ -4,10 +4,10 @@ import chalk from "chalk";
 
 import { ChatBaseCommand } from "../../../chat-base-command.js";
 
-export default class MessagesGet extends ChatBaseCommand {
+export default class MessagesHistory extends ChatBaseCommand {
   static override args = {
     roomId: Args.string({
-      description: "The room ID to get messages from",
+      description: "The room ID to get message history from",
       required: true,
     }),
   };
@@ -16,12 +16,12 @@ export default class MessagesGet extends ChatBaseCommand {
     "Get historical messages from an Ably Chat room";
 
   static override examples = [
-    "$ ably rooms messages get my-room",
-    '$ ably rooms messages get --api-key "YOUR_API_KEY" my-room',
-    "$ ably rooms messages get --limit 50 my-room",
-    "$ ably rooms messages get --show-metadata my-room",
-    "$ ably rooms messages get my-room --json",
-    "$ ably rooms messages get my-room --pretty-json",
+    "$ ably rooms messages history my-room",
+    '$ ably rooms messages history --api-key "YOUR_API_KEY" my-room',
+    "$ ably rooms messages history --limit 50 my-room",
+    "$ ably rooms messages history --show-metadata my-room",
+    "$ ably rooms messages history my-room --json",
+    "$ ably rooms messages history my-room --pretty-json",
   ];
 
   static override flags = {
@@ -40,7 +40,7 @@ export default class MessagesGet extends ChatBaseCommand {
   private ablyClient: Ably.Realtime | null = null;
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(MessagesGet);
+    const { args, flags } = await this.parse(MessagesHistory);
 
     try {
       // Create Chat client

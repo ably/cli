@@ -66,7 +66,7 @@ $ ably-interactive
 
 - **Command history**: Previous commands are saved and can be accessed with up/down arrows
 - **Tab completion**: Full support for command and flag completion
-- **Ctrl+C handling**: 
+- **Ctrl+C handling**:
   - Single Ctrl+C interrupts the current command and returns to prompt
   - Double Ctrl+C (within 500ms) force quits the shell
 - **No "ably" prefix needed**: Commands can be typed directly (e.g., just `channels list` instead of `ably channels list`)
@@ -176,7 +176,7 @@ See [MCP Server section](#mcp-server) for more details on how to use the MCP Ser
 * [`ably rooms`](#ably-rooms)
 * [`ably rooms list`](#ably-rooms-list)
 * [`ably rooms messages`](#ably-rooms-messages)
-* [`ably rooms messages get ROOMID`](#ably-rooms-messages-get-roomid)
+* [`ably rooms messages history ROOMID`](#ably-rooms-messages-history-roomid)
 * [`ably rooms messages reactions`](#ably-rooms-messages-reactions)
 * [`ably rooms messages reactions remove ROOMID MESSAGESERIAL REACTION`](#ably-rooms-messages-reactions-remove-roomid-messageserial-reaction)
 * [`ably rooms messages reactions send ROOMID MESSAGESERIAL REACTION`](#ably-rooms-messages-reactions-send-roomid-messageserial-reaction)
@@ -3546,24 +3546,24 @@ EXAMPLES
 
   $ ably rooms messages subscribe my-room
 
-  $ ably rooms messages get my-room
+  $ ably rooms messages history my-room
 
   $ ably rooms messages reactions add my-room "message-id" "👍"
 ```
 
 _See code: [src/commands/rooms/messages/index.ts](https://github.com/ably/cli/blob/v0.10.0/src/commands/rooms/messages/index.ts)_
 
-## `ably rooms messages get ROOMID`
+## `ably rooms messages history ROOMID`
 
 Get historical messages from an Ably Chat room
 
 ```
 USAGE
-  $ ably rooms messages get ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
+  $ ably rooms messages history ROOMID [--access-token <value>] [--api-key <value>] [--client-id <value>] [--env <value>]
     [--endpoint <value>] [--host <value>] [--json | --pretty-json] [--token <value>] [-v] [-l <value>] [--show-metadata]
 
 ARGUMENTS
-  ROOMID  The room ID to get messages from
+  ROOMID  The room ID to get message history from
 
 FLAGS
   -l, --limit=<value>         [default: 20] Maximum number of messages to retrieve
@@ -3584,20 +3584,20 @@ DESCRIPTION
   Get historical messages from an Ably Chat room
 
 EXAMPLES
-  $ ably rooms messages get my-room
+  $ ably rooms messages history my-room
 
-  $ ably rooms messages get --api-key "YOUR_API_KEY" my-room
+  $ ably rooms messages history --api-key "YOUR_API_KEY" my-room
 
-  $ ably rooms messages get --limit 50 my-room
+  $ ably rooms messages history --limit 50 my-room
 
-  $ ably rooms messages get --show-metadata my-room
+  $ ably rooms messages history --show-metadata my-room
 
-  $ ably rooms messages get my-room --json
+  $ ably rooms messages history my-room --json
 
-  $ ably rooms messages get my-room --pretty-json
+  $ ably rooms messages history my-room --pretty-json
 ```
 
-_See code: [src/commands/rooms/messages/get.ts](https://github.com/ably/cli/blob/v0.10.0/src/commands/rooms/messages/get.ts)_
+_See code: [src/commands/rooms/messages/history.ts](https://github.com/ably/cli/blob/v0.10.0/src/commands/rooms/messages/history.ts)_
 
 ## `ably rooms messages reactions`
 
@@ -5097,7 +5097,7 @@ Please see the documentation in [`.cursor/rules/Workflow.mdc`](.cursor/rules/Wor
 
 ## For AI Assistants
 
-**IMPORTANT**: See [`.claude/CLAUDE.md`](./.claude/CLAUDE.md) for mandatory instructions before making any changes.  
+**IMPORTANT**: See [`.claude/CLAUDE.md`](./.claude/CLAUDE.md) for mandatory instructions before making any changes.
 If you are an AI assistant, start with [`AI_START_HERE.md`](./AI_START_HERE.md) first.
 
 ## Quick Development Validation
