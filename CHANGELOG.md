@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2025-08-08
+
+### Added
+
+-  Added an AI_START_HERE.md file.
+
+### Changed
+
+- For chat rooms, `rooms messages get` is now `rooms messages history`
+
+### Fixed
+
+- Runtime errors now return more useful error messages when environment variables are not set.
+- Fixed spaces cursor connection stability issues.
+- Fixed various Web CLI terminal connection and UI issues.
+
+### Improved
+
+- Improved the terminal session and resume stability in message handling.
+- Improved functionality of the API key selection flow.
+- Improved AI assistant instructions.
+
 ## [0.10.0] - 2025-07-24
 
 ### Added
@@ -13,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- For chat rooms, `rooms messages reactions add` is now `rooms messages reactions send` 
+- For chat rooms, `rooms messages reactions add` is now `rooms messages reactions send`
 
 ### Fixed
 
