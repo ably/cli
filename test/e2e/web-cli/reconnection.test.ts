@@ -16,8 +16,8 @@ import {
 } from './wait-helpers.js';
 import { waitForRateLimitLock } from './rate-limit-lock';
 
-// Public terminal server endpoint
-const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+// Terminal server endpoint - use environment variable or default to public server
+const TERMINAL_SERVER_URL = process.env.TERMINAL_SERVER_URL || 'wss://web-cli.ably.com';
 
 async function _waitForPrompt(page: any, terminalSelector: string, timeout = 60000): Promise<void> {
   log('Waiting for terminal prompt...');
@@ -78,7 +78,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
   test.setTimeout(isCI ? 300_000 : 120_000); // 5 minutes in CI, 2 minutes locally
 
   test.beforeEach(() => {
-    log('Using Public Terminal Server:', PUBLIC_TERMINAL_SERVER_URL);
+    log('Using Public Terminal Server:', TERMINAL_SERVER_URL);
     if (isCI) {
       log('Running in CI environment - using extended timeouts');
     }
@@ -108,7 +108,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     log('Navigating to Web CLI app with debugging enabled...');
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
 
     // 3. Wait for terminal to be ready
     const terminalSelector = '.xterm';
@@ -235,7 +235,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     // Navigate with API key included
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
     
     // Wait for terminal
     const terminalSelector = '.xterm';
@@ -307,7 +307,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     // Navigate with API key included
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
     
     // Wait for terminal
     const terminalSelector = '.xterm';
@@ -386,7 +386,7 @@ test.describe('Web CLI Reconnection E2E Tests', () => {
     
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
     
     const terminalSelector = '.xterm-viewport';
     const statusSelector = '.status';

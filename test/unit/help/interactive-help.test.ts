@@ -28,10 +28,10 @@ describe('Interactive Mode Help Formatting', function() {
       help = new CustomHelp(config);
     });
     
-    it('should strip "$ ably " prefix from examples', function() {
+    it('should replace "$ ably " with "ably> " in examples', function() {
       const input = '$ ably channels publish my-channel "Hello"';
       const result = help.formatHelpOutput(input);
-      expect(result).to.equal('$ channels publish my-channel "Hello"');
+      expect(result).to.equal('ably> channels publish my-channel "Hello"');
     });
     
     it('should strip "ably " at the beginning of lines', function() {
@@ -52,8 +52,8 @@ $ ably channels publish test "msg1"
 $ ably channels publish test "msg2"
   ably apps list`;
       const expected = `Examples:
-$ channels publish test "msg1"
-$ channels publish test "msg2"
+ably> channels publish test "msg1"
+ably> channels publish test "msg2"
   apps list`;
       const result = help.formatHelpOutput(input);
       expect(result).to.equal(expected);
@@ -70,12 +70,12 @@ $ channels publish test "msg2"
   });
   
   describe('USAGE section', function() {
-    it('should show "$ [COMMAND]" in interactive mode', function() {
+    it('should show "ably> [COMMAND]" in interactive mode', function() {
       process.env.ABLY_INTERACTIVE_MODE = 'true';
       help = new CustomHelp(config);
       
       const output = help.formatStandardRoot();
-      expect(output).to.include('$ [COMMAND]');
+      expect(output).to.include('ably> [COMMAND]');
       expect(output).to.not.include('$ ably [COMMAND]');
     });
     
@@ -117,7 +117,7 @@ $ channels publish test "msg2"
       
       const output = help.formatStandardRoot();
       if (output.includes('login')) {
-        expect(output).to.include('$ accounts login');
+        expect(output).to.include('ably> accounts login');
         expect(output).to.not.include('$ ably accounts login');
       }
     });

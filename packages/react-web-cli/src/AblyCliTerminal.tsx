@@ -59,7 +59,7 @@ function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (..
 export type ConnectionStatus = 'initial' | 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
 // Prompts that indicate the terminal is ready for input
-const TERMINAL_PROMPT_IDENTIFIER = '$ '; // Basic prompt
+const TERMINAL_PROMPT_IDENTIFIER = 'ably> '; // Basic prompt
 
 // Shared CLI installation tip
 const CLI_INSTALL_TIP = {
@@ -555,7 +555,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // not somewhere in the middle of previous output
       // Also check for common Ably CLI prompts
       const hasShellPrompt = TERMINAL_PROMPT_PATTERN.test(cleanBuf);
-      const hasAblyPrompt = cleanBuf.endsWith('$ ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('ably> ');
+      const hasAblyPrompt = cleanBuf.endsWith('ably> ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('$ ');
       
       debugLog(`⚠️ DIAGNOSTIC: Checking for prompt. hasShellPrompt: ${hasShellPrompt}, hasAblyPrompt: ${hasAblyPrompt}, buffer end: "${cleanBuf.slice(-20)}"`);
       
@@ -770,7 +770,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       // Only detect the prompt if it appears at the end of the buffer
       // Also check for common Ably CLI prompts
       const hasShellPrompt = TERMINAL_PROMPT_PATTERN.test(cleanBuf);
-      const hasAblyPrompt = cleanBuf.endsWith('$ ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('ably> ');
+      const hasAblyPrompt = cleanBuf.endsWith('ably> ') || cleanBuf.endsWith('> ') || cleanBuf.endsWith('$ ');
       
       if (hasShellPrompt || hasAblyPrompt) {
         debugLog('[AblyCLITerminal] [Secondary] Prompt detected – session active');

@@ -15,8 +15,8 @@ type _BrowserContext = {
 // Constants
 const DRAWER_OPEN_KEY = "ablyCliDrawerOpen";
 
-// Public terminal server endpoint
-const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+// Terminal server endpoint - use environment variable or default to public server
+const TERMINAL_SERVER_URL = process.env.TERMINAL_SERVER_URL || 'wss://web-cli.ably.com';
 
 /**
  * Wait for the terminal prompt to appear, indicating the terminal is ready
@@ -80,7 +80,7 @@ test.describe('Web CLI E2E Tests', () => {
     await waitForTerminalStable(page, 2000);
     
     // Use the public terminal server
-    const pageUrl = `${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}`;
+    const pageUrl = `${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}`;
     log(`Navigating to: ${pageUrl}`);
 
     await page.goto(pageUrl);

@@ -13,7 +13,7 @@ import { authenticateWebCli } from './auth-helper.js';
 import { waitForRateLimitLock } from './rate-limit-lock';
 
 // Public terminal server endpoint
-const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+const TERMINAL_SERVER_URL = process.env.TERMINAL_SERVER_URL || 'wss://web-cli.ably.com';
 
 test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
   // Increase timeout significantly for CI environments
@@ -34,7 +34,7 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
 
     // 1. Navigate to the Web CLI app with debugging enabled
     log('Navigating to Web CLI app with debugging enabled...');
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true`);
 
     // 2. Authenticate using API key
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
@@ -124,7 +124,7 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
     });
     
     // Navigate with debugging enabled
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true`);
 
     // Authenticate
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
@@ -167,7 +167,7 @@ test.describe('Web CLI Reconnection Diagnostic E2E Tests', () => {
     await page.waitForTimeout(15000);
     
     // Navigate with debugging enabled
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true`);
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true`);
 
     // Authenticate
     const apiKey = process.env.E2E_ABLY_API_KEY || process.env.ABLY_API_KEY;
