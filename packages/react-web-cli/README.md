@@ -89,6 +89,42 @@ export default function MyTerminal() {
 | `maxReconnectAttempts` | number | No | 15 | Maximum reconnection attempts before giving up |
 | `resumeOnReload` | boolean | No | false | Whether to attempt to resume an existing session after page reload |
 | `enableSplitScreen` | boolean | No | false | Enable split-screen mode with a second independent terminal |
+| `showSplitControl` | boolean | No | true | Show the built-in split button. Set to false when controlling splits programmatically |
+
+### Programmatic Split-Screen Control
+
+The component exposes an imperative API via `ref` to control split-screen without using the built-in button:
+
+```tsx
+import { useRef } from "react";
+import { AblyCliTerminal, type AblyCliTerminalHandle } from "@ably/react-web-cli";
+
+export default function MyTerminal() {
+  const termRef = useRef<AblyCliTerminalHandle>(null);
+
+  return (
+    <div style={{ height: 500 }}>
+      <div style={{ marginBottom: 8 }}>
+        <button onClick={() => termRef.current?.openSplit()}>Open split</button>
+        <button onClick={() => termRef.current?.toggleSplit()} style={{ marginLeft: 8 }}>
+          Toggle split
+        </button>
+        <button onClick={() => termRef.current?.closeSplit()} style={{ marginLeft: 8 }}>
+          Close split
+        </button>
+      </div>
+      <AblyCliTerminal
+        ref={termRef}
+        websocketUrl="wss://web-cli.ably.com"
+        ablyApiKey="YOUR_ABLY_API_KEY"
+        enableSplitScreen
+        showSplitControl={false}
+        initialCommand="ably --version"
+      />
+    </div>
+  );
+}
+```
 
 *\* `ablyApiKey` is mandatory.  `ablyAccessToken` is optional and only needed for Control-API commands (e.g. accounts, apps, keys).
 

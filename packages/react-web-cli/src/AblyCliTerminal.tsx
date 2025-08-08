@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useImperativeHandle } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -96,6 +96,11 @@ export interface AblyCliTerminalProps {
    * A split icon will be displayed in the top-right corner when in single-pane mode.
    */
   enableSplitScreen?: boolean;
+  /**
+   * Controls visibility of the built-in split button inside the component UI.
+   * Defaults to true. Set to false when controlling splits programmatically.
+   */
+  showSplitControl?: boolean;
 }
 
 // Use shared debug logging
@@ -114,7 +119,15 @@ if (typeof window !== 'undefined') {
 // Import isHijackMetaChunk from shared module for backward compatibility
 import { isHijackMetaChunk } from './terminal-shared';
 
-export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
+export interface AblyCliTerminalHandle {
+  openSplit: () => void;
+  closeSplit: () => void;
+  toggleSplit: () => void;
+  setSplitPosition: (percent: number) => void;
+  isSplit: () => boolean;
+}
+
+export const AblyCliTerminal = React.forwardRef<AblyCliTerminalHandle, AblyCliTerminalProps>(({
   websocketUrl,
   ablyAccessToken,
   ablyApiKey,
@@ -125,7 +138,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   resumeOnReload,
   maxReconnectAttempts,
   enableSplitScreen = false,
-}) => {
+  showSplitControl = true,
+}, ref) => {
   
   const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -150,6 +164,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     }
     return false;
   });
+
+  
   
   /**
    * `splitPosition` controls the relative width of the left pane as a percentage (0-100)
@@ -358,6 +374,45 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
     }, 50);
   }, [resumeOnReload]);
+
+  // Expose imperative API for controlling split-screen externally
+  useImperativeHandle(ref, () => ({
+    openSplit: () => {
+      if (!isSplit && enableSplitScreen) {
+        handleSplitScreenWithSecondTerminal();
+      }
+    },
+    closeSplit: () => {
+      if (isSplit) {
+        handleCloseSplit();
+      }
+    },
+    toggleSplit: () => {
+      if (isSplit) {
+        handleCloseSplit();
+      } else if (enableSplitScreen) {
+        handleSplitScreenWithSecondTerminal();
+      }
+    },
+    setSplitPosition: (percent: number) => {
+      const clamped = Math.max(0, Math.min(100, percent));
+      setSplitPosition(clamped);
+      if (resumeOnReload && typeof window !== 'undefined') {
+        window.sessionStorage.setItem('ably.cli.splitPosition', String(clamped));
+      }
+      // Trigger a resize so fit addons re-measure
+      if (typeof window !== 'undefined') {
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+      }
+    },
+    isSplit: () => isSplit,
+  }), [
+    isSplit,
+    enableSplitScreen,
+    resumeOnReload,
+    handleSplitScreenWithSecondTerminal,
+    handleCloseSplit,
+  ]);
 
   // Track the current sessionId received from the server (if any)
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -2644,7 +2699,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
             }}
           >
             {/* Split button – only when not already split and enableSplitScreen is true */}
-            {!isSplit && enableSplitScreen && (
+            {!isSplit && enableSplitScreen && showSplitControl && (
               <button
                 onClick={handleSplitScreen}
                 aria-label="Split terminal"
@@ -2770,6 +2825,6 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export default AblyCliTerminal;
