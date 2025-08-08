@@ -104,7 +104,7 @@ The CLI uses topics (space-separated) to group related commands logically.
 - `$ ably rooms list`: Lists chat rooms (filters channel enumeration).
 - `$ ably rooms messages send ROOMID TEXT`: Sends a chat message. Supports `--count`, `--delay`, interpolation.
 - `$ ably rooms messages subscribe ROOMID`: Subscribes to chat messages. Runs until terminated.
-- `$ ably rooms messages get ROOMID`: Gets historical chat messages.
+- `$ ably rooms messages history ROOMID`: Gets historical chat messages.
 - `$ ably rooms occupancy get ROOMID`: Gets current occupancy for a room.
 - `$ ably rooms occupancy subscribe ROOMID`: Subscribes to live room occupancy. Runs until terminated.
 - `$ ably rooms presence enter ROOMID`: Enters presence in a room and stays present. Runs until terminated.

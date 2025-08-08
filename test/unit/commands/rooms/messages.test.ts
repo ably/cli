@@ -5,7 +5,7 @@ import * as Ably from "ably";
 
 import RoomsMessagesSend from "../../../../src/commands/rooms/messages/send.js";
 import RoomsMessagesSubscribe from "../../../../src/commands/rooms/messages/subscribe.js";
-import RoomsMessagesGet from "../../../../src/commands/rooms/messages/get.js";
+import RoomsMessagesHistory from "../../../../src/commands/rooms/messages/history.js";
 
 // Testable subclass for rooms messages send command
 class TestableRoomsMessagesSend extends RoomsMessagesSend {
@@ -75,8 +75,8 @@ class TestableRoomsMessagesSubscribe extends RoomsMessagesSubscribe {
   } as any;
 }
 
-// Testable subclass for rooms messages get command
-class TestableRoomsMessagesGet extends RoomsMessagesGet {
+// Testable subclass for rooms messages history command
+class TestableRoomsMessagesHistory extends RoomsMessagesHistory {
   private _parseResult: any;
   public mockChatClient: any;
   public mockRealtimeClient: any;
@@ -129,7 +129,7 @@ describe("rooms messages commands", function () {
 
     beforeEach(function () {
       command = new TestableRoomsMessagesSend([], mockConfig);
-      
+
       sendStub = sandbox.stub().resolves();
       mockMessages = {
         send: sendStub,
@@ -189,11 +189,11 @@ describe("rooms messages commands", function () {
 
       // Should eventually send 3 messages
       expect(sendStub.callCount).to.equal(3);
-      
+
       // Check first and last calls for interpolation
       const firstCall = sendStub.getCall(0);
       const lastCall = sendStub.getCall(2);
-      
+
       expect(firstCall.args[0].text).to.equal("Message 1");
       expect(lastCall.args[0].text).to.equal("Message 3");
     });
@@ -240,7 +240,7 @@ describe("rooms messages commands", function () {
 
     beforeEach(function () {
       command = new TestableRoomsMessagesSubscribe([], mockConfig);
-      
+
       subscribeStub = sandbox.stub();
       mockMessages = {
         subscribe: subscribeStub,
@@ -296,28 +296,28 @@ describe("rooms messages commands", function () {
 
       // Since subscribe runs indefinitely, we'll test the setup
       const runPromise = command.run();
-      
+
       // Give it a moment to set up
       await new Promise(resolve => setTimeout(resolve, 50));
-      
+
       expect(command.mockChatClient.rooms.get.calledWith("test-room")).to.be.true;
       expect(mockRoom.attach.calledOnce).to.be.true;
       expect(subscribeStub.calledOnce).to.be.true;
-      
+
       // Cleanup - this would normally be done by SIGINT
       command.mockRealtimeClient.close();
     });
   });
 
-  describe("rooms messages get (history)", function () {
-    let command: TestableRoomsMessagesGet;
+  describe("rooms messages history", function () {
+    let command: TestableRoomsMessagesHistory;
     let mockRoom: any;
     let mockMessages: any;
     let getStub: sinon.SinonStub;
 
     beforeEach(function () {
-      command = new TestableRoomsMessagesGet([], mockConfig);
-      
+      command = new TestableRoomsMessagesHistory([], mockConfig);
+
       getStub = sandbox.stub().resolves({
         items: [
           {
@@ -326,7 +326,7 @@ describe("rooms messages commands", function () {
             timestamp: new Date(Date.now() - 10000),
           },
           {
-            text: "Historical message 2", 
+            text: "Historical message 2",
             clientId: "client2",
             timestamp: new Date(Date.now() - 5000),
           },
