@@ -105,6 +105,7 @@ vi.mock('@xterm/addon-fit', () => ({
 // Now import the modules AFTER mocks are defined
 import * as GlobalReconnect from './global-reconnect';
 import { AblyCliTerminal } from './AblyCliTerminal'; // Import now
+import type { AblyCliTerminalHandle } from './AblyCliTerminal';
 import * as TerminalBoxModule from './terminal-box'; // Import to access mocked colours if needed for assertions
 
 // Mock use-terminal-visibility
@@ -1164,6 +1165,42 @@ describe('AblyCliTerminal - Connection Status and Animation', () => {
     
     // Split button should not be present
     expect(screen.queryByRole('button', { name: /Split terminal/i })).toBeNull();
+  });
+
+  test('imperative handle can toggle split-screen externally when enabled', async () => {
+    const ref = React.createRef<AblyCliTerminalHandle>();
+
+    render(
+      <AblyCliTerminal
+        ref={ref}
+        websocketUrl="wss://web-cli.ably.com"
+        ablyAccessToken="test-token"
+        ablyApiKey="test-key"
+        enableSplitScreen={true}
+        showSplitControl={false}
+      />
+    );
+
+    // Initially, no secondary container
+    expect(screen.queryByTestId('terminal-container-secondary')).toBeNull();
+
+    // Use imperative API to enable split
+    await act(async () => {
+      ref.current?.enableSplitScreen();
+      await Promise.resolve();
+    });
+
+    // Secondary pane should appear
+    expect(await screen.findByTestId('terminal-container-secondary')).toBeInTheDocument();
+
+    // Toggle back via imperative API
+    await act(async () => {
+      ref.current?.toggleSplitScreen();
+      await Promise.resolve();
+    });
+
+    // Secondary pane should be gone
+    expect(screen.queryByTestId('terminal-container-secondary')).toBeNull();
   });
 
   // -------------------------------------------------------------
