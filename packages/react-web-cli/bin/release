@@ -1,0 +1,323 @@
+#!/bin/bash
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Parse arguments
+DEV_MODE=false
+DRY_RUN=false
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dev|-D)
+      DEV_MODE=true
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    --help|-h)
+      echo "Usage: $0 [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --dev, -D     Publish dev package with randomized suffix"
+      echo "  --dry-run     Show what would be done without actually doing it"
+      echo "  --help, -h    Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  $0                    # Normal release with version prompts"
+      echo "  $0 --dev            # Dev release with current version + random suffix"
+      echo "  $0 --dry-run         # Preview what would happen"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Unknown option: $1${NC}"
+      exit 1
+      ;;
+  esac
+done
+
+log() {
+  echo -e "${BLUE}[$(date '+%H:%M:%S')] $1${NC}"
+}
+
+success() {
+  echo -e "${GREEN}✓ $1${NC}"
+}
+
+warning() {
+  echo -e "${YELLOW}⚠ $1${NC}"
+}
+
+error() {
+  echo -e "${RED}✗ $1${NC}"
+}
+
+# Check if we're in the right directory
+if [[ ! -f "$PACKAGE_DIR/package.json" ]]; then
+  error "package.json not found. Run this script from packages/react-web-cli/bin/"
+  exit 1
+fi
+
+# Change to package directory
+cd "$PACKAGE_DIR"
+
+log "Starting release process for @ably/react-web-cli"
+
+# Get current version from package.json
+CURRENT_VERSION=$(node -p "require('./package.json').version")
+log "Current version: $CURRENT_VERSION"
+
+if [[ "$DEV_MODE" == true ]]; then
+  log "Dev mode enabled - will publish dev package"
+  
+  # Generate random suffix
+  RANDOM_SUFFIX=$(openssl rand -hex 4 | cut -c1-8)
+  DEV_VERSION="${CURRENT_VERSION}-dev.${RANDOM_SUFFIX}"
+  
+  log "Dev version: $DEV_VERSION"
+  
+  if [[ "$DRY_RUN" == true ]]; then
+    log "DRY RUN: Would set version to $DEV_VERSION and publish"
+    exit 0
+  fi
+  
+  # Temporarily update package.json for dev release
+  log "Temporarily updating package.json version to $DEV_VERSION"
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.version = '$DEV_VERSION';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
+  
+  # Function to restore version on exit
+  restore_version() {
+    log "Restoring original version in package.json"
+    node -e "
+      const fs = require('fs');
+      const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+      pkg.version = '$CURRENT_VERSION';
+      fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+    "
+  }
+  
+  # Set trap to restore version on script exit
+  trap restore_version EXIT
+  
+else
+  # Normal release mode - check git status and other prerequisites
+  
+  if [[ "$DRY_RUN" == true ]]; then
+    log "DRY RUN: Would perform git checks and version prompts"
+    exit 0
+  fi
+  
+  log "Checking git status..."
+  
+  # Check if we're in a git repository
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    error "Not in a git repository"
+    exit 1
+  fi
+  
+  # Check if working directory is clean
+  if [[ -n $(git status --porcelain) ]]; then
+    error "Working directory is not clean. Please commit or stash your changes."
+    git status --short
+    exit 1
+  fi
+  
+  # Check if we're on main branch
+  CURRENT_BRANCH=$(git branch --show-current)
+  if [[ "$CURRENT_BRANCH" != "main" ]]; then
+    warning "Not on main branch (currently on: $CURRENT_BRANCH)"
+    read -p "Continue anyway? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      log "Aborted"
+      exit 1
+    fi
+  fi
+  
+  # Check if we're up to date with remote
+  log "Checking if branch is up to date with remote..."
+  git fetch origin
+  LOCAL=$(git rev-parse @)
+  REMOTE=$(git rev-parse @{u} 2>/dev/null || echo "")
+  
+  if [[ -n "$REMOTE" ]]; then
+    if [[ "$LOCAL" != "$REMOTE" ]]; then
+      error "Branch is not up to date with remote. Please pull latest changes."
+      exit 1
+    fi
+  else
+    warning "No upstream branch found. Continuing..."
+  fi
+  
+  success "Git checks passed"
+  
+  # Interactive version selection
+  echo ""
+  log "Current version: $CURRENT_VERSION"
+  echo "Select version bump type:"
+  echo "  1) patch (e.g., $CURRENT_VERSION -> $(node -e "console.log(require('semver').inc('$CURRENT_VERSION', 'patch'))" 2>/dev/null || echo "x.x.x"))"
+  echo "  2) minor (e.g., $CURRENT_VERSION -> $(node -e "console.log(require('semver').inc('$CURRENT_VERSION', 'minor'))" 2>/dev/null || echo "x.x.x"))"
+  echo "  3) major (e.g., $CURRENT_VERSION -> $(node -e "console.log(require('semver').inc('$CURRENT_VERSION', 'major'))" 2>/dev/null || echo "x.x.x"))"
+  echo "  4) custom"
+  echo "  5) prerelease (alpha/beta/rc)"
+  
+  read -p "Choice (1-5): " -n 1 -r
+  echo
+  
+  case $REPLY in
+    1)
+      NEW_VERSION=$(node -e "console.log(require('semver').inc('$CURRENT_VERSION', 'patch'))" 2>/dev/null || {
+        # Fallback for simple semantic versioning without semver package
+        IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+        NEW_VERSION="$major.$minor.$((patch + 1))"
+      })
+      ;;
+    2)
+      NEW_VERSION=$(node -e "console.log(require('semver').inc('$CURRENT_VERSION', 'minor'))" 2>/dev/null || {
+        IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+        NEW_VERSION="$major.$((minor + 1)).0"
+      })
+      ;;
+    3)
+      NEW_VERSION=$(node -e "console.log(require('semver').inc('$CURRENT_VERSION', 'major'))" 2>/dev/null || {
+        IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+        NEW_VERSION="$((major + 1)).0.0"
+      })
+      ;;
+    4)
+      read -p "Enter custom version: " NEW_VERSION
+      ;;
+    5)
+      echo "Select prerelease type:"
+      echo "  a) alpha"
+      echo "  b) beta" 
+      echo "  r) rc"
+      read -p "Choice (a/b/r): " -n 1 -r
+      echo
+      case $REPLY in
+        a) PRERELEASE_TYPE="alpha" ;;
+        b) PRERELEASE_TYPE="beta" ;;
+        r) PRERELEASE_TYPE="rc" ;;
+        *) error "Invalid choice"; exit 1 ;;
+      esac
+      read -p "Enter prerelease number (0 for first): " PRERELEASE_NUM
+      NEW_VERSION="${CURRENT_VERSION}-${PRERELEASE_TYPE}.${PRERELEASE_NUM}"
+      ;;
+    *)
+      error "Invalid choice"
+      exit 1
+      ;;
+  esac
+  
+  log "New version will be: $NEW_VERSION"
+  read -p "Continue with release? (y/N) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log "Aborted"
+    exit 1
+  fi
+fi
+
+# Check if npm is logged in
+log "Checking npm authentication..."
+if ! npm whoami >/dev/null 2>&1; then
+  error "Not logged in to npm. Please run 'npm login' first."
+  exit 1
+fi
+success "npm authentication verified"
+
+# Install dependencies
+log "Installing dependencies..."
+if ! pnpm install; then
+  error "Failed to install dependencies"
+  exit 1
+fi
+success "Dependencies installed"
+
+# Run tests
+log "Running tests..."
+if ! pnpm test; then
+  error "Tests failed"
+  exit 1
+fi
+success "Tests passed"
+
+# Build the package
+log "Building package..."
+if ! pnpm build; then
+  error "Build failed"
+  exit 1
+fi
+success "Build completed"
+
+# Verify dist directory exists and has content
+if [[ ! -d "dist" ]] || [[ -z "$(ls -A dist)" ]]; then
+  error "Build output (dist directory) is missing or empty"
+  exit 1
+fi
+success "Build output verified"
+
+if [[ "$DEV_MODE" == false ]]; then
+  # Update package.json version
+  log "Updating package.json version to $NEW_VERSION"
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.version = '$NEW_VERSION';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
+fi
+
+# Publish to npm
+log "Publishing to npm..."
+PUBLISH_CMD="pnpm publish --access public --no-git-checks"
+
+if [[ "$DEV_MODE" == true ]]; then
+  PUBLISH_CMD="$PUBLISH_CMD --tag dev"
+  log "Publishing as dev package with tag 'dev'"
+fi
+
+if ! $PUBLISH_CMD; then
+  error "Failed to publish to npm"
+  exit 1
+fi
+
+if [[ "$DEV_MODE" == true ]]; then
+  success "Dev package published successfully: @ably/react-web-cli@$DEV_VERSION"
+  log "Install with: npm install @ably/react-web-cli@dev"
+else
+  success "Package published successfully: @ably/react-web-cli@$NEW_VERSION"
+  
+  # Create git tag and push
+  log "Creating git tag v$NEW_VERSION"
+  git add package.json
+  git commit -m "chore: bump version to $NEW_VERSION"
+  git tag "v$NEW_VERSION"
+  
+  log "Pushing changes and tags to remote"
+  git push origin "$CURRENT_BRANCH"
+  git push origin "v$NEW_VERSION"
+  
+  success "Release completed successfully!"
+  log "New version: $NEW_VERSION"
+  log "Git tag: v$NEW_VERSION"
+fi
+
+log "Done!"
