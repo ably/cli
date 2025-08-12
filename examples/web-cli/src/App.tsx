@@ -1,5 +1,5 @@
-import { AblyCliTerminal } from "@ably/react-web-cli";
-import { useCallback, useEffect, useState } from "react";
+import { AblyCliTerminal, type AblyCliTerminalHandle } from "@ably/react-web-cli";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Key, Settings, Shield } from "lucide-react";
 
 import "./App.css";
@@ -122,7 +122,6 @@ function App() {
   const [apiKey, setApiKey] = useState<string | undefined>(initialCreds.apiKey);
   const [accessToken, setAccessToken] = useState<string | undefined>(initialCreds.accessToken);
   const [isAuthenticated, setIsAuthenticated] = useState(Boolean(initialCreds.apiKey && initialCreds.apiKey.trim()));
-  const [isUsingCustomAuth, setIsUsingCustomAuth] = useState(initialCreds.source === 'session' || initialCreds.source === 'localStorage');
   const [authSource, setAuthSource] = useState(initialCreds.source);
   // Get the URL and domain early for use in state initialization
   const currentWebsocketUrl = getWebSocketUrl();
@@ -185,7 +184,6 @@ function App() {
     }
     
     setRememberCredentials(shouldRemember);
-    setIsUsingCustomAuth(true);
   }, [rememberCredentials, wsDomain]);
 
   // Handle auth settings save
@@ -205,11 +203,10 @@ function App() {
       setApiKey(undefined);
       setAccessToken(undefined);
       setIsAuthenticated(false);
-      setIsUsingCustomAuth(false);
       setShowAuthSettings(false);
       setRememberCredentials(false);
     }
-  }, [handleAuthenticate]);
+  }, [handleAuthenticate, wsDomain]);
 
   // Effect to update URL when displayMode changes
   useEffect(() => {
@@ -221,9 +218,11 @@ function App() {
   }, [displayMode]);
 
   // Prepare the terminal component instance to pass it down
+  const termRef = useRef<AblyCliTerminalHandle>(null);
   const TerminalInstance = useCallback(() => (
     isAuthenticated && apiKey && apiKey.trim() ? (
       <AblyCliTerminal
+        ref={termRef}
         ablyAccessToken={accessToken}
         ablyApiKey={apiKey}
         onConnectionStatusChange={handleConnectionChange}
@@ -232,6 +231,7 @@ function App() {
         websocketUrl={currentWebsocketUrl}
         resumeOnReload={true}
         enableSplitScreen={true}
+        showSplitControl={true}
         maxReconnectAttempts={5} /* In the example, limit reconnection attempts for testing, default is 15 */
         ciAuthToken={getCIAuthToken()}
       />
@@ -255,6 +255,13 @@ function App() {
         <div className="header-info">
           <span>Status: <span className={`status status-${connectionStatus}`}>{connectionStatus}</span></span>
           <span>Server: {currentWebsocketUrl}</span>
+          <button
+            onClick={() => termRef.current?.toggleSplitScreen()}
+            className="auth-button flex items-center space-x-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
+            title="Toggle Split Screen"
+          >
+            Toggle Split
+          </button>
           <button
             onClick={() => setShowAuthSettings(true)}
             className="auth-button flex items-center space-x-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"

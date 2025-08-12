@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -96,6 +96,24 @@ export interface AblyCliTerminalProps {
    * A split icon will be displayed in the top-right corner when in single-pane mode.
    */
   enableSplitScreen?: boolean;
+  /**
+   * When true (default), shows the internal split control button.
+   * Set to false when controlling split externally to hide the internal UI affordance.
+   */
+  showSplitControl?: boolean;
+}
+
+export interface AblyCliTerminalHandle {
+  /** Enable split-screen mode programmatically. No-op if split-screen is disabled by props. */
+  enableSplitScreen: () => void;
+  /** Disable split-screen mode programmatically (closes secondary terminal). */
+  disableSplitScreen: () => void;
+  /** Toggle split-screen mode. */
+  toggleSplitScreen: () => void;
+  /** Set split position as a percentage (0-100). Values are clamped. */
+  setSplitPosition: (percent: number) => void;
+  /** Read current split state. */
+  getSplitState: () => { isSplit: boolean; splitPosition: number };
 }
 
 // Use shared debug logging
@@ -114,7 +132,7 @@ if (typeof window !== 'undefined') {
 // Import isHijackMetaChunk from shared module for backward compatibility
 import { isHijackMetaChunk } from './terminal-shared';
 
-export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
+const AblyCliTerminalInner = ({
   websocketUrl,
   ablyAccessToken,
   ablyApiKey,
@@ -125,7 +143,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
   resumeOnReload,
   maxReconnectAttempts,
   enableSplitScreen = false,
-}) => {
+  showSplitControl = true,
+}: AblyCliTerminalProps, ref: React.Ref<AblyCliTerminalHandle>) => {
   
   const [componentConnectionStatus, setComponentConnectionStatusState] = useState<ConnectionStatus>('initial');
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -226,6 +245,40 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
       }
     }, 50);
   }, []);
+
+  // Imperative handle for external control of split operations
+  useImperativeHandle(ref, () => ({
+    enableSplitScreen: () => {
+      if (!enableSplitScreen) {
+        console.warn('[AblyCLITerminal] enableSplitScreen prop is false; cannot enable split.');
+        return;
+      }
+      if (!isSplit) {
+        handleSplitScreenWithSecondTerminal();
+      }
+    },
+    disableSplitScreen: () => {
+      if (isSplit) {
+        handleCloseSplit();
+      }
+    },
+    toggleSplitScreen: () => {
+      if (!enableSplitScreen) {
+        console.warn('[AblyCLITerminal] enableSplitScreen prop is false; cannot toggle split.');
+        return;
+      }
+      if (isSplit) {
+        handleCloseSplit();
+      } else {
+        handleSplitScreenWithSecondTerminal();
+      }
+    },
+    setSplitPosition: (percent: number) => {
+      const clamped = Math.max(0, Math.min(100, Number(percent)));
+      setSplitPosition(clamped);
+    },
+    getSplitState: () => ({ isSplit, splitPosition }),
+  }), [enableSplitScreen, handleSplitScreenWithSecondTerminal, handleCloseSplit, isSplit, splitPosition]);
 
   /** Handle clicking Close on Terminal 1 (primary) */
   const handleClosePrimary = useCallback(() => {
@@ -2643,8 +2696,8 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
               flexDirection: 'column'
             }}
           >
-            {/* Split button – only when not already split and enableSplitScreen is true */}
-            {!isSplit && enableSplitScreen && (
+            {/* Split button – only when not already split and controls are enabled */}
+            {!isSplit && enableSplitScreen && showSplitControl && (
               <button
                 onClick={handleSplitScreen}
                 aria-label="Split terminal"
@@ -2771,5 +2824,7 @@ export const AblyCliTerminal: React.FC<AblyCliTerminalProps> = ({
     </div>
   );
 };
+
+export const AblyCliTerminal = forwardRef<AblyCliTerminalHandle, AblyCliTerminalProps>(AblyCliTerminalInner);
 
 export default AblyCliTerminal;
