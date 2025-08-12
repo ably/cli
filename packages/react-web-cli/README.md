@@ -192,6 +192,54 @@ pnpm build
 pnpm test
 ```
 
+## Publishing
+
+This package includes an automated release script to ensure consistent and safe publishing to npm. **Use this script instead of manual `pnpm publish` commands** to avoid common publishing errors.
+
+### Publishing a Release
+
+```bash
+# Interactive release with version prompts
+./bin/release
+
+# Preview what would happen (dry run)
+./bin/release --dry-run
+```
+
+The release script will:
+- ✅ Check git status (clean working directory, up-to-date with remote)
+- ✅ Run tests and build verification
+- ✅ Prompt for version selection (patch/minor/major/custom/prerelease)
+- ✅ Update package.json and create git tag
+- ✅ Publish to npm with proper configuration
+- ✅ Push changes and tags to remote
+
+### Publishing a Dev Package
+
+For testing purposes, you can publish temporary dev packages:
+
+```bash
+# Publish dev package with current version + random suffix
+./bin/release --dev
+
+# Example output: @ably/react-web-cli@0.8.1-dev.a1b2c3d4
+```
+
+Dev packages:
+- Use current version + randomized 8-character suffix
+- Are published with `dev` tag (install with `npm install @ably/react-web-cli@dev`)
+- Skip git checks and version bumping
+- Still run tests and build for safety
+- Automatically restore original package.json
+
+### Release Script Options
+
+| Option | Description |
+|--------|-------------|
+| `--dev`, `-D` | Publish dev package with randomized suffix |
+| `--dry-run` | Preview actions without executing them |
+| `--help`, `-h` | Show usage information |
+
 ## License
 
 [Apache-2.0](https://github.com/ably/cli/blob/main/LICENSE)
