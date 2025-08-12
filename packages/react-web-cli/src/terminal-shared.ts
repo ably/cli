@@ -169,7 +169,7 @@ export function createAuthPayload(
   const payload: AuthPayload = {
     environmentVariables: {
       ABLY_WEB_CLI_MODE: 'true',
-      PS1: '$ ',
+      PS1: 'ably> ',
       ...additionalEnvVars
     }
   };

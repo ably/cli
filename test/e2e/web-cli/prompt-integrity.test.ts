@@ -10,7 +10,7 @@ import {
 } from './wait-helpers';
 
 // Public terminal server endpoint
-const PUBLIC_TERMINAL_SERVER_URL = 'wss://web-cli.ably.com';
+const TERMINAL_SERVER_URL = process.env.TERMINAL_SERVER_URL || 'wss://web-cli.ably.com';
 
 test.describe('Web CLI Prompt Integrity E2E Tests', () => {
   test.setTimeout(120_000);
@@ -24,7 +24,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
     const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
 
     // Wait for terminal to be ready and connected to shell
@@ -117,7 +117,7 @@ test.describe('Web CLI Prompt Integrity E2E Tests', () => {
     
     await waitForRateLimitIfNeeded();
     incrementConnectionCount();
-    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(PUBLIC_TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
+    await page.goto(`${getTestUrl()}?serverUrl=${encodeURIComponent(TERMINAL_SERVER_URL)}&cliDebug=true&apiKey=${encodeURIComponent(apiKey)}`, { waitUntil: 'networkidle' });
     const terminal = page.locator('.xterm:not(#initial-xterm-placeholder)');
 
     // Wait for terminal to be ready
